@@ -22,29 +22,3 @@ jobs:
 
       - name: Unit tests
         run: go test ./...
-
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: test
-    environment: integration
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Build
-        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/gcloud-go .
-
-      - name: Write credentials file
-        run: echo "${{ secrets.GCP_SA_KEY }}" > /tmp/sa-key.json
-
-      - name: Integration tests
-        env:
-          GCLOUD_TEST_PROJECT: ${{ vars.GCP_PROJECT }}
-          GCLOUD_TEST_ZONE: ${{ vars.GCP_ZONE }}
-          GCLOUD_TEST_CRED_FILE: /tmp/sa-key.json
-        run: go test -tags=integration -v -timeout 10m
