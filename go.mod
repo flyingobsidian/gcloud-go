@@ -1,4 +1,4 @@
-module github.com/flyingobsidian/gcloud-golang-cli
+module github.com/flyingobsidian/gcloud-go
 
 go 1.25.0
 

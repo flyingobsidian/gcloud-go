@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/config"
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/secrets"
+	"github.com/flyingobsidian/gcloud-go/internal/config"
+	"github.com/flyingobsidian/gcloud-go/internal/secrets"
 	"github.com/spf13/cobra"
 	secretmanager "google.golang.org/api/secretmanager/v1"
 )

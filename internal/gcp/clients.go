@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/auth"
+	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 	dataflow "google.golang.org/api/dataflow/v1b3"
 	dataplex "google.golang.org/api/dataplex/v1"

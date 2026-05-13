@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/gcp"
+	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dataflow "google.golang.org/api/dataflow/v1b3"
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/config"
+	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/auth"
+	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
 )
