@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path"
 
-	icompute "github.com/flyingobsidian/gcloud-golang-cli/internal/compute"
+	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
 )

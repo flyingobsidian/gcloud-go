@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	icompute "github.com/flyingobsidian/gcloud-golang-cli/internal/compute"
+	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
 )
 

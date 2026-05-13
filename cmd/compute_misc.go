@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	icompute "github.com/flyingobsidian/gcloud-golang-cli/internal/compute"
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/config"
+	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
+	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
 )

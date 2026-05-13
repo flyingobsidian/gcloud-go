@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/gcp"
+	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 )

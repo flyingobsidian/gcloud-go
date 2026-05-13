@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/config"
+	"github.com/flyingobsidian/gcloud-go/internal/config"
 	_ "modernc.org/sqlite"
 )
 

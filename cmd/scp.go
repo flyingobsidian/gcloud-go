@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	icompute "github.com/flyingobsidian/gcloud-golang-cli/internal/compute"
+	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 )
 
 var scpCmd = &cobra.Command{

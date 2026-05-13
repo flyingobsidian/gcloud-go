@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/gcp"
+	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	monitoring "google.golang.org/api/monitoring/v3"
 )

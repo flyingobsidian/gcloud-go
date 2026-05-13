@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/auth"
-	icompute "github.com/flyingobsidian/gcloud-golang-cli/internal/compute"
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/iap"
+	"github.com/flyingobsidian/gcloud-go/internal/auth"
+	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
+	"github.com/flyingobsidian/gcloud-go/internal/iap"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
 )

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/gcp"
+	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	storage "google.golang.org/api/storage/v1"
 )

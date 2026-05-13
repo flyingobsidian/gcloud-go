@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/cmd"
+	"github.com/flyingobsidian/gcloud-go/cmd"
 )
 
 func main() {

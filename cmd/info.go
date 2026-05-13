@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-golang-cli/internal/config"
+	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 )
 
