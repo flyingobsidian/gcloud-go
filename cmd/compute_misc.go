@@ -28,7 +28,10 @@ var projectInfoRemoveMetadataCmd = &cobra.Command{
 	RunE:  runProjectInfoRemoveMetadata,
 }
 
-var flagRemoveMetadataKeys string
+var (
+	flagRemoveMetadataKeys string
+	flagRemoveMetadataAll  bool
+)
 
 // --- forwarding-rules ---
 
@@ -67,12 +70,14 @@ var (
 	flagAddressNetwork     string
 	flagAddressPurpose     string
 	flagAddressType        string
+	flagAddressAddresses   string
+	flagAddressDescription string
 )
 
 func init() {
 	// project-info remove-metadata
 	projectInfoRemoveMetadataCmd.Flags().StringVar(&flagRemoveMetadataKeys, "keys", "", "Comma-separated list of metadata keys to remove")
-	projectInfoRemoveMetadataCmd.MarkFlagRequired("keys")
+	projectInfoRemoveMetadataCmd.Flags().BoolVar(&flagRemoveMetadataAll, "all", false, "Remove all metadata")
 	projectInfoCmd.AddCommand(projectInfoRemoveMetadataCmd)
 	computeCmd.AddCommand(projectInfoCmd)
 
@@ -88,6 +93,8 @@ func init() {
 	addressesCreateCmd.Flags().StringVar(&flagAddressNetwork, "network", "", "Network for internal address")
 	addressesCreateCmd.Flags().StringVar(&flagAddressPurpose, "purpose", "", "Purpose of the address")
 	addressesCreateCmd.Flags().StringVar(&flagAddressType, "address-type", "", "Address type (INTERNAL or EXTERNAL)")
+	addressesCreateCmd.Flags().StringVar(&flagAddressAddresses, "addresses", "", "Specific IP address to reserve")
+	addressesCreateCmd.Flags().StringVar(&flagAddressDescription, "description", "", "Description for the address")
 	addressesCmd.AddCommand(addressesCreateCmd)
 	computeCmd.AddCommand(addressesCmd)
 }
@@ -110,17 +117,21 @@ func runProjectInfoRemoveMetadata(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting project metadata: %w", err)
 	}
 
-	keysToRemove := strings.Split(flagRemoveMetadataKeys, ",")
-	removeSet := make(map[string]bool)
-	for _, k := range keysToRemove {
-		removeSet[strings.TrimSpace(k)] = true
-	}
-
-	// Filter out the keys to remove.
 	var newItems []*compute.MetadataItems
-	for _, item := range proj.CommonInstanceMetadata.Items {
-		if !removeSet[item.Key] {
-			newItems = append(newItems, item)
+	if flagRemoveMetadataAll {
+		newItems = nil
+	} else if flagRemoveMetadataKeys == "" {
+		return fmt.Errorf("one of --keys or --all is required")
+	} else {
+		keysToRemove := strings.Split(flagRemoveMetadataKeys, ",")
+		removeSet := make(map[string]bool)
+		for _, k := range keysToRemove {
+			removeSet[strings.TrimSpace(k)] = true
+		}
+		for _, item := range proj.CommonInstanceMetadata.Items {
+			if !removeSet[item.Key] {
+				newItems = append(newItems, item)
+			}
 		}
 	}
 
@@ -217,6 +228,12 @@ func runAddressesCreate(cmd *cobra.Command, args []string) error {
 	}
 	if flagAddressType != "" {
 		addr.AddressType = flagAddressType
+	}
+	if flagAddressAddresses != "" {
+		addr.Address = flagAddressAddresses
+	}
+	if flagAddressDescription != "" {
+		addr.Description = flagAddressDescription
 	}
 
 	op, err := svc.Addresses.Insert(project, region, addr).Context(ctx).Do()
