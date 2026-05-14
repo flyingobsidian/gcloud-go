@@ -72,7 +72,11 @@ var instancesDeleteCmd = &cobra.Command{
 	RunE:  runInstancesDelete,
 }
 
-var flagDeleteQuiet bool
+var (
+	flagDeleteQuiet bool
+	flagDeleteDisks string
+	flagKeepDisks   string
+)
 
 func init() {
 	// describe
@@ -102,6 +106,8 @@ func init() {
 
 	// delete
 	instancesDeleteCmd.Flags().BoolVar(&flagDeleteQuiet, "quiet", false, "Suppress confirmation prompt")
+	instancesDeleteCmd.Flags().StringVar(&flagDeleteDisks, "delete-disks", "", "Disk types to delete: all, data, or boot")
+	instancesDeleteCmd.Flags().StringVar(&flagKeepDisks, "keep-disks", "", "Disk types to keep: all, data, or boot")
 	instancesCmd.AddCommand(instancesDeleteCmd)
 }
 
@@ -267,6 +273,31 @@ func runInstancesDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if flagDeleteDisks != "" || flagKeepDisks != "" {
+		inst, err := svc.Instances.Get(project, zone, instance).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("getting instance: %w", err)
+		}
+		for _, d := range inst.Disks {
+			want := d.AutoDelete
+			if shouldModifyDisk(d, flagDeleteDisks, true) {
+				want = true
+			}
+			if shouldModifyDisk(d, flagKeepDisks, false) {
+				want = false
+			}
+			if want != d.AutoDelete {
+				op, err := svc.Instances.SetDiskAutoDelete(project, zone, instance, want, d.DeviceName).Context(ctx).Do()
+				if err != nil {
+					return fmt.Errorf("setting auto-delete on disk %s: %w", d.DeviceName, err)
+				}
+				if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	fmt.Printf("Deleting instance [%s]...\n", instance)
 	op, err := svc.Instances.Delete(project, zone, instance).Context(ctx).Do()
 	if err != nil {
@@ -357,6 +388,18 @@ func buildNetworkInterface(project, network, subnet string, noAddress bool) *com
 		}
 	}
 	return ni
+}
+
+func shouldModifyDisk(d *compute.AttachedDisk, mode string, _ bool) bool {
+	switch mode {
+	case "all":
+		return true
+	case "boot":
+		return d.Boot
+	case "data":
+		return !d.Boot
+	}
+	return false
 }
 
 func buildMetadata(kv map[string]string, fromFile map[string]string) *compute.Metadata {
