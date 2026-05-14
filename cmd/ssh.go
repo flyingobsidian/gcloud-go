@@ -24,15 +24,25 @@ var sshCmd = &cobra.Command{
 }
 
 var (
-	flagSSHTunnelThroughIAP bool
-	flagSSHInternalIP       bool
-	flagSSHKeyFile          string
+	flagSSHTunnelThroughIAP      bool
+	flagSSHInternalIP            bool
+	flagSSHKeyFile               string
+	flagSSHCommand               string
+	flagSSHFlag                  []string
+	flagSSHDryRun                bool
+	flagSSHPlain                 bool
+	flagSSHStrictHostKeyChecking string
 )
 
 func init() {
 	sshCmd.Flags().BoolVar(&flagSSHTunnelThroughIAP, "tunnel-through-iap", false, "Tunnel through Identity-Aware Proxy")
 	sshCmd.Flags().BoolVar(&flagSSHInternalIP, "internal-ip", false, "Connect using internal IP")
 	sshCmd.Flags().StringVar(&flagSSHKeyFile, "ssh-key-file", "", "SSH private key file")
+	sshCmd.Flags().StringVar(&flagSSHCommand, "command", "", "Command to run on the instance")
+	sshCmd.Flags().StringArrayVar(&flagSSHFlag, "ssh-flag", nil, "Extra flags to pass to ssh")
+	sshCmd.Flags().BoolVar(&flagSSHDryRun, "dry-run", false, "Print the ssh command without running it")
+	sshCmd.Flags().BoolVar(&flagSSHPlain, "plain", false, "Suppress managed SSH key setup")
+	sshCmd.Flags().StringVar(&flagSSHStrictHostKeyChecking, "strict-host-key-checking", "", "Override StrictHostKeyChecking (yes, no, ask)")
 
 	computeCmd.AddCommand(sshCmd)
 }
@@ -57,7 +67,20 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build SSH args.
-	sshArgs := buildSSHOpts(flagSSHKeyFile)
+	var sshArgs []string
+	if flagSSHPlain {
+		sshArgs = []string{}
+	} else {
+		sshArgs = buildSSHOpts(flagSSHKeyFile)
+	}
+
+	if flagSSHStrictHostKeyChecking != "" {
+		sshArgs = append(sshArgs, "-o", "StrictHostKeyChecking="+flagSSHStrictHostKeyChecking)
+	}
+
+	for _, f := range flagSSHFlag {
+		sshArgs = append(sshArgs, f)
+	}
 
 	var target string
 
@@ -88,10 +111,17 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	}
 	sshArgs = append(sshArgs, target)
 
-	// Append remote command if provided after --.
-	if dashIdx := cmd.ArgsLenAtDash(); dashIdx >= 0 {
+	// Append remote command if provided via --command or after --.
+	if flagSSHCommand != "" {
+		sshArgs = append(sshArgs, "--", flagSSHCommand)
+	} else if dashIdx := cmd.ArgsLenAtDash(); dashIdx >= 0 {
 		sshArgs = append(sshArgs, "--")
 		sshArgs = append(sshArgs, args[dashIdx:]...)
+	}
+
+	if flagSSHDryRun {
+		fmt.Println("ssh " + fmt.Sprintf("%v", sshArgs))
+		return nil
 	}
 
 	return execSSH(ctx, sshArgs)
