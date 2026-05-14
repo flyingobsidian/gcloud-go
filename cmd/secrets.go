@@ -48,7 +48,14 @@ var secretsCreateCmd = &cobra.Command{
 	RunE:  runSecretsCreate,
 }
 
-var flagDataFile string
+var (
+	flagDataFile          string
+	flagReplicationPolicy string
+	flagLocations         []string
+	flagSecretLabels      map[string]string
+	flagExpireTime        string
+	flagTTL               string
+)
 
 // --- secrets versions add ---
 
@@ -93,7 +100,10 @@ var secretsDeleteCmd = &cobra.Command{
 	RunE:  runSecretsDelete,
 }
 
-var flagQuiet bool
+var (
+	flagQuiet           bool
+	flagSecretsLocation string
+)
 
 func init() {
 	// secrets versions access
@@ -103,6 +113,11 @@ func init() {
 
 	// secrets create
 	secretsCreateCmd.Flags().StringVar(&flagDataFile, "data-file", "", "File with secret data, or - for stdin")
+	secretsCreateCmd.Flags().StringVar(&flagReplicationPolicy, "replication-policy", "automatic", "Replication policy (automatic or user-managed)")
+	secretsCreateCmd.Flags().StringSliceVar(&flagLocations, "locations", nil, "Locations for user-managed replication")
+	secretsCreateCmd.Flags().StringToStringVar(&flagSecretLabels, "labels", nil, "Labels as key=value pairs")
+	secretsCreateCmd.Flags().StringVar(&flagExpireTime, "expire-time", "", "Expiration time (RFC 3339 format)")
+	secretsCreateCmd.Flags().StringVar(&flagTTL, "ttl", "", "Time-to-live duration (e.g. 30d, 24h)")
 
 	// secrets versions add
 	secretsVersionsAddCmd.Flags().StringVar(&flagVersionsAddDataFile, "data-file", "", "File with secret data, or - for stdin (required)")
@@ -114,6 +129,14 @@ func init() {
 
 	// secrets delete
 	secretsDeleteCmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress confirmation prompt")
+
+	// --location on all subcommands
+	secretsVersionsAccessCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsVersionsAddCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsCreateCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsListCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsDescribeCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsDeleteCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
 
 	// Wire up command tree.
 	secretsVersionsCmd.AddCommand(secretsVersionsAccessCmd)
@@ -153,7 +176,7 @@ func runSecretsVersionsAccess(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	name := secrets.VersionName(project, flagSecretName, version)
+	name := secrets.VersionName(project, flagSecretName, version, flagSecretsLocation)
 	resp, err := svc.Projects.Secrets.Versions.Access(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("accessing secret version: %w", err)
@@ -188,14 +211,32 @@ func runSecretsCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Create the secret with automatic replication.
-	secret := &secretmanager.Secret{
-		Replication: &secretmanager.Replication{
+	// Create the secret with configured replication.
+	secret := &secretmanager.Secret{}
+	if flagReplicationPolicy == "user-managed" && len(flagLocations) > 0 {
+		var replicas []*secretmanager.Replica
+		for _, loc := range flagLocations {
+			replicas = append(replicas, &secretmanager.Replica{Location: loc})
+		}
+		secret.Replication = &secretmanager.Replication{
+			UserManaged: &secretmanager.UserManaged{Replicas: replicas},
+		}
+	} else {
+		secret.Replication = &secretmanager.Replication{
 			Automatic: &secretmanager.Automatic{},
-		},
+		}
+	}
+	if len(flagSecretLabels) > 0 {
+		secret.Labels = flagSecretLabels
+	}
+	if flagExpireTime != "" {
+		secret.ExpireTime = flagExpireTime
+	}
+	if flagTTL != "" {
+		secret.Ttl = flagTTL
 	}
 
-	parent := secrets.SecretParent(project)
+	parent := secrets.SecretParent(project, flagSecretsLocation)
 	created, err := svc.Projects.Secrets.Create(parent, secret).SecretId(secretID).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating secret: %w", err)
@@ -235,7 +276,7 @@ func runSecretsVersionsAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	name := secrets.SecretName(project, secretID)
+	name := secrets.SecretName(project, secretID, flagSecretsLocation)
 	return addVersion(ctx, svc, name, data)
 }
 
@@ -251,7 +292,7 @@ func runSecretsList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	parent := secrets.SecretParent(project)
+	parent := secrets.SecretParent(project, flagSecretsLocation)
 	call := svc.Projects.Secrets.List(parent).Context(ctx)
 	if flagSecretsFilter != "" {
 		call = call.Filter(flagSecretsFilter)
@@ -305,7 +346,7 @@ func runSecretsDescribe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	name := secrets.SecretName(project, secretID)
+	name := secrets.SecretName(project, secretID, flagSecretsLocation)
 	secret, err := svc.Projects.Secrets.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing secret: %w", err)
@@ -341,7 +382,7 @@ func runSecretsDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	name := secrets.SecretName(project, secretID)
+	name := secrets.SecretName(project, secretID, flagSecretsLocation)
 	if _, err := svc.Projects.Secrets.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting secret: %w", err)
 	}

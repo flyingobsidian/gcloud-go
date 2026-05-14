@@ -55,6 +55,7 @@ var (
 	flagDataplexLocation  string
 	flagDataplexDatascan  string
 	flagDataplexJobFormat string
+	flagDataplexJobView   string
 )
 
 func init() {
@@ -67,6 +68,7 @@ func init() {
 
 	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
 	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexDatascan, "datascan", "", "Data scan ID")
+	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexJobView, "view", "", "Job view (BASIC or FULL)")
 
 	dataplexDatascansJobsCmd.AddCommand(dataplexDatascansJobsListCmd)
 	dataplexDatascansJobsCmd.AddCommand(dataplexDatascansJobsDescribeCmd)
@@ -171,7 +173,11 @@ func runDataplexDatascansJobsDescribe(cmd *cobra.Command, args []string) error {
 	}
 
 	name := fmt.Sprintf("%s/jobs/%s", datascanName(project, location, datascanID), args[0])
-	job, err := svc.Projects.Locations.DataScans.Jobs.Get(name).Context(ctx).Do()
+	call := svc.Projects.Locations.DataScans.Jobs.Get(name).Context(ctx)
+	if flagDataplexJobView != "" {
+		call = call.View(flagDataplexJobView)
+	}
+	job, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("describing data scan job: %w", err)
 	}

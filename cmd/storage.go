@@ -33,7 +33,10 @@ var storageBucketsListCmd = &cobra.Command{
 	RunE:  runStorageBucketsList,
 }
 
-var flagStorageBucketsFormat string
+var (
+	flagStorageBucketsFormat      string
+	flagStorageBucketsSoftDeleted bool
+)
 
 // --- cp ---
 
@@ -49,7 +52,11 @@ Examples:
 	RunE: runStorageCp,
 }
 
-var flagStorageCpRecurse bool
+var (
+	flagStorageCpRecurse      bool
+	flagStorageCpNoClobber    bool
+	flagStorageCpStorageClass string
+)
 
 // --- ls ---
 
@@ -64,15 +71,24 @@ Examples:
 	RunE: runStorageLs,
 }
 
-var flagStorageLsRecurse bool
+var (
+	flagStorageLsRecurse bool
+	flagStorageLsLong    bool
+	flagStorageLsJSON    bool
+)
 
 func init() {
 	storageBucketsListCmd.Flags().StringVar(&flagStorageBucketsFormat, "format", "", "Output format (e.g. json)")
+	storageBucketsListCmd.Flags().BoolVar(&flagStorageBucketsSoftDeleted, "soft-deleted", false, "Include soft-deleted buckets")
 	storageBucketsCmd.AddCommand(storageBucketsListCmd)
 
 	storageCpCmd.Flags().BoolVarP(&flagStorageCpRecurse, "recursive", "r", false, "Copy recursively")
+	storageCpCmd.Flags().BoolVarP(&flagStorageCpNoClobber, "no-clobber", "n", false, "Do not overwrite existing files")
+	storageCpCmd.Flags().StringVar(&flagStorageCpStorageClass, "storage-class", "", "Storage class for uploaded objects")
 
 	storageLsCmd.Flags().BoolVarP(&flagStorageLsRecurse, "recursive", "r", false, "List recursively")
+	storageLsCmd.Flags().BoolVarP(&flagStorageLsLong, "long", "l", false, "Show size and creation time")
+	storageLsCmd.Flags().BoolVar(&flagStorageLsJSON, "json", false, "Output as JSON")
 
 	storageCmd.AddCommand(storageBucketsCmd)
 	storageCmd.AddCommand(storageCpCmd)
@@ -92,7 +108,11 @@ func runStorageBucketsList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	resp, err := svc.Buckets.List(project).Context(ctx).Do()
+	call := svc.Buckets.List(project).Context(ctx)
+	if flagStorageBucketsSoftDeleted {
+		call = call.SoftDeleted(true)
+	}
+	resp, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("listing buckets: %w", err)
 	}
@@ -167,6 +187,13 @@ func storageDownload(ctx context.Context, svc *storage.Service, src, dst string)
 		dst = filepath.Join(dst, filepath.Base(object))
 	}
 
+	if flagStorageCpNoClobber {
+		if _, err := os.Stat(dst); err == nil {
+			fmt.Printf("Skipping existing file: %s\n", dst)
+			return nil
+		}
+	}
+
 	f, err := os.Create(dst)
 	if err != nil {
 		return fmt.Errorf("creating local file: %w", err)
@@ -200,7 +227,14 @@ func storageUpload(ctx context.Context, svc *storage.Service, src, dst string) e
 	}
 
 	obj := &storage.Object{Name: objectName}
-	_, err = svc.Objects.Insert(bucket, obj).Media(f).Context(ctx).Do()
+	if flagStorageCpStorageClass != "" {
+		obj.StorageClass = flagStorageCpStorageClass
+	}
+	call := svc.Objects.Insert(bucket, obj).Media(f).Context(ctx)
+	if flagStorageCpNoClobber {
+		call = call.IfGenerationMatch(0)
+	}
+	_, err = call.Do()
 	if err != nil {
 		return fmt.Errorf("uploading object: %w", err)
 	}
@@ -270,13 +304,35 @@ func runStorageLs(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing objects: %w", err)
 	}
 
+	if flagStorageLsJSON {
+		type lsEntry struct {
+			URL  string `json:"url"`
+			Size uint64 `json:"size,omitempty"`
+			Time string `json:"timeCreated,omitempty"`
+		}
+		var entries []lsEntry
+		for _, p := range resp.Prefixes {
+			entries = append(entries, lsEntry{URL: fmt.Sprintf("gs://%s/%s", bucket, p)})
+		}
+		for _, obj := range resp.Items {
+			entries = append(entries, lsEntry{URL: fmt.Sprintf("gs://%s/%s", bucket, obj.Name), Size: obj.Size, Time: obj.TimeCreated})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(entries)
+	}
+
 	// Print directories (prefixes).
 	for _, p := range resp.Prefixes {
 		fmt.Printf("gs://%s/%s\n", bucket, p)
 	}
 	// Print objects.
 	for _, obj := range resp.Items {
-		fmt.Printf("gs://%s/%s\n", bucket, obj.Name)
+		if flagStorageLsLong {
+			fmt.Printf("%10d  %s  gs://%s/%s\n", obj.Size, obj.TimeCreated, bucket, obj.Name)
+		} else {
+			fmt.Printf("gs://%s/%s\n", bucket, obj.Name)
+		}
 	}
 	return nil
 }

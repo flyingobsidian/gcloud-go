@@ -23,10 +23,14 @@ var instancesStartCmd = &cobra.Command{
 	RunE:  runInstancesStart,
 }
 
-var flagAsync bool
+var (
+	flagAsync               bool
+	flagStopDiscardLocalSSD bool
+)
 
 func init() {
 	instancesStopCmd.Flags().BoolVar(&flagAsync, "async", false, "Return immediately without waiting for operation to complete")
+	instancesStopCmd.Flags().BoolVar(&flagStopDiscardLocalSSD, "discard-local-ssd", false, "Discard data on local SSDs when stopping")
 	instancesStartCmd.Flags().BoolVar(&flagAsync, "async", false, "Return immediately without waiting for operation to complete")
 
 	instancesCmd.AddCommand(instancesStopCmd)
@@ -63,7 +67,11 @@ func runInstancesStop(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Stopping instance [%s] in zone [%s]...\n", instance, zone)
-	op, err := svc.Instances.Stop(project, zone, instance).Context(ctx).Do()
+	call := svc.Instances.Stop(project, zone, instance).Context(ctx)
+	if flagStopDiscardLocalSSD {
+		call = call.DiscardLocalSsd(true)
+	}
+	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("stopping instance: %w", err)
 	}

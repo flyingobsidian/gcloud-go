@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -43,10 +44,14 @@ var dataflowJobsCancelCmd = &cobra.Command{
 }
 
 var (
-	flagDataflowRegion     string
-	flagDataflowListFormat string
-	flagDataflowListFilter string
-	flagDataflowListStatus string
+	flagDataflowRegion       string
+	flagDataflowListFormat   string
+	flagDataflowListFilter   string
+	flagDataflowListStatus   string
+	flagDataflowCreatedAfter string
+	flagDataflowCreatedBefore string
+	flagDataflowDescribeFull bool
+	flagDataflowCancelForce  bool
 )
 
 func init() {
@@ -54,9 +59,14 @@ func init() {
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListFormat, "format", "", "Output format (e.g. json)")
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListFilter, "filter", "", "Filter expression")
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListStatus, "status", "", "Filter by job status (active, all, terminated)")
+	dataflowJobsListCmd.Flags().StringVar(&flagDataflowCreatedAfter, "created-after", "", "Filter jobs created after this time (RFC 3339)")
+	dataflowJobsListCmd.Flags().StringVar(&flagDataflowCreatedBefore, "created-before", "", "Filter jobs created before this time (RFC 3339)")
 
 	dataflowJobsDescribeCmd.Flags().StringVar(&flagDataflowRegion, "region", "", "Region of the job")
+	dataflowJobsDescribeCmd.Flags().BoolVar(&flagDataflowDescribeFull, "full", false, "Show full job details including steps")
+
 	dataflowJobsCancelCmd.Flags().StringVar(&flagDataflowRegion, "region", "", "Region of the job")
+	dataflowJobsCancelCmd.Flags().BoolVar(&flagDataflowCancelForce, "force", false, "Force drain the job instead of cancelling")
 
 	dataflowJobsCmd.AddCommand(dataflowJobsListCmd)
 	dataflowJobsCmd.AddCommand(dataflowJobsDescribeCmd)
@@ -106,6 +116,32 @@ func runDataflowJobsList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing dataflow jobs: %w", err)
 	}
 
+	// Client-side time filters.
+	if flagDataflowCreatedAfter != "" || flagDataflowCreatedBefore != "" {
+		var filtered []*dataflow.Job
+		for _, j := range resp.Jobs {
+			ct, err := time.Parse(time.RFC3339, j.CreateTime)
+			if err != nil {
+				filtered = append(filtered, j)
+				continue
+			}
+			if flagDataflowCreatedAfter != "" {
+				after, err := time.Parse(time.RFC3339, flagDataflowCreatedAfter)
+				if err == nil && ct.Before(after) {
+					continue
+				}
+			}
+			if flagDataflowCreatedBefore != "" {
+				before, err := time.Parse(time.RFC3339, flagDataflowCreatedBefore)
+				if err == nil && ct.After(before) {
+					continue
+				}
+			}
+			filtered = append(filtered, j)
+		}
+		resp.Jobs = filtered
+	}
+
 	if flagDataflowListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -131,7 +167,11 @@ func runDataflowJobsDescribe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	job, err := svc.Projects.Locations.Jobs.Get(project, region, args[0]).Context(ctx).Do()
+	call := svc.Projects.Locations.Jobs.Get(project, region, args[0]).Context(ctx)
+	if flagDataflowDescribeFull {
+		call = call.View("JOB_VIEW_ALL")
+	}
+	job, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("describing dataflow job: %w", err)
 	}
@@ -151,9 +191,12 @@ func runDataflowJobsCancel(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Cancel by updating the job's requested state to JOB_STATE_CANCELLED.
+	state := "JOB_STATE_CANCELLED"
+	if flagDataflowCancelForce {
+		state = "JOB_STATE_DRAINED"
+	}
 	_, err = svc.Projects.Locations.Jobs.Update(project, region, args[0], &dataflow.Job{
-		RequestedState: "JOB_STATE_CANCELLED",
+		RequestedState: state,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("cancelling dataflow job: %w", err)
