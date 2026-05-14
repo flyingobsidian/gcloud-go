@@ -19,10 +19,14 @@ var infoCmd = &cobra.Command{
 	RunE:  runInfo,
 }
 
-var flagInfoFormat string
+var (
+	flagInfoFormat    string
+	flagInfoAnonymize bool
+)
 
 func init() {
 	infoCmd.Flags().StringVar(&flagInfoFormat, "format", "", "Output format (e.g. json, value(FIELD))")
+	infoCmd.Flags().BoolVar(&flagInfoAnonymize, "anonymize", false, "Anonymize sensitive information in output")
 	rootCmd.AddCommand(infoCmd)
 }
 
@@ -77,6 +81,12 @@ func runInfo(cmd *cobra.Command, args []string) error {
 			Zone:    props.Compute.Zone,
 			Region:  props.Compute.Region,
 		}
+	}
+
+	if flagInfoAnonymize {
+		info.Config.Account = "REDACTED"
+		info.Config.Project = "REDACTED"
+		info.Installation.ConfigDir = "REDACTED"
 	}
 
 	// Handle --format
