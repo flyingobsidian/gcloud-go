@@ -40,8 +40,8 @@ Global flags: `--project`, `--zone`, `--account`
 | `gcloud dataflow jobs describe JOB_ID` | `--region`, `--full` | (complete) |
 | `gcloud dataflow jobs cancel JOB_ID` | `--region`, `--force` | (complete) |
 | `gcloud storage buckets list` | `--format`, `--soft-deleted` | (complete) |
-| `gcloud storage cp SOURCE DESTINATION` | `-r`/`--recursive`, `--no-clobber`, `--storage-class` | `--gzip-*`, `--preserve-posix`, `--daisy-chain`, `--manifest-path` |
-| `gcloud storage ls [GCS_PATH]` | `-r`/`--recursive`, `--long`, `--json` | `--full`, `--all-versions`, `--buckets`, `--readable-sizes` |
+| `gcloud storage cp SOURCE DESTINATION` | `-r`/`--recursive`, `-n`/`--no-clobber`, `--storage-class` | `--gzip-*`, `--preserve-posix`, `--daisy-chain`, `--manifest-path` |
+| `gcloud storage ls [GCS_PATH]` | `-r`/`--recursive`, `-l`/`--long`, `--json` | `--full`, `--all-versions`, `--buckets`, `--readable-sizes` |
 | `gcloud monitoring policies list` | `--format`, `--filter` | (complete) |
 | `gcloud monitoring snoozes create` | `--display-name`, `--start-time`, `--end-time`, `--criteria-policies`, `--criteria-filter`, `--snooze-from-file` | (complete) |
 | `gcloud monitoring snoozes describe SNOOZE_ID` | | (complete) |
@@ -51,6 +51,6 @@ Global flags: `--project`, `--zone`, `--account`
 | `gcloud artifacts docker images scan IMAGE` | `--location`, `--format`, `--remote`, `--async` | `--additional-package-types` |
 | `gcloud artifacts docker images list-vulnerabilities SCAN_RESOURCE` | `--format` | (complete) |
 | `gcloud redis instances describe INSTANCE_NAME` | `--region` | (complete) |
-| `gcloud dataplex datascans run DATASCAN_ID` | `--location` | (complete) |
+| `gcloud dataplex datascans run DATASCAN_ID` | `--location`, `--datascan` | (complete) |
 | `gcloud dataplex datascans jobs list` | `--location`, `--datascan`, `--format` | (complete) |
 | `gcloud dataplex datascans jobs describe JOB_ID` | `--location`, `--datascan`, `--view` | (complete) |
