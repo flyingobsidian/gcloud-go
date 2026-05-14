@@ -56,6 +56,7 @@ var (
 	flagSnoozeEndTime     string
 	flagSnoozePolicies    []string
 	flagSnoozeFilter      string
+	flagSnoozeFromFile    string
 )
 
 // --- snoozes describe ---
@@ -91,6 +92,7 @@ var (
 	flagSnoozeUpdateDisplayName string
 	flagSnoozeUpdateStartTime   string
 	flagSnoozeUpdateEndTime     string
+	flagSnoozeUpdateFromFile    string
 )
 
 // --- snoozes cancel ---
@@ -115,6 +117,7 @@ func init() {
 	monitoringSnoozesCreateCmd.MarkFlagRequired("end-time")
 	monitoringSnoozesCreateCmd.Flags().StringSliceVar(&flagSnoozePolicies, "criteria-policies", nil, "Alert policy resource names to snooze")
 	monitoringSnoozesCreateCmd.Flags().StringVar(&flagSnoozeFilter, "criteria-filter", "", "Filter for snooze criteria")
+	monitoringSnoozesCreateCmd.Flags().StringVar(&flagSnoozeFromFile, "snooze-from-file", "", "JSON file containing snooze definition")
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesCreateCmd)
 
 	monitoringSnoozesListCmd.Flags().StringVar(&flagSnoozesListFormat, "format", "", "Output format (e.g. json)")
@@ -125,6 +128,7 @@ func init() {
 	monitoringSnoozesUpdateCmd.Flags().StringVar(&flagSnoozeUpdateDisplayName, "display-name", "", "New display name")
 	monitoringSnoozesUpdateCmd.Flags().StringVar(&flagSnoozeUpdateStartTime, "start-time", "", "New start time (RFC3339)")
 	monitoringSnoozesUpdateCmd.Flags().StringVar(&flagSnoozeUpdateEndTime, "end-time", "", "New end time (RFC3339)")
+	monitoringSnoozesUpdateCmd.Flags().StringVar(&flagSnoozeUpdateFromFile, "snooze-from-file", "", "JSON file containing snooze definition")
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesUpdateCmd)
 
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesCancelCmd)
@@ -181,16 +185,28 @@ func runMonitoringSnoozesCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	snooze := &monitoring.Snooze{
-		DisplayName: flagSnoozeDisplayName,
-		Interval: &monitoring.TimeInterval{
-			StartTime: flagSnoozeStartTime,
-			EndTime:   flagSnoozeEndTime,
-		},
-		Criteria: &monitoring.Criteria{
-			Policies: flagSnoozePolicies,
-			Filter:   flagSnoozeFilter,
-		},
+	var snooze *monitoring.Snooze
+	if flagSnoozeFromFile != "" {
+		data, err := os.ReadFile(flagSnoozeFromFile)
+		if err != nil {
+			return fmt.Errorf("reading snooze file: %w", err)
+		}
+		snooze = &monitoring.Snooze{}
+		if err := json.Unmarshal(data, snooze); err != nil {
+			return fmt.Errorf("parsing snooze file: %w", err)
+		}
+	} else {
+		snooze = &monitoring.Snooze{
+			DisplayName: flagSnoozeDisplayName,
+			Interval: &monitoring.TimeInterval{
+				StartTime: flagSnoozeStartTime,
+				EndTime:   flagSnoozeEndTime,
+			},
+			Criteria: &monitoring.Criteria{
+				Policies: flagSnoozePolicies,
+				Filter:   flagSnoozeFilter,
+			},
+		}
 	}
 
 	result, err := svc.Projects.Snoozes.Create(fmt.Sprintf("projects/%s", project), snooze).Context(ctx).Do()
@@ -269,6 +285,23 @@ func runMonitoringSnoozesUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	name := snoozeName(project, args[0])
+
+	if flagSnoozeUpdateFromFile != "" {
+		data, err := os.ReadFile(flagSnoozeUpdateFromFile)
+		if err != nil {
+			return fmt.Errorf("reading snooze file: %w", err)
+		}
+		snooze := &monitoring.Snooze{}
+		if err := json.Unmarshal(data, snooze); err != nil {
+			return fmt.Errorf("parsing snooze file: %w", err)
+		}
+		result, err := svc.Projects.Snoozes.Patch(name, snooze).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("updating snooze: %w", err)
+		}
+		fmt.Printf("Updated snooze [%s].\n", result.Name)
+		return nil
+	}
 
 	// Read-modify-write: get current snooze then apply updates.
 	snooze, err := svc.Projects.Snoozes.Get(name).Context(ctx).Do()
