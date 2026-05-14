@@ -65,7 +65,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 
 	info := infoResult{
 		Basic: infoBasic{
-			Version:         "gcloud-go 0.1.0",
+			Version:         "gcloud-go " + Version,
 			OperatingSystem: runtime.GOOS,
 			Architecture:    runtime.GOARCH,
 			GoVersion:       runtime.Version(),
