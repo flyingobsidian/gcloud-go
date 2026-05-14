@@ -26,6 +26,9 @@ var (
 	flagSCPInternalIP       bool
 	flagSCPKeyFile          string
 	flagSCPRecurse          bool
+	flagSCPPort             int
+	flagSCPCompress         bool
+	flagSCPFlag             []string
 )
 
 func init() {
@@ -33,6 +36,9 @@ func init() {
 	scpCmd.Flags().BoolVar(&flagSCPInternalIP, "internal-ip", false, "Connect using internal IP")
 	scpCmd.Flags().StringVar(&flagSCPKeyFile, "ssh-key-file", "", "SSH private key file")
 	scpCmd.Flags().BoolVar(&flagSCPRecurse, "recurse", false, "Upload directories recursively")
+	scpCmd.Flags().IntVar(&flagSCPPort, "port", 0, "SSH port on the remote host")
+	scpCmd.Flags().BoolVar(&flagSCPCompress, "compress", false, "Enable compression")
+	scpCmd.Flags().StringArrayVar(&flagSCPFlag, "scp-flag", nil, "Extra flags to pass to scp")
 
 	computeCmd.AddCommand(scpCmd)
 }
@@ -115,6 +121,14 @@ func runSCP(cmd *cobra.Command, args []string) error {
 		"-o", "IdentitiesOnly=yes",
 	)
 
+	if flagSCPCompress {
+		scpArgs = append(scpArgs, "-C")
+	}
+
+	for _, f := range flagSCPFlag {
+		scpArgs = append(scpArgs, f)
+	}
+
 	var host string
 
 	if flagSCPTunnelThroughIAP {
@@ -137,6 +151,10 @@ func runSCP(cmd *cobra.Command, args []string) error {
 		if host == "" {
 			return fmt.Errorf("instance %s has no external IP; consider --tunnel-through-iap", remoteTarget.Instance)
 		}
+	}
+
+	if flagSCPPort != 0 && !flagSCPTunnelThroughIAP {
+		scpArgs = append(scpArgs, "-P", strconv.Itoa(flagSCPPort))
 	}
 
 	// Build source and destination SCP arguments.
