@@ -51,11 +51,15 @@ var (
 	flagArtifactsScanLocation string
 	flagArtifactsScanFormat   string
 	flagArtifactsVulnFormat   string
+	flagArtifactsScanRemote   bool
+	flagArtifactsScanAsync    bool
 )
 
 func init() {
 	artifactsScanCmd.Flags().StringVar(&flagArtifactsScanLocation, "location", "", "Location for the scan (e.g. us, europe)")
 	artifactsScanCmd.Flags().StringVar(&flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
+	artifactsScanCmd.Flags().BoolVar(&flagArtifactsScanRemote, "remote", false, "Scan the image in the registry without pulling it")
+	artifactsScanCmd.Flags().BoolVar(&flagArtifactsScanAsync, "async", false, "Return immediately without waiting for scan to complete")
 	artifactsListVulnerabilitiesCmd.Flags().StringVar(&flagArtifactsVulnFormat, "format", "", "Output format (e.g. json)")
 
 	artifactsDockerImagesCmd.AddCommand(artifactsScanCmd)
@@ -91,6 +95,16 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 	op, err := svc.Projects.Locations.Scans.AnalyzePackages(parent, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("starting scan: %w", err)
+	}
+
+	if flagArtifactsScanAsync {
+		if flagArtifactsScanFormat == "json" {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(op)
+		}
+		fmt.Printf("Scan started. Operation: %s\n", op.Name)
+		return nil
 	}
 
 	// Poll the operation until done.
