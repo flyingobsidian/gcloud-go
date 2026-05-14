@@ -18,7 +18,9 @@ jobs:
           go-version-file: go.mod
 
       - name: Build
-        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/gcloud-go .
+        run: |
+          VERSION=$(git describe --tags 2>/dev/null || echo dev)
+          CGO_ENABLED=0 go build -ldflags="-s -w -X github.com/flyingobsidian/gcloud-go/cmd.Version=$VERSION" -o bin/gcloud-go .
 
       - name: Unit tests
         run: go test ./...
