@@ -17,9 +17,11 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gcloud",
-	Short: "Lightweight gcloud CLI replacement",
-	Version: Version,
+	Use:           "gcloud",
+	Short:         "Lightweight gcloud CLI replacement",
+	Version:       Version,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func init() {
