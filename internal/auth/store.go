@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/config"
 	_ "modernc.org/sqlite"
@@ -56,7 +57,7 @@ func (s *CredentialStore) Store(credFile string) (string, error) {
 	// Determine the account identifier.
 	account := credAccountID(parsed)
 	if account == "" {
-		return "", fmt.Errorf("credential file missing client_email field")
+		return "", fmt.Errorf("cannot determine account from credential file (no client_email or service_account_impersonation_url)")
 	}
 
 	// Store in SQLite credentials.db.
@@ -153,9 +154,29 @@ func credAccountID(cred map[string]any) string {
 	if email, ok := cred["client_email"].(string); ok && email != "" {
 		return email
 	}
-	// Authorized user: use account field if present, otherwise client_id.
+	// Authorized user: use account field if present.
 	if acct, ok := cred["account"].(string); ok && acct != "" {
 		return acct
 	}
+	// External account (workload identity federation): extract SA email
+	// from service_account_impersonation_url.
+	if url, ok := cred["service_account_impersonation_url"].(string); ok && url != "" {
+		return extractSAFromImpersonationURL(url)
+	}
 	return ""
+}
+
+// extractSAFromImpersonationURL extracts the service account email from a URL like:
+// https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/SA@PROJECT.iam.gserviceaccount.com:generateAccessToken
+func extractSAFromImpersonationURL(url string) string {
+	const marker = "/serviceAccounts/"
+	idx := strings.Index(url, marker)
+	if idx < 0 {
+		return ""
+	}
+	sa := url[idx+len(marker):]
+	if colon := strings.IndexByte(sa, ':'); colon >= 0 {
+		sa = sa[:colon]
+	}
+	return sa
 }
