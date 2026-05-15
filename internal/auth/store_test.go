@@ -143,6 +143,37 @@ func TestStoreInvalidJSON(t *testing.T) {
 	}
 }
 
+func TestStoreExternalAccount(t *testing.T) {
+	dir := t.TempDir()
+	store := &CredentialStore{configDir: dir}
+
+	cred := map[string]any{
+		"type":                              "external_account",
+		"audience":                          "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/provider",
+		"subject_token_type":                "urn:ietf:params:oauth:token-type:jwt",
+		"token_url":                         "https://sts.googleapis.com/v1/token",
+		"service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/ci-sa@my-project.iam.gserviceaccount.com:generateAccessToken",
+		"credential_source":                 map[string]any{"file": ".ci_job_jwt_file"},
+	}
+	data, err := json.Marshal(cred)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	credFile := filepath.Join(t.TempDir(), "external.json")
+	if err := os.WriteFile(credFile, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	account, err := store.Store(credFile)
+	if err != nil {
+		t.Fatalf("Store() error: %v", err)
+	}
+	if account != "ci-sa@my-project.iam.gserviceaccount.com" {
+		t.Errorf("Store() account = %q, want %q", account, "ci-sa@my-project.iam.gserviceaccount.com")
+	}
+}
+
 func TestStoreMissingClientEmail(t *testing.T) {
 	dir := t.TempDir()
 	store := &CredentialStore{configDir: dir}
@@ -206,6 +237,14 @@ func TestCredAccountID(t *testing.T) {
 	}{
 		{"service_account", map[string]any{"client_email": "sa@proj.iam.gserviceaccount.com"}, "sa@proj.iam.gserviceaccount.com"},
 		{"authorized_user with account", map[string]any{"account": "user@gmail.com"}, "user@gmail.com"},
+		{"external_account with impersonation", map[string]any{
+			"type":                                "external_account",
+			"service_account_impersonation_url":   "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/gitlab-ci@my-project.iam.gserviceaccount.com:generateAccessToken",
+		}, "gitlab-ci@my-project.iam.gserviceaccount.com"},
+		{"external_account without impersonation", map[string]any{
+			"type":     "external_account",
+			"audience": "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/provider",
+		}, ""},
 		{"empty", map[string]any{}, ""},
 	}
 	for _, tt := range tests {
