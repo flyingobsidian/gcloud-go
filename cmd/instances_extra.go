@@ -373,6 +373,13 @@ func resolveRegion() (string, string, error) {
 }
 
 func formatOutput(v any, format string) error {
+	if isGetFormat(format) {
+		field := extractGetField(format)
+		if inst, ok := v.(*compute.Instance); ok {
+			fmt.Println(getInstanceField(inst, field))
+			return nil
+		}
+	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
