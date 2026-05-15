@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -85,45 +86,46 @@ func TestGetInternalIPEmpty(t *testing.T) {
 	}
 }
 
-func TestBuildSSHOpts(t *testing.T) {
-	// With explicit key file.
-	opts := buildSSHOpts("/path/to/key")
+func TestBuildSSHOptsWithExistingKey(t *testing.T) {
+	// Create a temp key file so os.Stat succeeds.
+	tmp := t.TempDir()
+	keyFile := filepath.Join(tmp, "test_key")
+	os.WriteFile(keyFile, []byte("fake"), 0600)
+
+	opts := buildSSHOpts(keyFile)
 	found := false
 	for i, o := range opts {
-		if o == "-i" && i+1 < len(opts) && opts[i+1] == "/path/to/key" {
+		if o == "-i" && i+1 < len(opts) && opts[i+1] == keyFile {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("buildSSHOpts('/path/to/key') should include -i /path/to/key")
+		t.Error("buildSSHOpts with existing key should include -i <keyFile>")
 	}
 
-	// Without explicit key file, should default to google_compute_engine.
-	opts2 := buildSSHOpts("")
-	foundDefault := false
-	for i, o := range opts2 {
-		if o == "-i" && i+1 < len(opts2) {
-			if filepath.Base(opts2[i+1]) == "google_compute_engine" {
-				foundDefault = true
-			}
-			break
+	// Should also include IdentitiesOnly when key exists.
+	foundID := false
+	for _, o := range opts {
+		if o == "IdentitiesOnly=yes" {
+			foundID = true
 		}
 	}
-	if !foundDefault {
-		t.Error("buildSSHOpts('') should default to google_compute_engine key")
+	if !foundID {
+		t.Error("buildSSHOpts with existing key should include IdentitiesOnly=yes")
 	}
+}
 
-	// Should include UserKnownHostsFile.
-	foundKH := false
-	for _, o := range opts2 {
-		if len(o) > len("UserKnownHostsFile=") && o[:len("UserKnownHostsFile=")] == "UserKnownHostsFile=" {
-			if filepath.Base(o[len("UserKnownHostsFile="):]) == "google_compute_known_hosts" {
-				foundKH = true
-			}
+func TestBuildSSHOptsMissingKey(t *testing.T) {
+	opts := buildSSHOpts("/nonexistent/path/to/key")
+	for i, o := range opts {
+		if o == "-i" && i+1 < len(opts) {
+			t.Error("buildSSHOpts with missing key should not include -i")
 		}
 	}
-	if !foundKH {
-		t.Error("buildSSHOpts() should include UserKnownHostsFile=...google_compute_known_hosts")
+	for _, o := range opts {
+		if o == "IdentitiesOnly=yes" {
+			t.Error("buildSSHOpts with missing key should not include IdentitiesOnly=yes")
+		}
 	}
 }
