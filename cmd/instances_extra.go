@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/flyingobsidian/gcloud-go/internal/config"
@@ -133,7 +134,7 @@ func runInstancesDescribe(cmd *cobra.Command, args []string) error {
 }
 
 func runInstancesList(cmd *cobra.Command, args []string) error {
-	project, zone, err := resolveProjectZone()
+	project, err := resolveProject()
 	if err != nil {
 		return err
 	}
@@ -144,38 +145,34 @@ func runInstancesList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	call := svc.Instances.List(project, zone).Context(ctx)
-	if flagListFilter != "" {
-		call = call.Filter(flagListFilter)
-	}
-
-	resp, err := call.Do()
-	if err != nil {
-		return fmt.Errorf("listing instances: %w", err)
-	}
-
-	if flagListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(resp.Items)
-	}
-
-	if isGetFormat(flagListFormat) {
-		field := extractGetField(flagListFormat)
-		for _, inst := range resp.Items {
-			fmt.Println(getInstanceField(inst, field))
+	// Resolve zone: if set, list in that zone; otherwise aggregate across all zones.
+	zone := resolveZone()
+	var instances []*compute.Instance
+	if zone != "" {
+		call := svc.Instances.List(project, zone).Context(ctx)
+		if flagListFilter != "" {
+			call = call.Filter(flagListFilter)
 		}
-		return nil
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing instances: %w", err)
+		}
+		instances = resp.Items
+	} else {
+		call := svc.Instances.AggregatedList(project).Context(ctx)
+		if flagListFilter != "" {
+			call = call.Filter(flagListFilter)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing instances: %w", err)
+		}
+		for _, scoped := range resp.Items {
+			instances = append(instances, scoped.Instances...)
+		}
 	}
 
-	fmt.Printf("%-30s %-15s %-20s %-15s %-15s\n", "NAME", "ZONE", "MACHINE_TYPE", "INTERNAL_IP", "STATUS")
-	for _, inst := range resp.Items {
-		mt := path.Base(inst.MachineType)
-		ip := getInternalIP(inst)
-		z := path.Base(inst.Zone)
-		fmt.Printf("%-30s %-15s %-20s %-15s %-15s\n", inst.Name, z, mt, ip, inst.Status)
-	}
-	return nil
+	return formatInstanceList(instances)
 }
 
 func runInstancesCreate(cmd *cobra.Command, args []string) error {
@@ -311,6 +308,55 @@ func runInstancesDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func resolveZone() string {
+	if flagZone != "" {
+		return flagZone
+	}
+	props, _ := config.Load()
+	if props != nil {
+		return config.Resolve("", "CLOUDSDK_COMPUTE_ZONE", props.Compute.Zone)
+	}
+	return ""
+}
+
+func formatInstanceList(instances []*compute.Instance) error {
+	if flagListFormat == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(instances)
+	}
+
+	if isGetFormat(flagListFormat) {
+		field := extractGetField(flagListFormat)
+		for _, inst := range instances {
+			fmt.Println(getInstanceField(inst, field))
+		}
+		return nil
+	}
+
+	if isCsvFormat(flagListFormat) {
+		fields := extractCsvFields(flagListFormat)
+		fmt.Println(strings.Join(fields, ","))
+		for _, inst := range instances {
+			var vals []string
+			for _, f := range fields {
+				vals = append(vals, getInstanceField(inst, f))
+			}
+			fmt.Println(strings.Join(vals, ","))
+		}
+		return nil
+	}
+
+	fmt.Printf("%-30s %-15s %-20s %-15s %-15s\n", "NAME", "ZONE", "MACHINE_TYPE", "INTERNAL_IP", "STATUS")
+	for _, inst := range instances {
+		mt := path.Base(inst.MachineType)
+		ip := getInternalIP(inst)
+		z := path.Base(inst.Zone)
+		fmt.Printf("%-30s %-15s %-20s %-15s %-15s\n", inst.Name, z, mt, ip, inst.Status)
+	}
+	return nil
+}
+
 // --- Helpers ---
 
 func resolveRegion() (string, string, error) {
@@ -340,18 +386,42 @@ func extractGetField(format string) string {
 	return format[4 : len(format)-1]
 }
 
+func isCsvFormat(format string) bool {
+	return len(format) > 5 && strings.HasPrefix(format, "csv(") && format[len(format)-1] == ')'
+}
+
+func extractCsvFields(format string) []string {
+	inner := format[4 : len(format)-1]
+	var fields []string
+	for _, f := range strings.Split(inner, ",") {
+		fields = append(fields, strings.TrimSpace(f))
+	}
+	return fields
+}
+
 func getInstanceField(inst *compute.Instance, field string) string {
-	switch field {
+	switch strings.ToUpper(field) {
 	case "STATUS":
 		return inst.Status
-	case "name":
+	case "NAME":
 		return inst.Name
+	case "ZONE":
+		return path.Base(inst.Zone)
+	case "MACHINE_TYPE":
+		return path.Base(inst.MachineType)
+	case "INTERNAL_IP":
+		return getInternalIP(inst)
+	case "EXTERNAL_IP":
+		return getExternalIP(inst)
+	}
+	// Handle dotted-path field access (case-sensitive).
+	switch field {
 	case "networkInterfaces[0].networkIP":
 		return getInternalIP(inst)
 	case "networkInterfaces[0].accessConfigs[0].natIP":
 		return getExternalIP(inst)
 	default:
-		return inst.Name
+		return ""
 	}
 }
 
