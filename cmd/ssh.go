@@ -160,7 +160,9 @@ func buildSSHOpts(keyFile string) []string {
 		keyFile = googleSSHKeyPath()
 	}
 	if keyFile != "" {
-		opts = append(opts, "-i", keyFile)
+		if _, err := os.Stat(keyFile); err == nil {
+			opts = append(opts, "-i", keyFile, "-o", "IdentitiesOnly=yes")
+		}
 	}
 
 	// Use gcloud's known_hosts file.
@@ -172,7 +174,6 @@ func buildSSHOpts(keyFile string) []string {
 	opts = append(opts,
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "CheckHostIP=no",
-		"-o", "IdentitiesOnly=yes",
 	)
 	return opts
 }
