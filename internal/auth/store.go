@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/flyingobsidian/gcloud-go/internal/config"
 	_ "modernc.org/sqlite"
@@ -15,7 +16,9 @@ import (
 // CredentialStore reads credentials from gcloud's native SQLite credentials.db
 // and can also store service account JSON files for auth login --cred-file.
 type CredentialStore struct {
-	configDir string
+	configDir  string
+	dbPathOnce sync.Once
+	dbPath     string
 }
 
 // NewStore creates a credential store using the gcloud config directory.
@@ -106,7 +109,10 @@ func (s *CredentialStore) List() ([]string, error) {
 }
 
 func (s *CredentialStore) listFromSQLite() ([]string, error) {
-	dbPath := filepath.Join(s.configDir, "credentials.db")
+	dbPath := s.sqliteDBPath()
+	if dbPath == "" {
+		return nil, fmt.Errorf("no writable credentials.db path")
+	}
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, err
@@ -131,7 +137,10 @@ func (s *CredentialStore) listFromSQLite() ([]string, error) {
 }
 
 func (s *CredentialStore) loadFromSQLite(account string) ([]byte, error) {
-	dbPath := filepath.Join(s.configDir, "credentials.db")
+	dbPath := s.sqliteDBPath()
+	if dbPath == "" {
+		return nil, fmt.Errorf("no credentials.db available")
+	}
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, err
@@ -155,15 +164,38 @@ func (s *CredentialStore) loadFromJSON(account string) ([]byte, error) {
 	return data, nil
 }
 
+// sqliteDBPath returns a writable path for credentials.db.
+// It tries the config directory first, falling back to /tmp/gcloud-go/.
+func (s *CredentialStore) sqliteDBPath() string {
+	s.dbPathOnce.Do(func() {
+		primary := filepath.Join(s.configDir, "credentials.db")
+		if db, err := sql.Open("sqlite", primary); err == nil {
+			if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS credentials (account_id TEXT PRIMARY KEY, value BLOB)`); err == nil {
+				db.Close()
+				s.dbPath = primary
+				return
+			}
+			db.Close()
+		}
+		fallback := filepath.Join(os.TempDir(), "gcloud-go")
+		if err := os.MkdirAll(fallback, 0700); err == nil {
+			s.dbPath = filepath.Join(fallback, "credentials.db")
+		}
+	})
+	return s.dbPath
+}
+
 func (s *CredentialStore) storeToSQLite(account string, data []byte) error {
-	dbPath := filepath.Join(s.configDir, "credentials.db")
+	dbPath := s.sqliteDBPath()
+	if dbPath == "" {
+		return fmt.Errorf("no writable credentials.db path")
+	}
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	// Ensure table exists.
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS credentials (account_id TEXT PRIMARY KEY, value BLOB)`)
 	if err != nil {
 		return err
