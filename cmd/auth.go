@@ -96,6 +96,16 @@ func runAuthList(cmd *cobra.Command, args []string) error {
 		active = props.Core.Account
 	}
 
+	if len(accounts) == 0 {
+		fmt.Println("")
+		fmt.Println("No credentialed accounts found")
+		fmt.Println("")
+		fmt.Println("To login, run:")
+		fmt.Println("    $ gcloud auth login `ACCOUNT`")
+		fmt.Println("")
+		return nil
+	}
+
 	fmt.Println("      Credentialed Accounts")
 	fmt.Println("ACTIVE  ACCOUNT")
 	for _, acct := range accounts {
@@ -109,7 +119,7 @@ func runAuthList(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("To set the active account, run:")
 	fmt.Println("    $ gcloud config set account `ACCOUNT`")
-
+	fmt.Println("")
 	return nil
 }
 
