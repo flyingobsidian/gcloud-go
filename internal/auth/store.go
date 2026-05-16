@@ -60,11 +60,8 @@ func (s *CredentialStore) Store(credFile string) (string, error) {
 		return "", fmt.Errorf("cannot determine account from credential file (no client_email or service_account_impersonation_url)")
 	}
 
-	// Store in SQLite credentials.db.
-	if err := s.storeToSQLite(account, data); err != nil {
-		// Non-fatal: fall through to JSON store.
-		fmt.Fprintf(os.Stderr, "warning: could not write to credentials.db: %v\n", err)
-	}
+	// Store in SQLite credentials.db (best-effort for gcloud compatibility).
+	_ = s.storeToSQLite(account, data)
 
 	// Also store as JSON file for fallback.
 	jsonDir := filepath.Join(s.configDir, "credentials")
@@ -79,18 +76,46 @@ func (s *CredentialStore) Store(credFile string) (string, error) {
 	return account, nil
 }
 
-// List returns all stored account identifiers from the SQLite DB.
+// List returns all stored account identifiers from both the SQLite DB
+// and the JSON credential directory.
 func (s *CredentialStore) List() ([]string, error) {
+	seen := make(map[string]bool)
+
+	// Try SQLite credentials.db.
+	if accts, err := s.listFromSQLite(); err == nil {
+		for _, a := range accts {
+			seen[a] = true
+		}
+	}
+
+	// Also check JSON credential directory.
+	jsonDir := filepath.Join(s.configDir, "credentials")
+	entries, _ := os.ReadDir(jsonDir)
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasSuffix(name, ".json") {
+			seen[strings.TrimSuffix(name, ".json")] = true
+		}
+	}
+
+	accounts := make([]string, 0, len(seen))
+	for a := range seen {
+		accounts = append(accounts, a)
+	}
+	return accounts, nil
+}
+
+func (s *CredentialStore) listFromSQLite() ([]string, error) {
 	dbPath := filepath.Join(s.configDir, "credentials.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("opening credentials.db: %w", err)
+		return nil, err
 	}
 	defer db.Close()
 
 	rows, err := db.Query(`SELECT account_id FROM credentials`)
 	if err != nil {
-		return nil, fmt.Errorf("querying credentials: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
