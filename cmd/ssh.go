@@ -6,8 +6,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
@@ -64,6 +67,31 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	inst, err := svc.Instances.Get(project, zone, instance).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting instance %s: %w", instance, err)
+	}
+
+	// Ensure SSH key exists (unless --plain or --ssh-key-file is set).
+	if !flagSSHPlain && flagSSHKeyFile == "" {
+		keyPath := googleSSHKeyPath()
+		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+			keyPath, err = generateSSHKey(keyPath)
+			if err != nil {
+				return fmt.Errorf("generating SSH key: %w", err)
+			}
+			sshUser := user
+			if sshUser == "" {
+				if u, err := osUser(); err == nil {
+					sshUser = u
+				}
+			}
+			if sshUser != "" {
+				if err := pushSSHKeyToProject(ctx, svc, project, sshUser, keyPath+".pub"); err != nil {
+					fmt.Fprintf(os.Stderr, "WARNING: could not push SSH key to project metadata: %v\n", err)
+				} else {
+					fmt.Fprintln(os.Stderr, "Waiting for SSH key to propagate.")
+					time.Sleep(5 * time.Second)
+				}
+			}
+		}
 	}
 
 	// Build SSH args.
@@ -227,4 +255,89 @@ func getInternalIP(inst *compute.Instance) string {
 		return inst.NetworkInterfaces[0].NetworkIP
 	}
 	return ""
+}
+
+func osUser() (string, error) {
+	u, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return u.Username, nil
+}
+
+// generateSSHKey creates an SSH keypair. It tries the preferred path first,
+// falling back to /tmp/gcloud-go/ if the directory can't be created.
+func generateSSHKey(preferredPath string) (string, error) {
+	keyPath := preferredPath
+	dir := filepath.Dir(keyPath)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		// Fall back to /tmp.
+		dir = filepath.Join(os.TempDir(), "gcloud-go")
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return "", fmt.Errorf("creating SSH key directory: %w", err)
+		}
+		keyPath = filepath.Join(dir, "google_compute_engine")
+	}
+
+	fmt.Fprintf(os.Stderr, "WARNING: The SSH key file for gcloud does not exist.\n")
+	fmt.Fprintf(os.Stderr, "WARNING: SSH keygen will be executed to generate a key.\n")
+
+	cmd := exec.Command("ssh-keygen", "-t", "rsa", "-b", "3072", "-f", keyPath, "-N", "", "-q")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("running ssh-keygen: %w", err)
+	}
+
+	return keyPath, nil
+}
+
+// pushSSHKeyToProject adds the public key to the project's SSH metadata.
+func pushSSHKeyToProject(ctx context.Context, svc *compute.Service, project, sshUser, pubKeyPath string) error {
+	pubKey, err := os.ReadFile(pubKeyPath)
+	if err != nil {
+		return fmt.Errorf("reading public key: %w", err)
+	}
+
+	// Format: "user:ssh-rsa AAAA... comment"
+	entry := sshUser + ":" + strings.TrimSpace(string(pubKey))
+
+	// Get current project metadata.
+	proj, err := svc.Projects.Get(project).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("getting project metadata: %w", err)
+	}
+
+	// Find or create the ssh-keys metadata item.
+	var sshKeysItem *compute.MetadataItems
+	for _, item := range proj.CommonInstanceMetadata.Items {
+		if item.Key == "ssh-keys" {
+			sshKeysItem = item
+			break
+		}
+	}
+
+	if sshKeysItem == nil {
+		sshKeysItem = &compute.MetadataItems{Key: "ssh-keys", Value: &entry}
+		proj.CommonInstanceMetadata.Items = append(proj.CommonInstanceMetadata.Items, sshKeysItem)
+	} else {
+		// Append to existing keys if not already present.
+		existing := ""
+		if sshKeysItem.Value != nil {
+			existing = *sshKeysItem.Value
+		}
+		if !strings.Contains(existing, strings.TrimSpace(string(pubKey))) {
+			combined := existing + "\n" + entry
+			sshKeysItem.Value = &combined
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "Updating project ssh metadata...\n")
+	_, err = svc.Projects.SetCommonInstanceMetadata(project, proj.CommonInstanceMetadata).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("updating project metadata: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Updating project ssh metadata...done.\n")
+	return nil
 }

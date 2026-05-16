@@ -22,6 +22,12 @@ var authLoginCmd = &cobra.Command{
 	RunE:  runAuthLogin,
 }
 
+var authListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List credentialed accounts",
+	RunE:  runAuthList,
+}
+
 var (
 	flagCredFile  string
 	flagBrief     bool
@@ -35,6 +41,7 @@ func init() {
 	authLoginCmd.Flags().BoolVar(&flagUpdateADC, "update-adc", false, "Also update Application Default Credentials")
 
 	authCmd.AddCommand(authLoginCmd)
+	authCmd.AddCommand(authListCmd)
 	rootCmd.AddCommand(authCmd)
 }
 
@@ -68,6 +75,51 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 	if !flagBrief {
 		fmt.Printf("Activated service account credentials for: [%s]\n", account)
 	}
+	return nil
+}
+
+func runAuthList(cmd *cobra.Command, args []string) error {
+	store, err := auth.NewStore()
+	if err != nil {
+		return fmt.Errorf("initializing credential store: %w", err)
+	}
+
+	accounts, err := store.List()
+	if err != nil {
+		return fmt.Errorf("listing credentials: %w", err)
+	}
+
+	// Determine active account from config.
+	props, _ := config.Load()
+	active := ""
+	if props != nil {
+		active = props.Core.Account
+	}
+
+	if len(accounts) == 0 {
+		fmt.Println("")
+		fmt.Println("No credentialed accounts found")
+		fmt.Println("")
+		fmt.Println("To login, run:")
+		fmt.Println("    $ gcloud auth login `ACCOUNT`")
+		fmt.Println("")
+		return nil
+	}
+
+	fmt.Println("      Credentialed Accounts")
+	fmt.Println("ACTIVE  ACCOUNT")
+	for _, acct := range accounts {
+		marker := " "
+		if acct == active {
+			marker = "*"
+		}
+		fmt.Printf("%s       %s\n", marker, acct)
+	}
+
+	fmt.Println()
+	fmt.Println("To set the active account, run:")
+	fmt.Println("    $ gcloud config set account `ACCOUNT`")
+	fmt.Println("")
 	return nil
 }
 
