@@ -162,26 +162,35 @@ func runForwardingRulesList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	resp, err := svc.ForwardingRules.AggregatedList(project).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("listing forwarding rules: %w", err)
+	var allRules []*compute.ForwardingRule
+	pageToken := ""
+	for {
+		call := svc.ForwardingRules.AggregatedList(project).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing forwarding rules: %w", err)
+		}
+		for _, scoped := range resp.Items {
+			allRules = append(allRules, scoped.ForwardingRules...)
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	if flagFRListFormat == "json" {
-		var all []*compute.ForwardingRule
-		for _, scoped := range resp.Items {
-			all = append(all, scoped.ForwardingRules...)
-		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(all)
+		return enc.Encode(allRules)
 	}
 
 	fmt.Printf("%-40s %-20s %-15s %-10s\n", "NAME", "REGION", "IP_ADDRESS", "IP_PROTOCOL")
-	for _, scoped := range resp.Items {
-		for _, fr := range scoped.ForwardingRules {
-			fmt.Printf("%-40s %-20s %-15s %-10s\n", fr.Name, fr.Region, fr.IPAddress, fr.IPProtocol)
-		}
+	for _, fr := range allRules {
+		fmt.Printf("%-40s %-20s %-15s %-10s\n", fr.Name, fr.Region, fr.IPAddress, fr.IPProtocol)
 	}
 	return nil
 }

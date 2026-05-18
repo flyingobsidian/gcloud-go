@@ -150,24 +150,35 @@ func runMonitoringPoliciesList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	call := svc.Projects.AlertPolicies.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
-	if flagMonPoliciesFilter != "" {
-		call = call.Filter(flagMonPoliciesFilter)
-	}
-
-	resp, err := call.Do()
-	if err != nil {
-		return fmt.Errorf("listing alert policies: %w", err)
+	var allPolicies []*monitoring.AlertPolicy
+	pageToken := ""
+	for {
+		call := svc.Projects.AlertPolicies.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
+		if flagMonPoliciesFilter != "" {
+			call = call.Filter(flagMonPoliciesFilter)
+		}
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing alert policies: %w", err)
+		}
+		allPolicies = append(allPolicies, resp.AlertPolicies...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	if flagMonPoliciesFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(resp.AlertPolicies)
+		return enc.Encode(allPolicies)
 	}
 
 	fmt.Printf("%-60s %-10s %s\n", "NAME", "ENABLED", "DISPLAY_NAME")
-	for _, p := range resp.AlertPolicies {
+	for _, p := range allPolicies {
 		fmt.Printf("%-60s %-10t %s\n", p.Name, p.Enabled, p.DisplayName)
 	}
 	return nil
@@ -254,19 +265,32 @@ func runMonitoringSnoozesList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	resp, err := svc.Projects.Snoozes.List(fmt.Sprintf("projects/%s", project)).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("listing snoozes: %w", err)
+	var allSnoozes []*monitoring.Snooze
+	pageToken := ""
+	for {
+		call := svc.Projects.Snoozes.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing snoozes: %w", err)
+		}
+		allSnoozes = append(allSnoozes, resp.Snoozes...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	if flagSnoozesListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(resp.Snoozes)
+		return enc.Encode(allSnoozes)
 	}
 
 	fmt.Printf("%-60s %s\n", "NAME", "DISPLAY_NAME")
-	for _, s := range resp.Snoozes {
+	for _, s := range allSnoozes {
 		fmt.Printf("%-60s %s\n", s.Name, s.DisplayName)
 	}
 	return nil

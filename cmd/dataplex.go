@@ -137,19 +137,33 @@ func runDataplexDatascansJobsList(cmd *cobra.Command, args []string) error {
 	}
 
 	parent := datascanName(project, location, datascanID)
-	resp, err := svc.Projects.Locations.DataScans.Jobs.List(parent).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("listing data scan jobs: %w", err)
+
+	var allJobs []*dataplex.GoogleCloudDataplexV1DataScanJob
+	pageToken := ""
+	for {
+		call := svc.Projects.Locations.DataScans.Jobs.List(parent).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing data scan jobs: %w", err)
+		}
+		allJobs = append(allJobs, resp.DataScanJobs...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	if flagDataplexJobFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(resp.DataScanJobs)
+		return enc.Encode(allJobs)
 	}
 
 	fmt.Printf("%-60s %-15s %s\n", "NAME", "STATE", "START_TIME")
-	for _, j := range resp.DataScanJobs {
+	for _, j := range allJobs {
 		fmt.Printf("%-60s %-15s %s\n", j.Name, j.State, j.StartTime)
 	}
 	return nil

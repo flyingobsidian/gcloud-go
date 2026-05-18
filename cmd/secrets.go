@@ -293,26 +293,38 @@ func runSecretsList(cmd *cobra.Command, args []string) error {
 	}
 
 	parent := secrets.SecretParent(project, flagSecretsLocation)
-	call := svc.Projects.Secrets.List(parent).Context(ctx)
-	if flagSecretsFilter != "" {
-		call = call.Filter(flagSecretsFilter)
-	}
 
-	resp, err := call.Do()
-	if err != nil {
-		return fmt.Errorf("listing secrets: %w", err)
+	var allSecrets []*secretmanager.Secret
+	pageToken := ""
+	for {
+		call := svc.Projects.Secrets.List(parent).Context(ctx)
+		if flagSecretsFilter != "" {
+			call = call.Filter(flagSecretsFilter)
+		}
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing secrets: %w", err)
+		}
+		allSecrets = append(allSecrets, resp.Secrets...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	// Handle --format.
 	if flagSecretsFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(resp.Secrets)
+		return enc.Encode(allSecrets)
 	}
 
 	if strings.HasPrefix(flagSecretsFormat, "get(") && strings.HasSuffix(flagSecretsFormat, ")") {
 		field := flagSecretsFormat[4 : len(flagSecretsFormat)-1]
-		for _, s := range resp.Secrets {
+		for _, s := range allSecrets {
 			switch field {
 			case "name":
 				fmt.Println(s.Name)
@@ -327,7 +339,7 @@ func runSecretsList(cmd *cobra.Command, args []string) error {
 
 	// Default table format.
 	fmt.Printf("%-60s %s\n", "NAME", "CREATED")
-	for _, s := range resp.Secrets {
+	for _, s := range allSecrets {
 		fmt.Printf("%-60s %s\n", s.Name, s.CreateTime)
 	}
 	return nil
