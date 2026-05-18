@@ -149,26 +149,46 @@ func runInstancesList(cmd *cobra.Command, args []string) error {
 	zone := resolveZone()
 	var instances []*compute.Instance
 	if zone != "" {
-		call := svc.Instances.List(project, zone).Context(ctx)
-		if flagListFilter != "" {
-			call = call.Filter(flagListFilter)
+		pageToken := ""
+		for {
+			call := svc.Instances.List(project, zone).Context(ctx)
+			if flagListFilter != "" {
+				call = call.Filter(flagListFilter)
+			}
+			if pageToken != "" {
+				call = call.PageToken(pageToken)
+			}
+			resp, err := call.Do()
+			if err != nil {
+				return fmt.Errorf("listing instances: %w", err)
+			}
+			instances = append(instances, resp.Items...)
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
 		}
-		resp, err := call.Do()
-		if err != nil {
-			return fmt.Errorf("listing instances: %w", err)
-		}
-		instances = resp.Items
 	} else {
-		call := svc.Instances.AggregatedList(project).Context(ctx)
-		if flagListFilter != "" {
-			call = call.Filter(flagListFilter)
-		}
-		resp, err := call.Do()
-		if err != nil {
-			return fmt.Errorf("listing instances: %w", err)
-		}
-		for _, scoped := range resp.Items {
-			instances = append(instances, scoped.Instances...)
+		pageToken := ""
+		for {
+			call := svc.Instances.AggregatedList(project).Context(ctx)
+			if flagListFilter != "" {
+				call = call.Filter(flagListFilter)
+			}
+			if pageToken != "" {
+				call = call.PageToken(pageToken)
+			}
+			resp, err := call.Do()
+			if err != nil {
+				return fmt.Errorf("listing instances: %w", err)
+			}
+			for _, scoped := range resp.Items {
+				instances = append(instances, scoped.Instances...)
+			}
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
 		}
 	}
 
