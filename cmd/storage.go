@@ -108,22 +108,34 @@ func runStorageBucketsList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	call := svc.Buckets.List(project).Context(ctx)
-	if flagStorageBucketsSoftDeleted {
-		call = call.SoftDeleted(true)
-	}
-	resp, err := call.Do()
-	if err != nil {
-		return fmt.Errorf("listing buckets: %w", err)
+	var allBuckets []*storage.Bucket
+	pageToken := ""
+	for {
+		call := svc.Buckets.List(project).Context(ctx)
+		if flagStorageBucketsSoftDeleted {
+			call = call.SoftDeleted(true)
+		}
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing buckets: %w", err)
+		}
+		allBuckets = append(allBuckets, resp.Items...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	if flagStorageBucketsFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(resp.Items)
+		return enc.Encode(allBuckets)
 	}
 
-	for _, b := range resp.Items {
+	for _, b := range allBuckets {
 		fmt.Printf("gs://%s/\n", b.Name)
 	}
 	return nil
@@ -279,12 +291,23 @@ func runStorageLs(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		resp, err := svc.Buckets.List(project).Context(ctx).Do()
-		if err != nil {
-			return fmt.Errorf("listing buckets: %w", err)
-		}
-		for _, b := range resp.Items {
-			fmt.Printf("gs://%s/\n", b.Name)
+		pageToken := ""
+		for {
+			call := svc.Buckets.List(project).Context(ctx)
+			if pageToken != "" {
+				call = call.PageToken(pageToken)
+			}
+			resp, err := call.Do()
+			if err != nil {
+				return fmt.Errorf("listing buckets: %w", err)
+			}
+			for _, b := range resp.Items {
+				fmt.Printf("gs://%s/\n", b.Name)
+			}
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
 		}
 		return nil
 	}
@@ -294,14 +317,27 @@ func runStorageLs(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	call := svc.Objects.List(bucket).Prefix(prefix).Context(ctx)
-	if !flagStorageLsRecurse {
-		call = call.Delimiter("/")
-	}
-
-	resp, err := call.Do()
-	if err != nil {
-		return fmt.Errorf("listing objects: %w", err)
+	var allPrefixes []string
+	var allObjects []*storage.Object
+	pageToken := ""
+	for {
+		call := svc.Objects.List(bucket).Prefix(prefix).Context(ctx)
+		if !flagStorageLsRecurse {
+			call = call.Delimiter("/")
+		}
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing objects: %w", err)
+		}
+		allPrefixes = append(allPrefixes, resp.Prefixes...)
+		allObjects = append(allObjects, resp.Items...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	if flagStorageLsJSON {
@@ -311,10 +347,10 @@ func runStorageLs(cmd *cobra.Command, args []string) error {
 			Time string `json:"timeCreated,omitempty"`
 		}
 		var entries []lsEntry
-		for _, p := range resp.Prefixes {
+		for _, p := range allPrefixes {
 			entries = append(entries, lsEntry{URL: fmt.Sprintf("gs://%s/%s", bucket, p)})
 		}
-		for _, obj := range resp.Items {
+		for _, obj := range allObjects {
 			entries = append(entries, lsEntry{URL: fmt.Sprintf("gs://%s/%s", bucket, obj.Name), Size: obj.Size, Time: obj.TimeCreated})
 		}
 		enc := json.NewEncoder(os.Stdout)
@@ -323,11 +359,11 @@ func runStorageLs(cmd *cobra.Command, args []string) error {
 	}
 
 	// Print directories (prefixes).
-	for _, p := range resp.Prefixes {
+	for _, p := range allPrefixes {
 		fmt.Printf("gs://%s/%s\n", bucket, p)
 	}
 	// Print objects.
-	for _, obj := range resp.Items {
+	for _, obj := range allObjects {
 		if flagStorageLsLong {
 			fmt.Printf("%10d  %s  gs://%s/%s\n", obj.Size, obj.TimeCreated, bucket, obj.Name)
 		} else {
