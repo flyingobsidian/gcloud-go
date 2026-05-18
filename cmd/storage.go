@@ -187,6 +187,14 @@ func storageDownload(ctx context.Context, svc *storage.Service, src, dst string)
 		return err
 	}
 
+	if flagStorageCpRecurse {
+		return storageDownloadRecursive(ctx, svc, bucket, object, dst)
+	}
+
+	return storageDownloadFile(ctx, svc, bucket, object, dst)
+}
+
+func storageDownloadFile(ctx context.Context, svc *storage.Service, bucket, object, dst string) error {
 	resp, err := svc.Objects.Get(bucket, object).Context(ctx).Download()
 	if err != nil {
 		return fmt.Errorf("downloading object: %w", err)
@@ -221,12 +229,75 @@ func storageDownload(ctx context.Context, svc *storage.Service, src, dst string)
 	return nil
 }
 
+func storageDownloadRecursive(ctx context.Context, svc *storage.Service, bucket, prefix, dst string) error {
+	// Ensure prefix ends with "/" for directory-like listing.
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	var objects []*storage.Object
+	pageToken := ""
+	for {
+		call := svc.Objects.List(bucket).Prefix(prefix).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing objects: %w", err)
+		}
+		objects = append(objects, resp.Items...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	if len(objects) == 0 {
+		return fmt.Errorf("no objects found under gs://%s/%s", bucket, prefix)
+	}
+
+	for _, obj := range objects {
+		// Skip directory marker objects.
+		if strings.HasSuffix(obj.Name, "/") {
+			continue
+		}
+		relPath := strings.TrimPrefix(obj.Name, prefix)
+		localPath := filepath.Join(dst, filepath.FromSlash(relPath))
+
+		if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+
+		if err := storageDownloadFile(ctx, svc, bucket, obj.Name, localPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func storageUpload(ctx context.Context, svc *storage.Service, src, dst string) error {
 	bucket, prefix, err := parseGCSPath(dst)
 	if err != nil {
 		return err
 	}
 
+	info, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", src, err)
+	}
+
+	if info.IsDir() {
+		if !flagStorageCpRecurse {
+			return fmt.Errorf("%s is a directory; use --recursive or -r to copy directories", src)
+		}
+		return storageUploadRecursive(ctx, svc, src, bucket, prefix)
+	}
+
+	return storageUploadFile(ctx, svc, src, bucket, prefix)
+}
+
+func storageUploadFile(ctx context.Context, svc *storage.Service, src, bucket, prefix string) error {
 	f, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("opening local file: %w", err)
@@ -255,6 +326,30 @@ func storageUpload(ctx context.Context, svc *storage.Service, src, dst string) e
 	return nil
 }
 
+func storageUploadRecursive(ctx context.Context, svc *storage.Service, srcDir, bucket, prefix string) error {
+	// Ensure prefix ends with "/" when set.
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+		objectName := prefix + filepath.ToSlash(relPath)
+
+		return storageUploadFile(ctx, svc, path, bucket, objectName)
+	})
+}
+
 func storageGCSCopy(ctx context.Context, svc *storage.Service, src, dst string) error {
 	srcBucket, srcObject, err := parseGCSPath(src)
 	if err != nil {
@@ -263,6 +358,10 @@ func storageGCSCopy(ctx context.Context, svc *storage.Service, src, dst string) 
 	dstBucket, dstObject, err := parseGCSPath(dst)
 	if err != nil {
 		return err
+	}
+
+	if flagStorageCpRecurse {
+		return storageGCSCopyRecursive(ctx, svc, srcBucket, srcObject, dstBucket, dstObject)
 	}
 
 	if dstObject == "" || strings.HasSuffix(dstObject, "/") {
@@ -275,6 +374,53 @@ func storageGCSCopy(ctx context.Context, svc *storage.Service, src, dst string) 
 	}
 
 	fmt.Printf("Copied gs://%s/%s to gs://%s/%s\n", srcBucket, srcObject, dstBucket, dstObject)
+	return nil
+}
+
+func storageGCSCopyRecursive(ctx context.Context, svc *storage.Service, srcBucket, srcPrefix, dstBucket, dstPrefix string) error {
+	// Ensure prefixes end with "/" for directory-like listing.
+	if srcPrefix != "" && !strings.HasSuffix(srcPrefix, "/") {
+		srcPrefix += "/"
+	}
+	if dstPrefix != "" && !strings.HasSuffix(dstPrefix, "/") {
+		dstPrefix += "/"
+	}
+
+	var objects []*storage.Object
+	pageToken := ""
+	for {
+		call := svc.Objects.List(srcBucket).Prefix(srcPrefix).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing objects: %w", err)
+		}
+		objects = append(objects, resp.Items...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	if len(objects) == 0 {
+		return fmt.Errorf("no objects found under gs://%s/%s", srcBucket, srcPrefix)
+	}
+
+	for _, obj := range objects {
+		if strings.HasSuffix(obj.Name, "/") {
+			continue
+		}
+		relPath := strings.TrimPrefix(obj.Name, srcPrefix)
+		dstObject := dstPrefix + relPath
+
+		_, err := svc.Objects.Copy(srcBucket, obj.Name, dstBucket, dstObject, nil).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("copying gs://%s/%s: %w", srcBucket, obj.Name, err)
+		}
+		fmt.Printf("Copied gs://%s/%s to gs://%s/%s\n", srcBucket, obj.Name, dstBucket, dstObject)
+	}
 	return nil
 }
 
