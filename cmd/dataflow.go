@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
@@ -57,8 +58,8 @@ var (
 func init() {
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowRegion, "region", "", "Region of the jobs")
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListFormat, "format", "", "Output format (e.g. json)")
-	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListFilter, "filter", "", "Filter expression")
-	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListStatus, "status", "", "Filter by job status (active, all, terminated)")
+	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListFilter, "filter", "", "Client-side filter by job name (substring match)")
+	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListStatus, "status", "", "Server-side status filter: active, all, or terminated")
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowCreatedAfter, "created-after", "", "Filter jobs created after this time (RFC 3339)")
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowCreatedBefore, "created-before", "", "Filter jobs created before this time (RFC 3339)")
 
@@ -103,15 +104,15 @@ func runDataflowJobsList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Map --status to the API's filter enum (UNKNOWN, ALL, TERMINATED, ACTIVE).
+	apiFilter := statusToAPIFilter(flagDataflowListStatus)
+
 	var allJobs []*dataflow.Job
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Jobs.List(project, region).Context(ctx)
-		if flagDataflowListFilter != "" {
-			call = call.Filter(flagDataflowListFilter)
-		}
-		if flagDataflowListStatus != "" {
-			call = call.Filter(flagDataflowListStatus)
+		if apiFilter != "" {
+			call = call.Filter(apiFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -127,31 +128,8 @@ func runDataflowJobsList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	// Client-side time filters.
-	if flagDataflowCreatedAfter != "" || flagDataflowCreatedBefore != "" {
-		var filtered []*dataflow.Job
-		for _, j := range allJobs {
-			ct, err := time.Parse(time.RFC3339, j.CreateTime)
-			if err != nil {
-				filtered = append(filtered, j)
-				continue
-			}
-			if flagDataflowCreatedAfter != "" {
-				after, err := time.Parse(time.RFC3339, flagDataflowCreatedAfter)
-				if err == nil && ct.Before(after) {
-					continue
-				}
-			}
-			if flagDataflowCreatedBefore != "" {
-				before, err := time.Parse(time.RFC3339, flagDataflowCreatedBefore)
-				if err == nil && ct.After(before) {
-					continue
-				}
-			}
-			filtered = append(filtered, j)
-		}
-		allJobs = filtered
-	}
+	// Client-side filters.
+	allJobs = filterDataflowJobs(allJobs)
 
 	if flagDataflowListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
@@ -215,4 +193,62 @@ func runDataflowJobsCancel(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Cancelled job [%s].\n", args[0])
 	return nil
+}
+
+// statusToAPIFilter maps the user-facing --status flag to the Dataflow API
+// filter enum value. The API accepts UNKNOWN, ALL, TERMINATED, or ACTIVE.
+func statusToAPIFilter(status string) string {
+	switch strings.ToLower(status) {
+	case "active":
+		return "ACTIVE"
+	case "terminated":
+		return "TERMINATED"
+	case "all":
+		return "ALL"
+	case "":
+		return ""
+	default:
+		return strings.ToUpper(status)
+	}
+}
+
+// filterDataflowJobs applies client-side filters (--filter for name matching,
+// --created-after/--created-before for time range) to the job list.
+func filterDataflowJobs(jobs []*dataflow.Job) []*dataflow.Job {
+	needsFilter := flagDataflowListFilter != "" ||
+		flagDataflowCreatedAfter != "" ||
+		flagDataflowCreatedBefore != ""
+	if !needsFilter {
+		return jobs
+	}
+
+	nameFilter := strings.ToLower(flagDataflowListFilter)
+
+	var filtered []*dataflow.Job
+	for _, j := range jobs {
+		if nameFilter != "" && !strings.Contains(strings.ToLower(j.Name), nameFilter) {
+			continue
+		}
+		if flagDataflowCreatedAfter != "" || flagDataflowCreatedBefore != "" {
+			ct, err := time.Parse(time.RFC3339, j.CreateTime)
+			if err != nil {
+				filtered = append(filtered, j)
+				continue
+			}
+			if flagDataflowCreatedAfter != "" {
+				after, err := time.Parse(time.RFC3339, flagDataflowCreatedAfter)
+				if err == nil && ct.Before(after) {
+					continue
+				}
+			}
+			if flagDataflowCreatedBefore != "" {
+				before, err := time.Parse(time.RFC3339, flagDataflowCreatedBefore)
+				if err == nil && ct.After(before) {
+					continue
+				}
+			}
+		}
+		filtered = append(filtered, j)
+	}
+	return filtered
 }
