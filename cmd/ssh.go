@@ -14,7 +14,10 @@ import (
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
+	"github.com/flyingobsidian/gcloud-go/internal/config"
+	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/flyingobsidian/gcloud-go/internal/iap"
+	ioslogin "github.com/flyingobsidian/gcloud-go/internal/oslogin"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
 )
@@ -69,26 +72,89 @@ func runSSH(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting instance %s: %w", instance, err)
 	}
 
+	// Check if OS Login is enabled (instance metadata overrides project metadata).
+	proj, err := svc.Projects.Get(project).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("getting project metadata: %w", err)
+	}
+	useOSLogin := ioslogin.IsEnabled(inst, proj)
+
 	// Ensure SSH key exists (unless --plain or --ssh-key-file is set).
 	if !flagSSHPlain && flagSSHKeyFile == "" {
 		keyPath := googleSSHKeyPath()
+		keyGenerated := false
 		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 			keyPath, err = generateSSHKey(keyPath)
 			if err != nil {
 				return fmt.Errorf("generating SSH key: %w", err)
 			}
-			sshUser := user
-			if sshUser == "" {
-				if u, err := osUser(); err == nil {
-					sshUser = u
+			keyGenerated = true
+		}
+
+		if keyGenerated {
+			if useOSLogin {
+				// Push key via OS Login API and resolve POSIX username.
+				email := resolveAccountEmail()
+				if email != "" {
+					osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+					} else {
+						posixUser, err := ioslogin.ImportSSHKey(ctx, osLoginSvc, email, keyPath+".pub", project)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "WARNING: could not import SSH key via OS Login: %v\n", err)
+						} else if posixUser != "" && user == "" {
+							user = posixUser
+						}
+					}
+				}
+			} else {
+				// Push key to project metadata (legacy path).
+				sshUser := user
+				if sshUser == "" {
+					if u, err := osUser(); err == nil {
+						sshUser = u
+					}
+				}
+				if sshUser != "" {
+					if err := pushSSHKeyToProject(ctx, svc, project, sshUser, keyPath+".pub"); err != nil {
+						fmt.Fprintf(os.Stderr, "WARNING: could not push SSH key to project metadata: %v\n", err)
+					} else {
+						fmt.Fprintln(os.Stderr, "Waiting for SSH key to propagate.")
+						time.Sleep(5 * time.Second)
+					}
 				}
 			}
-			if sshUser != "" {
-				if err := pushSSHKeyToProject(ctx, svc, project, sshUser, keyPath+".pub"); err != nil {
-					fmt.Fprintf(os.Stderr, "WARNING: could not push SSH key to project metadata: %v\n", err)
+		} else if useOSLogin && user == "" {
+			// Key already exists, but we still need the POSIX username for OS Login.
+			email := resolveAccountEmail()
+			if email != "" {
+				osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
 				} else {
-					fmt.Fprintln(os.Stderr, "Waiting for SSH key to propagate.")
-					time.Sleep(5 * time.Second)
+					posixUser, err := ioslogin.PosixUsername(ctx, osLoginSvc, email, project)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "WARNING: could not resolve OS Login username: %v\n", err)
+					} else {
+						user = posixUser
+					}
+				}
+			}
+		}
+	} else if useOSLogin && user == "" && !flagSSHPlain {
+		// Custom key file provided but no user; resolve POSIX username via OS Login.
+		email := resolveAccountEmail()
+		if email != "" {
+			osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+			} else {
+				posixUser, err := ioslogin.PosixUsername(ctx, osLoginSvc, email, project)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "WARNING: could not resolve OS Login username: %v\n", err)
+				} else {
+					user = posixUser
 				}
 			}
 		}
@@ -291,6 +357,18 @@ func generateSSHKey(preferredPath string) (string, error) {
 	}
 
 	return keyPath, nil
+}
+
+// resolveAccountEmail returns the active GCP account email from the flag or config.
+func resolveAccountEmail() string {
+	if flagAccount != "" {
+		return flagAccount
+	}
+	props, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	return props.Core.Account
 }
 
 // pushSSHKeyToProject adds the public key to the project's SSH metadata.
