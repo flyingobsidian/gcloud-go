@@ -142,24 +142,37 @@ func runArtifactsListVulnerabilities(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	resp, err := svc.Projects.Locations.Scans.Vulnerabilities.List(scanResource).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("listing vulnerabilities: %w", err)
+	var allOccurrences []*ondemandscanning.Occurrence
+	pageToken := ""
+	for {
+		call := svc.Projects.Locations.Scans.Vulnerabilities.List(scanResource).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing vulnerabilities: %w", err)
+		}
+		allOccurrences = append(allOccurrences, resp.Occurrences...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	if flagArtifactsVulnFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(resp.Occurrences)
+		return enc.Encode(allOccurrences)
 	}
 
-	if len(resp.Occurrences) == 0 {
+	if len(allOccurrences) == 0 {
 		fmt.Println("No vulnerabilities found.")
 		return nil
 	}
 
-	fmt.Printf("Found %d vulnerabilities:\n", len(resp.Occurrences))
-	for _, occ := range resp.Occurrences {
+	fmt.Printf("Found %d vulnerabilities:\n", len(allOccurrences))
+	for _, occ := range allOccurrences {
 		if occ.Vulnerability != nil {
 			fmt.Printf("  Severity: %-10s Package: %s\n",
 				occ.Vulnerability.Severity,
