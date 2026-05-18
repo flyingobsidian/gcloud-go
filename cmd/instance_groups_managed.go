@@ -10,6 +10,7 @@ import (
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
+	compute "google.golang.org/api/compute/v1"
 )
 
 var managedCmd = &cobra.Command{
@@ -99,19 +100,32 @@ func runManagedListInstances(cmd *cobra.Command, args []string) error {
 
 	if region != "" {
 		// Regional MIG.
-		resp, err := svc.RegionInstanceGroupManagers.ListManagedInstances(project, region, group).Context(ctx).Do()
-		if err != nil {
-			return fmt.Errorf("listing managed instances: %w", err)
+		var allInstances []*compute.ManagedInstance
+		pageToken := ""
+		for {
+			call := svc.RegionInstanceGroupManagers.ListManagedInstances(project, region, group).Context(ctx)
+			if pageToken != "" {
+				call = call.PageToken(pageToken)
+			}
+			resp, err := call.Do()
+			if err != nil {
+				return fmt.Errorf("listing managed instances: %w", err)
+			}
+			allInstances = append(allInstances, resp.ManagedInstances...)
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
 		}
 
 		if flagManagedListFormat == "json" {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
-			return enc.Encode(resp.ManagedInstances)
+			return enc.Encode(allInstances)
 		}
 
 		fmt.Printf("%-40s %-10s %-15s\n", "NAME", "ZONE", "STATUS")
-		for _, mi := range resp.ManagedInstances {
+		for _, mi := range allInstances {
 			name := path.Base(mi.Instance)
 			zone := extractZoneFromURL(mi.Instance)
 			fmt.Printf("%-40s %-10s %-15s\n", name, zone, mi.InstanceStatus)
@@ -125,19 +139,32 @@ func runManagedListInstances(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("either --region or --zone is required")
 	}
 
-	resp, err := svc.InstanceGroupManagers.ListManagedInstances(project, zone, group).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("listing managed instances: %w", err)
+	var allInstances []*compute.ManagedInstance
+	pageToken := ""
+	for {
+		call := svc.InstanceGroupManagers.ListManagedInstances(project, zone, group).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing managed instances: %w", err)
+		}
+		allInstances = append(allInstances, resp.ManagedInstances...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	if flagManagedListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(resp.ManagedInstances)
+		return enc.Encode(allInstances)
 	}
 
 	fmt.Printf("%-40s %-15s\n", "NAME", "STATUS")
-	for _, mi := range resp.ManagedInstances {
+	for _, mi := range allInstances {
 		name := path.Base(mi.Instance)
 		fmt.Printf("%-40s %-15s\n", name, mi.InstanceStatus)
 	}

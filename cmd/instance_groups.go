@@ -47,19 +47,32 @@ func runUnmanagedListInstances(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	resp, err := svc.InstanceGroups.ListInstances(project, zone, group,
-		&compute.InstanceGroupsListInstancesRequest{}).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("listing instances: %w", err)
+	var allItems []*compute.InstanceWithNamedPorts
+	pageToken := ""
+	for {
+		call := svc.InstanceGroups.ListInstances(project, zone, group,
+			&compute.InstanceGroupsListInstancesRequest{}).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing instances: %w", err)
+		}
+		allItems = append(allItems, resp.Items...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
-	if len(resp.Items) == 0 {
+	if len(allItems) == 0 {
 		fmt.Println("No instances in group.")
 		return nil
 	}
 
 	fmt.Printf("%-40s %s\n", "NAME", "STATUS")
-	for _, item := range resp.Items {
+	for _, item := range allItems {
 		name := path.Base(item.Instance)
 		fmt.Printf("%-40s %s\n", name, item.Status)
 	}
