@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
+	"github.com/flyingobsidian/gcloud-go/internal/gcp"
+	ioslogin "github.com/flyingobsidian/gcloud-go/internal/oslogin"
+	"github.com/spf13/cobra"
 )
 
 var scpCmd = &cobra.Command{
@@ -93,6 +94,29 @@ func runSCP(cmd *cobra.Command, args []string) error {
 	inst, err := svc.Instances.Get(project, zone, remoteTarget.Instance).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting instance %s: %w", remoteTarget.Instance, err)
+	}
+
+	// If OS Login is enabled and no user was specified, resolve POSIX username.
+	if remoteTarget.User == "" {
+		proj, err := svc.Projects.Get(project).Context(ctx).Do()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: could not get project metadata: %v\n", err)
+		} else if ioslogin.IsEnabled(inst, proj) {
+			email := resolveAccountEmail()
+			if email != "" {
+				osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+				} else {
+					posixUser, err := ioslogin.PosixUsername(ctx, osLoginSvc, email, project)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "WARNING: could not resolve OS Login username: %v\n", err)
+					} else {
+						remoteTarget.User = posixUser
+					}
+				}
+			}
+		}
 	}
 
 	// Build SCP args.
