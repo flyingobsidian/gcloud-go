@@ -11,6 +11,7 @@ import (
 	monitoring "google.golang.org/api/monitoring/v3"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
 	"google.golang.org/api/option"
+	oslogin "google.golang.org/api/oslogin/v1"
 	redis "google.golang.org/api/redis/v1"
 	storage "google.golang.org/api/storage/v1"
 )
@@ -63,6 +64,14 @@ func DataplexService(ctx context.Context, account string) (*dataplex.Service, er
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return dataplex.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func OSLoginService(ctx context.Context, account string) (*oslogin.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return oslogin.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func OnDemandScanningService(ctx context.Context, account string) (*ondemandscanning.Service, error) {
