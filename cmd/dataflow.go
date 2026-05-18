@@ -103,23 +103,34 @@ func runDataflowJobsList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	call := svc.Projects.Locations.Jobs.List(project, region).Context(ctx)
-	if flagDataflowListFilter != "" {
-		call = call.Filter(flagDataflowListFilter)
-	}
-	if flagDataflowListStatus != "" {
-		call = call.Filter(flagDataflowListStatus)
-	}
-
-	resp, err := call.Do()
-	if err != nil {
-		return fmt.Errorf("listing dataflow jobs: %w", err)
+	var allJobs []*dataflow.Job
+	pageToken := ""
+	for {
+		call := svc.Projects.Locations.Jobs.List(project, region).Context(ctx)
+		if flagDataflowListFilter != "" {
+			call = call.Filter(flagDataflowListFilter)
+		}
+		if flagDataflowListStatus != "" {
+			call = call.Filter(flagDataflowListStatus)
+		}
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing dataflow jobs: %w", err)
+		}
+		allJobs = append(allJobs, resp.Jobs...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
 	// Client-side time filters.
 	if flagDataflowCreatedAfter != "" || flagDataflowCreatedBefore != "" {
 		var filtered []*dataflow.Job
-		for _, j := range resp.Jobs {
+		for _, j := range allJobs {
 			ct, err := time.Parse(time.RFC3339, j.CreateTime)
 			if err != nil {
 				filtered = append(filtered, j)
@@ -139,17 +150,17 @@ func runDataflowJobsList(cmd *cobra.Command, args []string) error {
 			}
 			filtered = append(filtered, j)
 		}
-		resp.Jobs = filtered
+		allJobs = filtered
 	}
 
 	if flagDataflowListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(resp.Jobs)
+		return enc.Encode(allJobs)
 	}
 
 	fmt.Printf("%-40s %-15s %-20s %-10s\n", "JOB_ID", "NAME", "TYPE", "STATE")
-	for _, j := range resp.Jobs {
+	for _, j := range allJobs {
 		fmt.Printf("%-40s %-15s %-20s %-10s\n", j.Id, j.Name, j.Type, j.CurrentState)
 	}
 	return nil
