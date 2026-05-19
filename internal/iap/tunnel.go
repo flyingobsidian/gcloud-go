@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"net/http"
 	"net/url"
 	"sync"
@@ -77,7 +78,7 @@ func handleConn(ctx context.Context, cfg TunnelConfig, tcpConn net.Conn) {
 
 	t, err := connect(ctx, cfg)
 	if err != nil {
-		fmt.Printf("IAP tunnel connect error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "IAP tunnel connect error: %v\n", err)
 		return
 	}
 	defer t.conn.Close(websocket.StatusNormalClosure, "done")
