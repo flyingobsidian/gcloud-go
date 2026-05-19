@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
@@ -58,7 +61,7 @@ var (
 func init() {
 	artifactsScanCmd.Flags().StringVar(&flagArtifactsScanLocation, "location", "", "Location for the scan (e.g. us, europe)")
 	artifactsScanCmd.Flags().StringVar(&flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
-	artifactsScanCmd.Flags().BoolVar(&flagArtifactsScanRemote, "remote", false, "Scan the image in the registry without pulling it")
+	artifactsScanCmd.Flags().BoolVar(&flagArtifactsScanRemote, "remote", false, "Scan the image remotely in the registry (skip local extraction)")
 	artifactsScanCmd.Flags().BoolVar(&flagArtifactsScanAsync, "async", false, "Return immediately without waiting for scan to complete")
 	artifactsListVulnerabilitiesCmd.Flags().StringVar(&flagArtifactsVulnFormat, "format", "", "Output format (e.g. json)")
 
@@ -90,6 +93,18 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
 	req := &ondemandscanning.AnalyzePackagesRequestV1{
 		ResourceUri: image,
+	}
+
+	if !flagArtifactsScanRemote {
+		// Local scan: extract packages from the image using Docker, then send
+		// the package list to the API for vulnerability analysis.
+		fmt.Fprintf(os.Stderr, "Locally extracting packages from %s...\n", image)
+		pkgs, err := extractLocalPackages(ctx, image)
+		if err != nil {
+			return fmt.Errorf("local extraction failed: %w\nConsider using --remote to scan the image in the registry", err)
+		}
+		req.Packages = pkgs
+		fmt.Fprintf(os.Stderr, "Extracted %d packages.\n", len(pkgs))
 	}
 
 	op, err := svc.Projects.Locations.Scans.AnalyzePackages(parent, req).Context(ctx).Do()
@@ -180,4 +195,141 @@ func runArtifactsListVulnerabilities(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return nil
+}
+
+// extractLocalPackages runs Docker to extract installed OS packages from
+// the image. It tries dpkg (Debian/Ubuntu), rpm (RHEL/CentOS), and apk
+// (Alpine) in sequence, matching the local extraction that gcloud's
+// local-extract binary performs.
+func extractLocalPackages(ctx context.Context, image string) ([]*ondemandscanning.PackageData, error) {
+	dockerBin, err := exec.LookPath("docker")
+	if err != nil {
+		return nil, fmt.Errorf("docker not found in PATH: %w", err)
+	}
+
+	// Detect OS and extract packages. Try each package manager in order.
+	type extractor struct {
+		name    string
+		cmd     string
+		cpeBase string
+		parse   func(output string) []*ondemandscanning.PackageData
+	}
+
+	extractors := []extractor{
+		{
+			name:    "dpkg",
+			cmd:     `dpkg-query -W -f '${Package}\t${Version}\t${Architecture}\n'`,
+			cpeBase: "cpe:/o:debian:debian_linux",
+			parse:   parseDpkgOutput,
+		},
+		{
+			name:    "rpm",
+			cmd:     `rpm -qa --queryformat '%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n'`,
+			cpeBase: "cpe:/o:redhat:enterprise_linux",
+			parse:   parseRpmOutput,
+		},
+		{
+			name:    "apk",
+			cmd:     `apk info -v 2>/dev/null | sort`,
+			cpeBase: "cpe:/o:alpine:alpine_linux",
+			parse:   parseApkOutput,
+		},
+	}
+
+	for _, ext := range extractors {
+		cmd := exec.CommandContext(ctx, dockerBin, "run", "--rm", "--entrypoint", "sh", image, "-c", ext.cmd)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			continue
+		}
+		output := stdout.String()
+		if strings.TrimSpace(output) == "" {
+			continue
+		}
+		pkgs := ext.parse(output)
+		// Set cpeUri on all packages.
+		for _, pkg := range pkgs {
+			if pkg.CpeUri == "" {
+				pkg.CpeUri = ext.cpeBase
+			}
+		}
+		return pkgs, nil
+	}
+
+	return nil, fmt.Errorf("could not extract packages from image %s (no supported package manager found)", image)
+}
+
+func parseDpkgOutput(output string) []*ondemandscanning.PackageData {
+	var pkgs []*ondemandscanning.PackageData
+	for _, line := range strings.Split(output, "\n") {
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) < 2 || parts[0] == "" {
+			continue
+		}
+		pkg := &ondemandscanning.PackageData{
+			Package:     parts[0],
+			Version:     parts[1],
+			PackageType: "DEBIAN",
+		}
+		if len(parts) >= 3 {
+			pkg.Architecture = parts[2]
+		}
+		pkgs = append(pkgs, pkg)
+	}
+	return pkgs
+}
+
+func parseRpmOutput(output string) []*ondemandscanning.PackageData {
+	var pkgs []*ondemandscanning.PackageData
+	for _, line := range strings.Split(output, "\n") {
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) < 2 || parts[0] == "" {
+			continue
+		}
+		pkg := &ondemandscanning.PackageData{
+			Package:     parts[0],
+			Version:     parts[1],
+			PackageType: "RPM",
+		}
+		if len(parts) >= 3 {
+			pkg.Architecture = parts[2]
+		}
+		pkgs = append(pkgs, pkg)
+	}
+	return pkgs
+}
+
+func parseApkOutput(output string) []*ondemandscanning.PackageData {
+	var pkgs []*ondemandscanning.PackageData
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// apk info -v output: "package-name-1.2.3-r0"
+		// Split on last hyphen that precedes a digit to separate name from version.
+		name, version := splitApkPackage(line)
+		if name == "" {
+			continue
+		}
+		pkgs = append(pkgs, &ondemandscanning.PackageData{
+			Package:     name,
+			Version:     version,
+			PackageType: "APK",
+		})
+	}
+	return pkgs
+}
+
+// splitApkPackage splits "package-name-1.2.3-r0" into ("package-name", "1.2.3-r0").
+func splitApkPackage(s string) (string, string) {
+	// Find the last hyphen followed by a digit.
+	for i := len(s) - 1; i > 0; i-- {
+		if s[i] == '-' && i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9' {
+			return s[:i], s[i+1:]
+		}
+	}
+	return s, ""
 }
