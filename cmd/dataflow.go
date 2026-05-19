@@ -139,9 +139,9 @@ func runDataflowJobsList(cmd *cobra.Command, args []string) error {
 		return enc.Encode(allJobs)
 	}
 
-	fmt.Printf("%-40s %-15s %-20s %-10s\n", "JOB_ID", "NAME", "TYPE", "STATE")
+	fmt.Printf("%-40s %-20s %-20s %-10s %-15s %-25s\n", "JOB_ID", "NAME", "TYPE", "STATE", "REGION", "CREATION_TIME")
 	for _, j := range allJobs {
-		fmt.Printf("%-40s %-15s %-20s %-10s\n", j.Id, j.Name, j.Type, j.CurrentState)
+		fmt.Printf("%-40s %-20s %-20s %-10s %-15s %-25s\n", j.Id, j.Name, j.Type, j.CurrentState, j.Location, j.CreateTime)
 	}
 	return nil
 }
@@ -236,7 +236,7 @@ func filterDataflowJobs(jobs []*dataflow.Job) []*dataflow.Job {
 		if flagDataflowCreatedAfter != "" || flagDataflowCreatedBefore != "" {
 			ct, err := time.Parse(time.RFC3339, j.CreateTime)
 			if err != nil {
-				filtered = append(filtered, j)
+				fmt.Fprintf(os.Stderr, "WARNING: could not parse createTime %q for job %s: %v\n", j.CreateTime, j.Id, err)
 				continue
 			}
 			if flagDataflowCreatedAfter != "" {
