@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"strings"
@@ -185,6 +186,13 @@ func runSecretsVersionsAccess(cmd *cobra.Command, args []string) error {
 	data, err := base64.StdEncoding.DecodeString(resp.Payload.Data)
 	if err != nil {
 		return fmt.Errorf("decoding secret data: %w", err)
+	}
+
+	if resp.Payload.DataCrc32c != 0 {
+		crc := crc32.Checksum(data, crc32.MakeTable(crc32.Castagnoli))
+		if int64(crc) != resp.Payload.DataCrc32c {
+			return fmt.Errorf("secret data CRC32C mismatch: expected %d, got %d", resp.Payload.DataCrc32c, crc)
+		}
 	}
 
 	if flagOutFile != "" {
