@@ -6,8 +6,10 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"strconv"
 	"strings"
+	"time"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
@@ -103,12 +105,57 @@ func runSCP(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting instance %s: %w", remoteTarget.Instance, err)
 	}
 
-	// If OS Login is enabled and no user was specified, resolve POSIX username.
-	if remoteTarget.User == "" {
-		proj, err := svc.Projects.Get(project).Context(ctx).Do()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: could not get project metadata: %v\n", err)
-		} else if ioslogin.IsEnabled(inst, proj) {
+	// Check OS Login and manage SSH keys (matching SSH command behavior).
+	proj, err := svc.Projects.Get(project).Context(ctx).Do()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: could not get project metadata: %v\n", err)
+	}
+	useOSLogin := proj != nil && ioslogin.IsEnabled(inst, proj)
+
+	if !flagSCPPlain && flagSCPKeyFile == "" {
+		keyPath := googleSSHKeyPath()
+		keyGenerated := false
+		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+			keyPath, err = generateSSHKey(keyPath)
+			if err != nil {
+				return fmt.Errorf("generating SSH key: %w", err)
+			}
+			keyGenerated = true
+		}
+
+		if keyGenerated {
+			if useOSLogin {
+				email := resolveAccountEmail()
+				if email != "" {
+					osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+					} else {
+						posixUser, err := ioslogin.ImportSSHKey(ctx, osLoginSvc, email, keyPath+".pub", project)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "WARNING: could not import SSH key via OS Login: %v\n", err)
+						} else if posixUser != "" && remoteTarget.User == "" {
+							remoteTarget.User = posixUser
+						}
+					}
+				}
+			} else {
+				sshUser := remoteTarget.User
+				if sshUser == "" {
+					if u, err := user.Current(); err == nil {
+						sshUser = u.Username
+					}
+				}
+				if sshUser != "" {
+					if err := pushSSHKeyToProject(ctx, svc, project, sshUser, keyPath+".pub"); err != nil {
+						fmt.Fprintf(os.Stderr, "WARNING: could not push SSH key to project metadata: %v\n", err)
+					} else {
+						fmt.Fprintln(os.Stderr, "Waiting for SSH key to propagate.")
+						time.Sleep(5 * time.Second)
+					}
+				}
+			}
+		} else if useOSLogin && remoteTarget.User == "" {
 			email := resolveAccountEmail()
 			if email != "" {
 				osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
@@ -121,6 +168,21 @@ func runSCP(cmd *cobra.Command, args []string) error {
 					} else {
 						remoteTarget.User = posixUser
 					}
+				}
+			}
+		}
+	} else if useOSLogin && remoteTarget.User == "" && !flagSCPPlain {
+		email := resolveAccountEmail()
+		if email != "" {
+			osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+			} else {
+				posixUser, err := ioslogin.PosixUsername(ctx, osLoginSvc, email, project)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "WARNING: could not resolve OS Login username: %v\n", err)
+				} else {
+					remoteTarget.User = posixUser
 				}
 			}
 		}
