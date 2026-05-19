@@ -71,6 +71,9 @@ func parseSCPTarget(arg string) scpTarget {
 }
 
 func runSCP(cmd *cobra.Command, args []string) error {
+	if flagSCPTunnelThroughIAP && flagSCPInternalIP {
+		return fmt.Errorf("--tunnel-through-iap and --internal-ip are mutually exclusive")
+	}
 	src := parseSCPTarget(args[0])
 	dst := parseSCPTarget(args[1])
 
