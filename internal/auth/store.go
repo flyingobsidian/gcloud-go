@@ -62,6 +62,9 @@ func (s *CredentialStore) Store(credFile string) (string, error) {
 	if account == "" {
 		return "", fmt.Errorf("cannot determine account from credential file (no client_email or service_account_impersonation_url)")
 	}
+	if strings.ContainsAny(account, "/\\") {
+		return "", fmt.Errorf("account name %q contains path separators", account)
+	}
 
 	// Store in SQLite credentials.db (best-effort for gcloud compatibility).
 	_ = s.storeToSQLite(account, data)
@@ -156,7 +159,7 @@ func (s *CredentialStore) loadFromSQLite(account string) ([]byte, error) {
 }
 
 func (s *CredentialStore) loadFromJSON(account string) ([]byte, error) {
-	path := filepath.Join(s.configDir, "credentials", account+".json")
+	path := filepath.Join(s.configDir, "credentials", filepath.Base(account)+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("loading credential for %s: %w", account, err)
