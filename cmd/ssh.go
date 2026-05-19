@@ -160,12 +160,36 @@ func runSSH(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Resolve the target host IP first so we can check known_hosts.
+	var host string
+	var iapListener net.Listener
+
+	if flagSSHTunnelThroughIAP {
+		ln, err := startIAPTunnel(ctx, project, zone, instance)
+		if err != nil {
+			return err
+		}
+		defer ln.Close()
+		iapListener = ln
+		host = "localhost"
+	} else if flagSSHInternalIP {
+		host = getInternalIP(inst)
+		if host == "" {
+			return fmt.Errorf("instance %s has no internal IP", instance)
+		}
+	} else {
+		host = getExternalIP(inst)
+		if host == "" {
+			return fmt.Errorf("instance %s has no external IP; consider --tunnel-through-iap", instance)
+		}
+	}
+
 	// Build SSH args.
 	var sshArgs []string
 	if flagSSHPlain {
 		sshArgs = []string{}
 	} else {
-		sshArgs = buildSSHOpts(flagSSHKeyFile)
+		sshArgs = buildSSHOpts(flagSSHKeyFile, host)
 	}
 
 	if flagSSHStrictHostKeyChecking != "" {
@@ -176,29 +200,12 @@ func runSSH(cmd *cobra.Command, args []string) error {
 		sshArgs = append(sshArgs, f)
 	}
 
-	var target string
-
-	if flagSSHTunnelThroughIAP {
-		ln, err := startIAPTunnel(ctx, project, zone, instance)
-		if err != nil {
-			return err
-		}
-		defer ln.Close()
-
-		localPort := ln.Addr().(*net.TCPAddr).Port
+	if iapListener != nil {
+		localPort := iapListener.Addr().(*net.TCPAddr).Port
 		sshArgs = append(sshArgs, "-p", strconv.Itoa(localPort))
-		target = "localhost"
-	} else if flagSSHInternalIP {
-		target = getInternalIP(inst)
-		if target == "" {
-			return fmt.Errorf("instance %s has no internal IP", instance)
-		}
-	} else {
-		target = getExternalIP(inst)
-		if target == "" {
-			return fmt.Errorf("instance %s has no external IP; consider --tunnel-through-iap", instance)
-		}
 	}
+
+	target := host
 
 	if user != "" {
 		target = user + "@" + target
@@ -246,7 +253,7 @@ func googleKnownHostsPath() string {
 	return filepath.Join(home, ".ssh", "google_compute_known_hosts")
 }
 
-func buildSSHOpts(keyFile string) []string {
+func buildSSHOpts(keyFile, host string) []string {
 	opts := []string{}
 
 	// Use gcloud's default SSH key unless overridden.
@@ -265,11 +272,49 @@ func buildSSHOpts(keyFile string) []string {
 		opts = append(opts, "-o", "UserKnownHostsFile="+knownHosts)
 	}
 
-	opts = append(opts,
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "CheckHostIP=no",
-	)
+	// Match gcloud Python behavior: accept host key on first connect, verify
+	// on subsequent connections.
+	if knownHostsHasHost(host) {
+		opts = append(opts, "-o", "StrictHostKeyChecking=yes")
+	} else {
+		opts = append(opts, "-o", "StrictHostKeyChecking=no")
+	}
+	opts = append(opts, "-o", "CheckHostIP=no")
+
 	return opts
+}
+
+// knownHostsHasHost reports whether the google_compute_known_hosts file
+// contains at least one entry for the given host.
+func knownHostsHasHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	khPath := googleKnownHostsPath()
+	if khPath == "" {
+		return false
+	}
+	data, err := os.ReadFile(khPath)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// known_hosts format: "host[,host...] keytype key [comment]"
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		for _, h := range strings.Split(fields[0], ",") {
+			if h == host {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func startIAPTunnel(ctx context.Context, project, zone, instance string) (net.Listener, error) {
