@@ -177,8 +177,8 @@ func (s *CredentialStore) sqliteDBPath() string {
 			}
 			db.Close()
 		}
-		fallback := filepath.Join(os.TempDir(), "gcloud-go")
-		if err := os.MkdirAll(fallback, 0700); err == nil {
+		fallback, err := os.MkdirTemp("", "gcloud-go-*")
+		if err == nil {
 			s.dbPath = filepath.Join(fallback, "credentials.db")
 		}
 	})
