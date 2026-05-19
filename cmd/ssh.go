@@ -382,12 +382,12 @@ func generateSSHKey(preferredPath string) (string, error) {
 	keyPath := preferredPath
 	dir := filepath.Dir(keyPath)
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		// Fall back to /tmp.
-		dir = filepath.Join(os.TempDir(), "gcloud-go")
-		if err := os.MkdirAll(dir, 0700); err != nil {
+		// Fall back to an unpredictable temporary directory.
+		tmpDir, err := os.MkdirTemp("", "gcloud-go-ssh-*")
+		if err != nil {
 			return "", fmt.Errorf("creating SSH key directory: %w", err)
 		}
-		keyPath = filepath.Join(dir, "google_compute_engine")
+		keyPath = filepath.Join(tmpDir, "google_compute_engine")
 	}
 
 	fmt.Fprintf(os.Stderr, "WARNING: The SSH key file for gcloud does not exist.\n")
