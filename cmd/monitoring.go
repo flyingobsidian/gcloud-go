@@ -207,16 +207,32 @@ func runMonitoringSnoozesCreate(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("parsing snooze file: %w", err)
 		}
 	} else {
-		snooze = &monitoring.Snooze{
-			DisplayName: flagSnoozeDisplayName,
-			Interval: &monitoring.TimeInterval{
-				StartTime: flagSnoozeStartTime,
-				EndTime:   flagSnoozeEndTime,
-			},
-			Criteria: &monitoring.Criteria{
-				Policies: flagSnoozePolicies,
-				Filter:   flagSnoozeFilter,
-			},
+		snooze = &monitoring.Snooze{}
+	}
+	// Apply flag overrides (flags take precedence over file values).
+	if flagSnoozeDisplayName != "" {
+		snooze.DisplayName = flagSnoozeDisplayName
+	}
+	if flagSnoozeStartTime != "" || flagSnoozeEndTime != "" {
+		if snooze.Interval == nil {
+			snooze.Interval = &monitoring.TimeInterval{}
+		}
+		if flagSnoozeStartTime != "" {
+			snooze.Interval.StartTime = flagSnoozeStartTime
+		}
+		if flagSnoozeEndTime != "" {
+			snooze.Interval.EndTime = flagSnoozeEndTime
+		}
+	}
+	if len(flagSnoozePolicies) > 0 || flagSnoozeFilter != "" {
+		if snooze.Criteria == nil {
+			snooze.Criteria = &monitoring.Criteria{}
+		}
+		if len(flagSnoozePolicies) > 0 {
+			snooze.Criteria.Policies = flagSnoozePolicies
+		}
+		if flagSnoozeFilter != "" {
+			snooze.Criteria.Filter = flagSnoozeFilter
 		}
 	}
 
