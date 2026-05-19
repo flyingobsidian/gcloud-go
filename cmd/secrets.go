@@ -58,6 +58,17 @@ var (
 	flagTTL               string
 )
 
+// --- secrets versions list ---
+
+var secretsVersionsListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List secret versions",
+	Args:  cobra.NoArgs,
+	RunE:  runSecretsVersionsList,
+}
+
+var flagVersionsListFormat string
+
 // --- secrets versions add ---
 
 var secretsVersionsAddCmd = &cobra.Command{
@@ -120,6 +131,12 @@ func init() {
 	secretsCreateCmd.Flags().StringVar(&flagExpireTime, "expire-time", "", "Expiration time (RFC 3339 format)")
 	secretsCreateCmd.Flags().StringVar(&flagTTL, "ttl", "", "Time-to-live duration (e.g. 30d, 24h)")
 
+	// secrets versions list
+	secretsVersionsListCmd.Flags().StringVar(&flagSecretName, "secret", "", "Secret name (required)")
+	secretsVersionsListCmd.MarkFlagRequired("secret")
+	secretsVersionsListCmd.Flags().StringVar(&flagVersionsListFormat, "format", "", "Output format (e.g. json)")
+	secretsVersionsListCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+
 	// secrets versions add
 	secretsVersionsAddCmd.Flags().StringVar(&flagVersionsAddDataFile, "data-file", "", "File with secret data, or - for stdin (required)")
 	secretsVersionsAddCmd.MarkFlagRequired("data-file")
@@ -141,6 +158,7 @@ func init() {
 
 	// Wire up command tree.
 	secretsVersionsCmd.AddCommand(secretsVersionsAccessCmd)
+	secretsVersionsCmd.AddCommand(secretsVersionsListCmd)
 	secretsVersionsCmd.AddCommand(secretsVersionsAddCmd)
 	secretsCmd.AddCommand(secretsVersionsCmd)
 	secretsCmd.AddCommand(secretsCreateCmd)
@@ -203,6 +221,50 @@ func runSecretsVersionsAccess(cmd *cobra.Command, args []string) error {
 	}
 
 	os.Stdout.Write(data)
+	return nil
+}
+
+func runSecretsVersionsList(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := secrets.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	parent := secrets.SecretName(project, flagSecretName, flagSecretsLocation)
+	var allVersions []*secretmanager.SecretVersion
+	pageToken := ""
+	for {
+		call := svc.Projects.Secrets.Versions.List(parent).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing secret versions: %w", err)
+		}
+		allVersions = append(allVersions, resp.Versions...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	if flagVersionsListFormat == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(allVersions)
+	}
+
+	fmt.Printf("%-60s %-12s %-25s\n", "NAME", "STATE", "CREATED")
+	for _, v := range allVersions {
+		fmt.Printf("%-60s %-12s %-25s\n", v.Name, v.State, v.CreateTime)
+	}
 	return nil
 }
 
