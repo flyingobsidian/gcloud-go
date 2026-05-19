@@ -224,7 +224,7 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagSSHDryRun {
-		fmt.Println("ssh " + fmt.Sprintf("%v", sshArgs))
+		fmt.Println(shellJoin("ssh", sshArgs))
 		return nil
 	}
 
@@ -466,4 +466,18 @@ func pushSSHKeyToProject(ctx context.Context, svc *compute.Service, project, ssh
 	}
 	fmt.Fprintf(os.Stderr, "Updating project ssh metadata...done.\n")
 	return nil
+}
+
+// shellJoin formats a command and arguments as a copy-pasteable shell command.
+func shellJoin(cmd string, args []string) string {
+	parts := make([]string, 0, len(args)+1)
+	parts = append(parts, cmd)
+	for _, a := range args {
+		if a == "" || strings.ContainsAny(a, " \t\n\"'\\$`!#&|;(){}[]<>?*~") {
+			parts = append(parts, "'"+strings.ReplaceAll(a, "'", "'\\''")+"'")
+		} else {
+			parts = append(parts, a)
+		}
+	}
+	return strings.Join(parts, " ")
 }
