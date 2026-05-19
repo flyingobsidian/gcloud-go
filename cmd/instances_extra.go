@@ -270,6 +270,9 @@ func runInstancesCreate(cmd *cobra.Command, args []string) error {
 }
 
 func runInstancesDelete(cmd *cobra.Command, args []string) error {
+	if flagDeleteDisks != "" && flagKeepDisks != "" {
+		return fmt.Errorf("--delete-disks and --keep-disks are mutually exclusive")
+	}
 	instance := args[0]
 	project, zone, err := resolveProjectZone()
 	if err != nil {
