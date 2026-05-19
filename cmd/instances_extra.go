@@ -234,7 +234,10 @@ func runInstancesCreate(cmd *cobra.Command, args []string) error {
 		inst.Tags = &compute.Tags{Items: flagTags}
 	}
 
-	meta := buildMetadata(flagMetadata, flagMetadataFromFile)
+	meta, err := buildMetadata(flagMetadata, flagMetadataFromFile)
+	if err != nil {
+		return err
+	}
 	if meta != nil {
 		inst.Metadata = meta
 	}
@@ -499,7 +502,7 @@ func shouldModifyDisk(d *compute.AttachedDisk, mode string, _ bool) bool {
 	return false
 }
 
-func buildMetadata(kv map[string]string, fromFile map[string]string) *compute.Metadata {
+func buildMetadata(kv map[string]string, fromFile map[string]string) (*compute.Metadata, error) {
 	var items []*compute.MetadataItems
 	for k, v := range kv {
 		val := v
@@ -508,13 +511,13 @@ func buildMetadata(kv map[string]string, fromFile map[string]string) *compute.Me
 	for k, f := range fromFile {
 		data, err := os.ReadFile(f)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("reading metadata file for key %q: %w", k, err)
 		}
 		val := string(data)
 		items = append(items, &compute.MetadataItems{Key: k, Value: &val})
 	}
 	if len(items) == 0 {
-		return nil
+		return nil, nil
 	}
-	return &compute.Metadata{Items: items}
+	return &compute.Metadata{Items: items}, nil
 }
