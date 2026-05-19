@@ -115,6 +115,24 @@ func resolveSubjectTokenType() string {
 }
 
 func buildCredentialSource() (map[string]any, error) {
+	// Enforce mutual exclusion between credential source types.
+	sourceCount := 0
+	if flagCredentialSourceFile != "" {
+		sourceCount++
+	}
+	if flagCredentialSourceURL != "" {
+		sourceCount++
+	}
+	if flagExecutableCommand != "" {
+		sourceCount++
+	}
+	if flagAws {
+		sourceCount++
+	}
+	if sourceCount > 1 {
+		return nil, fmt.Errorf("specify only one of --credential-source-file, --credential-source-url, --executable-command, or --aws")
+	}
+
 	switch {
 	case flagCredentialSourceFile != "":
 		src := map[string]any{"file": flagCredentialSourceFile}
