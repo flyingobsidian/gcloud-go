@@ -165,13 +165,14 @@ func (s *CredentialStore) loadFromJSON(account string) ([]byte, error) {
 }
 
 // sqliteDBPath returns a writable path for credentials.db.
-// It tries the config directory first, falling back to /tmp/gcloud-go/.
+// It tries the config directory first, falling back to a temporary directory.
 func (s *CredentialStore) sqliteDBPath() string {
 	s.dbPathOnce.Do(func() {
 		primary := filepath.Join(s.configDir, "credentials.db")
 		if db, err := sql.Open("sqlite", primary); err == nil {
 			if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS credentials (account_id TEXT PRIMARY KEY, value BLOB)`); err == nil {
 				db.Close()
+				os.Chmod(primary, 0600)
 				s.dbPath = primary
 				return
 			}
@@ -202,7 +203,11 @@ func (s *CredentialStore) storeToSQLite(account string, data []byte) error {
 	}
 
 	_, err = db.Exec(`REPLACE INTO credentials (account_id, value) VALUES (?, ?)`, account, string(data))
-	return err
+	if err != nil {
+		return err
+	}
+	os.Chmod(dbPath, 0600)
+	return nil
 }
 
 // credAccountID returns the account identifier from a credential JSON.
