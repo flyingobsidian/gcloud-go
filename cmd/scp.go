@@ -23,13 +23,15 @@ var scpCmd = &cobra.Command{
 }
 
 var (
-	flagSCPTunnelThroughIAP bool
-	flagSCPInternalIP       bool
-	flagSCPKeyFile          string
-	flagSCPRecurse          bool
-	flagSCPPort             int
-	flagSCPCompress         bool
-	flagSCPFlag             []string
+	flagSCPTunnelThroughIAP      bool
+	flagSCPInternalIP            bool
+	flagSCPKeyFile               string
+	flagSCPRecurse               bool
+	flagSCPPort                  int
+	flagSCPCompress              bool
+	flagSCPFlag                  []string
+	flagSCPPlain                 bool
+	flagSCPStrictHostKeyChecking string
 )
 
 func init() {
@@ -40,6 +42,8 @@ func init() {
 	scpCmd.Flags().IntVar(&flagSCPPort, "port", 0, "SSH port on the remote host")
 	scpCmd.Flags().BoolVar(&flagSCPCompress, "compress", false, "Enable compression")
 	scpCmd.Flags().StringArrayVar(&flagSCPFlag, "scp-flag", nil, "Extra flags to pass to scp")
+	scpCmd.Flags().BoolVar(&flagSCPPlain, "plain", false, "Suppress managed SSH key setup")
+	scpCmd.Flags().StringVar(&flagSCPStrictHostKeyChecking, "strict-host-key-checking", "", "Override StrictHostKeyChecking (yes, no, ask)")
 
 	computeCmd.AddCommand(scpCmd)
 }
@@ -119,41 +123,9 @@ func runSCP(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Build SCP args.
-	scpArgs := []string{}
-	if flagSCPRecurse {
-		scpArgs = append(scpArgs, "-r")
-	}
-
-	// Use gcloud's default SSH key unless overridden.
-	keyFile := flagSCPKeyFile
-	if keyFile == "" {
-		keyFile = googleSSHKeyPath()
-	}
-	if keyFile != "" {
-		scpArgs = append(scpArgs, "-i", keyFile)
-	}
-
-	// Use gcloud's known_hosts file.
-	if knownHosts := googleKnownHostsPath(); knownHosts != "" {
-		scpArgs = append(scpArgs, "-o", "UserKnownHostsFile="+knownHosts)
-	}
-
-	scpArgs = append(scpArgs,
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "CheckHostIP=no",
-		"-o", "IdentitiesOnly=yes",
-	)
-
-	if flagSCPCompress {
-		scpArgs = append(scpArgs, "-C")
-	}
-
-	for _, f := range flagSCPFlag {
-		scpArgs = append(scpArgs, f)
-	}
-
+	// Resolve the target host IP first so we can check known_hosts.
 	var host string
+	var iapListener net.Listener
 
 	if flagSCPTunnelThroughIAP {
 		ln, err := startIAPTunnel(ctx, project, zone, remoteTarget.Instance)
@@ -161,9 +133,7 @@ func runSCP(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer ln.Close()
-
-		localPort := ln.Addr().(*net.TCPAddr).Port
-		scpArgs = append(scpArgs, "-P", strconv.Itoa(localPort))
+		iapListener = ln
 		host = "localhost"
 	} else if flagSCPInternalIP {
 		host = getInternalIP(inst)
@@ -175,6 +145,57 @@ func runSCP(cmd *cobra.Command, args []string) error {
 		if host == "" {
 			return fmt.Errorf("instance %s has no external IP; consider --tunnel-through-iap", remoteTarget.Instance)
 		}
+	}
+
+	// Build SCP args.
+	scpArgs := []string{}
+	if flagSCPRecurse {
+		scpArgs = append(scpArgs, "-r")
+	}
+
+	if flagSCPPlain {
+		// --plain: no managed key setup, just minimal args.
+	} else {
+		// Use gcloud's default SSH key unless overridden.
+		keyFile := flagSCPKeyFile
+		if keyFile == "" {
+			keyFile = googleSSHKeyPath()
+		}
+		if keyFile != "" {
+			if _, err := os.Stat(keyFile); err == nil {
+				scpArgs = append(scpArgs, "-i", keyFile, "-o", "IdentitiesOnly=yes")
+			}
+		}
+
+		// Use gcloud's known_hosts file.
+		if knownHosts := googleKnownHostsPath(); knownHosts != "" {
+			scpArgs = append(scpArgs, "-o", "UserKnownHostsFile="+knownHosts)
+		}
+
+		// Match gcloud Python behavior: verify host key if host is already known.
+		if knownHostsHasHost(host) {
+			scpArgs = append(scpArgs, "-o", "StrictHostKeyChecking=yes")
+		} else {
+			scpArgs = append(scpArgs, "-o", "StrictHostKeyChecking=no")
+		}
+		scpArgs = append(scpArgs, "-o", "CheckHostIP=no")
+	}
+
+	if flagSCPStrictHostKeyChecking != "" {
+		scpArgs = append(scpArgs, "-o", "StrictHostKeyChecking="+flagSCPStrictHostKeyChecking)
+	}
+
+	if flagSCPCompress {
+		scpArgs = append(scpArgs, "-C")
+	}
+
+	for _, f := range flagSCPFlag {
+		scpArgs = append(scpArgs, f)
+	}
+
+	if iapListener != nil {
+		localPort := iapListener.Addr().(*net.TCPAddr).Port
+		scpArgs = append(scpArgs, "-P", strconv.Itoa(localPort))
 	}
 
 	if flagSCPPort != 0 && !flagSCPTunnelThroughIAP {
