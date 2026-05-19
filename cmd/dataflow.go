@@ -52,7 +52,8 @@ var (
 	flagDataflowCreatedAfter string
 	flagDataflowCreatedBefore string
 	flagDataflowDescribeFull bool
-	flagDataflowCancelForce  bool
+	flagDataflowCancelForce bool
+	flagDataflowCancelDrain bool
 )
 
 func init() {
@@ -67,7 +68,8 @@ func init() {
 	dataflowJobsDescribeCmd.Flags().BoolVar(&flagDataflowDescribeFull, "full", false, "Show full job details including steps")
 
 	dataflowJobsCancelCmd.Flags().StringVar(&flagDataflowRegion, "region", "", "Region of the job")
-	dataflowJobsCancelCmd.Flags().BoolVar(&flagDataflowCancelForce, "force", false, "Force drain the job instead of cancelling")
+	dataflowJobsCancelCmd.Flags().BoolVar(&flagDataflowCancelForce, "force", false, "Force cancel without confirmation")
+	dataflowJobsCancelCmd.Flags().BoolVar(&flagDataflowCancelDrain, "drain", false, "Drain the job instead of cancelling")
 
 	dataflowJobsCmd.AddCommand(dataflowJobsListCmd)
 	dataflowJobsCmd.AddCommand(dataflowJobsDescribeCmd)
@@ -181,17 +183,19 @@ func runDataflowJobsCancel(cmd *cobra.Command, args []string) error {
 	}
 
 	state := "JOB_STATE_CANCELLED"
-	if flagDataflowCancelForce {
+	action := "Cancelled"
+	if flagDataflowCancelDrain {
 		state = "JOB_STATE_DRAINED"
+		action = "Drained"
 	}
 	_, err = svc.Projects.Locations.Jobs.Update(project, region, args[0], &dataflow.Job{
 		RequestedState: state,
 	}).Context(ctx).Do()
 	if err != nil {
-		return fmt.Errorf("cancelling dataflow job: %w", err)
+		return fmt.Errorf("%s dataflow job: %w", strings.ToLower(action), err)
 	}
 
-	fmt.Printf("Cancelled job [%s].\n", args[0])
+	fmt.Printf("%s job [%s].\n", action, args[0])
 	return nil
 }
 
