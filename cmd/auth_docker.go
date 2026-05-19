@@ -164,11 +164,6 @@ func writeDockerConfig(path string, cfg *dockerConfig, raw map[string]json.RawMe
 
 func splitComma(s string) []string {
 	var result []string
-	for _, part := range filepath.SplitList(s) {
-		result = append(result, part)
-	}
-	// filepath.SplitList uses OS path separator; use manual split for commas.
-	result = nil
 	start := 0
 	for i := 0; i <= len(s); i++ {
 		if i == len(s) || s[i] == ',' {
