@@ -270,6 +270,7 @@ func resolveProjectOnly(props *config.Properties) string {
 }
 
 func waitForGlobalOp(ctx context.Context, svc *compute.Service, project, opName string) error {
+	deadline := time.Now().Add(30 * time.Minute)
 	for {
 		op, err := svc.GlobalOperations.Get(project, opName).Context(ctx).Do()
 		if err != nil {
@@ -281,11 +282,15 @@ func waitForGlobalOp(ctx context.Context, svc *compute.Service, project, opName 
 			}
 			return nil
 		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for operation %s", opName)
+		}
 		time.Sleep(2 * time.Second)
 	}
 }
 
 func waitForRegionOp(ctx context.Context, svc *compute.Service, project, region, opName string) error {
+	deadline := time.Now().Add(30 * time.Minute)
 	for {
 		op, err := svc.RegionOperations.Get(project, region, opName).Context(ctx).Do()
 		if err != nil {
@@ -296,6 +301,9 @@ func waitForRegionOp(ctx context.Context, svc *compute.Service, project, region,
 				return fmt.Errorf("operation failed: %s", op.Error.Errors[0].Message)
 			}
 			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for operation %s", opName)
 		}
 		time.Sleep(2 * time.Second)
 	}
