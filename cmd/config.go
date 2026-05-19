@@ -27,10 +27,7 @@ Examples:
 	RunE: runConfigSet,
 }
 
-var flagInstallation bool
-
 func init() {
-	configSetCmd.Flags().BoolVar(&flagInstallation, "installation", false, "Set property for the installation (ignored, user config always used)")
 	configCmd.AddCommand(configSetCmd)
 	rootCmd.AddCommand(configCmd)
 }
