@@ -54,6 +54,9 @@ func init() {
 }
 
 func runSSH(cmd *cobra.Command, args []string) error {
+	if flagSSHTunnelThroughIAP && flagSSHInternalIP {
+		return fmt.Errorf("--tunnel-through-iap and --internal-ip are mutually exclusive")
+	}
 	user, instance := parseUserInstance(args[0])
 	project, zone, err := resolveProjectZone()
 	if err != nil {
