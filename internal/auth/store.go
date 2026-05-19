@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -108,6 +109,7 @@ func (s *CredentialStore) List() ([]string, error) {
 	for a := range seen {
 		accounts = append(accounts, a)
 	}
+	sort.Strings(accounts)
 	return accounts, nil
 }
 
