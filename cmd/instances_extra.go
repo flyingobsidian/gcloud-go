@@ -373,12 +373,17 @@ func formatInstanceList(instances []*compute.Instance) error {
 		return nil
 	}
 
-	fmt.Printf("%-30s %-15s %-20s %-15s %-15s\n", "NAME", "ZONE", "MACHINE_TYPE", "INTERNAL_IP", "STATUS")
+	fmt.Printf("%-30s %-15s %-20s %-12s %-16s %-16s %-10s\n", "NAME", "ZONE", "MACHINE_TYPE", "PREEMPTIBLE", "INTERNAL_IP", "EXTERNAL_IP", "STATUS")
 	for _, inst := range instances {
 		mt := path.Base(inst.MachineType)
-		ip := getInternalIP(inst)
+		intIP := getInternalIP(inst)
+		extIP := getExternalIP(inst)
 		z := path.Base(inst.Zone)
-		fmt.Printf("%-30s %-15s %-20s %-15s %-15s\n", inst.Name, z, mt, ip, inst.Status)
+		preempt := ""
+		if inst.Scheduling != nil && inst.Scheduling.Preemptible {
+			preempt = "true"
+		}
+		fmt.Printf("%-30s %-15s %-20s %-12s %-16s %-16s %-10s\n", inst.Name, z, mt, preempt, intIP, extIP, inst.Status)
 	}
 	return nil
 }
