@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -162,9 +164,9 @@ func runDataplexDatascansJobsList(cmd *cobra.Command, args []string) error {
 		return enc.Encode(allJobs)
 	}
 
-	fmt.Printf("%-60s %-15s %s\n", "NAME", "STATE", "START_TIME")
+	fmt.Printf("%-40s %-15s %-25s %-25s\n", "JOB_ID", "STATE", "START_TIME", "END_TIME")
 	for _, j := range allJobs {
-		fmt.Printf("%-60s %-15s %s\n", j.Name, j.State, j.StartTime)
+		fmt.Printf("%-40s %-15s %-25s %-25s\n", path.Base(j.Name), j.State, j.StartTime, j.EndTime)
 	}
 	return nil
 }
@@ -189,7 +191,7 @@ func runDataplexDatascansJobsDescribe(cmd *cobra.Command, args []string) error {
 	name := fmt.Sprintf("%s/jobs/%s", datascanName(project, location, datascanID), args[0])
 	call := svc.Projects.Locations.DataScans.Jobs.Get(name).Context(ctx)
 	if flagDataplexJobView != "" {
-		call = call.View(flagDataplexJobView)
+		call = call.View(strings.ToUpper(flagDataplexJobView))
 	}
 	job, err := call.Do()
 	if err != nil {
