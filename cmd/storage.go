@@ -58,6 +58,33 @@ var (
 	flagStorageCpStorageClass string
 )
 
+// --- cat ---
+
+var storageCatCmd = &cobra.Command{
+	Use:   "cat GCS_PATH",
+	Short: "Output the contents of a Cloud Storage object to stdout",
+	Long: `Output the contents of a Cloud Storage object to stdout.
+Examples:
+  gcloud storage cat gs://bucket/path/file.txt`,
+	Args: cobra.ExactArgs(1),
+	RunE: runStorageCat,
+}
+
+// --- rm ---
+
+var storageRmCmd = &cobra.Command{
+	Use:   "rm GCS_PATH",
+	Short: "Delete Cloud Storage objects",
+	Long: `Delete objects from Cloud Storage.
+Examples:
+  gcloud storage rm gs://bucket/path/file.txt
+  gcloud storage rm -r gs://bucket/path/`,
+	Args: cobra.ExactArgs(1),
+	RunE: runStorageRm,
+}
+
+var flagStorageRmRecurse bool
+
 // --- ls ---
 
 var storageLsCmd = &cobra.Command{
@@ -86,13 +113,17 @@ func init() {
 	storageCpCmd.Flags().BoolVarP(&flagStorageCpNoClobber, "no-clobber", "n", false, "Do not overwrite existing files")
 	storageCpCmd.Flags().StringVar(&flagStorageCpStorageClass, "storage-class", "", "Storage class for uploaded objects")
 
+	storageRmCmd.Flags().BoolVarP(&flagStorageRmRecurse, "recursive", "r", false, "Delete recursively")
+
 	storageLsCmd.Flags().BoolVarP(&flagStorageLsRecurse, "recursive", "r", false, "List recursively")
 	storageLsCmd.Flags().BoolVarP(&flagStorageLsLong, "long", "l", false, "Show size and creation time")
 	storageLsCmd.Flags().BoolVar(&flagStorageLsJSON, "json", false, "Output as JSON")
 
 	storageCmd.AddCommand(storageBucketsCmd)
+	storageCmd.AddCommand(storageCatCmd)
 	storageCmd.AddCommand(storageCpCmd)
 	storageCmd.AddCommand(storageLsCmd)
+	storageCmd.AddCommand(storageRmCmd)
 	rootCmd.AddCommand(storageCmd)
 }
 
@@ -421,6 +452,83 @@ func storageGCSCopyRecursive(ctx context.Context, svc *storage.Service, srcBucke
 		}
 		fmt.Printf("Copied gs://%s/%s to gs://%s/%s\n", srcBucket, obj.Name, dstBucket, dstObject)
 	}
+	return nil
+}
+
+func runStorageCat(cmd *cobra.Command, args []string) error {
+	bucket, object, err := parseGCSPath(args[0])
+	if err != nil {
+		return err
+	}
+	if object == "" {
+		return fmt.Errorf("object path is required: gs://bucket/object")
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.StorageService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	resp, err := svc.Objects.Get(bucket, object).Context(ctx).Download()
+	if err != nil {
+		return fmt.Errorf("reading object: %w", err)
+	}
+	defer resp.Body.Close()
+
+	_, err = io.Copy(os.Stdout, resp.Body)
+	return err
+}
+
+func runStorageRm(cmd *cobra.Command, args []string) error {
+	bucket, object, err := parseGCSPath(args[0])
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.StorageService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	if flagStorageRmRecurse {
+		prefix := object
+		if prefix != "" && !strings.HasSuffix(prefix, "/") {
+			prefix += "/"
+		}
+		pageToken := ""
+		for {
+			call := svc.Objects.List(bucket).Prefix(prefix).Context(ctx)
+			if pageToken != "" {
+				call = call.PageToken(pageToken)
+			}
+			resp, err := call.Do()
+			if err != nil {
+				return fmt.Errorf("listing objects: %w", err)
+			}
+			for _, obj := range resp.Items {
+				if err := svc.Objects.Delete(bucket, obj.Name).Context(ctx).Do(); err != nil {
+					return fmt.Errorf("deleting gs://%s/%s: %w", bucket, obj.Name, err)
+				}
+				fmt.Fprintf(os.Stderr, "Removing gs://%s/%s\n", bucket, obj.Name)
+			}
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
+		}
+		return nil
+	}
+
+	if object == "" {
+		return fmt.Errorf("object path is required (use -r to delete all objects under a prefix)")
+	}
+
+	if err := svc.Objects.Delete(bucket, object).Context(ctx).Do(); err != nil {
+		return fmt.Errorf("deleting object: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Removing gs://%s/%s\n", bucket, object)
 	return nil
 }
 
