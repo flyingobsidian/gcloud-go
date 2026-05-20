@@ -215,6 +215,47 @@ func (s *CredentialStore) storeToSQLite(account string, data []byte) error {
 	return nil
 }
 
+// Revoke removes stored credentials for the given account from both
+// the SQLite DB and the JSON credential directory.
+func (s *CredentialStore) Revoke(account string) error {
+	if strings.ContainsAny(account, "/\\") {
+		return fmt.Errorf("account name %q contains path separators", account)
+	}
+
+	var errs []string
+
+	// Remove from SQLite.
+	if err := s.deleteFromSQLite(account); err != nil {
+		errs = append(errs, fmt.Sprintf("sqlite: %v", err))
+	}
+
+	// Remove JSON file.
+	jsonPath := filepath.Join(s.configDir, "credentials", account+".json")
+	if err := os.Remove(jsonPath); err != nil && !os.IsNotExist(err) {
+		errs = append(errs, fmt.Sprintf("json file: %v", err))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("revoking %s: %s", account, strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+func (s *CredentialStore) deleteFromSQLite(account string) error {
+	dbPath := s.sqliteDBPath()
+	if dbPath == "" {
+		return nil // no DB to delete from
+	}
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`DELETE FROM credentials WHERE account_id = ?`, account)
+	return err
+}
+
 // credAccountID returns the account identifier from a credential JSON.
 func credAccountID(cred map[string]any) string {
 	// Service account: use client_email.
