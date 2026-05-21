@@ -38,22 +38,45 @@ var dataflowJobsDescribeCmd = &cobra.Command{
 }
 
 var dataflowJobsCancelCmd = &cobra.Command{
-	Use:   "cancel JOB_ID",
-	Short: "Cancel a running Dataflow job",
-	Args:  cobra.ExactArgs(1),
+	Use:   "cancel JOB_ID [JOB_ID...]",
+	Short: "Cancel running Dataflow jobs",
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  runDataflowJobsCancel,
 }
 
+var dataflowJobsDrainCmd = &cobra.Command{
+	Use:   "drain JOB_ID [JOB_ID...]",
+	Short: "Drain running Dataflow jobs",
+	Args:  cobra.MinimumNArgs(1),
+	RunE:  runDataflowJobsDrain,
+}
+
+var dataflowJobsRunCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run a Dataflow job from a template",
+	Args:  cobra.NoArgs,
+	RunE:  runDataflowJobsRun,
+}
+
 var (
-	flagDataflowRegion       string
-	flagDataflowListFormat   string
-	flagDataflowListFilter   string
-	flagDataflowListStatus   string
-	flagDataflowCreatedAfter string
+	flagDataflowRegion        string
+	flagDataflowListFormat    string
+	flagDataflowListFilter    string
+	flagDataflowListStatus    string
+	flagDataflowCreatedAfter  string
 	flagDataflowCreatedBefore string
-	flagDataflowDescribeFull bool
-	flagDataflowCancelForce bool
-	flagDataflowCancelDrain bool
+	flagDataflowDescribeFull  bool
+	flagDataflowCancelDrain   bool
+	flagDFRunGCSLocation      string
+	flagDFRunParameters       map[string]string
+	flagDFRunStagingLocation  string
+	flagDFRunMaxWorkers       int64
+	flagDFRunNumWorkers       int64
+	flagDFRunNetwork          string
+	flagDFRunSubnetwork       string
+	flagDFRunMachineType      string
+	flagDFRunServiceAccount   string
+	flagDFRunJobName          string
 )
 
 func init() {
@@ -68,12 +91,28 @@ func init() {
 	dataflowJobsDescribeCmd.Flags().BoolVar(&flagDataflowDescribeFull, "full", false, "Show full job details including steps")
 
 	dataflowJobsCancelCmd.Flags().StringVar(&flagDataflowRegion, "region", "", "Region of the job")
-	dataflowJobsCancelCmd.Flags().BoolVar(&flagDataflowCancelForce, "force", false, "Force cancel without confirmation")
 	dataflowJobsCancelCmd.Flags().BoolVar(&flagDataflowCancelDrain, "drain", false, "Drain the job instead of cancelling")
+
+	dataflowJobsDrainCmd.Flags().StringVar(&flagDataflowRegion, "region", "", "Region of the job")
+
+	dataflowJobsRunCmd.Flags().StringVar(&flagDataflowRegion, "region", "", "Region for the job")
+	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunGCSLocation, "gcs-location", "", "GCS path to the template (required)")
+	dataflowJobsRunCmd.MarkFlagRequired("gcs-location")
+	dataflowJobsRunCmd.Flags().StringToStringVar(&flagDFRunParameters, "parameters", nil, "Template parameters (key=value)")
+	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunStagingLocation, "staging-location", "", "GCS staging location")
+	dataflowJobsRunCmd.Flags().Int64Var(&flagDFRunMaxWorkers, "max-workers", 0, "Maximum number of workers")
+	dataflowJobsRunCmd.Flags().Int64Var(&flagDFRunNumWorkers, "num-workers", 0, "Initial number of workers")
+	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunNetwork, "network", "", "Network for workers")
+	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunSubnetwork, "subnetwork", "", "Subnetwork for workers")
+	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunMachineType, "worker-machine-type", "", "Worker machine type")
+	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunServiceAccount, "service-account-email", "", "Service account email")
+	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunJobName, "job-name", "", "Job name")
 
 	dataflowJobsCmd.AddCommand(dataflowJobsListCmd)
 	dataflowJobsCmd.AddCommand(dataflowJobsDescribeCmd)
 	dataflowJobsCmd.AddCommand(dataflowJobsCancelCmd)
+	dataflowJobsCmd.AddCommand(dataflowJobsDrainCmd)
+	dataflowJobsCmd.AddCommand(dataflowJobsRunCmd)
 	dataflowCmd.AddCommand(dataflowJobsCmd)
 	rootCmd.AddCommand(dataflowCmd)
 }
@@ -188,14 +227,95 @@ func runDataflowJobsCancel(cmd *cobra.Command, args []string) error {
 		state = "JOB_STATE_DRAINED"
 		action = "Drained"
 	}
-	_, err = svc.Projects.Locations.Jobs.Update(project, region, args[0], &dataflow.Job{
-		RequestedState: state,
-	}).Context(ctx).Do()
+
+	for _, jobID := range args {
+		_, err = svc.Projects.Locations.Jobs.Update(project, region, jobID, &dataflow.Job{
+			RequestedState: state,
+		}).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("%s dataflow job %s: %w", strings.ToLower(action), jobID, err)
+		}
+		fmt.Printf("%s job [%s].\n", action, jobID)
+	}
+	return nil
+}
+
+func runDataflowJobsDrain(cmd *cobra.Command, args []string) error {
+	project, region, err := resolveDataflowRegion()
 	if err != nil {
-		return fmt.Errorf("%s dataflow job: %w", strings.ToLower(action), err)
+		return err
 	}
 
-	fmt.Printf("%s job [%s].\n", action, args[0])
+	ctx := context.Background()
+	svc, err := gcp.DataflowService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	for _, jobID := range args {
+		_, err = svc.Projects.Locations.Jobs.Update(project, region, jobID, &dataflow.Job{
+			RequestedState: "JOB_STATE_DRAINED",
+		}).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("draining dataflow job %s: %w", jobID, err)
+		}
+		fmt.Printf("Drained job [%s].\n", jobID)
+	}
+	return nil
+}
+
+func runDataflowJobsRun(cmd *cobra.Command, args []string) error {
+	project, region, err := resolveDataflowRegion()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.DataflowService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	env := &dataflow.RuntimeEnvironment{}
+	if flagDFRunMaxWorkers > 0 {
+		env.MaxWorkers = flagDFRunMaxWorkers
+	}
+	if flagDFRunNumWorkers > 0 {
+		env.NumWorkers = flagDFRunNumWorkers
+	}
+	if flagDFRunNetwork != "" {
+		env.Network = flagDFRunNetwork
+	}
+	if flagDFRunSubnetwork != "" {
+		env.Subnetwork = flagDFRunSubnetwork
+	}
+	if flagDFRunMachineType != "" {
+		env.MachineType = flagDFRunMachineType
+	}
+	if flagDFRunServiceAccount != "" {
+		env.ServiceAccountEmail = flagDFRunServiceAccount
+	}
+	if flagDFRunStagingLocation != "" {
+		env.TempLocation = flagDFRunStagingLocation
+	}
+
+	req := &dataflow.CreateJobFromTemplateRequest{
+		GcsPath:     flagDFRunGCSLocation,
+		Environment: env,
+	}
+	if flagDFRunJobName != "" {
+		req.JobName = flagDFRunJobName
+	}
+	if len(flagDFRunParameters) > 0 {
+		req.Parameters = flagDFRunParameters
+	}
+
+	job, err := svc.Projects.Locations.Templates.Create(project, region, req).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("launching dataflow job: %w", err)
+	}
+
+	fmt.Printf("Launched job [%s] (ID: %s).\n", job.Name, job.Id)
 	return nil
 }
 
