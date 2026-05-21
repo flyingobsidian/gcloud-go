@@ -39,6 +39,18 @@ Examples:
 	RunE: runConfigGetValue,
 }
 
+var configUnsetCmd = &cobra.Command{
+	Use:   "unset PROPERTY",
+	Short: "Unset a configuration property",
+	Long: `Unset a configuration property. Property can be specified as SECTION/PROPERTY or just PROPERTY for core section.
+
+Examples:
+  gcloud config unset project
+  gcloud config unset compute/zone`,
+	Args: cobra.ExactArgs(1),
+	RunE: runConfigUnset,
+}
+
 var configListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all properties in the active configuration",
@@ -49,6 +61,7 @@ var configListCmd = &cobra.Command{
 func init() {
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configGetValueCmd)
+	configCmd.AddCommand(configUnsetCmd)
 	configCmd.AddCommand(configListCmd)
 	rootCmd.AddCommand(configCmd)
 }
@@ -92,6 +105,46 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Updated property [%s/%s].\n", section, key)
+	return nil
+}
+
+func runConfigUnset(cmd *cobra.Command, args []string) error {
+	property := args[0]
+	section, key := parseProperty(property)
+
+	props, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	switch section {
+	case "core":
+		switch key {
+		case "account":
+			props.Core.Account = ""
+		case "project":
+			props.Core.Project = ""
+		default:
+			return fmt.Errorf("unrecognized property: core/%s", key)
+		}
+	case "compute":
+		switch key {
+		case "zone":
+			props.Compute.Zone = ""
+		case "region":
+			props.Compute.Region = ""
+		default:
+			return fmt.Errorf("unrecognized property: compute/%s", key)
+		}
+	default:
+		return fmt.Errorf("unrecognized section: %s", section)
+	}
+
+	if err := props.Save(); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	fmt.Printf("Unset property [%s/%s].\n", section, key)
 	return nil
 }
 
