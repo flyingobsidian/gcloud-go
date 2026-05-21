@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
+	artifactregistry "google.golang.org/api/artifactregistry/v1"
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 	dataflow "google.golang.org/api/dataflow/v1b3"
 	dataplex "google.golang.org/api/dataplex/v1"
@@ -72,6 +73,14 @@ func OSLoginService(ctx context.Context, account string) (*oslogin.Service, erro
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return oslogin.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ArtifactRegistryService(ctx context.Context, account string) (*artifactregistry.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return artifactregistry.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func OnDemandScanningService(ctx context.Context, account string) (*ondemandscanning.Service, error) {
