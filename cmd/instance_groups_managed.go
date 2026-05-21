@@ -124,11 +124,17 @@ func runManagedListInstances(cmd *cobra.Command, args []string) error {
 			return enc.Encode(allInstances)
 		}
 
-		fmt.Printf("%-40s %-10s %-15s\n", "NAME", "ZONE", "STATUS")
+		fmt.Printf("%-40s %-10s %-15s %-20s %-15s\n", "NAME", "ZONE", "STATUS", "ACTION", "HEALTH")
 		for _, mi := range allInstances {
 			name := path.Base(mi.Instance)
 			zone := extractZoneFromURL(mi.Instance)
-			fmt.Printf("%-40s %-10s %-15s\n", name, zone, mi.InstanceStatus)
+			health := ""
+			if mi.InstanceHealth != nil {
+				for _, h := range mi.InstanceHealth {
+					health = h.DetailedHealthState
+				}
+			}
+			fmt.Printf("%-40s %-10s %-15s %-20s %-15s\n", name, zone, mi.InstanceStatus, mi.CurrentAction, health)
 		}
 		return nil
 	}
@@ -163,10 +169,16 @@ func runManagedListInstances(cmd *cobra.Command, args []string) error {
 		return enc.Encode(allInstances)
 	}
 
-	fmt.Printf("%-40s %-15s\n", "NAME", "STATUS")
+	fmt.Printf("%-40s %-15s %-20s %-15s\n", "NAME", "STATUS", "ACTION", "HEALTH")
 	for _, mi := range allInstances {
 		name := path.Base(mi.Instance)
-		fmt.Printf("%-40s %-15s\n", name, mi.InstanceStatus)
+		health := ""
+		if mi.InstanceHealth != nil {
+			for _, h := range mi.InstanceHealth {
+				health = h.DetailedHealthState
+			}
+		}
+		fmt.Printf("%-40s %-15s %-20s %-15s\n", name, mi.InstanceStatus, mi.CurrentAction, health)
 	}
 	return nil
 }
