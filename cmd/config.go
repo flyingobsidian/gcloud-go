@@ -58,7 +58,14 @@ var configListCmd = &cobra.Command{
 	RunE:  runConfigList,
 }
 
+var (
+	flagConfigListAll    bool
+	flagConfigListFilter string
+)
+
 func init() {
+	configListCmd.Flags().BoolVar(&flagConfigListAll, "all", false, "Show all properties including unset ones")
+	configListCmd.Flags().StringVar(&flagConfigListFilter, "filter", "", "Filter output by section name")
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configGetValueCmd)
 	configCmd.AddCommand(configUnsetCmd)
@@ -140,35 +147,52 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	fmt.Println("[core]")
-	if props.Core.Account != "" {
-		fmt.Printf("account = %s\n", props.Core.Account)
-	}
-	if props.Core.Project != "" {
-		fmt.Printf("project = %s\n", props.Core.Project)
+	showAll := flagConfigListAll
+	filter := flagConfigListFilter
+
+	type section struct {
+		name  string
+		props []struct{ key, val string }
 	}
 
-	if props.Compute.Zone != "" || props.Compute.Region != "" {
-		fmt.Println("[compute]")
-		if props.Compute.Region != "" {
-			fmt.Printf("region = %s\n", props.Compute.Region)
-		}
-		if props.Compute.Zone != "" {
-			fmt.Printf("zone = %s\n", props.Compute.Zone)
-		}
+	sections := []section{
+		{"core", []struct{ key, val string }{
+			{"account", props.Core.Account},
+			{"project", props.Core.Project},
+		}},
+		{"compute", []struct{ key, val string }{
+			{"region", props.Compute.Region},
+			{"zone", props.Compute.Zone},
+		}},
+		{"dataflow", []struct{ key, val string }{{"region", props.Dataflow.Region}}},
+		{"run", []struct{ key, val string }{{"region", props.Run.Region}}},
+		{"redis", []struct{ key, val string }{{"region", props.Redis.Region}}},
+		{"functions", []struct{ key, val string }{{"region", props.Functions.Region}}},
 	}
 
-	for _, s := range []struct {
-		name   string
-		region string
-	}{
-		{"dataflow", props.Dataflow.Region},
-		{"run", props.Run.Region},
-		{"redis", props.Redis.Region},
-		{"functions", props.Functions.Region},
-	} {
-		if s.region != "" {
-			fmt.Printf("[%s]\nregion = %s\n", s.name, s.region)
+	for _, s := range sections {
+		if filter != "" && !strings.Contains(s.name, filter) {
+			continue
+		}
+		hasValues := false
+		for _, p := range s.props {
+			if p.val != "" {
+				hasValues = true
+				break
+			}
+		}
+		if !hasValues && !showAll {
+			continue
+		}
+		fmt.Printf("[%s]\n", s.name)
+		for _, p := range s.props {
+			if p.val != "" || showAll {
+				display := p.val
+				if display == "" {
+					display = "(unset)"
+				}
+				fmt.Printf("%s = %s\n", p.key, display)
+			}
 		}
 	}
 
