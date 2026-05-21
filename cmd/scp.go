@@ -34,6 +34,7 @@ var (
 	flagSCPFlag                  []string
 	flagSCPPlain                 bool
 	flagSCPStrictHostKeyChecking string
+	flagSCPDryRun                bool
 )
 
 func init() {
@@ -46,6 +47,7 @@ func init() {
 	scpCmd.Flags().StringArrayVar(&flagSCPFlag, "scp-flag", nil, "Extra flags to pass to scp")
 	scpCmd.Flags().BoolVar(&flagSCPPlain, "plain", false, "Suppress managed SSH key setup")
 	scpCmd.Flags().StringVar(&flagSCPStrictHostKeyChecking, "strict-host-key-checking", "", "Override StrictHostKeyChecking (yes, no, ask)")
+	scpCmd.Flags().BoolVar(&flagSCPDryRun, "dry-run", false, "Print the scp command without running it")
 
 	computeCmd.AddCommand(scpCmd)
 }
@@ -269,6 +271,11 @@ func runSCP(cmd *cobra.Command, args []string) error {
 
 	// Build source and destination SCP arguments.
 	scpArgs = append(scpArgs, formatSCPArg(src, host), formatSCPArg(dst, host))
+
+	if flagSCPDryRun {
+		fmt.Println(shellJoin("scp", scpArgs))
+		return nil
+	}
 
 	scpBin, err := exec.LookPath("scp")
 	if err != nil {

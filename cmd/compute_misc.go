@@ -21,6 +21,20 @@ var projectInfoCmd = &cobra.Command{
 	Short: "Manage project-level information",
 }
 
+var projectInfoDescribeCmd = &cobra.Command{
+	Use:   "describe",
+	Short: "Describe project-level information",
+	Args:  cobra.NoArgs,
+	RunE:  runProjectInfoDescribe,
+}
+
+var projectInfoAddMetadataCmd = &cobra.Command{
+	Use:   "add-metadata",
+	Short: "Add or update project-level metadata",
+	Args:  cobra.NoArgs,
+	RunE:  runProjectInfoAddMetadata,
+}
+
 var projectInfoRemoveMetadataCmd = &cobra.Command{
 	Use:   "remove-metadata",
 	Short: "Remove project-level metadata",
@@ -31,6 +45,7 @@ var projectInfoRemoveMetadataCmd = &cobra.Command{
 var (
 	flagRemoveMetadataKeys string
 	flagRemoveMetadataAll  bool
+	flagAddProjectMetadata map[string]string
 )
 
 // --- forwarding-rules ---
@@ -129,9 +144,13 @@ var (
 )
 
 func init() {
-	// project-info remove-metadata
+	// project-info
 	projectInfoRemoveMetadataCmd.Flags().StringVar(&flagRemoveMetadataKeys, "keys", "", "Comma-separated list of metadata keys to remove")
 	projectInfoRemoveMetadataCmd.Flags().BoolVar(&flagRemoveMetadataAll, "all", false, "Remove all metadata")
+	projectInfoAddMetadataCmd.Flags().StringToStringVar(&flagAddProjectMetadata, "metadata", nil, "Metadata key=value pairs to add")
+	projectInfoAddMetadataCmd.MarkFlagRequired("metadata")
+	projectInfoCmd.AddCommand(projectInfoDescribeCmd)
+	projectInfoCmd.AddCommand(projectInfoAddMetadataCmd)
 	projectInfoCmd.AddCommand(projectInfoRemoveMetadataCmd)
 	computeCmd.AddCommand(projectInfoCmd)
 
@@ -169,6 +188,75 @@ func init() {
 	addressesCmd.AddCommand(addressesDeleteCmd)
 	addressesCmd.AddCommand(addressesDescribeCmd)
 	computeCmd.AddCommand(addressesCmd)
+}
+
+func runProjectInfoDescribe(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := icompute.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	proj, err := svc.Projects.Get(project).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("describing project: %w", err)
+	}
+
+	return formatOutput(proj, "")
+}
+
+func runProjectInfoAddMetadata(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := icompute.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	proj, err := svc.Projects.Get(project).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("getting project metadata: %w", err)
+	}
+
+	metadata := proj.CommonInstanceMetadata
+	if metadata == nil {
+		metadata = &compute.Metadata{}
+	}
+
+	for k, v := range flagAddProjectMetadata {
+		val := v
+		found := false
+		for _, item := range metadata.Items {
+			if item.Key == k {
+				item.Value = &val
+				found = true
+				break
+			}
+		}
+		if !found {
+			metadata.Items = append(metadata.Items, &compute.MetadataItems{Key: k, Value: &val})
+		}
+	}
+
+	op, err := svc.Projects.SetCommonInstanceMetadata(project, metadata).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("setting metadata: %w", err)
+	}
+
+	if err := waitForGlobalOp(ctx, svc, project, op.Name); err != nil {
+		return err
+	}
+	fmt.Println("Updated project metadata.")
+	return nil
 }
 
 func runProjectInfoRemoveMetadata(cmd *cobra.Command, args []string) error {

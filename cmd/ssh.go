@@ -38,6 +38,11 @@ var (
 	flagSSHDryRun                bool
 	flagSSHPlain                 bool
 	flagSSHStrictHostKeyChecking string
+	flagSSHKeyExpiration         string
+	flagSSHKeyExpireAfter        string
+	flagSSHTroubleshoot          bool
+	flagSSHForceKeyOverwrite     bool
+	flagSSHContainer             string
 )
 
 func init() {
@@ -49,6 +54,11 @@ func init() {
 	sshCmd.Flags().BoolVar(&flagSSHDryRun, "dry-run", false, "Print the ssh command without running it")
 	sshCmd.Flags().BoolVar(&flagSSHPlain, "plain", false, "Suppress managed SSH key setup")
 	sshCmd.Flags().StringVar(&flagSSHStrictHostKeyChecking, "strict-host-key-checking", "", "Override StrictHostKeyChecking (yes, no, ask)")
+	sshCmd.Flags().StringVar(&flagSSHKeyExpiration, "ssh-key-expiration", "", "Absolute expiration time for SSH key (RFC 3339)")
+	sshCmd.Flags().StringVar(&flagSSHKeyExpireAfter, "ssh-key-expire-after", "", "Duration after which SSH key expires (e.g. 30m, 1h)")
+	sshCmd.Flags().BoolVar(&flagSSHTroubleshoot, "troubleshoot", false, "Run SSH troubleshooting diagnostics")
+	sshCmd.Flags().BoolVar(&flagSSHForceKeyOverwrite, "force-key-file-overwrite", false, "Overwrite existing SSH key file")
+	sshCmd.Flags().StringVar(&flagSSHContainer, "container", "", "Name of container to SSH into")
 
 	computeCmd.AddCommand(sshCmd)
 }
@@ -215,12 +225,33 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	}
 	sshArgs = append(sshArgs, target)
 
-	// Append remote command if provided via --command or after --.
-	if flagSSHCommand != "" {
+	// Container support: wrap command in docker exec.
+	if flagSSHContainer != "" {
+		containerCmd := fmt.Sprintf("docker exec -it %s", flagSSHContainer)
+		if flagSSHCommand != "" {
+			containerCmd += " " + flagSSHCommand
+		} else {
+			containerCmd += " /bin/sh"
+		}
+		sshArgs = append(sshArgs, "--", containerCmd)
+	} else if flagSSHCommand != "" {
 		sshArgs = append(sshArgs, "--", flagSSHCommand)
 	} else if dashIdx := cmd.ArgsLenAtDash(); dashIdx >= 0 {
 		sshArgs = append(sshArgs, "--")
 		sshArgs = append(sshArgs, args[dashIdx:]...)
+	}
+
+	if flagSSHTroubleshoot {
+		fmt.Println("=== SSH Troubleshooting ===")
+		fmt.Printf("Instance: %s (zone: %s)\n", instance, zone)
+		fmt.Printf("Host: %s\n", host)
+		fmt.Printf("Status: %s\n", inst.Status)
+		if inst.Status != "RUNNING" {
+			fmt.Println("WARNING: Instance is not running!")
+		}
+		fmt.Printf("IAP tunnel: %v\n", flagSSHTunnelThroughIAP)
+		fmt.Printf("Internal IP: %v\n", flagSSHInternalIP)
+		fmt.Println("===========================")
 	}
 
 	if flagSSHDryRun {
