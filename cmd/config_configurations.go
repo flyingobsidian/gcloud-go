@@ -40,11 +40,19 @@ var configConfigurationsDeleteCmd = &cobra.Command{
 	RunE:  runConfigConfigurationsDelete,
 }
 
+var configConfigurationsDescribeCmd = &cobra.Command{
+	Use:   "describe NAME",
+	Short: "Describe a named configuration",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runConfigConfigurationsDescribe,
+}
+
 func init() {
 	configConfigurationsCmd.AddCommand(configConfigurationsCreateCmd)
 	configConfigurationsCmd.AddCommand(configConfigurationsListCmd)
 	configConfigurationsCmd.AddCommand(configConfigurationsActivateCmd)
 	configConfigurationsCmd.AddCommand(configConfigurationsDeleteCmd)
+	configConfigurationsCmd.AddCommand(configConfigurationsDescribeCmd)
 	configCmd.AddCommand(configConfigurationsCmd)
 }
 
@@ -91,5 +99,27 @@ func runConfigConfigurationsDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Printf("Deleted configuration [%s].\n", name)
+	return nil
+}
+
+func runConfigConfigurationsDescribe(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	props, err := config.LoadNamed(name)
+	if err != nil {
+		return fmt.Errorf("loading configuration [%s]: %w", name, err)
+	}
+
+	active := config.ActiveConfigName()
+	fmt.Printf("name: %s\n", name)
+	fmt.Printf("is_active: %v\n", name == active)
+
+	fmt.Println("properties:")
+	fmt.Println("  core:")
+	fmt.Printf("    account: %s\n", props.Core.Account)
+	fmt.Printf("    project: %s\n", props.Core.Project)
+	fmt.Println("  compute:")
+	fmt.Printf("    region: %s\n", props.Compute.Region)
+	fmt.Printf("    zone: %s\n", props.Compute.Zone)
+
 	return nil
 }

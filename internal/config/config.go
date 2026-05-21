@@ -49,6 +49,16 @@ func Load() (*Properties, error) {
 	return loadINI(path)
 }
 
+// LoadNamed reads a specific named configuration.
+func LoadNamed(name string) (*Properties, error) {
+	dir, err := ConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, "configurations", "config_"+name)
+	return loadINI(path)
+}
+
 // Save writes properties in gcloud's INI format to the active configuration.
 func (p *Properties) Save() error {
 	dir, err := ConfigDir()
