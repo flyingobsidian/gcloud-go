@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"github.com/flyingobsidian/gcloud-go/internal/config"
@@ -47,6 +48,8 @@ Use --all to revoke all accounts.`,
 }
 
 var flagAuthRevokeAll bool
+var flagAuthListFilterAccount string
+var flagAuthListFormat string
 
 var authActivateServiceAccountCmd = &cobra.Command{
 	Use:   "activate-service-account [ACCOUNT]",
@@ -79,6 +82,9 @@ func init() {
 	authLoginCmd.Flags().StringVar(&flagCredFile, "cred-file", "", "Path to service account JSON key file (if omitted, opens browser)")
 	authLoginCmd.Flags().BoolVar(&flagBrief, "brief", false, "Minimal output")
 	authLoginCmd.Flags().BoolVar(&flagUpdateADC, "update-adc", false, "Also update Application Default Credentials")
+
+	authListCmd.Flags().StringVar(&flagAuthListFilterAccount, "filter-account", "", "Filter listed accounts by substring match")
+	authListCmd.Flags().StringVar(&flagAuthListFormat, "format", "", "Output format: json")
 
 	authRevokeCmd.Flags().BoolVar(&flagAuthRevokeAll, "all", false, "Revoke credentials for all accounts")
 
@@ -282,6 +288,38 @@ func runAuthList(cmd *cobra.Command, args []string) error {
 	active := ""
 	if props != nil {
 		active = props.Core.Account
+	}
+
+	// Apply filter if specified.
+	if flagAuthListFilterAccount != "" {
+		var filtered []string
+		for _, acct := range accounts {
+			if strings.Contains(acct, flagAuthListFilterAccount) {
+				filtered = append(filtered, acct)
+			}
+		}
+		accounts = filtered
+	}
+
+	if flagAuthListFormat == "json" {
+		type accountEntry struct {
+			Account string `json:"account"`
+			Status  string `json:"status"`
+		}
+		entries := make([]accountEntry, 0, len(accounts))
+		for _, acct := range accounts {
+			status := ""
+			if acct == active {
+				status = "ACTIVE"
+			}
+			entries = append(entries, accountEntry{Account: acct, Status: status})
+		}
+		data, err := json.MarshalIndent(entries, "", "  ")
+		if err != nil {
+			return fmt.Errorf("encoding JSON: %w", err)
+		}
+		fmt.Println(string(data))
+		return nil
 	}
 
 	if len(accounts) == 0 {
