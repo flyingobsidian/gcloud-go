@@ -215,6 +215,25 @@ func (s *CredentialStore) storeToSQLite(account string, data []byte) error {
 	return nil
 }
 
+// StoreRaw saves raw credential JSON for the given account identifier.
+func (s *CredentialStore) StoreRaw(account string, data []byte) error {
+	if strings.ContainsAny(account, "/\\") {
+		return fmt.Errorf("account name %q contains path separators", account)
+	}
+
+	_ = s.storeToSQLite(account, data)
+
+	jsonDir := filepath.Join(s.configDir, "credentials")
+	if err := os.MkdirAll(jsonDir, 0700); err != nil {
+		return fmt.Errorf("creating credentials directory: %w", err)
+	}
+	dest := filepath.Join(jsonDir, account+".json")
+	if err := os.WriteFile(dest, data, 0600); err != nil {
+		return fmt.Errorf("writing credential file: %w", err)
+	}
+	return nil
+}
+
 // Revoke removes stored credentials for the given account from both
 // the SQLite DB and the JSON credential directory.
 func (s *CredentialStore) Revoke(account string) error {
