@@ -383,7 +383,10 @@ func runManagedSetTemplate(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagManagedSetTemplateRegion != "" {
-		op, err := svc.RegionInstanceGroupManagers.SetInstanceTemplate(project, flagManagedSetTemplateRegion, group, req).Context(ctx).Do()
+		reqR := &compute.RegionInstanceGroupManagersSetTemplateRequest{
+			InstanceTemplate: templateURL,
+		}
+		op, err := svc.RegionInstanceGroupManagers.SetInstanceTemplate(project, flagManagedSetTemplateRegion, group, reqR).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("setting instance template: %w", err)
 		}
