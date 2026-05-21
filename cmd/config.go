@@ -77,27 +77,8 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	switch section {
-	case "core":
-		switch key {
-		case "account":
-			props.Core.Account = value
-		case "project":
-			props.Core.Project = value
-		default:
-			return fmt.Errorf("unrecognized property: core/%s", key)
-		}
-	case "compute":
-		switch key {
-		case "zone":
-			props.Compute.Zone = value
-		case "region":
-			props.Compute.Region = value
-		default:
-			return fmt.Errorf("unrecognized property: compute/%s", key)
-		}
-	default:
-		return fmt.Errorf("unrecognized section: %s", section)
+	if err := setPropertyValue(props, section, key, value); err != nil {
+		return err
 	}
 
 	if err := props.Save(); err != nil {
@@ -117,27 +98,8 @@ func runConfigUnset(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	switch section {
-	case "core":
-		switch key {
-		case "account":
-			props.Core.Account = ""
-		case "project":
-			props.Core.Project = ""
-		default:
-			return fmt.Errorf("unrecognized property: core/%s", key)
-		}
-	case "compute":
-		switch key {
-		case "zone":
-			props.Compute.Zone = ""
-		case "region":
-			props.Compute.Region = ""
-		default:
-			return fmt.Errorf("unrecognized property: compute/%s", key)
-		}
-	default:
-		return fmt.Errorf("unrecognized section: %s", section)
+	if err := setPropertyValue(props, section, key, ""); err != nil {
+		return err
 	}
 
 	if err := props.Save(); err != nil {
@@ -196,6 +158,20 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	for _, s := range []struct {
+		name   string
+		region string
+	}{
+		{"dataflow", props.Dataflow.Region},
+		{"run", props.Run.Region},
+		{"redis", props.Redis.Region},
+		{"functions", props.Functions.Region},
+	} {
+		if s.region != "" {
+			fmt.Printf("[%s]\nregion = %s\n", s.name, s.region)
+		}
+	}
+
 	fmt.Fprintln(cmd.ErrOrStderr(), "Your active configuration is: [default]")
 	return nil
 }
@@ -220,9 +196,79 @@ func getPropertyValue(props *config.Properties, section, key string) (string, er
 		default:
 			return "", fmt.Errorf("unrecognized property: compute/%s", key)
 		}
+	case "dataflow":
+		if key == "region" {
+			return props.Dataflow.Region, nil
+		}
+		return "", fmt.Errorf("unrecognized property: dataflow/%s", key)
+	case "run":
+		if key == "region" {
+			return props.Run.Region, nil
+		}
+		return "", fmt.Errorf("unrecognized property: run/%s", key)
+	case "redis":
+		if key == "region" {
+			return props.Redis.Region, nil
+		}
+		return "", fmt.Errorf("unrecognized property: redis/%s", key)
+	case "functions":
+		if key == "region" {
+			return props.Functions.Region, nil
+		}
+		return "", fmt.Errorf("unrecognized property: functions/%s", key)
 	default:
 		return "", fmt.Errorf("unrecognized section: %s", section)
 	}
+}
+
+func setPropertyValue(props *config.Properties, section, key, value string) error {
+	switch section {
+	case "core":
+		switch key {
+		case "account":
+			props.Core.Account = value
+		case "project":
+			props.Core.Project = value
+		default:
+			return fmt.Errorf("unrecognized property: core/%s", key)
+		}
+	case "compute":
+		switch key {
+		case "zone":
+			props.Compute.Zone = value
+		case "region":
+			props.Compute.Region = value
+		default:
+			return fmt.Errorf("unrecognized property: compute/%s", key)
+		}
+	case "dataflow":
+		if key == "region" {
+			props.Dataflow.Region = value
+			return nil
+		}
+		return fmt.Errorf("unrecognized property: dataflow/%s", key)
+	case "run":
+		if key == "region" {
+			props.Run.Region = value
+			return nil
+		}
+		return fmt.Errorf("unrecognized property: run/%s", key)
+	case "redis":
+		if key == "region" {
+			props.Redis.Region = value
+			return nil
+		}
+		return fmt.Errorf("unrecognized property: redis/%s", key)
+	case "functions":
+		if key == "region" {
+			props.Functions.Region = value
+			return nil
+		}
+		return fmt.Errorf("unrecognized property: functions/%s", key)
+	default:
+		return fmt.Errorf("unrecognized section: %s", section)
+	}
+	return nil
 }
 
 // parseProperty splits "section/key" or defaults to "core/key".
