@@ -63,6 +63,48 @@ var addressesCreateCmd = &cobra.Command{
 	RunE:  runAddressesCreate,
 }
 
+var addressesListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List static IP addresses",
+	Args:  cobra.NoArgs,
+	RunE:  runAddressesList,
+}
+
+var addressesDeleteCmd = &cobra.Command{
+	Use:   "delete ADDRESS_NAME",
+	Short: "Delete a static IP address",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runAddressesDelete,
+}
+
+var addressesDescribeCmd = &cobra.Command{
+	Use:   "describe ADDRESS_NAME",
+	Short: "Describe a static IP address",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runAddressesDescribe,
+}
+
+var forwardingRulesDescribeCmd = &cobra.Command{
+	Use:   "describe RULE_NAME",
+	Short: "Describe a forwarding rule",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runForwardingRulesDescribe,
+}
+
+var forwardingRulesCreateCmd = &cobra.Command{
+	Use:   "create RULE_NAME",
+	Short: "Create a forwarding rule",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runForwardingRulesCreate,
+}
+
+var forwardingRulesDeleteCmd = &cobra.Command{
+	Use:   "delete RULE_NAME",
+	Short: "Delete a forwarding rule",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runForwardingRulesDelete,
+}
+
 var (
 	flagAddressRegion      string
 	flagAddressNetworkTier string
@@ -72,6 +114,18 @@ var (
 	flagAddressType        string
 	flagAddressAddresses   string
 	flagAddressDescription string
+	flagAddressGlobal      bool
+	flagAddressListFormat  string
+	flagAddrDeleteRegion   string
+	flagAddrDescribeRegion string
+	flagFRRegion           string
+	flagFRDescribeRegion   string
+	flagFRTarget           string
+	flagFRIPAddress        string
+	flagFRIPProtocol       string
+	flagFRPortRange        string
+	flagFRListFilter       string
+	flagFRDeleteRegion     string
 )
 
 func init() {
@@ -81,12 +135,23 @@ func init() {
 	projectInfoCmd.AddCommand(projectInfoRemoveMetadataCmd)
 	computeCmd.AddCommand(projectInfoCmd)
 
-	// forwarding-rules list
+	// forwarding-rules
 	forwardingRulesListCmd.Flags().StringVar(&flagFRListFormat, "format", "", "Output format (e.g. json)")
+	forwardingRulesListCmd.Flags().StringVar(&flagFRListFilter, "filter", "", "Filter expression")
+	forwardingRulesDescribeCmd.Flags().StringVar(&flagFRDescribeRegion, "region", "", "Region")
+	forwardingRulesCreateCmd.Flags().StringVar(&flagFRRegion, "region", "", "Region")
+	forwardingRulesCreateCmd.Flags().StringVar(&flagFRTarget, "target-pool", "", "Target pool")
+	forwardingRulesCreateCmd.Flags().StringVar(&flagFRIPAddress, "address", "", "IP address")
+	forwardingRulesCreateCmd.Flags().StringVar(&flagFRIPProtocol, "ip-protocol", "", "IP protocol (TCP, UDP)")
+	forwardingRulesCreateCmd.Flags().StringVar(&flagFRPortRange, "port-range", "", "Port range (e.g. 80-80)")
+	forwardingRulesDeleteCmd.Flags().StringVar(&flagFRDeleteRegion, "region", "", "Region")
 	forwardingRulesCmd.AddCommand(forwardingRulesListCmd)
+	forwardingRulesCmd.AddCommand(forwardingRulesDescribeCmd)
+	forwardingRulesCmd.AddCommand(forwardingRulesCreateCmd)
+	forwardingRulesCmd.AddCommand(forwardingRulesDeleteCmd)
 	computeCmd.AddCommand(forwardingRulesCmd)
 
-	// addresses create
+	// addresses
 	addressesCreateCmd.Flags().StringVar(&flagAddressRegion, "region", "", "Region for the address")
 	addressesCreateCmd.Flags().StringVar(&flagAddressNetworkTier, "network-tier", "", "Network tier (PREMIUM or STANDARD)")
 	addressesCreateCmd.Flags().StringVar(&flagAddressSubnet, "subnet", "", "Subnet for internal address")
@@ -95,7 +160,14 @@ func init() {
 	addressesCreateCmd.Flags().StringVar(&flagAddressType, "address-type", "", "Address type (INTERNAL or EXTERNAL)")
 	addressesCreateCmd.Flags().StringVar(&flagAddressAddresses, "addresses", "", "Specific IP address to reserve")
 	addressesCreateCmd.Flags().StringVar(&flagAddressDescription, "description", "", "Description for the address")
+	addressesCreateCmd.Flags().BoolVar(&flagAddressGlobal, "global", false, "Create a global address")
+	addressesListCmd.Flags().StringVar(&flagAddressListFormat, "format", "", "Output format (e.g. json)")
+	addressesDeleteCmd.Flags().StringVar(&flagAddrDeleteRegion, "region", "", "Region")
+	addressesDescribeCmd.Flags().StringVar(&flagAddrDescribeRegion, "region", "", "Region")
 	addressesCmd.AddCommand(addressesCreateCmd)
+	addressesCmd.AddCommand(addressesListCmd)
+	addressesCmd.AddCommand(addressesDeleteCmd)
+	addressesCmd.AddCommand(addressesDescribeCmd)
 	computeCmd.AddCommand(addressesCmd)
 }
 
@@ -166,6 +238,9 @@ func runForwardingRulesList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.ForwardingRules.AggregatedList(project).Context(ctx)
+		if flagFRListFilter != "" {
+			call = call.Filter(flagFRListFilter)
+		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
@@ -188,30 +263,23 @@ func runForwardingRulesList(cmd *cobra.Command, args []string) error {
 		return enc.Encode(allRules)
 	}
 
-	fmt.Printf("%-40s %-20s %-15s %-10s\n", "NAME", "REGION", "IP_ADDRESS", "IP_PROTOCOL")
+	fmt.Printf("%-30s %-20s %-15s %-10s %-30s\n", "NAME", "REGION", "IP_ADDRESS", "IP_PROTOCOL", "TARGET")
 	for _, fr := range allRules {
-		fmt.Printf("%-40s %-20s %-15s %-10s\n", fr.Name, fr.Region, fr.IPAddress, fr.IPProtocol)
+		fmt.Printf("%-30s %-20s %-15s %-10s %-30s\n", fr.Name, fr.Region, fr.IPAddress, fr.IPProtocol, fr.Target)
 	}
 	return nil
 }
 
 func runAddressesCreate(cmd *cobra.Command, args []string) error {
+	// Cross-flag validation (#148).
+	if flagAddressNetwork != "" && flagAddressSubnet != "" {
+		return fmt.Errorf("--network and --subnet are mutually exclusive")
+	}
+
 	name := args[0]
 	project, err := resolveProject()
 	if err != nil {
 		return err
-	}
-
-	region := flagAddressRegion
-	if region == "" {
-		props, err := config.Load()
-		if err != nil {
-			return err
-		}
-		region = config.Resolve("", "CLOUDSDK_COMPUTE_REGION", props.Compute.Region)
-		if region == "" {
-			return fmt.Errorf("--region is required")
-		}
 	}
 
 	ctx := context.Background()
@@ -245,17 +313,278 @@ func runAddressesCreate(cmd *cobra.Command, args []string) error {
 		addr.Description = flagAddressDescription
 	}
 
+	if flagAddressGlobal {
+		op, err := svc.GlobalAddresses.Insert(project, addr).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("creating global address: %w", err)
+		}
+		if err := waitForGlobalOp(ctx, svc, project, op.Name); err != nil {
+			return err
+		}
+		fmt.Printf("Created global address [%s].\n", name)
+		return nil
+	}
+
+	region := flagAddressRegion
+	if region == "" {
+		props, err := config.Load()
+		if err != nil {
+			return err
+		}
+		region = config.Resolve("", "CLOUDSDK_COMPUTE_REGION", props.Compute.Region)
+		if region == "" {
+			return fmt.Errorf("--region is required (or use --global)")
+		}
+	}
+
 	op, err := svc.Addresses.Insert(project, region, addr).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating address: %w", err)
 	}
 
-	// Wait for region operation.
 	if err := waitForRegionOp(ctx, svc, project, region, op.Name); err != nil {
 		return err
 	}
 
 	fmt.Printf("Created address [%s].\n", name)
+	return nil
+}
+
+func runAddressesList(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := icompute.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	var allAddrs []*compute.Address
+	pageToken := ""
+	for {
+		call := svc.Addresses.AggregatedList(project).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing addresses: %w", err)
+		}
+		for _, scoped := range resp.Items {
+			allAddrs = append(allAddrs, scoped.Addresses...)
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	if flagAddressListFormat == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(allAddrs)
+	}
+
+	fmt.Printf("%-30s %-20s %-18s %-10s %-10s\n", "NAME", "REGION", "ADDRESS", "STATUS", "TYPE")
+	for _, a := range allAddrs {
+		fmt.Printf("%-30s %-20s %-18s %-10s %-10s\n", a.Name, a.Region, a.Address, a.Status, a.AddressType)
+	}
+	return nil
+}
+
+func runAddressesDelete(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	region := flagAddrDeleteRegion
+	if region == "" {
+		props, err := config.Load()
+		if err != nil {
+			return err
+		}
+		region = config.Resolve("", "CLOUDSDK_COMPUTE_REGION", props.Compute.Region)
+		if region == "" {
+			return fmt.Errorf("--region is required")
+		}
+	}
+
+	ctx := context.Background()
+	svc, err := icompute.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	op, err := svc.Addresses.Delete(project, region, name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("deleting address: %w", err)
+	}
+
+	if err := waitForRegionOp(ctx, svc, project, region, op.Name); err != nil {
+		return err
+	}
+	fmt.Printf("Deleted address [%s].\n", name)
+	return nil
+}
+
+func runAddressesDescribe(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	region := flagAddrDescribeRegion
+	if region == "" {
+		props, err := config.Load()
+		if err != nil {
+			return err
+		}
+		region = config.Resolve("", "CLOUDSDK_COMPUTE_REGION", props.Compute.Region)
+		if region == "" {
+			return fmt.Errorf("--region is required")
+		}
+	}
+
+	ctx := context.Background()
+	svc, err := icompute.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	addr, err := svc.Addresses.Get(project, region, name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("describing address: %w", err)
+	}
+
+	return formatOutput(addr, "")
+}
+
+func runForwardingRulesDescribe(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := icompute.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	region := flagFRDescribeRegion
+	if region == "" {
+		props, err := config.Load()
+		if err != nil {
+			return err
+		}
+		region = config.Resolve("", "CLOUDSDK_COMPUTE_REGION", props.Compute.Region)
+		if region == "" {
+			return fmt.Errorf("--region is required")
+		}
+	}
+
+	fr, err := svc.ForwardingRules.Get(project, region, name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("describing forwarding rule: %w", err)
+	}
+
+	return formatOutput(fr, "")
+}
+
+func runForwardingRulesCreate(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	region := flagFRRegion
+	if region == "" {
+		props, err := config.Load()
+		if err != nil {
+			return err
+		}
+		region = config.Resolve("", "CLOUDSDK_COMPUTE_REGION", props.Compute.Region)
+		if region == "" {
+			return fmt.Errorf("--region is required")
+		}
+	}
+
+	ctx := context.Background()
+	svc, err := icompute.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	fr := &compute.ForwardingRule{
+		Name: name,
+	}
+	if flagFRTarget != "" {
+		fr.Target = flagFRTarget
+	}
+	if flagFRIPAddress != "" {
+		fr.IPAddress = flagFRIPAddress
+	}
+	if flagFRIPProtocol != "" {
+		fr.IPProtocol = flagFRIPProtocol
+	}
+	if flagFRPortRange != "" {
+		fr.PortRange = flagFRPortRange
+	}
+
+	op, err := svc.ForwardingRules.Insert(project, region, fr).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("creating forwarding rule: %w", err)
+	}
+
+	if err := waitForRegionOp(ctx, svc, project, region, op.Name); err != nil {
+		return err
+	}
+	fmt.Printf("Created forwarding rule [%s].\n", name)
+	return nil
+}
+
+func runForwardingRulesDelete(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	region := flagFRDeleteRegion
+	if region == "" {
+		props, err := config.Load()
+		if err != nil {
+			return err
+		}
+		region = config.Resolve("", "CLOUDSDK_COMPUTE_REGION", props.Compute.Region)
+		if region == "" {
+			return fmt.Errorf("--region is required")
+		}
+	}
+
+	ctx := context.Background()
+	svc, err := icompute.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	op, err := svc.ForwardingRules.Delete(project, region, name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("deleting forwarding rule: %w", err)
+	}
+
+	if err := waitForRegionOp(ctx, svc, project, region, op.Name); err != nil {
+		return err
+	}
+	fmt.Printf("Deleted forwarding rule [%s].\n", name)
 	return nil
 }
 
