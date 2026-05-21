@@ -1,11 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
+	"strings"
 
+	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
+	iam "google.golang.org/api/iam/v1"
 )
 
 var iamCmd = &cobra.Command{
@@ -25,6 +30,86 @@ var createCredConfigCmd = &cobra.Command{
 	RunE:  runCreateCredConfig,
 }
 
+// --- workload-identity-pools CRUD (#201) ---
+
+var wipCreateCmd = &cobra.Command{
+	Use:   "create POOL_ID",
+	Short: "Create a workload identity pool",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runWIPCreate,
+}
+
+var wipDescribeCmd = &cobra.Command{
+	Use:   "describe POOL_ID",
+	Short: "Describe a workload identity pool",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runWIPDescribe,
+}
+
+var wipListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List workload identity pools",
+	Args:  cobra.NoArgs,
+	RunE:  runWIPList,
+}
+
+var wipDeleteCmd = &cobra.Command{
+	Use:   "delete POOL_ID",
+	Short: "Delete a workload identity pool",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runWIPDelete,
+}
+
+var (
+	flagWIPLocation    string
+	flagWIPDisplayName string
+	flagWIPDescription string
+	flagWIPListFormat  string
+)
+
+// --- workload-identity-pools providers CRUD (#202) ---
+
+var wipProvidersCmd = &cobra.Command{
+	Use:   "providers",
+	Short: "Manage workload identity pool providers",
+}
+
+var wipProvCreateCmd = &cobra.Command{
+	Use:   "create PROVIDER_ID",
+	Short: "Create a workload identity pool provider",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runWIPProvCreate,
+}
+
+var wipProvDescribeCmd = &cobra.Command{
+	Use:   "describe PROVIDER_ID",
+	Short: "Describe a workload identity pool provider",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runWIPProvDescribe,
+}
+
+var wipProvListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List workload identity pool providers",
+	Args:  cobra.NoArgs,
+	RunE:  runWIPProvList,
+}
+
+var wipProvDeleteCmd = &cobra.Command{
+	Use:   "delete PROVIDER_ID",
+	Short: "Delete a workload identity pool provider",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runWIPProvDelete,
+}
+
+var (
+	flagWIPProvPool          string
+	flagWIPProvType          string
+	flagWIPProvAttrMapping   map[string]string
+	flagWIPProvIssuerURI     string
+	flagWIPProvDisplayName   string
+)
+
 var (
 	flagOutputFile                    string
 	flagServiceAccount                string
@@ -39,6 +124,13 @@ var (
 	flagExecutableOutputFile          string
 	flagServiceAccountTokenLifetime   int
 	flagAws                           bool
+	flagAzure                         bool
+	flagAppIDURI                      string
+	flagCredCertPath                  string
+	flagCredCertKeyPath               string
+	flagCredCertTrustChainPath        string
+	flagCredCertConfigOutput          string
+	flagEnableIMDSv2                  bool
 )
 
 func init() {
@@ -55,7 +147,42 @@ func init() {
 	createCredConfigCmd.Flags().StringVar(&flagExecutableOutputFile, "executable-output-file", "", "Cache file for executable output")
 	createCredConfigCmd.Flags().IntVar(&flagServiceAccountTokenLifetime, "service-account-token-lifetime-seconds", 0, "Token lifetime (600-43200)")
 	createCredConfigCmd.Flags().BoolVar(&flagAws, "aws", false, "Use AWS credentials")
+	createCredConfigCmd.Flags().BoolVar(&flagAzure, "azure", false, "Use Azure AD credentials")
+	createCredConfigCmd.Flags().StringVar(&flagAppIDURI, "app-id-uri", "", "Azure AD application ID URI")
+	createCredConfigCmd.Flags().StringVar(&flagCredCertPath, "credential-cert-path", "", "X.509 certificate path")
+	createCredConfigCmd.Flags().StringVar(&flagCredCertKeyPath, "credential-cert-private-key-path", "", "X.509 private key path")
+	createCredConfigCmd.Flags().StringVar(&flagCredCertTrustChainPath, "credential-cert-trust-chain-path", "", "X.509 trust chain path")
+	createCredConfigCmd.Flags().StringVar(&flagCredCertConfigOutput, "credential-cert-configuration-output-file", "", "X.509 cert config output file")
+	createCredConfigCmd.Flags().BoolVar(&flagEnableIMDSv2, "enable-imdsv2", false, "Enforce AWS IMDSv2")
 	createCredConfigCmd.MarkFlagRequired("output-file")
+
+	// Workload identity pools CRUD
+	for _, c := range []*cobra.Command{wipCreateCmd, wipDescribeCmd, wipListCmd, wipDeleteCmd} {
+		c.Flags().StringVar(&flagWIPLocation, "location", "global", "Location")
+	}
+	wipCreateCmd.Flags().StringVar(&flagWIPDisplayName, "display-name", "", "Display name")
+	wipCreateCmd.Flags().StringVar(&flagWIPDescription, "description", "", "Description")
+	wipListCmd.Flags().StringVar(&flagWIPListFormat, "format", "", "Output format (e.g. json)")
+	workloadIdentityPoolsCmd.AddCommand(wipCreateCmd)
+	workloadIdentityPoolsCmd.AddCommand(wipDescribeCmd)
+	workloadIdentityPoolsCmd.AddCommand(wipListCmd)
+	workloadIdentityPoolsCmd.AddCommand(wipDeleteCmd)
+
+	// Workload identity pools providers CRUD
+	for _, c := range []*cobra.Command{wipProvCreateCmd, wipProvDescribeCmd, wipProvListCmd, wipProvDeleteCmd} {
+		c.Flags().StringVar(&flagWIPLocation, "location", "global", "Location")
+		c.Flags().StringVar(&flagWIPProvPool, "workload-identity-pool", "", "Pool ID (required)")
+		c.MarkFlagRequired("workload-identity-pool")
+	}
+	wipProvCreateCmd.Flags().StringVar(&flagWIPProvType, "type", "", "Provider type (aws or oidc)")
+	wipProvCreateCmd.Flags().StringToStringVar(&flagWIPProvAttrMapping, "attribute-mapping", nil, "Attribute mapping (key=value)")
+	wipProvCreateCmd.Flags().StringVar(&flagWIPProvIssuerURI, "issuer-uri", "", "OIDC issuer URI")
+	wipProvCreateCmd.Flags().StringVar(&flagWIPProvDisplayName, "display-name", "", "Display name")
+	wipProvidersCmd.AddCommand(wipProvCreateCmd)
+	wipProvidersCmd.AddCommand(wipProvDescribeCmd)
+	wipProvidersCmd.AddCommand(wipProvListCmd)
+	wipProvidersCmd.AddCommand(wipProvDeleteCmd)
+	workloadIdentityPoolsCmd.AddCommand(wipProvidersCmd)
 
 	workloadIdentityPoolsCmd.AddCommand(createCredConfigCmd)
 	iamCmd.AddCommand(workloadIdentityPoolsCmd)
@@ -111,6 +238,12 @@ func resolveSubjectTokenType() string {
 	if flagAws {
 		return "urn:ietf:params:aws:token-type:aws4_request"
 	}
+	if flagAzure {
+		return "urn:ietf:params:oauth:token-type:jwt"
+	}
+	if flagCredCertPath != "" {
+		return "urn:ietf:params:oauth:token-type:mtls"
+	}
 	return "urn:ietf:params:oauth:token-type:jwt"
 }
 
@@ -129,8 +262,14 @@ func buildCredentialSource() (map[string]any, error) {
 	if flagAws {
 		sourceCount++
 	}
+	if flagAzure {
+		sourceCount++
+	}
+	if flagCredCertPath != "" {
+		sourceCount++
+	}
 	if sourceCount > 1 {
-		return nil, fmt.Errorf("specify only one of --credential-source-file, --credential-source-url, --executable-command, or --aws")
+		return nil, fmt.Errorf("specify only one credential source type")
 	}
 
 	switch {
@@ -167,7 +306,7 @@ func buildCredentialSource() (map[string]any, error) {
 
 	case flagExecutableCommand != "":
 		exec := map[string]any{
-			"command":    flagExecutableCommand,
+			"command":        flagExecutableCommand,
 			"timeout_millis": flagExecutableTimeoutMillis,
 		}
 		if flagExecutableOutputFile != "" {
@@ -176,14 +315,302 @@ func buildCredentialSource() (map[string]any, error) {
 		return map[string]any{"executable": exec}, nil
 
 	case flagAws:
-		return map[string]any{
+		src := map[string]any{
 			"environment_id":                 "aws1",
 			"region_url":                     "http://169.254.169.254/latest/meta-data/placement/availability-zone",
 			"url":                            "http://169.254.169.254/latest/meta-data/iam/security-credentials",
 			"regional_cred_verification_url": "https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15",
-		}, nil
+		}
+		if flagEnableIMDSv2 {
+			src["imdsv2_session_token_url"] = "http://169.254.169.254/latest/api/token"
+		}
+		return src, nil
+
+	case flagAzure:
+		src := map[string]any{
+			"environment_id": "azure",
+			"url":            "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=",
+			"headers": map[string]string{
+				"Metadata": "True",
+			},
+			"format": map[string]any{
+				"type":                    "json",
+				"subject_token_field_name": "access_token",
+			},
+		}
+		if flagAppIDURI != "" {
+			src["url"] = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=" + flagAppIDURI
+		}
+		return src, nil
+
+	case flagCredCertPath != "":
+		src := map[string]any{
+			"certificate": map[string]any{
+				"certificate":    flagCredCertPath,
+			},
+		}
+		cert := src["certificate"].(map[string]any)
+		if flagCredCertKeyPath != "" {
+			cert["private_key"] = flagCredCertKeyPath
+		}
+		if flagCredCertTrustChainPath != "" {
+			cert["trust_chain"] = flagCredCertTrustChainPath
+		}
+		return src, nil
 
 	default:
-		return nil, fmt.Errorf("specify one of --credential-source-file, --credential-source-url, --executable-command, or --aws")
+		return nil, fmt.Errorf("specify one of --credential-source-file, --credential-source-url, --executable-command, --aws, --azure, or --credential-cert-path")
 	}
+}
+
+// --- workload-identity-pools CRUD implementations (#201) ---
+
+func resolveWIPLocation() (string, string, error) {
+	project, err := resolveProject()
+	if err != nil {
+		return "", "", err
+	}
+	location := flagWIPLocation
+	if location == "" {
+		location = "global"
+	}
+	return project, location, nil
+}
+
+func runWIPCreate(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveWIPLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.IAMService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	pool := &iam.WorkloadIdentityPool{}
+	if flagWIPDisplayName != "" {
+		pool.DisplayName = flagWIPDisplayName
+	}
+	if flagWIPDescription != "" {
+		pool.Description = flagWIPDescription
+	}
+
+	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
+	op, err := svc.Projects.Locations.WorkloadIdentityPools.Create(parent, pool).WorkloadIdentityPoolId(args[0]).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("creating workload identity pool: %w", err)
+	}
+
+	fmt.Printf("Created workload identity pool [%s] (operation: %s).\n", args[0], op.Name)
+	return nil
+}
+
+func runWIPDescribe(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveWIPLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.IAMService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := fmt.Sprintf("projects/%s/locations/%s/workloadIdentityPools/%s", project, location, args[0])
+	pool, err := svc.Projects.Locations.WorkloadIdentityPools.Get(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("describing workload identity pool: %w", err)
+	}
+
+	return formatOutput(pool, "")
+}
+
+func runWIPList(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveWIPLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.IAMService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
+	var allPools []*iam.WorkloadIdentityPool
+	pageToken := ""
+	for {
+		call := svc.Projects.Locations.WorkloadIdentityPools.List(parent).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing workload identity pools: %w", err)
+		}
+		allPools = append(allPools, resp.WorkloadIdentityPools...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	if flagWIPListFormat == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(allPools)
+	}
+
+	fmt.Printf("%-40s %-30s %s\n", "NAME", "DISPLAY_NAME", "STATE")
+	for _, p := range allPools {
+		fmt.Printf("%-40s %-30s %s\n", path.Base(p.Name), p.DisplayName, p.State)
+	}
+	return nil
+}
+
+func runWIPDelete(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveWIPLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.IAMService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := fmt.Sprintf("projects/%s/locations/%s/workloadIdentityPools/%s", project, location, args[0])
+	op, err := svc.Projects.Locations.WorkloadIdentityPools.Delete(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("deleting workload identity pool: %w", err)
+	}
+
+	fmt.Printf("Deleted workload identity pool [%s] (operation: %s).\n", args[0], op.Name)
+	return nil
+}
+
+// --- workload-identity-pools providers CRUD implementations (#202) ---
+
+func runWIPProvCreate(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveWIPLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.IAMService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	provider := &iam.WorkloadIdentityPoolProvider{}
+	if flagWIPProvDisplayName != "" {
+		provider.DisplayName = flagWIPProvDisplayName
+	}
+	if len(flagWIPProvAttrMapping) > 0 {
+		provider.AttributeMapping = flagWIPProvAttrMapping
+	}
+
+	switch strings.ToLower(flagWIPProvType) {
+	case "oidc":
+		provider.Oidc = &iam.Oidc{}
+		if flagWIPProvIssuerURI != "" {
+			provider.Oidc.IssuerUri = flagWIPProvIssuerURI
+		}
+	case "aws":
+		provider.Aws = &iam.Aws{AccountId: ""}
+	}
+
+	parent := fmt.Sprintf("projects/%s/locations/%s/workloadIdentityPools/%s", project, location, flagWIPProvPool)
+	op, err := svc.Projects.Locations.WorkloadIdentityPools.Providers.Create(parent, provider).WorkloadIdentityPoolProviderId(args[0]).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("creating provider: %w", err)
+	}
+
+	fmt.Printf("Created provider [%s] (operation: %s).\n", args[0], op.Name)
+	return nil
+}
+
+func runWIPProvDescribe(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveWIPLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.IAMService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := fmt.Sprintf("projects/%s/locations/%s/workloadIdentityPools/%s/providers/%s", project, location, flagWIPProvPool, args[0])
+	provider, err := svc.Projects.Locations.WorkloadIdentityPools.Providers.Get(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("describing provider: %w", err)
+	}
+
+	return formatOutput(provider, "")
+}
+
+func runWIPProvList(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveWIPLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.IAMService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	parent := fmt.Sprintf("projects/%s/locations/%s/workloadIdentityPools/%s", project, location, flagWIPProvPool)
+	var allProviders []*iam.WorkloadIdentityPoolProvider
+	pageToken := ""
+	for {
+		call := svc.Projects.Locations.WorkloadIdentityPools.Providers.List(parent).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing providers: %w", err)
+		}
+		allProviders = append(allProviders, resp.WorkloadIdentityPoolProviders...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(allProviders)
+}
+
+func runWIPProvDelete(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveWIPLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.IAMService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := fmt.Sprintf("projects/%s/locations/%s/workloadIdentityPools/%s/providers/%s", project, location, flagWIPProvPool, args[0])
+	op, err := svc.Projects.Locations.WorkloadIdentityPools.Providers.Delete(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("deleting provider: %w", err)
+	}
+
+	fmt.Printf("Deleted provider [%s] (operation: %s).\n", args[0], op.Name)
+	return nil
 }
