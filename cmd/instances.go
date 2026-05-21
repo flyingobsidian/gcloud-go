@@ -10,16 +10,16 @@ import (
 )
 
 var instancesStopCmd = &cobra.Command{
-	Use:   "stop INSTANCE_NAME",
+	Use:   "stop INSTANCE_NAME [INSTANCE_NAME ...]",
 	Short: "Stop a Compute Engine instance",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  runInstancesStop,
 }
 
 var instancesStartCmd = &cobra.Command{
-	Use:   "start INSTANCE_NAME",
+	Use:   "start INSTANCE_NAME [INSTANCE_NAME ...]",
 	Short: "Start a Compute Engine instance",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  runInstancesStart,
 }
 
@@ -54,7 +54,6 @@ func resolveProjectZone() (string, string, error) {
 }
 
 func runInstancesStop(cmd *cobra.Command, args []string) error {
-	instance := args[0]
 	project, zone, err := resolveProjectZone()
 	if err != nil {
 		return err
@@ -66,30 +65,31 @@ func runInstancesStop(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Stopping instance [%s] in zone [%s]...\n", instance, zone)
-	call := svc.Instances.Stop(project, zone, instance).Context(ctx)
-	if flagStopDiscardLocalSSD {
-		call = call.DiscardLocalSsd(true)
-	}
-	op, err := call.Do()
-	if err != nil {
-		return fmt.Errorf("stopping instance: %w", err)
-	}
+	for _, instance := range args {
+		fmt.Printf("Stopping instance [%s] in zone [%s]...\n", instance, zone)
+		call := svc.Instances.Stop(project, zone, instance).Context(ctx)
+		if flagStopDiscardLocalSSD {
+			call = call.DiscardLocalSsd(true)
+		}
+		op, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("stopping instance %s: %w", instance, err)
+		}
 
-	if flagAsync {
-		fmt.Printf("Stop operation started: %s\n", op.Name)
-		return nil
-	}
+		if flagAsync {
+			fmt.Printf("Stop operation started: %s\n", op.Name)
+			continue
+		}
 
-	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
-		return err
+		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
+			return err
+		}
+		fmt.Printf("Stopped instance [%s].\n", instance)
 	}
-	fmt.Printf("Stopped instance [%s].\n", instance)
 	return nil
 }
 
 func runInstancesStart(cmd *cobra.Command, args []string) error {
-	instance := args[0]
 	project, zone, err := resolveProjectZone()
 	if err != nil {
 		return err
@@ -101,20 +101,33 @@ func runInstancesStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Starting instance [%s] in zone [%s]...\n", instance, zone)
-	op, err := svc.Instances.Start(project, zone, instance).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("starting instance: %w", err)
-	}
+	for _, instance := range args {
+		fmt.Printf("Starting instance [%s] in zone [%s]...\n", instance, zone)
+		op, err := svc.Instances.Start(project, zone, instance).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("starting instance %s: %w", instance, err)
+		}
 
-	if flagAsync {
-		fmt.Printf("Start operation started: %s\n", op.Name)
-		return nil
-	}
+		if flagAsync {
+			fmt.Printf("Start operation started: %s\n", op.Name)
+			continue
+		}
 
-	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
-		return err
+		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
+			return err
+		}
+
+		// Print resulting IPs after start.
+		inst, err := svc.Instances.Get(project, zone, instance).Context(ctx).Do()
+		if err == nil && len(inst.NetworkInterfaces) > 0 {
+			ni := inst.NetworkInterfaces[0]
+			fmt.Printf("  Internal IP: %s\n", ni.NetworkIP)
+			if len(ni.AccessConfigs) > 0 && ni.AccessConfigs[0].NatIP != "" {
+				fmt.Printf("  External IP: %s\n", ni.AccessConfigs[0].NatIP)
+			}
+		}
+
+		fmt.Printf("Started instance [%s].\n", instance)
 	}
-	fmt.Printf("Started instance [%s].\n", instance)
 	return nil
 }
