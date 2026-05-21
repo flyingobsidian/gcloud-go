@@ -103,6 +103,62 @@ var secretsDescribeCmd = &cobra.Command{
 	RunE:  runSecretsDescribe,
 }
 
+// --- secrets versions describe ---
+
+var secretsVersionsDescribeCmd = &cobra.Command{
+	Use:   "describe VERSION",
+	Short: "Describe a secret version's metadata",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runSecretsVersionsDescribe,
+}
+
+// --- secrets versions disable ---
+
+var secretsVersionsDisableCmd = &cobra.Command{
+	Use:   "disable VERSION",
+	Short: "Disable a secret version",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runSecretsVersionsDisable,
+}
+
+// --- secrets versions enable ---
+
+var secretsVersionsEnableCmd = &cobra.Command{
+	Use:   "enable VERSION",
+	Short: "Enable a secret version",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runSecretsVersionsEnable,
+}
+
+// --- secrets versions destroy ---
+
+var secretsVersionsDestroyCmd = &cobra.Command{
+	Use:   "destroy VERSION",
+	Short: "Destroy a secret version's data",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runSecretsVersionsDestroy,
+}
+
+// --- secrets update ---
+
+var secretsUpdateCmd = &cobra.Command{
+	Use:   "update SECRET_ID",
+	Short: "Update a secret's properties",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runSecretsUpdate,
+}
+
+var (
+	flagUpdateLabels      map[string]string
+	flagUpdateRemoveLabels []string
+	flagUpdateClearLabels  bool
+	flagUpdateExpireTime   string
+	flagUpdateTTL          string
+	flagRemoveExpiration   bool
+	flagNextRotationTime   string
+	flagRotationPeriod     string
+)
+
 // --- secrets delete ---
 
 var secretsDeleteCmd = &cobra.Command{
@@ -115,6 +171,7 @@ var secretsDeleteCmd = &cobra.Command{
 var (
 	flagQuiet           bool
 	flagSecretsLocation string
+	flagDeleteEtag      string
 )
 
 func init() {
@@ -145,26 +202,58 @@ func init() {
 	secretsListCmd.Flags().StringVar(&flagSecretsFilter, "filter", "", "Filter expression")
 	secretsListCmd.Flags().StringVar(&flagSecretsFormat, "format", "", "Output format (e.g. json, 'get(name)')")
 
+	// secrets versions describe/disable/enable/destroy
+	secretsVersionsDescribeCmd.Flags().StringVar(&flagSecretName, "secret", "", "Secret name (required)")
+	secretsVersionsDescribeCmd.MarkFlagRequired("secret")
+	secretsVersionsDisableCmd.Flags().StringVar(&flagSecretName, "secret", "", "Secret name (required)")
+	secretsVersionsDisableCmd.MarkFlagRequired("secret")
+	secretsVersionsEnableCmd.Flags().StringVar(&flagSecretName, "secret", "", "Secret name (required)")
+	secretsVersionsEnableCmd.MarkFlagRequired("secret")
+	secretsVersionsDestroyCmd.Flags().StringVar(&flagSecretName, "secret", "", "Secret name (required)")
+	secretsVersionsDestroyCmd.MarkFlagRequired("secret")
+	secretsVersionsDestroyCmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress confirmation prompt")
+
+	// secrets update
+	secretsUpdateCmd.Flags().StringToStringVar(&flagUpdateLabels, "update-labels", nil, "Labels to update (key=value)")
+	secretsUpdateCmd.Flags().StringSliceVar(&flagUpdateRemoveLabels, "remove-labels", nil, "Labels to remove")
+	secretsUpdateCmd.Flags().BoolVar(&flagUpdateClearLabels, "clear-labels", false, "Remove all labels")
+	secretsUpdateCmd.Flags().StringVar(&flagUpdateExpireTime, "expire-time", "", "Expiration time (RFC 3339)")
+	secretsUpdateCmd.Flags().StringVar(&flagUpdateTTL, "ttl", "", "Time-to-live duration")
+	secretsUpdateCmd.Flags().BoolVar(&flagRemoveExpiration, "remove-expiration", false, "Remove expiration")
+	secretsUpdateCmd.Flags().StringVar(&flagNextRotationTime, "next-rotation-time", "", "Next rotation time (RFC 3339)")
+	secretsUpdateCmd.Flags().StringVar(&flagRotationPeriod, "rotation-period", "", "Rotation period (e.g. 30d)")
+
 	// secrets delete
 	secretsDeleteCmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress confirmation prompt")
+	secretsDeleteCmd.Flags().StringVar(&flagDeleteEtag, "etag", "", "Etag for optimistic concurrency")
 
 	// --location on all subcommands
 	secretsVersionsAccessCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
 	secretsVersionsAddCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsVersionsDescribeCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsVersionsDisableCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsVersionsEnableCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsVersionsDestroyCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
 	secretsCreateCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
 	secretsListCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
 	secretsDescribeCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
 	secretsDeleteCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
+	secretsUpdateCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
 
 	// Wire up command tree.
 	secretsVersionsCmd.AddCommand(secretsVersionsAccessCmd)
 	secretsVersionsCmd.AddCommand(secretsVersionsListCmd)
 	secretsVersionsCmd.AddCommand(secretsVersionsAddCmd)
+	secretsVersionsCmd.AddCommand(secretsVersionsDescribeCmd)
+	secretsVersionsCmd.AddCommand(secretsVersionsDisableCmd)
+	secretsVersionsCmd.AddCommand(secretsVersionsEnableCmd)
+	secretsVersionsCmd.AddCommand(secretsVersionsDestroyCmd)
 	secretsCmd.AddCommand(secretsVersionsCmd)
 	secretsCmd.AddCommand(secretsCreateCmd)
 	secretsCmd.AddCommand(secretsListCmd)
 	secretsCmd.AddCommand(secretsDescribeCmd)
 	secretsCmd.AddCommand(secretsDeleteCmd)
+	secretsCmd.AddCommand(secretsUpdateCmd)
 	rootCmd.AddCommand(secretsCmd)
 }
 
@@ -439,6 +528,198 @@ func runSecretsDescribe(cmd *cobra.Command, args []string) error {
 	return enc.Encode(secret)
 }
 
+func runSecretsVersionsDescribe(cmd *cobra.Command, args []string) error {
+	version := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := secrets.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := secrets.VersionName(project, flagSecretName, version, flagSecretsLocation)
+	v, err := svc.Projects.Secrets.Versions.Get(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("describing secret version: %w", err)
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
+
+func runSecretsVersionsDisable(cmd *cobra.Command, args []string) error {
+	version := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := secrets.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := secrets.VersionName(project, flagSecretName, version, flagSecretsLocation)
+	req := &secretmanager.DisableSecretVersionRequest{}
+	v, err := svc.Projects.Secrets.Versions.Disable(name, req).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("disabling secret version: %w", err)
+	}
+
+	fmt.Printf("Disabled version [%s].\n", v.Name)
+	return nil
+}
+
+func runSecretsVersionsEnable(cmd *cobra.Command, args []string) error {
+	version := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := secrets.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := secrets.VersionName(project, flagSecretName, version, flagSecretsLocation)
+	req := &secretmanager.EnableSecretVersionRequest{}
+	v, err := svc.Projects.Secrets.Versions.Enable(name, req).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("enabling secret version: %w", err)
+	}
+
+	fmt.Printf("Enabled version [%s].\n", v.Name)
+	return nil
+}
+
+func runSecretsVersionsDestroy(cmd *cobra.Command, args []string) error {
+	version := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	if !flagQuiet {
+		fmt.Printf("You are about to destroy version [%s] of secret [%s]. This action cannot be undone.\n", version, flagSecretName)
+		fmt.Print("Do you want to continue (Y/n)? ")
+		var answer string
+		fmt.Scanln(&answer)
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		if answer != "" && answer != "y" && answer != "yes" {
+			fmt.Println("Aborted.")
+			return nil
+		}
+	}
+
+	ctx := context.Background()
+	svc, err := secrets.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := secrets.VersionName(project, flagSecretName, version, flagSecretsLocation)
+	req := &secretmanager.DestroySecretVersionRequest{}
+	v, err := svc.Projects.Secrets.Versions.Destroy(name, req).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("destroying secret version: %w", err)
+	}
+
+	fmt.Printf("Destroyed version [%s].\n", v.Name)
+	return nil
+}
+
+func runSecretsUpdate(cmd *cobra.Command, args []string) error {
+	secretID := args[0]
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := secrets.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := secrets.SecretName(project, secretID, flagSecretsLocation)
+
+	// Get current secret to merge labels.
+	current, err := svc.Projects.Secrets.Get(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("getting secret: %w", err)
+	}
+
+	secret := &secretmanager.Secret{}
+	var updateMask []string
+
+	// Handle labels.
+	if flagUpdateClearLabels {
+		secret.Labels = map[string]string{}
+		updateMask = append(updateMask, "labels")
+	} else if len(flagUpdateLabels) > 0 || len(flagUpdateRemoveLabels) > 0 {
+		labels := make(map[string]string)
+		for k, v := range current.Labels {
+			labels[k] = v
+		}
+		for _, k := range flagUpdateRemoveLabels {
+			delete(labels, k)
+		}
+		for k, v := range flagUpdateLabels {
+			labels[k] = v
+		}
+		secret.Labels = labels
+		updateMask = append(updateMask, "labels")
+	}
+
+	// Handle expiration.
+	if flagRemoveExpiration {
+		secret.ExpireTime = ""
+		secret.Ttl = ""
+		updateMask = append(updateMask, "expire_time", "ttl")
+	} else {
+		if flagUpdateExpireTime != "" {
+			secret.ExpireTime = flagUpdateExpireTime
+			updateMask = append(updateMask, "expire_time")
+		}
+		if flagUpdateTTL != "" {
+			secret.Ttl = flagUpdateTTL
+			updateMask = append(updateMask, "ttl")
+		}
+	}
+
+	// Handle rotation.
+	if flagNextRotationTime != "" || flagRotationPeriod != "" {
+		secret.Rotation = &secretmanager.Rotation{}
+		if flagNextRotationTime != "" {
+			secret.Rotation.NextRotationTime = flagNextRotationTime
+		}
+		if flagRotationPeriod != "" {
+			secret.Rotation.RotationPeriod = flagRotationPeriod
+		}
+		updateMask = append(updateMask, "rotation")
+	}
+
+	if len(updateMask) == 0 {
+		return fmt.Errorf("no update flags specified")
+	}
+
+	updated, err := svc.Projects.Secrets.Patch(name, secret).UpdateMask(strings.Join(updateMask, ",")).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("updating secret: %w", err)
+	}
+
+	fmt.Printf("Updated secret [%s].\n", updated.Name)
+	return nil
+}
+
 func runSecretsDelete(cmd *cobra.Command, args []string) error {
 	secretID := args[0]
 	project, err := resolveProject()
@@ -465,7 +746,11 @@ func runSecretsDelete(cmd *cobra.Command, args []string) error {
 	}
 
 	name := secrets.SecretName(project, secretID, flagSecretsLocation)
-	if _, err := svc.Projects.Secrets.Delete(name).Context(ctx).Do(); err != nil {
+	call := svc.Projects.Secrets.Delete(name).Context(ctx)
+	if flagDeleteEtag != "" {
+		call = call.Etag(flagDeleteEtag)
+	}
+	if _, err := call.Do(); err != nil {
 		return fmt.Errorf("deleting secret: %w", err)
 	}
 
