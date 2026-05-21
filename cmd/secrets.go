@@ -149,14 +149,14 @@ var secretsUpdateCmd = &cobra.Command{
 }
 
 var (
-	flagUpdateLabels      map[string]string
-	flagUpdateRemoveLabels []string
-	flagUpdateClearLabels  bool
-	flagUpdateExpireTime   string
-	flagUpdateTTL          string
-	flagRemoveExpiration   bool
-	flagNextRotationTime   string
-	flagRotationPeriod     string
+	flagSecretUpdateLabels      map[string]string
+	flagSecretRemoveLabels      []string
+	flagSecretClearLabels       bool
+	flagSecretUpdateExpireTime  string
+	flagSecretUpdateTTL         string
+	flagSecretRemoveExpiration  bool
+	flagSecretNextRotationTime  string
+	flagSecretRotationPeriod    string
 )
 
 // --- secrets delete ---
@@ -214,14 +214,14 @@ func init() {
 	secretsVersionsDestroyCmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress confirmation prompt")
 
 	// secrets update
-	secretsUpdateCmd.Flags().StringToStringVar(&flagUpdateLabels, "update-labels", nil, "Labels to update (key=value)")
-	secretsUpdateCmd.Flags().StringSliceVar(&flagUpdateRemoveLabels, "remove-labels", nil, "Labels to remove")
-	secretsUpdateCmd.Flags().BoolVar(&flagUpdateClearLabels, "clear-labels", false, "Remove all labels")
-	secretsUpdateCmd.Flags().StringVar(&flagUpdateExpireTime, "expire-time", "", "Expiration time (RFC 3339)")
-	secretsUpdateCmd.Flags().StringVar(&flagUpdateTTL, "ttl", "", "Time-to-live duration")
-	secretsUpdateCmd.Flags().BoolVar(&flagRemoveExpiration, "remove-expiration", false, "Remove expiration")
-	secretsUpdateCmd.Flags().StringVar(&flagNextRotationTime, "next-rotation-time", "", "Next rotation time (RFC 3339)")
-	secretsUpdateCmd.Flags().StringVar(&flagRotationPeriod, "rotation-period", "", "Rotation period (e.g. 30d)")
+	secretsUpdateCmd.Flags().StringToStringVar(&flagSecretUpdateLabels, "update-labels", nil, "Labels to update (key=value)")
+	secretsUpdateCmd.Flags().StringSliceVar(&flagSecretRemoveLabels, "remove-labels", nil, "Labels to remove")
+	secretsUpdateCmd.Flags().BoolVar(&flagSecretClearLabels, "clear-labels", false, "Remove all labels")
+	secretsUpdateCmd.Flags().StringVar(&flagSecretUpdateExpireTime, "expire-time", "", "Expiration time (RFC 3339)")
+	secretsUpdateCmd.Flags().StringVar(&flagSecretUpdateTTL, "ttl", "", "Time-to-live duration")
+	secretsUpdateCmd.Flags().BoolVar(&flagSecretRemoveExpiration, "remove-expiration", false, "Remove expiration")
+	secretsUpdateCmd.Flags().StringVar(&flagSecretNextRotationTime, "next-rotation-time", "", "Next rotation time (RFC 3339)")
+	secretsUpdateCmd.Flags().StringVar(&flagSecretRotationPeriod, "rotation-period", "", "Rotation period (e.g. 30d)")
 
 	// secrets delete
 	secretsDeleteCmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress confirmation prompt")
@@ -661,18 +661,18 @@ func runSecretsUpdate(cmd *cobra.Command, args []string) error {
 	var updateMask []string
 
 	// Handle labels.
-	if flagUpdateClearLabels {
+	if flagSecretClearLabels {
 		secret.Labels = map[string]string{}
 		updateMask = append(updateMask, "labels")
-	} else if len(flagUpdateLabels) > 0 || len(flagUpdateRemoveLabels) > 0 {
+	} else if len(flagSecretUpdateLabels) > 0 || len(flagSecretRemoveLabels) > 0 {
 		labels := make(map[string]string)
 		for k, v := range current.Labels {
 			labels[k] = v
 		}
-		for _, k := range flagUpdateRemoveLabels {
+		for _, k := range flagSecretRemoveLabels {
 			delete(labels, k)
 		}
-		for k, v := range flagUpdateLabels {
+		for k, v := range flagSecretUpdateLabels {
 			labels[k] = v
 		}
 		secret.Labels = labels
@@ -680,29 +680,29 @@ func runSecretsUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Handle expiration.
-	if flagRemoveExpiration {
+	if flagSecretRemoveExpiration {
 		secret.ExpireTime = ""
 		secret.Ttl = ""
 		updateMask = append(updateMask, "expire_time", "ttl")
 	} else {
-		if flagUpdateExpireTime != "" {
-			secret.ExpireTime = flagUpdateExpireTime
+		if flagSecretUpdateExpireTime != "" {
+			secret.ExpireTime = flagSecretUpdateExpireTime
 			updateMask = append(updateMask, "expire_time")
 		}
-		if flagUpdateTTL != "" {
-			secret.Ttl = flagUpdateTTL
+		if flagSecretUpdateTTL != "" {
+			secret.Ttl = flagSecretUpdateTTL
 			updateMask = append(updateMask, "ttl")
 		}
 	}
 
 	// Handle rotation.
-	if flagNextRotationTime != "" || flagRotationPeriod != "" {
+	if flagSecretNextRotationTime != "" || flagSecretRotationPeriod != "" {
 		secret.Rotation = &secretmanager.Rotation{}
-		if flagNextRotationTime != "" {
-			secret.Rotation.NextRotationTime = flagNextRotationTime
+		if flagSecretNextRotationTime != "" {
+			secret.Rotation.NextRotationTime = flagSecretNextRotationTime
 		}
-		if flagRotationPeriod != "" {
-			secret.Rotation.RotationPeriod = flagRotationPeriod
+		if flagSecretRotationPeriod != "" {
+			secret.Rotation.RotationPeriod = flagSecretRotationPeriod
 		}
 		updateMask = append(updateMask, "rotation")
 	}
