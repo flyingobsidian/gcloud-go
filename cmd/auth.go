@@ -39,11 +39,10 @@ var authListCmd = &cobra.Command{
 }
 
 var authRevokeCmd = &cobra.Command{
-	Use:   "revoke [ACCOUNT]",
-	Short: "Revoke credentials for an account",
-	Long: `Revoke access credentials for an account. If no account is specified, revokes the active account.
+	Use:   "revoke [ACCOUNT ...]",
+	Short: "Revoke credentials for one or more accounts",
+	Long: `Revoke access credentials for one or more accounts. If no account is specified, revokes the active account.
 Use --all to revoke all accounts.`,
-	Args: cobra.MaximumNArgs(1),
 	RunE: runAuthRevoke,
 }
 
@@ -342,30 +341,35 @@ func runAuthRevoke(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Determine which account to revoke.
-	var account string
-	if len(args) > 0 {
-		account = args[0]
-	} else {
+	// Determine which accounts to revoke.
+	accounts := args
+	if len(accounts) == 0 {
 		props, _ := config.Load()
-		if props != nil {
-			account = props.Core.Account
+		if props != nil && props.Core.Account != "" {
+			accounts = []string{props.Core.Account}
 		}
-		if account == "" {
+		if len(accounts) == 0 {
 			return fmt.Errorf("no account specified and no active account found; provide an account or use --all")
 		}
 	}
 
-	if err := store.Revoke(account); err != nil {
-		return err
+	for _, account := range accounts {
+		if err := store.Revoke(account); err != nil {
+			return err
+		}
+		fmt.Printf("Revoked credentials for: [%s]\n", account)
 	}
-	fmt.Printf("Revoked credentials for: [%s]\n", account)
 
 	// If we revoked the active account, clear it from config.
 	props, _ := config.Load()
-	if props != nil && props.Core.Account == account {
-		props.Core.Account = ""
-		_ = props.Save()
+	if props != nil {
+		for _, account := range accounts {
+			if props.Core.Account == account {
+				props.Core.Account = ""
+				_ = props.Save()
+				break
+			}
+		}
 	}
 
 	return nil
