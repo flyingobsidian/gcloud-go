@@ -279,6 +279,10 @@ func runProjectInfoRemoveMetadata(cmd *cobra.Command, args []string) error {
 
 	var newItems []*compute.MetadataItems
 	if flagRemoveMetadataAll {
+		if len(proj.CommonInstanceMetadata.Items) == 0 {
+			fmt.Fprintln(os.Stderr, "No change requested; skipping update.")
+			return nil
+		}
 		newItems = nil
 	} else if flagRemoveMetadataKeys == "" {
 		return fmt.Errorf("one of --keys or --all is required")
@@ -288,10 +292,17 @@ func runProjectInfoRemoveMetadata(cmd *cobra.Command, args []string) error {
 		for _, k := range keysToRemove {
 			removeSet[strings.TrimSpace(k)] = true
 		}
+		found := false
 		for _, item := range proj.CommonInstanceMetadata.Items {
-			if !removeSet[item.Key] {
+			if removeSet[item.Key] {
+				found = true
+			} else {
 				newItems = append(newItems, item)
 			}
+		}
+		if !found {
+			fmt.Fprintln(os.Stderr, "No change requested; skipping update.")
+			return nil
 		}
 	}
 
