@@ -53,6 +53,51 @@ var dataplexDatascansJobsDescribeCmd = &cobra.Command{
 	RunE:  runDataplexDatascansJobsDescribe,
 }
 
+// --- datascans describe ---
+
+var dataplexDatascansDescribeCmd = &cobra.Command{
+	Use:   "describe DATASCAN_ID",
+	Short: "Describe a data scan",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runDataplexDatascansDescribe,
+}
+
+// --- datascans list ---
+
+var dataplexDatascansListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List data scans",
+	Args:  cobra.NoArgs,
+	RunE:  runDataplexDatascansList,
+}
+
+var flagDataplexListFormat string
+
+// --- datascans create ---
+
+var dataplexDatascansCreateCmd = &cobra.Command{
+	Use:   "create DATASCAN_ID",
+	Short: "Create a data scan",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runDataplexDatascansCreate,
+}
+
+var (
+	flagDataplexDataSource string
+	flagDataplexScanType   string
+)
+
+// --- datascans delete ---
+
+var dataplexDatascansDeleteCmd = &cobra.Command{
+	Use:   "delete DATASCAN_ID",
+	Short: "Delete a data scan",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runDataplexDatascansDelete,
+}
+
+var flagDataplexQuiet bool
+
 var (
 	flagDataplexLocation  string
 	flagDataplexDatascan  string
@@ -72,9 +117,23 @@ func init() {
 	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexDatascan, "datascan", "", "Data scan ID")
 	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexJobView, "view", "", "Job view (BASIC or FULL)")
 
+	dataplexDatascansDescribeCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
+	dataplexDatascansListCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scans")
+	dataplexDatascansListCmd.Flags().StringVar(&flagDataplexListFormat, "format", "", "Output format (e.g. json)")
+	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
+	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexDataSource, "data-source", "", "Data source entity (required)")
+	dataplexDatascansCreateCmd.MarkFlagRequired("data-source")
+	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexScanType, "type", "data-quality", "Scan type (data-quality or data-profile)")
+	dataplexDatascansDeleteCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
+	dataplexDatascansDeleteCmd.Flags().BoolVar(&flagDataplexQuiet, "quiet", false, "Suppress confirmation prompt")
+
 	dataplexDatascansJobsCmd.AddCommand(dataplexDatascansJobsListCmd)
 	dataplexDatascansJobsCmd.AddCommand(dataplexDatascansJobsDescribeCmd)
 	dataplexDatascansCmd.AddCommand(dataplexDatascansRunCmd)
+	dataplexDatascansCmd.AddCommand(dataplexDatascansDescribeCmd)
+	dataplexDatascansCmd.AddCommand(dataplexDatascansListCmd)
+	dataplexDatascansCmd.AddCommand(dataplexDatascansCreateCmd)
+	dataplexDatascansCmd.AddCommand(dataplexDatascansDeleteCmd)
 	dataplexDatascansCmd.AddCommand(dataplexDatascansJobsCmd)
 	dataplexCmd.AddCommand(dataplexDatascansCmd)
 	rootCmd.AddCommand(dataplexCmd)
@@ -199,4 +258,147 @@ func runDataplexDatascansJobsDescribe(cmd *cobra.Command, args []string) error {
 	}
 
 	return formatOutput(job, "")
+}
+
+func runDataplexDatascansDescribe(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveDataplexLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.DataplexService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := datascanName(project, location, args[0])
+	scan, err := svc.Projects.Locations.DataScans.Get(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("describing data scan: %w", err)
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(scan)
+}
+
+func runDataplexDatascansList(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveDataplexLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.DataplexService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
+	var allScans []*dataplex.GoogleCloudDataplexV1DataScan
+	pageToken := ""
+	for {
+		call := svc.Projects.Locations.DataScans.List(parent).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing data scans: %w", err)
+		}
+		allScans = append(allScans, resp.DataScans...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	if flagDataplexListFormat == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(allScans)
+	}
+
+	fmt.Printf("%-30s %-15s %-25s %-20s\n", "NAME", "STATE", "CREATE_TIME", "TYPE")
+	for _, s := range allScans {
+		scanType := ""
+		if s.DataQualitySpec != nil {
+			scanType = "DATA_QUALITY"
+		} else if s.DataProfileSpec != nil {
+			scanType = "DATA_PROFILE"
+		}
+		fmt.Printf("%-30s %-15s %-25s %-20s\n", path.Base(s.Name), s.State, s.CreateTime, scanType)
+	}
+	return nil
+}
+
+func runDataplexDatascansCreate(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveDataplexLocation()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.DataplexService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
+	scan := &dataplex.GoogleCloudDataplexV1DataScan{
+		Data: &dataplex.GoogleCloudDataplexV1DataSource{
+			Entity: flagDataplexDataSource,
+		},
+	}
+
+	switch strings.ToLower(flagDataplexScanType) {
+	case "data-quality":
+		scan.DataQualitySpec = &dataplex.GoogleCloudDataplexV1DataQualitySpec{}
+	case "data-profile":
+		scan.DataProfileSpec = &dataplex.GoogleCloudDataplexV1DataProfileSpec{}
+	default:
+		return fmt.Errorf("unsupported scan type: %s (use data-quality or data-profile)", flagDataplexScanType)
+	}
+
+	op, err := svc.Projects.Locations.DataScans.Create(parent, scan).DataScanId(args[0]).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("creating data scan: %w", err)
+	}
+
+	fmt.Printf("Created data scan [%s] (operation: %s).\n", args[0], op.Name)
+	return nil
+}
+
+func runDataplexDatascansDelete(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveDataplexLocation()
+	if err != nil {
+		return err
+	}
+
+	if !flagDataplexQuiet {
+		fmt.Printf("You are about to delete data scan [%s]. This action cannot be undone.\n", args[0])
+		fmt.Print("Do you want to continue (Y/n)? ")
+		var answer string
+		fmt.Scanln(&answer)
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		if answer != "" && answer != "y" && answer != "yes" {
+			fmt.Println("Aborted.")
+			return nil
+		}
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.DataplexService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	name := datascanName(project, location, args[0])
+	if _, err := svc.Projects.Locations.DataScans.Delete(name).Context(ctx).Do(); err != nil {
+		return fmt.Errorf("deleting data scan: %w", err)
+	}
+
+	fmt.Printf("Deleted data scan [%s].\n", args[0])
+	return nil
 }
