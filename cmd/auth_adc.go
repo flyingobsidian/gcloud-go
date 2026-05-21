@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -30,6 +31,13 @@ Example:
 	RunE: runAuthADCLogin,
 }
 
+var authADCSetQuotaProjectCmd = &cobra.Command{
+	Use:   "set-quota-project QUOTA_PROJECT_ID",
+	Short: "Update the quota project in Application Default Credentials",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runAuthADCSetQuotaProject,
+}
+
 var authADCRevokeCmd = &cobra.Command{
 	Use:   "revoke",
 	Short: "Revoke Application Default Credentials",
@@ -54,6 +62,7 @@ func init() {
 	authApplicationDefaultCmd.AddCommand(authADCLoginCmd)
 	authApplicationDefaultCmd.AddCommand(authADCPrintAccessTokenCmd)
 	authApplicationDefaultCmd.AddCommand(authADCRevokeCmd)
+	authApplicationDefaultCmd.AddCommand(authADCSetQuotaProjectCmd)
 	authCmd.AddCommand(authApplicationDefaultCmd)
 }
 
@@ -67,6 +76,35 @@ func adcFilePath() string {
 		configDir = filepath.Join(home, ".config", "gcloud")
 	}
 	return filepath.Join(configDir, "application_default_credentials.json")
+}
+
+func runAuthADCSetQuotaProject(cmd *cobra.Command, args []string) error {
+	quotaProject := args[0]
+	adcPath := adcFilePath()
+
+	data, err := os.ReadFile(adcPath)
+	if err != nil {
+		return fmt.Errorf("reading ADC file: %w (run 'gcloud auth application-default login' first)", err)
+	}
+
+	var creds map[string]any
+	if err := json.Unmarshal(data, &creds); err != nil {
+		return fmt.Errorf("parsing ADC file: %w", err)
+	}
+
+	creds["quota_project_id"] = quotaProject
+
+	updated, err := json.MarshalIndent(creds, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding ADC file: %w", err)
+	}
+
+	if err := os.WriteFile(adcPath, updated, 0600); err != nil {
+		return fmt.Errorf("writing ADC file: %w", err)
+	}
+
+	fmt.Printf("Updated quota project to [%s] in %s\n", quotaProject, adcPath)
+	return nil
 }
 
 func runAuthADCRevoke(cmd *cobra.Command, args []string) error {
