@@ -120,6 +120,14 @@ func runConfigConfigurationsDescribe(cmd *cobra.Command, args []string) error {
 	fmt.Println("  compute:")
 	fmt.Printf("    region: %s\n", props.Compute.Region)
 	fmt.Printf("    zone: %s\n", props.Compute.Zone)
+	fmt.Println("  dataflow:")
+	fmt.Printf("    region: %s\n", props.Dataflow.Region)
+	fmt.Println("  run:")
+	fmt.Printf("    region: %s\n", props.Run.Region)
+	fmt.Println("  redis:")
+	fmt.Printf("    region: %s\n", props.Redis.Region)
+	fmt.Println("  functions:")
+	fmt.Printf("    region: %s\n", props.Functions.Region)
 
 	return nil
 }

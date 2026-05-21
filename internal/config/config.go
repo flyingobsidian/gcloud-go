@@ -10,8 +10,12 @@ import (
 
 // Properties holds gcloud configuration properties.
 type Properties struct {
-	Core    CoreProperties
-	Compute ComputeProperties
+	Core      CoreProperties
+	Compute   ComputeProperties
+	Dataflow  RegionProperty
+	Run       RegionProperty
+	Redis     RegionProperty
+	Functions RegionProperty
 }
 
 type CoreProperties struct {
@@ -21,6 +25,11 @@ type CoreProperties struct {
 
 type ComputeProperties struct {
 	Zone   string
+	Region string
+}
+
+// RegionProperty holds a region for service-specific sections.
+type RegionProperty struct {
 	Region string
 }
 
@@ -229,6 +238,22 @@ func loadINI(path string) (*Properties, error) {
 			case "region":
 				p.Compute.Region = val
 			}
+		case "dataflow":
+			if key == "region" {
+				p.Dataflow.Region = val
+			}
+		case "run":
+			if key == "region" {
+				p.Run.Region = val
+			}
+		case "redis":
+			if key == "region" {
+				p.Redis.Region = val
+			}
+		case "functions":
+			if key == "region" {
+				p.Functions.Region = val
+			}
 		}
 	}
 	return p, scanner.Err()
@@ -252,6 +277,20 @@ func saveINI(path string, p *Properties) error {
 		}
 		if p.Compute.Region != "" {
 			fmt.Fprintf(&b, "region = %s\n", p.Compute.Region)
+		}
+	}
+
+	for _, s := range []struct {
+		name   string
+		region string
+	}{
+		{"dataflow", p.Dataflow.Region},
+		{"run", p.Run.Region},
+		{"redis", p.Redis.Region},
+		{"functions", p.Functions.Region},
+	} {
+		if s.region != "" {
+			fmt.Fprintf(&b, "\n[%s]\nregion = %s\n", s.name, s.region)
 		}
 	}
 
