@@ -33,11 +33,7 @@ Examples:
 	RunE: runInstancesRemoveMetadata,
 }
 
-var (
-	flagAddMetadataKV     map[string]string
-	flagRemoveMetadataKeys string
-	flagRemoveMetadataAll  bool
-)
+var flagAddMetadataKV map[string]string
 
 func init() {
 	instancesAddMetadataCmd.Flags().StringToStringVar(&flagAddMetadataKV, "metadata", nil, "Metadata key=value pairs to add")
