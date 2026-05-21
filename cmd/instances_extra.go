@@ -37,6 +37,7 @@ var instancesListCmd = &cobra.Command{
 var (
 	flagListFilter string
 	flagListFormat string
+	flagListURI    bool
 )
 
 // --- instances create ---
@@ -102,6 +103,7 @@ func init() {
 	// list
 	instancesListCmd.Flags().StringVar(&flagListFilter, "filter", "", "Filter expression")
 	instancesListCmd.Flags().StringVar(&flagListFormat, "format", "", "Output format (e.g. json, 'get(STATUS)')")
+	instancesListCmd.Flags().BoolVar(&flagListURI, "uri", false, "Print self-links (URIs) instead of the default table")
 	instancesCmd.AddCommand(instancesListCmd)
 
 	// create
@@ -500,6 +502,13 @@ func resolveZone() string {
 }
 
 func formatInstanceList(instances []*compute.Instance) error {
+	if flagListURI {
+		for _, inst := range instances {
+			fmt.Println(inst.SelfLink)
+		}
+		return nil
+	}
+
 	if flagListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
