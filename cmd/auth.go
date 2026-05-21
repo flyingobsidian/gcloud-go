@@ -2,14 +2,21 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 )
 
 var authCmd = &cobra.Command{
@@ -19,8 +26,10 @@ var authCmd = &cobra.Command{
 
 var authLoginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Authorize access using a service account credential file",
-	RunE:  runAuthLogin,
+	Short: "Authorize access for gcloud CLI",
+	Long: `Authorize gcloud to access Google Cloud. Without --cred-file, opens a browser
+for interactive OAuth2 login. With --cred-file, activates a service account.`,
+	RunE: runAuthLogin,
 }
 
 var authListCmd = &cobra.Command{
@@ -68,8 +77,7 @@ var (
 )
 
 func init() {
-	authLoginCmd.Flags().StringVar(&flagCredFile, "cred-file", "", "Path to service account JSON key file")
-	authLoginCmd.MarkFlagRequired("cred-file")
+	authLoginCmd.Flags().StringVar(&flagCredFile, "cred-file", "", "Path to service account JSON key file (if omitted, opens browser)")
 	authLoginCmd.Flags().BoolVar(&flagBrief, "brief", false, "Minimal output")
 	authLoginCmd.Flags().BoolVar(&flagUpdateADC, "update-adc", false, "Also update Application Default Credentials")
 
@@ -87,6 +95,13 @@ func init() {
 }
 
 func runAuthLogin(cmd *cobra.Command, args []string) error {
+	if flagCredFile != "" {
+		return runAuthLoginCredFile()
+	}
+	return runAuthLoginBrowser()
+}
+
+func runAuthLoginCredFile() error {
 	store, err := auth.NewStore()
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
@@ -97,7 +112,6 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("storing credential: %w", err)
 	}
 
-	// Set as active account in config.
 	props, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -117,6 +131,140 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Activated service account credentials for: [%s]\n", account)
 	}
 	return nil
+}
+
+// gcloud's public OAuth2 client credentials (well-known, not secret).
+const (
+	gcloudClientID     = "764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com"
+	gcloudClientSecret = "d-FL95Q19q7MQmFpd7hHD0Ty"
+)
+
+func runAuthLoginBrowser() error {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return fmt.Errorf("starting local server: %w", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	redirectURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	oauthCfg := &oauth2.Config{
+		ClientID:     gcloudClientID,
+		ClientSecret: gcloudClientSecret,
+		Endpoint:     google.Endpoint,
+		RedirectURL:  redirectURL,
+		Scopes: []string{
+			"openid",
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/cloud-platform",
+			"https://www.googleapis.com/auth/accounts.reauth",
+		},
+	}
+
+	state := "gcloud-go-login"
+	authURL := oauthCfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent"))
+
+	fmt.Println("Your browser has been opened to visit:")
+	fmt.Println()
+	fmt.Println("    " + authURL)
+	fmt.Println()
+	openBrowser(authURL)
+
+	codeCh := make(chan string, 1)
+	errCh := make(chan error, 1)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") != state {
+			http.Error(w, "invalid state", http.StatusBadRequest)
+			return
+		}
+		if errMsg := r.URL.Query().Get("error"); errMsg != "" {
+			fmt.Fprintf(w, "Authentication failed: %s", errMsg)
+			errCh <- fmt.Errorf("authentication failed: %s", errMsg)
+			return
+		}
+		code := r.URL.Query().Get("code")
+		fmt.Fprint(w, "<html><body><h2>Authentication successful.</h2><p>You may close this window.</p></body></html>")
+		codeCh <- code
+	})
+	server := &http.Server{Handler: mux}
+	go server.Serve(listener)
+
+	var code string
+	select {
+	case code = <-codeCh:
+	case err := <-errCh:
+		server.Close()
+		return err
+	}
+	server.Close()
+
+	ctx := context.Background()
+	token, err := oauthCfg.Exchange(ctx, code)
+	if err != nil {
+		return fmt.Errorf("exchanging auth code: %w", err)
+	}
+
+	// Build authorized_user credential JSON for storage.
+	credJSON := map[string]any{
+		"type":          "authorized_user",
+		"client_id":     gcloudClientID,
+		"client_secret": gcloudClientSecret,
+		"refresh_token": token.RefreshToken,
+	}
+
+	// Get user email from token info.
+	account := "user@unknown"
+	ts := oauthCfg.TokenSource(ctx, token)
+	client := oauth2.NewClient(ctx, ts)
+	resp, err := client.Get("https://www.googleapis.com/oauth2/v1/userinfo")
+	if err == nil {
+		defer resp.Body.Close()
+		var info struct{ Email string `json:"email"` }
+		if json.NewDecoder(resp.Body).Decode(&info) == nil && info.Email != "" {
+			account = info.Email
+		}
+	}
+	credJSON["account"] = account
+
+	data, _ := json.Marshal(credJSON)
+
+	store, err := auth.NewStore()
+	if err != nil {
+		return fmt.Errorf("initializing credential store: %w", err)
+	}
+
+	// Store credential data directly.
+	_ = store.StoreRaw(account, data)
+
+	props, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	props.Core.Account = account
+	if err := props.Save(); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	if !flagBrief {
+		fmt.Printf("\nYou are now logged in as [%s].\n", account)
+	}
+	return nil
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return
+	}
+	cmd.Start()
 }
 
 func runAuthList(cmd *cobra.Command, args []string) error {
