@@ -42,9 +42,9 @@ var (
 // --- instances create ---
 
 var instancesCreateCmd = &cobra.Command{
-	Use:   "create INSTANCE_NAME",
+	Use:   "create INSTANCE_NAME [INSTANCE_NAME ...]",
 	Short: "Create a Compute Engine instance",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  runInstancesCreate,
 }
 
@@ -61,17 +61,30 @@ var (
 	flagMetadataFromFile map[string]string
 	flagServiceAccountEmail string
 	flagScopes           []string
-	flagNoAddress        bool
-	flagPreemptible      bool
-	flagProvisioningModel string
+	flagNoAddress            bool
+	flagPreemptible          bool
+	flagProvisioningModel    string
+	flagCreateLabels         map[string]string
+	flagCreateDeletionProtect bool
+	flagCreateAsync          bool
+	flagCreateDisk           string
+	flagCreateNewDisk        string
+	flagPrivateNetworkIP     string
+	flagCreateAddress        string
+	flagAccelerator          string
+	flagShieldedSecureBoot   bool
+	flagShieldedVTPM         bool
+	flagShieldedIntegrity    bool
+	flagCanIPForward         bool
+	flagMinCPUPlatform       string
 )
 
 // --- instances delete ---
 
 var instancesDeleteCmd = &cobra.Command{
-	Use:   "delete INSTANCE_NAME",
+	Use:   "delete INSTANCE_NAME [INSTANCE_NAME ...]",
 	Short: "Delete a Compute Engine instance",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  runInstancesDelete,
 }
 
@@ -107,6 +120,19 @@ func init() {
 	instancesCreateCmd.Flags().BoolVar(&flagNoAddress, "no-address", false, "No external IP address")
 	instancesCreateCmd.Flags().BoolVar(&flagPreemptible, "preemptible", false, "Create a preemptible instance")
 	instancesCreateCmd.Flags().StringVar(&flagProvisioningModel, "provisioning-model", "", "Provisioning model: STANDARD or SPOT")
+	instancesCreateCmd.Flags().StringToStringVar(&flagCreateLabels, "labels", nil, "Labels key=value pairs")
+	instancesCreateCmd.Flags().BoolVar(&flagCreateDeletionProtect, "deletion-protection", false, "Enable deletion protection")
+	instancesCreateCmd.Flags().BoolVar(&flagCreateAsync, "async", false, "Return immediately without waiting")
+	instancesCreateCmd.Flags().StringVar(&flagCreateDisk, "disk", "", "Attach an existing disk (name=NAME,mode=rw|ro,boot=yes|no)")
+	instancesCreateCmd.Flags().StringVar(&flagCreateNewDisk, "create-disk", "", "Create and attach a new disk (name=NAME,size=SIZE,type=TYPE)")
+	instancesCreateCmd.Flags().StringVar(&flagPrivateNetworkIP, "private-network-ip", "", "Private network IP address")
+	instancesCreateCmd.Flags().StringVar(&flagCreateAddress, "address", "", "External IP address or name of a reserved address")
+	instancesCreateCmd.Flags().StringVar(&flagAccelerator, "accelerator", "", "Accelerator spec (e.g. type=nvidia-tesla-t4,count=1)")
+	instancesCreateCmd.Flags().BoolVar(&flagShieldedSecureBoot, "shielded-secure-boot", false, "Enable Secure Boot for shielded VM")
+	instancesCreateCmd.Flags().BoolVar(&flagShieldedVTPM, "shielded-vtpm", true, "Enable vTPM for shielded VM")
+	instancesCreateCmd.Flags().BoolVar(&flagShieldedIntegrity, "shielded-integrity-monitoring", true, "Enable integrity monitoring for shielded VM")
+	instancesCreateCmd.Flags().BoolVar(&flagCanIPForward, "can-ip-forward", false, "Allow IP forwarding")
+	instancesCreateCmd.Flags().StringVar(&flagMinCPUPlatform, "min-cpu-platform", "", "Minimum CPU platform")
 	instancesCmd.AddCommand(instancesCreateCmd)
 
 	// delete
@@ -200,7 +226,6 @@ func runInstancesList(cmd *cobra.Command, args []string) error {
 }
 
 func runInstancesCreate(cmd *cobra.Command, args []string) error {
-	instance := args[0]
 	project, zone, err := resolveProjectZone()
 	if err != nil {
 		return err
@@ -212,91 +237,202 @@ func runInstancesCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	machineTypeURL := fmt.Sprintf("zones/%s/machineTypes/%s", zone, flagMachineType)
-	sourceImage := fmt.Sprintf("projects/%s/global/images/family/%s", flagImageProject, flagImageFamily)
+	for _, instance := range args {
+		machineTypeURL := fmt.Sprintf("zones/%s/machineTypes/%s", zone, flagMachineType)
+		sourceImage := fmt.Sprintf("projects/%s/global/images/family/%s", flagImageProject, flagImageFamily)
 
-	inst := &compute.Instance{
-		Name:        instance,
-		MachineType: machineTypeURL,
-		Disks: []*compute.AttachedDisk{
-			{
-				Boot:       true,
-				AutoDelete: true,
-				InitializeParams: &compute.AttachedDiskInitializeParams{
-					SourceImage: sourceImage,
-					DiskSizeGb:  parseDiskSize(flagBootDiskSize),
-					DiskType:    formatDiskType(zone, flagBootDiskType),
+		inst := &compute.Instance{
+			Name:        instance,
+			MachineType: machineTypeURL,
+			Disks: []*compute.AttachedDisk{
+				{
+					Boot:       true,
+					AutoDelete: true,
+					InitializeParams: &compute.AttachedDiskInitializeParams{
+						SourceImage: sourceImage,
+						DiskSizeGb:  parseDiskSize(flagBootDiskSize),
+						DiskType:    formatDiskType(zone, flagBootDiskType),
+					},
 				},
 			},
-		},
-		NetworkInterfaces: []*compute.NetworkInterface{
-			buildNetworkInterface(project, flagNetwork, flagSubnet, flagNoAddress),
-		},
-	}
-
-	if len(flagTags) > 0 {
-		inst.Tags = &compute.Tags{Items: flagTags}
-	}
-
-	meta, err := buildMetadata(flagMetadata, flagMetadataFromFile)
-	if err != nil {
-		return err
-	}
-	if meta != nil {
-		inst.Metadata = meta
-	}
-
-	if flagServiceAccountEmail != "" || len(flagScopes) > 0 {
-		sa := &compute.ServiceAccount{
-			Email:  flagServiceAccountEmail,
-			Scopes: flagScopes,
+			NetworkInterfaces: []*compute.NetworkInterface{
+				buildNetworkInterface(project, flagNetwork, flagSubnet, flagNoAddress),
+			},
 		}
-		if sa.Email == "" {
-			sa.Email = "default"
-		}
-		if len(sa.Scopes) == 0 {
-			sa.Scopes = []string{"https://www.googleapis.com/auth/cloud-platform"}
-		}
-		inst.ServiceAccounts = []*compute.ServiceAccount{sa}
-	}
 
-	if flagPreemptible || flagProvisioningModel != "" {
-		if inst.Scheduling == nil {
-			inst.Scheduling = &compute.Scheduling{}
+		if len(flagTags) > 0 {
+			inst.Tags = &compute.Tags{Items: flagTags}
 		}
-		if flagPreemptible {
-			inst.Scheduling.Preemptible = true
-		}
-		if flagProvisioningModel != "" {
-			inst.Scheduling.ProvisioningModel = flagProvisioningModel
-		}
-	}
 
-	fmt.Printf("Creating instance [%s] in zone [%s]...\n", instance, zone)
-	op, err := svc.Instances.Insert(project, zone, inst).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("creating instance: %w", err)
-	}
+		meta, err := buildMetadata(flagMetadata, flagMetadataFromFile)
+		if err != nil {
+			return err
+		}
+		if meta != nil {
+			inst.Metadata = meta
+		}
 
-	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
-		return err
+		if flagServiceAccountEmail != "" || len(flagScopes) > 0 {
+			sa := &compute.ServiceAccount{
+				Email:  flagServiceAccountEmail,
+				Scopes: flagScopes,
+			}
+			if sa.Email == "" {
+				sa.Email = "default"
+			}
+			if len(sa.Scopes) == 0 {
+				sa.Scopes = []string{"https://www.googleapis.com/auth/cloud-platform"}
+			}
+			inst.ServiceAccounts = []*compute.ServiceAccount{sa}
+		}
+
+		if flagPreemptible || flagProvisioningModel != "" {
+			if inst.Scheduling == nil {
+				inst.Scheduling = &compute.Scheduling{}
+			}
+			if flagPreemptible {
+				inst.Scheduling.Preemptible = true
+			}
+			if flagProvisioningModel != "" {
+				inst.Scheduling.ProvisioningModel = flagProvisioningModel
+			}
+		}
+
+		if len(flagCreateLabels) > 0 {
+			inst.Labels = flagCreateLabels
+		}
+
+		if flagCreateDeletionProtect {
+			inst.DeletionProtection = true
+		}
+
+		if flagCanIPForward {
+			inst.CanIpForward = true
+		}
+
+		if flagMinCPUPlatform != "" {
+			inst.MinCpuPlatform = flagMinCPUPlatform
+		}
+
+		if flagShieldedSecureBoot || flagShieldedVTPM || flagShieldedIntegrity {
+			inst.ShieldedInstanceConfig = &compute.ShieldedInstanceConfig{
+				EnableSecureBoot:          flagShieldedSecureBoot,
+				EnableVtpm:                flagShieldedVTPM,
+				EnableIntegrityMonitoring: flagShieldedIntegrity,
+			}
+		}
+
+		if flagPrivateNetworkIP != "" && len(inst.NetworkInterfaces) > 0 {
+			inst.NetworkInterfaces[0].NetworkIP = flagPrivateNetworkIP
+		}
+
+		if flagCreateAddress != "" && len(inst.NetworkInterfaces) > 0 {
+			if len(inst.NetworkInterfaces[0].AccessConfigs) > 0 {
+				inst.NetworkInterfaces[0].AccessConfigs[0].NatIP = flagCreateAddress
+			}
+		}
+
+		if flagAccelerator != "" {
+			accel := parseAccelerator(flagAccelerator, project, zone)
+			if accel != nil {
+				inst.GuestAccelerators = []*compute.AcceleratorConfig{accel}
+				if inst.Scheduling == nil {
+					inst.Scheduling = &compute.Scheduling{}
+				}
+				inst.Scheduling.OnHostMaintenance = "TERMINATE"
+			}
+		}
+
+		if flagCreateDisk != "" {
+			diskSpec := parseKeyValueSpec(flagCreateDisk)
+			diskName := diskSpec["name"]
+			if diskName == "" {
+				return fmt.Errorf("--disk requires name= parameter")
+			}
+			diskURL := fmt.Sprintf("projects/%s/zones/%s/disks/%s", project, zone, diskName)
+			mode := "READ_WRITE"
+			if diskSpec["mode"] == "ro" {
+				mode = "READ_ONLY"
+			}
+			boot := diskSpec["boot"] == "yes"
+			inst.Disks = append(inst.Disks, &compute.AttachedDisk{
+				Source: diskURL,
+				Mode:   mode,
+				Boot:   boot,
+			})
+		}
+
+		if flagCreateNewDisk != "" {
+			diskSpec := parseKeyValueSpec(flagCreateNewDisk)
+			diskName := diskSpec["name"]
+			params := &compute.AttachedDiskInitializeParams{
+				DiskName:   diskName,
+				DiskSizeGb: parseDiskSize(diskSpec["size"]),
+				DiskType:   formatDiskType(zone, diskSpec["type"]),
+			}
+			inst.Disks = append(inst.Disks, &compute.AttachedDisk{
+				AutoDelete:       true,
+				InitializeParams: params,
+			})
+		}
+
+		fmt.Printf("Creating instance [%s] in zone [%s]...\n", instance, zone)
+		op, err := svc.Instances.Insert(project, zone, inst).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("creating instance %s: %w", instance, err)
+		}
+
+		if flagCreateAsync {
+			fmt.Printf("Create operation started for [%s]: %s\n", instance, op.Name)
+			continue
+		}
+
+		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
+			return err
+		}
+		fmt.Printf("Created instance [%s].\n", instance)
 	}
-	fmt.Printf("Created instance [%s].\n", instance)
 	return nil
+}
+
+func parseAccelerator(spec, project, zone string) *compute.AcceleratorConfig {
+	parts := parseKeyValueSpec(spec)
+	accelType := parts["type"]
+	if accelType == "" {
+		return nil
+	}
+	count := int64(1)
+	if c := parts["count"]; c != "" {
+		fmt.Sscanf(c, "%d", &count)
+	}
+	return &compute.AcceleratorConfig{
+		AcceleratorType:  fmt.Sprintf("projects/%s/zones/%s/acceleratorTypes/%s", project, zone, accelType),
+		AcceleratorCount: count,
+	}
+}
+
+func parseKeyValueSpec(spec string) map[string]string {
+	result := make(map[string]string)
+	for _, part := range strings.Split(spec, ",") {
+		k, v, ok := strings.Cut(part, "=")
+		if ok {
+			result[strings.TrimSpace(k)] = strings.TrimSpace(v)
+		}
+	}
+	return result
 }
 
 func runInstancesDelete(cmd *cobra.Command, args []string) error {
 	if flagDeleteDisks != "" && flagKeepDisks != "" {
 		return fmt.Errorf("--delete-disks and --keep-disks are mutually exclusive")
 	}
-	instance := args[0]
 	project, zone, err := resolveProjectZone()
 	if err != nil {
 		return err
 	}
 
 	if !flagDeleteQuiet {
-		fmt.Printf("The following instances will be deleted: [%s]\n", instance)
+		fmt.Printf("The following instances will be deleted: %v\n", args)
 		fmt.Print("Do you want to continue (Y/n)? ")
 		var answer string
 		fmt.Scanln(&answer)
@@ -312,41 +448,43 @@ func runInstancesDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if flagDeleteDisks != "" || flagKeepDisks != "" {
-		inst, err := svc.Instances.Get(project, zone, instance).Context(ctx).Do()
+	for _, instance := range args {
+		if flagDeleteDisks != "" || flagKeepDisks != "" {
+			inst, err := svc.Instances.Get(project, zone, instance).Context(ctx).Do()
+			if err != nil {
+				return fmt.Errorf("getting instance %s: %w", instance, err)
+			}
+			for _, d := range inst.Disks {
+				want := d.AutoDelete
+				if shouldModifyDisk(d, flagDeleteDisks, true) {
+					want = true
+				}
+				if shouldModifyDisk(d, flagKeepDisks, false) {
+					want = false
+				}
+				if want != d.AutoDelete {
+					op, err := svc.Instances.SetDiskAutoDelete(project, zone, instance, want, d.DeviceName).Context(ctx).Do()
+					if err != nil {
+						return fmt.Errorf("setting auto-delete on disk %s: %w", d.DeviceName, err)
+					}
+					if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		fmt.Printf("Deleting instance [%s]...\n", instance)
+		op, err := svc.Instances.Delete(project, zone, instance).Context(ctx).Do()
 		if err != nil {
-			return fmt.Errorf("getting instance: %w", err)
+			return fmt.Errorf("deleting instance %s: %w", instance, err)
 		}
-		for _, d := range inst.Disks {
-			want := d.AutoDelete
-			if shouldModifyDisk(d, flagDeleteDisks, true) {
-				want = true
-			}
-			if shouldModifyDisk(d, flagKeepDisks, false) {
-				want = false
-			}
-			if want != d.AutoDelete {
-				op, err := svc.Instances.SetDiskAutoDelete(project, zone, instance, want, d.DeviceName).Context(ctx).Do()
-				if err != nil {
-					return fmt.Errorf("setting auto-delete on disk %s: %w", d.DeviceName, err)
-				}
-				if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
-					return err
-				}
-			}
+
+		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
+			return err
 		}
+		fmt.Printf("Deleted instance [%s].\n", instance)
 	}
-
-	fmt.Printf("Deleting instance [%s]...\n", instance)
-	op, err := svc.Instances.Delete(project, zone, instance).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("deleting instance: %w", err)
-	}
-
-	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
-		return err
-	}
-	fmt.Printf("Deleted instance [%s].\n", instance)
 	return nil
 }
 
