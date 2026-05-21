@@ -12,6 +12,7 @@ import (
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
+	artifactregistry "google.golang.org/api/artifactregistry/v1"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
 )
 
@@ -50,12 +51,49 @@ Example:
 	RunE: runArtifactsListVulnerabilities,
 }
 
+// --- artifacts docker images list (#186) ---
+
+var artifactsDockerImagesListCmd = &cobra.Command{
+	Use:   "list REPOSITORY",
+	Short: "List Docker images in a repository",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runArtifactsDockerImagesList,
+}
+
 var (
-	flagArtifactsScanLocation string
-	flagArtifactsScanFormat   string
-	flagArtifactsVulnFormat   string
-	flagArtifactsScanRemote   bool
-	flagArtifactsScanAsync    bool
+	flagArtImgListFormat       string
+	flagArtImgListIncludeTags  bool
+)
+
+// --- artifacts docker images describe (#187) ---
+
+var artifactsDockerImagesDescribeCmd = &cobra.Command{
+	Use:   "describe IMAGE",
+	Short: "Describe a Docker image",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runArtifactsDockerImagesDescribe,
+}
+
+// --- artifacts docker images delete (#188) ---
+
+var artifactsDockerImagesDeleteCmd = &cobra.Command{
+	Use:   "delete IMAGE",
+	Short: "Delete a Docker image",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runArtifactsDockerImagesDelete,
+}
+
+var flagArtImgDeleteQuiet bool
+
+// --- scan extra flags (#189, #190) ---
+
+var (
+	flagArtifactsScanLocation     string
+	flagArtifactsScanFormat       string
+	flagArtifactsVulnFormat       string
+	flagArtifactsScanRemote       bool
+	flagArtifactsScanAsync        bool
+	flagArtifactsScanExtraTypes   []string
 )
 
 func init() {
@@ -63,10 +101,19 @@ func init() {
 	artifactsScanCmd.Flags().StringVar(&flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
 	artifactsScanCmd.Flags().BoolVar(&flagArtifactsScanRemote, "remote", false, "Scan the image remotely in the registry (skip local extraction)")
 	artifactsScanCmd.Flags().BoolVar(&flagArtifactsScanAsync, "async", false, "Return immediately without waiting for scan to complete")
+	artifactsScanCmd.Flags().StringSliceVar(&flagArtifactsScanExtraTypes, "additional-package-types", nil, "Additional package types to scan (GO, MAVEN, PIP, NPM)")
 	artifactsListVulnerabilitiesCmd.Flags().StringVar(&flagArtifactsVulnFormat, "format", "", "Output format (e.g. json)")
+
+	artifactsDockerImagesListCmd.Flags().StringVar(&flagArtImgListFormat, "format", "", "Output format (e.g. json)")
+	artifactsDockerImagesListCmd.Flags().BoolVar(&flagArtImgListIncludeTags, "include-tags", false, "Include image tags")
+	artifactsDockerImagesDescribeCmd.Flags().StringVar(&flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
+	artifactsDockerImagesDeleteCmd.Flags().BoolVar(&flagArtImgDeleteQuiet, "quiet", false, "Suppress confirmation prompt")
 
 	artifactsDockerImagesCmd.AddCommand(artifactsScanCmd)
 	artifactsDockerImagesCmd.AddCommand(artifactsListVulnerabilitiesCmd)
+	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesListCmd)
+	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesDescribeCmd)
+	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesDeleteCmd)
 	artifactsDockerCmd.AddCommand(artifactsDockerImagesCmd)
 	artifactsCmd.AddCommand(artifactsDockerCmd)
 	rootCmd.AddCommand(artifactsCmd)
@@ -197,6 +244,163 @@ func runArtifactsListVulnerabilities(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// --- artifacts docker images list (#186) ---
+
+func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	// Repository arg is like: LOCATION-docker.pkg.dev/PROJECT/REPO
+	parent := fmt.Sprintf("projects/-/locations/-/repositories/-/packages/-")
+	// Try to parse the repository path into the API format.
+	parts := strings.Split(strings.TrimSuffix(args[0], "/"), "/")
+	if len(parts) >= 3 {
+		// e.g., us-docker.pkg.dev/my-project/my-repo
+		host := parts[0]
+		location := strings.TrimSuffix(host, "-docker.pkg.dev")
+		project := parts[1]
+		repo := parts[2]
+		parent = fmt.Sprintf("projects/%s/locations/%s/repositories/%s/packages/-", project, location, repo)
+	}
+
+	var allImages []*artifactregistry.DockerImage
+	pageToken := ""
+	for {
+		call := svc.Projects.Locations.Repositories.DockerImages.List(strings.TrimSuffix(parent, "/packages/-")).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing docker images: %w", err)
+		}
+		allImages = append(allImages, resp.DockerImages...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	if flagArtImgListFormat == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(allImages)
+	}
+
+	fmt.Printf("%-60s %-20s %s\n", "IMAGE", "DIGEST", "TAGS")
+	for _, img := range allImages {
+		tags := ""
+		if flagArtImgListIncludeTags && len(img.Tags) > 0 {
+			tags = strings.Join(img.Tags, ",")
+		}
+		fmt.Printf("%-60s %-20s %s\n", img.Uri, truncateDigest(img.Uri), tags)
+	}
+	return nil
+}
+
+func truncateDigest(uri string) string {
+	if idx := strings.Index(uri, "@sha256:"); idx >= 0 {
+		digest := uri[idx+8:]
+		if len(digest) > 12 {
+			return "sha256:" + digest[:12]
+		}
+		return "sha256:" + digest
+	}
+	return ""
+}
+
+// --- artifacts docker images describe (#187) ---
+
+func runArtifactsDockerImagesDescribe(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	// Parse the image path. Format: LOCATION-docker.pkg.dev/PROJECT/REPO/IMAGE[@sha256:DIGEST]
+	image := args[0]
+	name, err := parseArtifactImageName(image)
+	if err != nil {
+		return err
+	}
+
+	img, err := svc.Projects.Locations.Repositories.DockerImages.Get(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("describing docker image: %w", err)
+	}
+
+	return formatOutput(img, "")
+}
+
+func parseArtifactImageName(image string) (string, error) {
+	// Input: us-docker.pkg.dev/project/repo/image@sha256:abc123
+	// Output: projects/project/locations/us/repositories/repo/dockerImages/image@sha256:abc123
+	parts := strings.SplitN(image, "/", 4)
+	if len(parts) < 4 {
+		return "", fmt.Errorf("invalid image path: expected LOCATION-docker.pkg.dev/PROJECT/REPO/IMAGE")
+	}
+	host := parts[0]
+	location := strings.TrimSuffix(host, "-docker.pkg.dev")
+	project := parts[1]
+	repo := parts[2]
+	imagePart := parts[3]
+	return fmt.Sprintf("projects/%s/locations/%s/repositories/%s/dockerImages/%s", project, location, repo, imagePart), nil
+}
+
+// --- artifacts docker images delete (#188) ---
+
+func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
+	if !flagArtImgDeleteQuiet {
+		fmt.Printf("You are about to delete image [%s].\n", args[0])
+		fmt.Print("Do you want to continue (Y/n)? ")
+		var answer string
+		fmt.Scanln(&answer)
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		if answer != "" && answer != "y" && answer != "yes" {
+			fmt.Println("Aborted.")
+			return nil
+		}
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	// Parse image path to get the package name.
+	parts := strings.SplitN(args[0], "/", 4)
+	if len(parts) < 4 {
+		return fmt.Errorf("invalid image path: expected LOCATION-docker.pkg.dev/PROJECT/REPO/IMAGE")
+	}
+	host := parts[0]
+	location := strings.TrimSuffix(host, "-docker.pkg.dev")
+	project := parts[1]
+	repo := parts[2]
+	imagePart := parts[3]
+
+	// Strip tag/digest for package name.
+	pkgName := imagePart
+	if idx := strings.Index(pkgName, "@"); idx >= 0 {
+		pkgName = pkgName[:idx]
+	}
+	if idx := strings.Index(pkgName, ":"); idx >= 0 {
+		pkgName = pkgName[:idx]
+	}
+
+	name := fmt.Sprintf("projects/%s/locations/%s/repositories/%s/packages/%s", project, location, repo, pkgName)
+	if _, err := svc.Projects.Locations.Repositories.Packages.Delete(name).Context(ctx).Do(); err != nil {
+		return fmt.Errorf("deleting image: %w", err)
+	}
+
+	fmt.Printf("Deleted image [%s].\n", args[0])
+	return nil
+}
+
 // extractLocalPackages runs Docker to extract installed OS packages from
 // the image. It tries dpkg (Debian/Ubuntu), rpm (RHEL/CentOS), and apk
 // (Alpine) in sequence, matching the local extraction that gcloud's
@@ -236,6 +440,41 @@ func extractLocalPackages(ctx context.Context, image string) ([]*ondemandscannin
 		},
 	}
 
+	// Application-level extractors (for --additional-package-types or expanded extraction).
+	appExtractors := []extractor{
+		{
+			name:    "go",
+			cmd:     `find / -name go.sum -exec cat {} \; 2>/dev/null`,
+			cpeBase: "cpe:/a:golang:go",
+			parse:   parseGoSumOutput,
+		},
+		{
+			name:    "pip",
+			cmd:     `pip list --format=freeze 2>/dev/null || pip3 list --format=freeze 2>/dev/null`,
+			cpeBase: "cpe:/a:python:python",
+			parse:   parsePipOutput,
+		},
+		{
+			name:    "npm",
+			cmd:     `find / -name package.json -not -path '*/node_modules/.package-lock.json' -exec sh -c 'cat "$1" 2>/dev/null' _ {} \; 2>/dev/null | head -5000`,
+			cpeBase: "cpe:/a:npmjs:npm",
+			parse:   parseNpmOutput,
+		},
+		{
+			name:    "maven",
+			cmd:     `find / -name pom.xml -exec grep -h '<artifactId>\|<version>' {} \; 2>/dev/null | head -5000`,
+			cpeBase: "cpe:/a:apache:maven",
+			parse:   parseMavenOutput,
+		},
+	}
+
+	wantExtra := make(map[string]bool)
+	for _, t := range flagArtifactsScanExtraTypes {
+		wantExtra[strings.ToUpper(t)] = true
+	}
+
+	var allPkgs []*ondemandscanning.PackageData
+	// Run OS extractors first.
 	for _, ext := range extractors {
 		cmd := exec.CommandContext(ctx, dockerBin, "run", "--rm", "--entrypoint", "sh", image, "-c", ext.cmd)
 		var stdout, stderr bytes.Buffer
@@ -249,16 +488,46 @@ func extractLocalPackages(ctx context.Context, image string) ([]*ondemandscannin
 			continue
 		}
 		pkgs := ext.parse(output)
-		// Set cpeUri on all packages.
 		for _, pkg := range pkgs {
 			if pkg.CpeUri == "" {
 				pkg.CpeUri = ext.cpeBase
 			}
 		}
-		return pkgs, nil
+		allPkgs = append(allPkgs, pkgs...)
+		break // Only use the first successful OS extractor
 	}
 
-	return nil, fmt.Errorf("could not extract packages from image %s (no supported package manager found)", image)
+	// Run application extractors if requested.
+	if len(wantExtra) > 0 {
+		for _, ext := range appExtractors {
+			if !wantExtra[strings.ToUpper(ext.name)] {
+				continue
+			}
+			cmd := exec.CommandContext(ctx, dockerBin, "run", "--rm", "--entrypoint", "sh", image, "-c", ext.cmd)
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err != nil {
+				continue
+			}
+			output := stdout.String()
+			if strings.TrimSpace(output) == "" {
+				continue
+			}
+			pkgs := ext.parse(output)
+			for _, pkg := range pkgs {
+				if pkg.CpeUri == "" {
+					pkg.CpeUri = ext.cpeBase
+				}
+			}
+			allPkgs = append(allPkgs, pkgs...)
+		}
+	}
+
+	if len(allPkgs) == 0 {
+		return nil, fmt.Errorf("could not extract packages from image %s (no supported package manager found)", image)
+	}
+	return allPkgs, nil
 }
 
 func parseDpkgOutput(output string) []*ondemandscanning.PackageData {
@@ -332,4 +601,109 @@ func splitApkPackage(s string) (string, string) {
 		}
 	}
 	return s, ""
+}
+
+// parseGoSumOutput parses go.sum lines: "module v1.2.3 h1:hash="
+func parseGoSumOutput(output string) []*ondemandscanning.PackageData {
+	seen := make(map[string]bool)
+	var pkgs []*ondemandscanning.PackageData
+	for _, line := range strings.Split(output, "\n") {
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		mod := parts[0]
+		ver := strings.TrimSuffix(parts[1], "/go.mod")
+		ver = strings.TrimPrefix(ver, "v")
+		key := mod + "@" + ver
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		pkgs = append(pkgs, &ondemandscanning.PackageData{
+			Package:     mod,
+			Version:     ver,
+			PackageType: "GO",
+		})
+	}
+	return pkgs
+}
+
+// parsePipOutput parses "pip list --format=freeze" output: "package==version"
+func parsePipOutput(output string) []*ondemandscanning.PackageData {
+	var pkgs []*ondemandscanning.PackageData
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "==", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		pkgs = append(pkgs, &ondemandscanning.PackageData{
+			Package:     parts[0],
+			Version:     parts[1],
+			PackageType: "PIP",
+		})
+	}
+	return pkgs
+}
+
+// parseNpmOutput is a basic parser for package.json name/version.
+func parseNpmOutput(output string) []*ondemandscanning.PackageData {
+	var pkgs []*ondemandscanning.PackageData
+	type pkgJSON struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+	// Try to parse each JSON object in the output.
+	decoder := json.NewDecoder(strings.NewReader(output))
+	for decoder.More() {
+		var p pkgJSON
+		if err := decoder.Decode(&p); err != nil {
+			break
+		}
+		if p.Name != "" && p.Version != "" {
+			pkgs = append(pkgs, &ondemandscanning.PackageData{
+				Package:     p.Name,
+				Version:     p.Version,
+				PackageType: "NPM",
+			})
+		}
+	}
+	return pkgs
+}
+
+// parseMavenOutput parses artifactId and version from Maven pom.xml grep output.
+func parseMavenOutput(output string) []*ondemandscanning.PackageData {
+	var pkgs []*ondemandscanning.PackageData
+	lines := strings.Split(output, "\n")
+	for i := 0; i < len(lines)-1; i++ {
+		aid := extractXMLValue(lines[i], "artifactId")
+		if aid == "" {
+			continue
+		}
+		ver := extractXMLValue(lines[i+1], "version")
+		if ver == "" {
+			continue
+		}
+		pkgs = append(pkgs, &ondemandscanning.PackageData{
+			Package:     aid,
+			Version:     ver,
+			PackageType: "MAVEN",
+		})
+		i++
+	}
+	return pkgs
+}
+
+func extractXMLValue(line, tag string) string {
+	line = strings.TrimSpace(line)
+	prefix := "<" + tag + ">"
+	suffix := "</" + tag + ">"
+	if strings.HasPrefix(line, prefix) && strings.HasSuffix(line, suffix) {
+		return line[len(prefix) : len(line)-len(suffix)]
+	}
+	return ""
 }
