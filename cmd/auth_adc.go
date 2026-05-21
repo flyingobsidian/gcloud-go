@@ -30,6 +30,14 @@ Example:
 	RunE: runAuthADCLogin,
 }
 
+var authADCRevokeCmd = &cobra.Command{
+	Use:   "revoke",
+	Short: "Revoke Application Default Credentials",
+	Long:  "Delete the Application Default Credentials file.",
+	Args:  cobra.NoArgs,
+	RunE:  runAuthADCRevoke,
+}
+
 var authADCPrintAccessTokenCmd = &cobra.Command{
 	Use:   "print-access-token",
 	Short: "Print an access token for Application Default Credentials",
@@ -45,6 +53,7 @@ func init() {
 
 	authApplicationDefaultCmd.AddCommand(authADCLoginCmd)
 	authApplicationDefaultCmd.AddCommand(authADCPrintAccessTokenCmd)
+	authApplicationDefaultCmd.AddCommand(authADCRevokeCmd)
 	authCmd.AddCommand(authApplicationDefaultCmd)
 }
 
@@ -58,6 +67,18 @@ func adcFilePath() string {
 		configDir = filepath.Join(home, ".config", "gcloud")
 	}
 	return filepath.Join(configDir, "application_default_credentials.json")
+}
+
+func runAuthADCRevoke(cmd *cobra.Command, args []string) error {
+	adcPath := adcFilePath()
+	if err := os.Remove(adcPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("Application Default Credentials are not set up")
+		}
+		return fmt.Errorf("removing ADC file: %w", err)
+	}
+	fmt.Printf("Credentials revoked: [%s]\n", adcPath)
+	return nil
 }
 
 func runAuthADCPrintAccessToken(cmd *cobra.Command, args []string) error {
