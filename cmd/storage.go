@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
@@ -83,7 +86,85 @@ Examples:
 	RunE: runStorageRm,
 }
 
-var flagStorageRmRecurse bool
+var (
+	flagStorageRmRecurse       bool
+	flagStorageRmAllVersions   bool
+	flagStorageRmContinueOnErr bool
+)
+
+// --- buckets describe ---
+
+var storageBucketsDescribeCmd = &cobra.Command{
+	Use:   "describe gs://BUCKET",
+	Short: "Describe a Cloud Storage bucket",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runStorageBucketsDescribe,
+}
+
+// --- mv ---
+
+var storageMvCmd = &cobra.Command{
+	Use:   "mv SOURCE DESTINATION",
+	Short: "Move/rename Cloud Storage objects",
+	Args:  cobra.ExactArgs(2),
+	RunE:  runStorageMv,
+}
+
+var flagStorageMvRecurse bool
+
+// --- rsync ---
+
+var storageRsyncCmd = &cobra.Command{
+	Use:   "rsync SOURCE DESTINATION",
+	Short: "Synchronize content of two buckets/directories",
+	Args:  cobra.ExactArgs(2),
+	RunE:  runStorageRsync,
+}
+
+var (
+	flagRsyncRecurse       bool
+	flagRsyncDeleteUnmatched bool
+	flagRsyncDryRun        bool
+)
+
+// --- du ---
+
+var storageDuCmd = &cobra.Command{
+	Use:   "du [GCS_PATH]",
+	Short: "Display disk usage of Cloud Storage objects",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runStorageDu,
+}
+
+var (
+	flagDuSummarize bool
+	flagDuReadable  bool
+)
+
+// --- hash ---
+
+var storageHashCmd = &cobra.Command{
+	Use:   "hash PATH",
+	Short: "Compute hashes for local files or Cloud Storage objects",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runStorageHash,
+}
+
+// --- cp extra flags ---
+
+var (
+	flagStorageCpContentType   string
+	flagStorageCpCacheControl  string
+	flagStorageCpContinueOnErr bool
+)
+
+// --- buckets list extra flags ---
+
+var (
+	flagBucketsListFilter string
+	flagBucketsListPrefix string
+	flagBucketsListURI    bool
+)
 
 // --- ls ---
 
@@ -107,23 +188,45 @@ var (
 func init() {
 	storageBucketsListCmd.Flags().StringVar(&flagStorageBucketsFormat, "format", "", "Output format (e.g. json)")
 	storageBucketsListCmd.Flags().BoolVar(&flagStorageBucketsSoftDeleted, "soft-deleted", false, "Include soft-deleted buckets")
+	storageBucketsListCmd.Flags().StringVar(&flagBucketsListFilter, "filter", "", "Filter expression")
+	storageBucketsListCmd.Flags().StringVar(&flagBucketsListPrefix, "prefix", "", "Filter buckets by name prefix")
+	storageBucketsListCmd.Flags().BoolVar(&flagBucketsListURI, "uri", false, "Print gs:// URIs")
 	storageBucketsCmd.AddCommand(storageBucketsListCmd)
+	storageBucketsCmd.AddCommand(storageBucketsDescribeCmd)
 
 	storageCpCmd.Flags().BoolVarP(&flagStorageCpRecurse, "recursive", "r", false, "Copy recursively")
 	storageCpCmd.Flags().BoolVarP(&flagStorageCpNoClobber, "no-clobber", "n", false, "Do not overwrite existing files")
 	storageCpCmd.Flags().StringVar(&flagStorageCpStorageClass, "storage-class", "", "Storage class for uploaded objects")
+	storageCpCmd.Flags().StringVar(&flagStorageCpContentType, "content-type", "", "Content-Type for uploaded objects")
+	storageCpCmd.Flags().StringVar(&flagStorageCpCacheControl, "cache-control", "", "Cache-Control header for uploaded objects")
+	storageCpCmd.Flags().BoolVar(&flagStorageCpContinueOnErr, "continue-on-error", false, "Skip failures and continue")
 
 	storageRmCmd.Flags().BoolVarP(&flagStorageRmRecurse, "recursive", "r", false, "Delete recursively")
+	storageRmCmd.Flags().BoolVar(&flagStorageRmAllVersions, "all-versions", false, "Delete all object versions")
+	storageRmCmd.Flags().BoolVar(&flagStorageRmContinueOnErr, "continue-on-error", false, "Skip failures and continue")
 
 	storageLsCmd.Flags().BoolVarP(&flagStorageLsRecurse, "recursive", "r", false, "List recursively")
 	storageLsCmd.Flags().BoolVarP(&flagStorageLsLong, "long", "l", false, "Show size and creation time")
 	storageLsCmd.Flags().BoolVar(&flagStorageLsJSON, "json", false, "Output as JSON")
 
+	storageMvCmd.Flags().BoolVarP(&flagStorageMvRecurse, "recursive", "r", false, "Move recursively")
+
+	storageRsyncCmd.Flags().BoolVarP(&flagRsyncRecurse, "recursive", "r", false, "Sync recursively")
+	storageRsyncCmd.Flags().BoolVarP(&flagRsyncDeleteUnmatched, "delete-unmatched-destination-objects", "d", false, "Delete destination objects not in source")
+	storageRsyncCmd.Flags().BoolVarP(&flagRsyncDryRun, "dry-run", "n", false, "Show what would be synced")
+
+	storageDuCmd.Flags().BoolVarP(&flagDuSummarize, "summarize", "s", false, "Show total only")
+	storageDuCmd.Flags().BoolVarP(&flagDuReadable, "readable", "h", false, "Human-readable sizes")
+
 	storageCmd.AddCommand(storageBucketsCmd)
 	storageCmd.AddCommand(storageCatCmd)
 	storageCmd.AddCommand(storageCpCmd)
 	storageCmd.AddCommand(storageLsCmd)
+	storageCmd.AddCommand(storageMvCmd)
 	storageCmd.AddCommand(storageRmCmd)
+	storageCmd.AddCommand(storageRsyncCmd)
+	storageCmd.AddCommand(storageDuCmd)
+	storageCmd.AddCommand(storageHashCmd)
 	rootCmd.AddCommand(storageCmd)
 }
 
@@ -146,6 +249,9 @@ func runStorageBucketsList(cmd *cobra.Command, args []string) error {
 		if flagStorageBucketsSoftDeleted {
 			call = call.SoftDeleted(true)
 		}
+		if flagBucketsListPrefix != "" {
+			call = call.Prefix(flagBucketsListPrefix)
+		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
@@ -160,10 +266,28 @@ func runStorageBucketsList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
+	// Client-side filter (simple substring match on name).
+	if flagBucketsListFilter != "" {
+		var filtered []*storage.Bucket
+		for _, b := range allBuckets {
+			if strings.Contains(b.Name, flagBucketsListFilter) {
+				filtered = append(filtered, b)
+			}
+		}
+		allBuckets = filtered
+	}
+
 	if flagStorageBucketsFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(allBuckets)
+	}
+
+	if flagBucketsListURI {
+		for _, b := range allBuckets {
+			fmt.Printf("gs://%s/\n", b.Name)
+		}
+		return nil
 	}
 
 	for _, b := range allBuckets {
@@ -344,6 +468,12 @@ func storageUploadFile(ctx context.Context, svc *storage.Service, src, bucket, p
 	if flagStorageCpStorageClass != "" {
 		obj.StorageClass = flagStorageCpStorageClass
 	}
+	if flagStorageCpContentType != "" {
+		obj.ContentType = flagStorageCpContentType
+	}
+	if flagStorageCpCacheControl != "" {
+		obj.CacheControl = flagStorageCpCacheControl
+	}
 	call := svc.Objects.Insert(bucket, obj).Media(f).Context(ctx)
 	if flagStorageCpNoClobber {
 		call = call.IfGenerationMatch(0)
@@ -498,8 +628,12 @@ func runStorageRm(cmd *cobra.Command, args []string) error {
 			prefix += "/"
 		}
 		pageToken := ""
+		var lastErr error
 		for {
 			call := svc.Objects.List(bucket).Prefix(prefix).Context(ctx)
+			if flagStorageRmAllVersions {
+				call = call.Versions(true)
+			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
@@ -508,7 +642,16 @@ func runStorageRm(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("listing objects: %w", err)
 			}
 			for _, obj := range resp.Items {
-				if err := svc.Objects.Delete(bucket, obj.Name).Context(ctx).Do(); err != nil {
+				delCall := svc.Objects.Delete(bucket, obj.Name).Context(ctx)
+				if flagStorageRmAllVersions && obj.Generation != 0 {
+					delCall = delCall.Generation(int64(obj.Generation))
+				}
+				if err := delCall.Do(); err != nil {
+					if flagStorageRmContinueOnErr {
+						fmt.Fprintf(os.Stderr, "WARNING: failed to delete gs://%s/%s: %v\n", bucket, obj.Name, err)
+						lastErr = err
+						continue
+					}
 					return fmt.Errorf("deleting gs://%s/%s: %w", bucket, obj.Name, err)
 				}
 				fmt.Fprintf(os.Stderr, "Removing gs://%s/%s\n", bucket, obj.Name)
@@ -518,11 +661,41 @@ func runStorageRm(cmd *cobra.Command, args []string) error {
 			}
 			pageToken = resp.NextPageToken
 		}
+		if lastErr != nil {
+			return fmt.Errorf("some objects could not be deleted")
+		}
 		return nil
 	}
 
 	if object == "" {
 		return fmt.Errorf("object path is required (use -r to delete all objects under a prefix)")
+	}
+
+	if flagStorageRmAllVersions {
+		// Delete all versions of a single object.
+		call := svc.Objects.List(bucket).Prefix(object).Versions(true).Context(ctx)
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing object versions: %w", err)
+		}
+		for _, obj := range resp.Items {
+			if obj.Name != object {
+				continue
+			}
+			delCall := svc.Objects.Delete(bucket, obj.Name).Context(ctx)
+			if obj.Generation != 0 {
+				delCall = delCall.Generation(int64(obj.Generation))
+			}
+			if err := delCall.Do(); err != nil {
+				if flagStorageRmContinueOnErr {
+					fmt.Fprintf(os.Stderr, "WARNING: failed to delete gs://%s/%s: %v\n", bucket, obj.Name, err)
+					continue
+				}
+				return fmt.Errorf("deleting gs://%s/%s: %w", bucket, obj.Name, err)
+			}
+			fmt.Fprintf(os.Stderr, "Removing gs://%s/%s#%d\n", bucket, obj.Name, obj.Generation)
+		}
+		return nil
 	}
 
 	if err := svc.Objects.Delete(bucket, object).Context(ctx).Do(); err != nil {
@@ -624,5 +797,417 @@ func runStorageLs(cmd *cobra.Command, args []string) error {
 			fmt.Printf("gs://%s/%s\n", bucket, obj.Name)
 		}
 	}
+	return nil
+}
+
+// --- buckets describe (#163) ---
+
+func runStorageBucketsDescribe(cmd *cobra.Command, args []string) error {
+	bucketName := args[0]
+	bucketName = strings.TrimPrefix(bucketName, "gs://")
+	bucketName = strings.TrimSuffix(bucketName, "/")
+
+	ctx := context.Background()
+	svc, err := gcp.StorageService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	bucket, err := svc.Buckets.Get(bucketName).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("describing bucket: %w", err)
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(bucket)
+}
+
+// --- mv (#164) ---
+
+func runStorageMv(cmd *cobra.Command, args []string) error {
+	src, dst := args[0], args[1]
+
+	ctx := context.Background()
+	svc, err := gcp.StorageService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case isGCSPath(src) && isGCSPath(dst):
+		return storageMvGCS(ctx, svc, src, dst)
+	case isGCSPath(src) && !isGCSPath(dst):
+		// Download then delete source.
+		if err := storageDownload(ctx, svc, src, dst); err != nil {
+			return err
+		}
+		return storageDeleteObject(ctx, svc, src)
+	case !isGCSPath(src) && isGCSPath(dst):
+		// Upload then delete local source.
+		if err := storageUpload(ctx, svc, src, dst); err != nil {
+			return err
+		}
+		return os.Remove(src)
+	default:
+		return fmt.Errorf("at least one of source or destination must be a gs:// path")
+	}
+}
+
+func storageMvGCS(ctx context.Context, svc *storage.Service, src, dst string) error {
+	srcBucket, srcObject, err := parseGCSPath(src)
+	if err != nil {
+		return err
+	}
+	dstBucket, dstObject, err := parseGCSPath(dst)
+	if err != nil {
+		return err
+	}
+
+	if flagStorageMvRecurse {
+		prefix := srcObject
+		if prefix != "" && !strings.HasSuffix(prefix, "/") {
+			prefix += "/"
+		}
+		dstPrefix := dstObject
+		if dstPrefix != "" && !strings.HasSuffix(dstPrefix, "/") {
+			dstPrefix += "/"
+		}
+		pageToken := ""
+		for {
+			call := svc.Objects.List(srcBucket).Prefix(prefix).Context(ctx)
+			if pageToken != "" {
+				call = call.PageToken(pageToken)
+			}
+			resp, err := call.Do()
+			if err != nil {
+				return fmt.Errorf("listing objects: %w", err)
+			}
+			for _, obj := range resp.Items {
+				if strings.HasSuffix(obj.Name, "/") {
+					continue
+				}
+				relPath := strings.TrimPrefix(obj.Name, prefix)
+				newName := dstPrefix + relPath
+				if _, err := svc.Objects.Copy(srcBucket, obj.Name, dstBucket, newName, nil).Context(ctx).Do(); err != nil {
+					return fmt.Errorf("copying gs://%s/%s: %w", srcBucket, obj.Name, err)
+				}
+				if err := svc.Objects.Delete(srcBucket, obj.Name).Context(ctx).Do(); err != nil {
+					return fmt.Errorf("deleting gs://%s/%s: %w", srcBucket, obj.Name, err)
+				}
+				fmt.Printf("Moved gs://%s/%s to gs://%s/%s\n", srcBucket, obj.Name, dstBucket, newName)
+			}
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
+		}
+		return nil
+	}
+
+	if dstObject == "" || strings.HasSuffix(dstObject, "/") {
+		dstObject += filepath.Base(srcObject)
+	}
+
+	if _, err := svc.Objects.Copy(srcBucket, srcObject, dstBucket, dstObject, nil).Context(ctx).Do(); err != nil {
+		return fmt.Errorf("copying object: %w", err)
+	}
+	if err := svc.Objects.Delete(srcBucket, srcObject).Context(ctx).Do(); err != nil {
+		return fmt.Errorf("deleting source: %w", err)
+	}
+	fmt.Printf("Moved gs://%s/%s to gs://%s/%s\n", srcBucket, srcObject, dstBucket, dstObject)
+	return nil
+}
+
+func storageDeleteObject(ctx context.Context, svc *storage.Service, gcsPath string) error {
+	bucket, object, err := parseGCSPath(gcsPath)
+	if err != nil {
+		return err
+	}
+	return svc.Objects.Delete(bucket, object).Context(ctx).Do()
+}
+
+// --- rsync (#165) ---
+
+func runStorageRsync(cmd *cobra.Command, args []string) error {
+	src, dst := args[0], args[1]
+
+	ctx := context.Background()
+	svc, err := gcp.StorageService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	// Build source file map.
+	srcFiles, err := listFiles(ctx, svc, src, flagRsyncRecurse)
+	if err != nil {
+		return fmt.Errorf("listing source: %w", err)
+	}
+
+	// Build destination file map.
+	dstFiles, err := listFiles(ctx, svc, dst, flagRsyncRecurse)
+	if err != nil {
+		return fmt.Errorf("listing destination: %w", err)
+	}
+
+	// Copy files that are new or different.
+	for relPath := range srcFiles {
+		if _, exists := dstFiles[relPath]; exists {
+			continue
+		}
+		srcPath := joinPath(src, relPath)
+		dstPath := joinPath(dst, relPath)
+		if flagRsyncDryRun {
+			fmt.Printf("Would copy %s to %s\n", srcPath, dstPath)
+			continue
+		}
+		// Use storage cp logic.
+		if isGCSPath(src) && isGCSPath(dst) {
+			srcBucket, srcObj, _ := parseGCSPath(srcPath)
+			dstBucket, dstObj, _ := parseGCSPath(dstPath)
+			if _, err := svc.Objects.Copy(srcBucket, srcObj, dstBucket, dstObj, nil).Context(ctx).Do(); err != nil {
+				return fmt.Errorf("copying %s: %w", srcPath, err)
+			}
+		} else if isGCSPath(src) {
+			if err := storageDownloadFile(ctx, svc, mustBucket(srcPath), mustObject(srcPath), dstPath); err != nil {
+				return err
+			}
+		} else {
+			if err := storageUploadFile(ctx, svc, srcPath, mustBucket(dstPath), mustObject(dstPath)); err != nil {
+				return err
+			}
+		}
+		fmt.Printf("Copied %s to %s\n", srcPath, dstPath)
+	}
+
+	// Delete unmatched destination objects.
+	if flagRsyncDeleteUnmatched {
+		for relPath := range dstFiles {
+			if _, exists := srcFiles[relPath]; exists {
+				continue
+			}
+			dstPath := joinPath(dst, relPath)
+			if flagRsyncDryRun {
+				fmt.Printf("Would delete %s\n", dstPath)
+				continue
+			}
+			if isGCSPath(dst) {
+				bucket, object, _ := parseGCSPath(dstPath)
+				if err := svc.Objects.Delete(bucket, object).Context(ctx).Do(); err != nil {
+					return fmt.Errorf("deleting %s: %w", dstPath, err)
+				}
+			} else {
+				if err := os.Remove(dstPath); err != nil {
+					return fmt.Errorf("deleting %s: %w", dstPath, err)
+				}
+			}
+			fmt.Printf("Deleted %s\n", dstPath)
+		}
+	}
+
+	return nil
+}
+
+func listFiles(ctx context.Context, svc *storage.Service, path string, recursive bool) (map[string]bool, error) {
+	files := make(map[string]bool)
+	if isGCSPath(path) {
+		bucket, prefix, err := parseGCSPath(path)
+		if err != nil {
+			return nil, err
+		}
+		if prefix != "" && !strings.HasSuffix(prefix, "/") {
+			prefix += "/"
+		}
+		pageToken := ""
+		for {
+			call := svc.Objects.List(bucket).Prefix(prefix).Context(ctx)
+			if pageToken != "" {
+				call = call.PageToken(pageToken)
+			}
+			resp, err := call.Do()
+			if err != nil {
+				return nil, err
+			}
+			for _, obj := range resp.Items {
+				if strings.HasSuffix(obj.Name, "/") {
+					continue
+				}
+				relPath := strings.TrimPrefix(obj.Name, prefix)
+				files[relPath] = true
+			}
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
+		}
+	} else {
+		err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				if !recursive && p != path {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			relPath, _ := filepath.Rel(path, p)
+			files[filepath.ToSlash(relPath)] = true
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+func joinPath(base, rel string) string {
+	if isGCSPath(base) {
+		base = strings.TrimSuffix(base, "/")
+		return base + "/" + rel
+	}
+	return filepath.Join(base, filepath.FromSlash(rel))
+}
+
+func mustBucket(gcsPath string) string {
+	b, _, _ := parseGCSPath(gcsPath)
+	return b
+}
+
+func mustObject(gcsPath string) string {
+	_, o, _ := parseGCSPath(gcsPath)
+	return o
+}
+
+// --- du (#166) ---
+
+func runStorageDu(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+	svc, err := gcp.StorageService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	var bucket, prefix string
+	if len(args) > 0 {
+		bucket, prefix, err = parseGCSPath(args[0])
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("GCS path is required (e.g. gs://bucket/prefix)")
+	}
+
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	var totalSize uint64
+	prefixSizes := make(map[string]uint64)
+	pageToken := ""
+	for {
+		call := svc.Objects.List(bucket).Prefix(prefix).Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		resp, err := call.Do()
+		if err != nil {
+			return fmt.Errorf("listing objects: %w", err)
+		}
+		for _, obj := range resp.Items {
+			totalSize += obj.Size
+			// Group by first-level prefix.
+			rel := strings.TrimPrefix(obj.Name, prefix)
+			parts := strings.SplitN(rel, "/", 2)
+			if len(parts) == 2 {
+				prefixSizes[prefix+parts[0]+"/"] += obj.Size
+			} else {
+				prefixSizes[obj.Name] += obj.Size
+			}
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+
+	if flagDuSummarize {
+		fmt.Printf("%s  gs://%s/%s\n", formatSize(totalSize, flagDuReadable), bucket, prefix)
+		return nil
+	}
+
+	for p, size := range prefixSizes {
+		fmt.Printf("%s  gs://%s/%s\n", formatSize(size, flagDuReadable), bucket, p)
+	}
+	fmt.Printf("%s  total\n", formatSize(totalSize, flagDuReadable))
+	return nil
+}
+
+func formatSize(size uint64, human bool) string {
+	if !human {
+		return fmt.Sprintf("%d", size)
+	}
+	const (
+		kb = 1024
+		mb = 1024 * kb
+		gb = 1024 * mb
+		tb = 1024 * gb
+	)
+	switch {
+	case size >= tb:
+		return fmt.Sprintf("%.1f TiB", float64(size)/float64(tb))
+	case size >= gb:
+		return fmt.Sprintf("%.1f GiB", float64(size)/float64(gb))
+	case size >= mb:
+		return fmt.Sprintf("%.1f MiB", float64(size)/float64(mb))
+	case size >= kb:
+		return fmt.Sprintf("%.1f KiB", float64(size)/float64(kb))
+	default:
+		return fmt.Sprintf("%d B", size)
+	}
+}
+
+// --- hash (#167) ---
+
+func runStorageHash(cmd *cobra.Command, args []string) error {
+	path := args[0]
+
+	if isGCSPath(path) {
+		ctx := context.Background()
+		svc, err := gcp.StorageService(ctx, flagAccount)
+		if err != nil {
+			return err
+		}
+		bucket, object, err := parseGCSPath(path)
+		if err != nil {
+			return err
+		}
+		obj, err := svc.Objects.Get(bucket, object).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("getting object metadata: %w", err)
+		}
+		fmt.Printf("Hash (crc32c): %s\n", obj.Crc32c)
+		fmt.Printf("Hash (md5):    %s\n", obj.Md5Hash)
+		return nil
+	}
+
+	// Local file.
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("opening file: %w", err)
+	}
+	defer f.Close()
+
+	crcHash := crc32.New(crc32.MakeTable(crc32.Castagnoli))
+	md5Hash := md5.New()
+	w := io.MultiWriter(crcHash, md5Hash)
+
+	if _, err := io.Copy(w, f); err != nil {
+		return fmt.Errorf("reading file: %w", err)
+	}
+
+	fmt.Printf("Hash (crc32c): %08x\n", crcHash.Sum32())
+	fmt.Printf("Hash (md5):    %s\n", hex.EncodeToString(md5Hash.Sum(nil)))
 	return nil
 }
