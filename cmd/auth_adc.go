@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/oauth2/google"
 )
 
 var authApplicationDefaultCmd = &cobra.Command{
@@ -28,6 +30,13 @@ Example:
 	RunE: runAuthADCLogin,
 }
 
+var authADCPrintAccessTokenCmd = &cobra.Command{
+	Use:   "print-access-token",
+	Short: "Print an access token for Application Default Credentials",
+	Args:  cobra.NoArgs,
+	RunE:  runAuthADCPrintAccessToken,
+}
+
 var flagADCCredFile string
 
 func init() {
@@ -35,6 +44,7 @@ func init() {
 	authADCLoginCmd.MarkFlagRequired("cred-file")
 
 	authApplicationDefaultCmd.AddCommand(authADCLoginCmd)
+	authApplicationDefaultCmd.AddCommand(authADCPrintAccessTokenCmd)
 	authCmd.AddCommand(authApplicationDefaultCmd)
 }
 
@@ -48,6 +58,28 @@ func adcFilePath() string {
 		configDir = filepath.Join(home, ".config", "gcloud")
 	}
 	return filepath.Join(configDir, "application_default_credentials.json")
+}
+
+func runAuthADCPrintAccessToken(cmd *cobra.Command, args []string) error {
+	adcPath := adcFilePath()
+	data, err := os.ReadFile(adcPath)
+	if err != nil {
+		return fmt.Errorf("reading ADC file: %w (run 'gcloud auth application-default login' first)", err)
+	}
+
+	ctx := context.Background()
+	creds, err := google.CredentialsFromJSON(ctx, data, "https://www.googleapis.com/auth/cloud-platform")
+	if err != nil {
+		return fmt.Errorf("parsing ADC credentials: %w", err)
+	}
+
+	token, err := creds.TokenSource.Token()
+	if err != nil {
+		return fmt.Errorf("generating access token: %w", err)
+	}
+
+	fmt.Println(token.AccessToken)
+	return nil
 }
 
 func runAuthADCLogin(cmd *cobra.Command, args []string) error {
