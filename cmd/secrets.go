@@ -67,7 +67,10 @@ var secretsVersionsListCmd = &cobra.Command{
 	RunE:  runSecretsVersionsList,
 }
 
-var flagVersionsListFormat string
+var (
+	flagVersionsListFormat string
+	flagVersionsListURI    bool
+)
 
 // --- secrets versions add ---
 
@@ -92,6 +95,7 @@ var secretsListCmd = &cobra.Command{
 var (
 	flagSecretsFilter string
 	flagSecretsFormat string
+	flagSecretsURI    bool
 )
 
 // --- secrets describe ---
@@ -169,7 +173,6 @@ var secretsDeleteCmd = &cobra.Command{
 }
 
 var (
-	flagQuiet           bool
 	flagSecretsLocation string
 	flagDeleteEtag      string
 )
@@ -192,6 +195,7 @@ func init() {
 	secretsVersionsListCmd.Flags().StringVar(&flagSecretName, "secret", "", "Secret name (required)")
 	secretsVersionsListCmd.MarkFlagRequired("secret")
 	secretsVersionsListCmd.Flags().StringVar(&flagVersionsListFormat, "format", "", "Output format (e.g. json)")
+	secretsVersionsListCmd.Flags().BoolVar(&flagVersionsListURI, "uri", false, "Print resource names")
 	secretsVersionsListCmd.Flags().StringVar(&flagSecretsLocation, "location", "", "Secret Manager location (for regional secrets)")
 
 	// secrets versions add
@@ -201,6 +205,7 @@ func init() {
 	// secrets list
 	secretsListCmd.Flags().StringVar(&flagSecretsFilter, "filter", "", "Filter expression")
 	secretsListCmd.Flags().StringVar(&flagSecretsFormat, "format", "", "Output format (e.g. json, 'get(name)')")
+	secretsListCmd.Flags().BoolVar(&flagSecretsURI, "uri", false, "Print resource names")
 
 	// secrets versions describe/disable/enable/destroy
 	secretsVersionsDescribeCmd.Flags().StringVar(&flagSecretName, "secret", "", "Secret name (required)")
@@ -211,7 +216,7 @@ func init() {
 	secretsVersionsEnableCmd.MarkFlagRequired("secret")
 	secretsVersionsDestroyCmd.Flags().StringVar(&flagSecretName, "secret", "", "Secret name (required)")
 	secretsVersionsDestroyCmd.MarkFlagRequired("secret")
-	secretsVersionsDestroyCmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress confirmation prompt")
+	// --quiet is provided by the global persistent flag
 
 	// secrets update
 	secretsUpdateCmd.Flags().StringToStringVar(&flagSecretUpdateLabels, "update-labels", nil, "Labels to update (key=value)")
@@ -224,7 +229,7 @@ func init() {
 	secretsUpdateCmd.Flags().StringVar(&flagSecretRotationPeriod, "rotation-period", "", "Rotation period (e.g. 30d)")
 
 	// secrets delete
-	secretsDeleteCmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress confirmation prompt")
+	// --quiet is provided by the global persistent flag
 	secretsDeleteCmd.Flags().StringVar(&flagDeleteEtag, "etag", "", "Etag for optimistic concurrency")
 
 	// --location on all subcommands
@@ -264,7 +269,14 @@ func resolveProject() (string, error) {
 	}
 	project := config.Resolve(flagProject, "CLOUDSDK_CORE_PROJECT", props.Core.Project)
 	if project == "" {
-		return "", fmt.Errorf("project is required; set via --project flag, CLOUDSDK_CORE_PROJECT env, or config")
+		if !IsInteractive() {
+			return "", fmt.Errorf("project is required; set via --project flag, CLOUDSDK_CORE_PROJECT env, or config")
+		}
+		fmt.Print("Enter project: ")
+		fmt.Scanln(&project)
+		if project == "" {
+			return "", fmt.Errorf("project is required")
+		}
 	}
 	return project, nil
 }
@@ -342,6 +354,13 @@ func runSecretsVersionsList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	if flagVersionsListURI {
+		for _, v := range allVersions {
+			fmt.Println(v.Name)
+		}
+		return nil
 	}
 
 	if flagVersionsListFormat == "json" {
@@ -472,6 +491,14 @@ func runSecretsList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	// Handle --uri.
+	if flagSecretsURI {
+		for _, secret := range allSecrets {
+			fmt.Println(secret.Name)
+		}
+		return nil
 	}
 
 	// Handle --format.

@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +16,13 @@ var (
 	flagProject string
 	flagZone    string
 	flagAccount string
+	flagQuiet   bool
 )
+
+// IsInteractive returns true when stdin is a terminal (used for interactive prompts).
+func IsInteractive() bool {
+	return isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd())
+}
 
 var rootCmd = &cobra.Command{
 	Use:           "gcloud",
@@ -28,6 +36,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagProject, "project", "", "Google Cloud project ID")
 	rootCmd.PersistentFlags().StringVar(&flagZone, "zone", "", "Compute Engine zone")
 	rootCmd.PersistentFlags().StringVar(&flagAccount, "account", "", "Account to use for authentication")
+	rootCmd.PersistentFlags().BoolVar(&flagQuiet, "quiet", false, "Suppress all confirmation prompts")
 
 	rootCmd.SetVersionTemplate(versionTemplate())
 }

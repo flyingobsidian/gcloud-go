@@ -65,6 +65,7 @@ var (
 	flagWIPDisplayName string
 	flagWIPDescription string
 	flagWIPListFormat  string
+	flagWIPListURI     bool
 )
 
 // --- workload-identity-pools providers CRUD (#202) ---
@@ -108,6 +109,7 @@ var (
 	flagWIPProvAttrMapping   map[string]string
 	flagWIPProvIssuerURI     string
 	flagWIPProvDisplayName   string
+	flagWIPProvListURI       bool
 )
 
 var (
@@ -163,6 +165,7 @@ func init() {
 	wipCreateCmd.Flags().StringVar(&flagWIPDisplayName, "display-name", "", "Display name")
 	wipCreateCmd.Flags().StringVar(&flagWIPDescription, "description", "", "Description")
 	wipListCmd.Flags().StringVar(&flagWIPListFormat, "format", "", "Output format (e.g. json)")
+	wipListCmd.Flags().BoolVar(&flagWIPListURI, "uri", false, "Print resource names")
 	workloadIdentityPoolsCmd.AddCommand(wipCreateCmd)
 	workloadIdentityPoolsCmd.AddCommand(wipDescribeCmd)
 	workloadIdentityPoolsCmd.AddCommand(wipListCmd)
@@ -178,6 +181,7 @@ func init() {
 	wipProvCreateCmd.Flags().StringToStringVar(&flagWIPProvAttrMapping, "attribute-mapping", nil, "Attribute mapping (key=value)")
 	wipProvCreateCmd.Flags().StringVar(&flagWIPProvIssuerURI, "issuer-uri", "", "OIDC issuer URI")
 	wipProvCreateCmd.Flags().StringVar(&flagWIPProvDisplayName, "display-name", "", "Display name")
+	wipProvListCmd.Flags().BoolVar(&flagWIPProvListURI, "uri", false, "Print resource names")
 	wipProvidersCmd.AddCommand(wipProvCreateCmd)
 	wipProvidersCmd.AddCommand(wipProvDescribeCmd)
 	wipProvidersCmd.AddCommand(wipProvListCmd)
@@ -459,6 +463,13 @@ func runWIPList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
+	if flagWIPListURI {
+		for _, pool := range allPools {
+			fmt.Println(pool.Name)
+		}
+		return nil
+	}
+
 	if flagWIPListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -586,6 +597,13 @@ func runWIPProvList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	if flagWIPProvListURI {
+		for _, prov := range allProviders {
+			fmt.Println(prov.Name)
+		}
+		return nil
 	}
 
 	enc := json.NewEncoder(os.Stdout)

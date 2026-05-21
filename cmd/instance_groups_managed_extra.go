@@ -47,7 +47,10 @@ var managedListCmd = &cobra.Command{
 	RunE:  runManagedList,
 }
 
-var flagManagedListAllFormat string
+var (
+	flagManagedListAllFormat string
+	flagManagedListURI       bool
+)
 
 // --- managed update ---
 
@@ -130,6 +133,7 @@ func init() {
 
 	// list
 	managedListCmd.Flags().StringVar(&flagManagedListAllFormat, "format", "", "Output format (e.g. json)")
+	managedListCmd.Flags().BoolVar(&flagManagedListURI, "uri", false, "Print resource URIs")
 
 	// update
 	managedUpdateCmd.Flags().StringVar(&flagManagedUpdateRegion, "region", "", "Region")
@@ -295,6 +299,13 @@ func runManagedList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	if flagManagedListURI {
+		for _, m := range migs {
+			fmt.Println(m.SelfLink)
+		}
+		return nil
 	}
 
 	if flagManagedListAllFormat == "json" {

@@ -35,6 +35,7 @@ var monitoringPoliciesListCmd = &cobra.Command{
 var (
 	flagMonPoliciesFormat string
 	flagMonPoliciesFilter string
+	flagMonPoliciesURI    bool
 )
 
 // --- snoozes create ---
@@ -78,7 +79,10 @@ var monitoringSnoozesListCmd = &cobra.Command{
 	RunE:  runMonitoringSnoozesList,
 }
 
-var flagSnoozesListFormat string
+var (
+	flagSnoozesListFormat string
+	flagSnoozesListURI    bool
+)
 
 // --- snoozes update ---
 
@@ -159,7 +163,6 @@ var monitoringPoliciesDeleteCmd = &cobra.Command{
 	RunE:  runMonitoringPoliciesDelete,
 }
 
-var flagPolDeleteQuiet bool
 
 // --- channels ---
 
@@ -178,6 +181,7 @@ var monitoringChannelsListCmd = &cobra.Command{
 var (
 	flagChanListFormat string
 	flagChanListFilter string
+	flagChanListURI    bool
 )
 
 var monitoringChannelsDescribeCmd = &cobra.Command{
@@ -220,7 +224,6 @@ var monitoringChannelsDeleteCmd = &cobra.Command{
 	RunE:  runMonitoringChannelsDelete,
 }
 
-var flagChanDeleteQuiet bool
 
 // --- snoozes list filter ---
 var flagSnoozesListFilter string
@@ -228,6 +231,7 @@ var flagSnoozesListFilter string
 func init() {
 	monitoringPoliciesListCmd.Flags().StringVar(&flagMonPoliciesFormat, "format", "", "Output format (e.g. json)")
 	monitoringPoliciesListCmd.Flags().StringVar(&flagMonPoliciesFilter, "filter", "", "Filter expression")
+	monitoringPoliciesListCmd.Flags().BoolVar(&flagMonPoliciesURI, "uri", false, "Print resource names")
 
 	monitoringPoliciesCreateCmd.Flags().StringVar(&flagPolCreateFromFile, "policy-from-file", "", "JSON file with policy definition")
 	monitoringPoliciesCreateCmd.Flags().StringVar(&flagPolCreateDisplayName, "display-name", "", "Display name")
@@ -242,8 +246,6 @@ func init() {
 	monitoringPoliciesUpdateCmd.Flags().StringVar(&flagPolUpdateFields, "fields", "", "Comma-separated fields to update")
 	monitoringPoliciesUpdateCmd.Flags().StringSliceVar(&flagPolAddChannels, "add-notification-channels", nil, "Channels to add")
 	monitoringPoliciesUpdateCmd.Flags().StringSliceVar(&flagPolRemoveChannels, "remove-notification-channels", nil, "Channels to remove")
-
-	monitoringPoliciesDeleteCmd.Flags().BoolVar(&flagPolDeleteQuiet, "quiet", false, "Suppress confirmation")
 
 	monitoringPoliciesCmd.AddCommand(monitoringPoliciesListCmd)
 	monitoringPoliciesCmd.AddCommand(monitoringPoliciesDescribeCmd)
@@ -264,6 +266,7 @@ func init() {
 
 	monitoringSnoozesListCmd.Flags().StringVar(&flagSnoozesListFormat, "format", "", "Output format (e.g. json)")
 	monitoringSnoozesListCmd.Flags().StringVar(&flagSnoozesListFilter, "filter", "", "Filter expression")
+	monitoringSnoozesListCmd.Flags().BoolVar(&flagSnoozesListURI, "uri", false, "Print resource names")
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesListCmd)
 
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesDescribeCmd)
@@ -279,6 +282,7 @@ func init() {
 	// channels
 	monitoringChannelsListCmd.Flags().StringVar(&flagChanListFormat, "format", "", "Output format (e.g. json)")
 	monitoringChannelsListCmd.Flags().StringVar(&flagChanListFilter, "filter", "", "Filter expression")
+	monitoringChannelsListCmd.Flags().BoolVar(&flagChanListURI, "uri", false, "Print resource names")
 	monitoringChannelsCreateCmd.Flags().StringVar(&flagChanType, "type", "", "Channel type (required)")
 	monitoringChannelsCreateCmd.MarkFlagRequired("type")
 	monitoringChannelsCreateCmd.Flags().StringVar(&flagChanDisplayName, "display-name", "", "Display name")
@@ -286,7 +290,6 @@ func init() {
 	monitoringChannelsUpdateCmd.Flags().StringVar(&flagChanUpdateDisplayName, "display-name", "", "New display name")
 	monitoringChannelsUpdateCmd.Flags().StringToStringVar(&flagChanUpdateLabels, "channel-labels", nil, "Channel labels")
 	monitoringChannelsUpdateCmd.Flags().StringVar(&flagChanUpdateFields, "fields", "", "Comma-separated fields to update")
-	monitoringChannelsDeleteCmd.Flags().BoolVar(&flagChanDeleteQuiet, "quiet", false, "Suppress confirmation")
 	monitoringChannelsCmd.AddCommand(monitoringChannelsListCmd)
 	monitoringChannelsCmd.AddCommand(monitoringChannelsDescribeCmd)
 	monitoringChannelsCmd.AddCommand(monitoringChannelsCreateCmd)
@@ -330,6 +333,13 @@ func runMonitoringPoliciesList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	if flagMonPoliciesURI {
+		for _, policy := range allPolicies {
+			fmt.Println(policy.Name)
+		}
+		return nil
 	}
 
 	if flagMonPoliciesFormat == "json" {
@@ -461,6 +471,13 @@ func runMonitoringSnoozesList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	if flagSnoozesListURI {
+		for _, snooze := range allSnoozes {
+			fmt.Println(snooze.Name)
+		}
+		return nil
 	}
 
 	if flagSnoozesListFormat == "json" {
@@ -782,7 +799,7 @@ func runMonitoringPoliciesDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !flagPolDeleteQuiet {
+	if !flagQuiet {
 		fmt.Printf("You are about to delete alert policy [%s].\n", args[0])
 		fmt.Print("Do you want to continue (Y/n)? ")
 		var answer string
@@ -842,6 +859,13 @@ func runMonitoringChannelsList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	if flagChanListURI {
+		for _, ch := range allChannels {
+			fmt.Println(ch.Name)
+		}
+		return nil
 	}
 
 	if flagChanListFormat == "json" {
@@ -971,7 +995,7 @@ func runMonitoringChannelsDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !flagChanDeleteQuiet {
+	if !flagQuiet {
 		fmt.Printf("You are about to delete notification channel [%s].\n", args[0])
 		fmt.Print("Do you want to continue (Y/n)? ")
 		var answer string

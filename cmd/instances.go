@@ -48,7 +48,14 @@ func resolveProjectZone() (string, string, error) {
 		return "", "", fmt.Errorf("project is required; set via --project flag, CLOUDSDK_CORE_PROJECT env, or config")
 	}
 	if zone == "" {
-		return "", "", fmt.Errorf("zone is required; set via --zone flag, CLOUDSDK_COMPUTE_ZONE env, or config")
+		if !IsInteractive() {
+			return "", "", fmt.Errorf("zone is required; set via --zone flag, CLOUDSDK_COMPUTE_ZONE env, or config")
+		}
+		fmt.Print("Enter zone (e.g. us-central1-a): ")
+		fmt.Scanln(&zone)
+		if zone == "" {
+			return "", "", fmt.Errorf("zone is required")
+		}
 	}
 	return project, zone, nil
 }

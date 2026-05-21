@@ -141,6 +141,9 @@ var (
 	flagFRPortRange        string
 	flagFRListFilter       string
 	flagFRDeleteRegion     string
+	flagFRListURI          bool
+	flagAddressListURI     bool
+	flagAddressCreateAsync bool
 )
 
 func init() {
@@ -157,6 +160,7 @@ func init() {
 	// forwarding-rules
 	forwardingRulesListCmd.Flags().StringVar(&flagFRListFormat, "format", "", "Output format (e.g. json)")
 	forwardingRulesListCmd.Flags().StringVar(&flagFRListFilter, "filter", "", "Filter expression")
+	forwardingRulesListCmd.Flags().BoolVar(&flagFRListURI, "uri", false, "Print resource URIs")
 	forwardingRulesDescribeCmd.Flags().StringVar(&flagFRDescribeRegion, "region", "", "Region")
 	forwardingRulesCreateCmd.Flags().StringVar(&flagFRRegion, "region", "", "Region")
 	forwardingRulesCreateCmd.Flags().StringVar(&flagFRTarget, "target-pool", "", "Target pool")
@@ -180,7 +184,9 @@ func init() {
 	addressesCreateCmd.Flags().StringVar(&flagAddressAddresses, "addresses", "", "Specific IP address to reserve")
 	addressesCreateCmd.Flags().StringVar(&flagAddressDescription, "description", "", "Description for the address")
 	addressesCreateCmd.Flags().BoolVar(&flagAddressGlobal, "global", false, "Create a global address")
+	addressesCreateCmd.Flags().BoolVar(&flagAddressCreateAsync, "async", false, "Return immediately without waiting")
 	addressesListCmd.Flags().StringVar(&flagAddressListFormat, "format", "", "Output format (e.g. json)")
+	addressesListCmd.Flags().BoolVar(&flagAddressListURI, "uri", false, "Print resource URIs")
 	addressesDeleteCmd.Flags().StringVar(&flagAddrDeleteRegion, "region", "", "Region")
 	addressesDescribeCmd.Flags().StringVar(&flagAddrDescribeRegion, "region", "", "Region")
 	addressesCmd.AddCommand(addressesCreateCmd)
@@ -356,6 +362,13 @@ func runForwardingRulesList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
+	if flagFRListURI {
+		for _, fr := range allRules {
+			fmt.Println(fr.SelfLink)
+		}
+		return nil
+	}
+
 	if flagFRListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -417,6 +430,10 @@ func runAddressesCreate(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating global address: %w", err)
 		}
+		if flagAddressCreateAsync {
+			fmt.Printf("Create operation started for [%s]: %s\n", name, op.Name)
+			return nil
+		}
 		if err := waitForGlobalOp(ctx, svc, project, op.Name); err != nil {
 			return err
 		}
@@ -439,6 +456,11 @@ func runAddressesCreate(cmd *cobra.Command, args []string) error {
 	op, err := svc.Addresses.Insert(project, region, addr).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating address: %w", err)
+	}
+
+	if flagAddressCreateAsync {
+		fmt.Printf("Create operation started for [%s]: %s\n", name, op.Name)
+		return nil
 	}
 
 	if err := waitForRegionOp(ctx, svc, project, region, op.Name); err != nil {
@@ -479,6 +501,13 @@ func runAddressesList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	if flagAddressListURI {
+		for _, a := range allAddrs {
+			fmt.Println(a.SelfLink)
+		}
+		return nil
 	}
 
 	if flagAddressListFormat == "json" {

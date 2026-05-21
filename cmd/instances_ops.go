@@ -12,10 +12,10 @@ import (
 // --- instances reset ---
 
 var instancesResetCmd = &cobra.Command{
-	Use:   "reset INSTANCE_NAME",
+	Use:   "reset INSTANCE_NAME [INSTANCE_NAME ...]",
 	Short: "Reset a Compute Engine instance",
 	Long:  "Perform a hard reboot of an instance (distinct from stop+start).",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  runInstancesReset,
 }
 
@@ -40,8 +40,9 @@ var instancesGetSerialPortOutputCmd = &cobra.Command{
 }
 
 var (
-	flagSerialPort  int64
-	flagSerialStart int64
+	flagSerialPort   int64
+	flagSerialStart  int64
+	flagResetAsync   bool
 )
 
 func init() {
@@ -51,13 +52,13 @@ func init() {
 	instancesGetSerialPortOutputCmd.Flags().Int64Var(&flagSerialPort, "port", 1, "Serial port number (1-4)")
 	instancesGetSerialPortOutputCmd.Flags().Int64Var(&flagSerialStart, "start", 0, "Byte offset to start reading from")
 
+	instancesResetCmd.Flags().BoolVar(&flagResetAsync, "async", false, "Return immediately without waiting")
 	instancesCmd.AddCommand(instancesResetCmd)
 	instancesCmd.AddCommand(instancesSetMachineTypeCmd)
 	instancesCmd.AddCommand(instancesGetSerialPortOutputCmd)
 }
 
 func runInstancesReset(cmd *cobra.Command, args []string) error {
-	instance := args[0]
 	project, zone, err := resolveProjectZone()
 	if err != nil {
 		return err
@@ -69,16 +70,23 @@ func runInstancesReset(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Resetting instance [%s] in zone [%s]...\n", instance, zone)
-	op, err := svc.Instances.Reset(project, zone, instance).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("resetting instance: %w", err)
-	}
+	for _, instance := range args {
+		fmt.Printf("Resetting instance [%s] in zone [%s]...\n", instance, zone)
+		op, err := svc.Instances.Reset(project, zone, instance).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("resetting instance %s: %w", instance, err)
+		}
 
-	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
-		return err
+		if flagResetAsync {
+			fmt.Printf("Reset operation started for [%s]: %s\n", instance, op.Name)
+			continue
+		}
+
+		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
+			return err
+		}
+		fmt.Printf("Reset instance [%s].\n", instance)
 	}
-	fmt.Printf("Reset instance [%s].\n", instance)
 	return nil
 }
 
