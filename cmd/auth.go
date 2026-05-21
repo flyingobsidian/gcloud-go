@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -39,6 +40,13 @@ Use --all to revoke all accounts.`,
 
 var flagAuthRevokeAll bool
 
+var authPrintAccessTokenCmd = &cobra.Command{
+	Use:   "print-access-token [ACCOUNT]",
+	Short: "Print an access token for the specified account",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runAuthPrintAccessToken,
+}
+
 var (
 	flagCredFile  string
 	flagBrief     bool
@@ -56,6 +64,7 @@ func init() {
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authListCmd)
 	authCmd.AddCommand(authRevokeCmd)
+	authCmd.AddCommand(authPrintAccessTokenCmd)
 	rootCmd.AddCommand(authCmd)
 }
 
@@ -193,6 +202,27 @@ func runAuthRevoke(cmd *cobra.Command, args []string) error {
 		_ = props.Save()
 	}
 
+	return nil
+}
+
+func runAuthPrintAccessToken(cmd *cobra.Command, args []string) error {
+	account := flagAccount
+	if len(args) > 0 {
+		account = args[0]
+	}
+
+	ctx := context.Background()
+	ts, err := auth.TokenSource(ctx, account, "https://www.googleapis.com/auth/cloud-platform")
+	if err != nil {
+		return fmt.Errorf("obtaining credentials: %w", err)
+	}
+
+	token, err := ts.Token()
+	if err != nil {
+		return fmt.Errorf("generating access token: %w", err)
+	}
+
+	fmt.Println(token.AccessToken)
 	return nil
 }
 
