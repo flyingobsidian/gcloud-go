@@ -40,6 +40,20 @@ Use --all to revoke all accounts.`,
 
 var flagAuthRevokeAll bool
 
+var authActivateServiceAccountCmd = &cobra.Command{
+	Use:   "activate-service-account [ACCOUNT]",
+	Short: "Authorize access using a service account key file",
+	Long: `Activate credentials for a service account using a JSON key file.
+
+Example:
+  gcloud auth activate-service-account --key-file=sa-key.json
+  gcloud auth activate-service-account user@project.iam.gserviceaccount.com --key-file=sa-key.json`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runAuthActivateServiceAccount,
+}
+
+var flagActivateSAKeyFile string
+
 var authPrintAccessTokenCmd = &cobra.Command{
 	Use:   "print-access-token [ACCOUNT]",
 	Short: "Print an access token for the specified account",
@@ -61,10 +75,14 @@ func init() {
 
 	authRevokeCmd.Flags().BoolVar(&flagAuthRevokeAll, "all", false, "Revoke credentials for all accounts")
 
+	authActivateServiceAccountCmd.Flags().StringVar(&flagActivateSAKeyFile, "key-file", "", "Path to service account JSON key file")
+	authActivateServiceAccountCmd.MarkFlagRequired("key-file")
+
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authListCmd)
 	authCmd.AddCommand(authRevokeCmd)
 	authCmd.AddCommand(authPrintAccessTokenCmd)
+	authCmd.AddCommand(authActivateServiceAccountCmd)
 	rootCmd.AddCommand(authCmd)
 }
 
@@ -202,6 +220,30 @@ func runAuthRevoke(cmd *cobra.Command, args []string) error {
 		_ = props.Save()
 	}
 
+	return nil
+}
+
+func runAuthActivateServiceAccount(cmd *cobra.Command, args []string) error {
+	store, err := auth.NewStore()
+	if err != nil {
+		return fmt.Errorf("initializing credential store: %w", err)
+	}
+
+	account, err := store.Store(flagActivateSAKeyFile)
+	if err != nil {
+		return fmt.Errorf("storing credential: %w", err)
+	}
+
+	props, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	props.Core.Account = account
+	if err := props.Save(); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	fmt.Printf("Activated service account credentials for: [%s]\n", account)
 	return nil
 }
 
