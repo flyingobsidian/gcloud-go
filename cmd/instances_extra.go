@@ -60,8 +60,10 @@ var (
 	flagMetadata       map[string]string
 	flagMetadataFromFile map[string]string
 	flagServiceAccountEmail string
-	flagScopes         []string
-	flagNoAddress      bool
+	flagScopes           []string
+	flagNoAddress        bool
+	flagPreemptible      bool
+	flagProvisioningModel string
 )
 
 // --- instances delete ---
@@ -103,6 +105,8 @@ func init() {
 	instancesCreateCmd.Flags().StringVar(&flagServiceAccountEmail, "service-account", "", "Service account email")
 	instancesCreateCmd.Flags().StringSliceVar(&flagScopes, "scopes", nil, "Service account scopes")
 	instancesCreateCmd.Flags().BoolVar(&flagNoAddress, "no-address", false, "No external IP address")
+	instancesCreateCmd.Flags().BoolVar(&flagPreemptible, "preemptible", false, "Create a preemptible instance")
+	instancesCreateCmd.Flags().StringVar(&flagProvisioningModel, "provisioning-model", "", "Provisioning model: STANDARD or SPOT")
 	instancesCmd.AddCommand(instancesCreateCmd)
 
 	// delete
@@ -254,6 +258,18 @@ func runInstancesCreate(cmd *cobra.Command, args []string) error {
 			sa.Scopes = []string{"https://www.googleapis.com/auth/cloud-platform"}
 		}
 		inst.ServiceAccounts = []*compute.ServiceAccount{sa}
+	}
+
+	if flagPreemptible || flagProvisioningModel != "" {
+		if inst.Scheduling == nil {
+			inst.Scheduling = &compute.Scheduling{}
+		}
+		if flagPreemptible {
+			inst.Scheduling.Preemptible = true
+		}
+		if flagProvisioningModel != "" {
+			inst.Scheduling.ProvisioningModel = flagProvisioningModel
+		}
 	}
 
 	fmt.Printf("Creating instance [%s] in zone [%s]...\n", instance, zone)
