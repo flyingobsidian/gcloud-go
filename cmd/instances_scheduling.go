@@ -12,18 +12,18 @@ import (
 // --- instances suspend ---
 
 var instancesSuspendCmd = &cobra.Command{
-	Use:   "suspend INSTANCE_NAME",
+	Use:   "suspend INSTANCE_NAME [INSTANCE_NAME ...]",
 	Short: "Suspend a Compute Engine instance",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  runInstancesSuspend,
 }
 
 // --- instances resume ---
 
 var instancesResumeCmd = &cobra.Command{
-	Use:   "resume INSTANCE_NAME",
+	Use:   "resume INSTANCE_NAME [INSTANCE_NAME ...]",
 	Short: "Resume a suspended Compute Engine instance",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  runInstancesResume,
 }
 
@@ -56,7 +56,6 @@ func init() {
 }
 
 func runInstancesSuspend(cmd *cobra.Command, args []string) error {
-	instance := args[0]
 	project, zone, err := resolveProjectZone()
 	if err != nil {
 		return err
@@ -68,26 +67,27 @@ func runInstancesSuspend(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Suspending instance [%s] in zone [%s]...\n", instance, zone)
-	op, err := svc.Instances.Suspend(project, zone, instance).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("suspending instance: %w", err)
-	}
+	for _, instance := range args {
+		fmt.Printf("Suspending instance [%s] in zone [%s]...\n", instance, zone)
+		op, err := svc.Instances.Suspend(project, zone, instance).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("suspending instance %s: %w", instance, err)
+		}
 
-	if flagAsync {
-		fmt.Printf("Suspend operation started: %s\n", op.Name)
-		return nil
-	}
+		if flagAsync {
+			fmt.Printf("Suspend operation started: %s\n", op.Name)
+			continue
+		}
 
-	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
-		return err
+		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
+			return err
+		}
+		fmt.Printf("Suspended instance [%s].\n", instance)
 	}
-	fmt.Printf("Suspended instance [%s].\n", instance)
 	return nil
 }
 
 func runInstancesResume(cmd *cobra.Command, args []string) error {
-	instance := args[0]
 	project, zone, err := resolveProjectZone()
 	if err != nil {
 		return err
@@ -99,21 +99,23 @@ func runInstancesResume(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Resuming instance [%s] in zone [%s]...\n", instance, zone)
-	op, err := svc.Instances.Resume(project, zone, instance).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("resuming instance: %w", err)
-	}
+	for _, instance := range args {
+		fmt.Printf("Resuming instance [%s] in zone [%s]...\n", instance, zone)
+		op, err := svc.Instances.Resume(project, zone, instance).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("resuming instance %s: %w", instance, err)
+		}
 
-	if flagAsync {
-		fmt.Printf("Resume operation started: %s\n", op.Name)
-		return nil
-	}
+		if flagAsync {
+			fmt.Printf("Resume operation started: %s\n", op.Name)
+			continue
+		}
 
-	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
-		return err
+		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
+			return err
+		}
+		fmt.Printf("Resumed instance [%s].\n", instance)
 	}
-	fmt.Printf("Resumed instance [%s].\n", instance)
 	return nil
 }
 

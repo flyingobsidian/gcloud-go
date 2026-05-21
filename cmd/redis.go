@@ -68,7 +68,6 @@ var redisInstancesDeleteCmd = &cobra.Command{
 	RunE:  runRedisInstancesDelete,
 }
 
-var flagRedisDeleteQuiet bool
 
 // --- redis instances update (#193) ---
 
@@ -120,6 +119,7 @@ var (
 	flagRedisListFormat string
 	flagRedisListFilter string
 	flagRedisListLimit  int64
+	flagRedisListURI    bool
 )
 
 func init() {
@@ -128,6 +128,7 @@ func init() {
 	redisInstancesListCmd.Flags().StringVar(&flagRedisListFormat, "format", "", "Output format (json)")
 	redisInstancesListCmd.Flags().StringVar(&flagRedisListFilter, "filter", "", "Filter expression")
 	redisInstancesListCmd.Flags().Int64Var(&flagRedisListLimit, "limit", 0, "Maximum number of results")
+	redisInstancesListCmd.Flags().BoolVar(&flagRedisListURI, "uri", false, "Print resource names")
 
 	redisInstancesCreateCmd.Flags().StringVar(&flagRedisRegion, "region", "", "Region")
 	redisInstancesCreateCmd.Flags().Int64Var(&flagRedisSize, "size", 1, "Memory size in GiB")
@@ -141,8 +142,6 @@ func init() {
 	redisInstancesCreateCmd.Flags().StringToStringVar(&flagRedisLabels, "labels", nil, "Labels (key=value)")
 
 	redisInstancesDeleteCmd.Flags().StringVar(&flagRedisRegion, "region", "", "Region")
-	redisInstancesDeleteCmd.Flags().BoolVar(&flagRedisDeleteQuiet, "quiet", false, "Suppress confirmation")
-
 	redisInstancesUpdateCmd.Flags().StringVar(&flagRedisRegion, "region", "", "Region")
 	redisInstancesUpdateCmd.Flags().Int64Var(&flagRedisUpdateSize, "size", 0, "New memory size in GiB")
 	redisInstancesUpdateCmd.Flags().StringToStringVar(&flagRedisUpdateConfig, "redis-config", nil, "Redis config")
@@ -253,6 +252,13 @@ func runRedisInstancesList(cmd *cobra.Command, args []string) error {
 	}
 	if flagRedisListLimit > 0 && int64(len(allInstances)) > flagRedisListLimit {
 		allInstances = allInstances[:flagRedisListLimit]
+	}
+
+	if flagRedisListURI {
+		for _, inst := range allInstances {
+			fmt.Println(inst.Name)
+		}
+		return nil
 	}
 
 	if flagRedisListFormat == "json" {
@@ -368,7 +374,7 @@ func runRedisInstancesDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !flagRedisDeleteQuiet {
+	if !flagQuiet {
 		fmt.Printf("You are about to delete Redis instance [%s]. This action cannot be undone.\n", args[0])
 		fmt.Print("Do you want to continue (Y/n)? ")
 		var answer string

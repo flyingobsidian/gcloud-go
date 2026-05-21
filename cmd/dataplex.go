@@ -71,7 +71,10 @@ var dataplexDatascansListCmd = &cobra.Command{
 	RunE:  runDataplexDatascansList,
 }
 
-var flagDataplexListFormat string
+var (
+	flagDataplexListFormat string
+	flagDataplexListURI    bool
+)
 
 // --- datascans create ---
 
@@ -96,13 +99,12 @@ var dataplexDatascansDeleteCmd = &cobra.Command{
 	RunE:  runDataplexDatascansDelete,
 }
 
-var flagDataplexQuiet bool
-
 var (
 	flagDataplexLocation  string
 	flagDataplexDatascan  string
 	flagDataplexJobFormat string
 	flagDataplexJobView   string
+	flagDataplexJobURI    bool
 )
 
 func init() {
@@ -112,6 +114,7 @@ func init() {
 	dataplexDatascansJobsListCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
 	dataplexDatascansJobsListCmd.Flags().StringVar(&flagDataplexDatascan, "datascan", "", "Data scan ID")
 	dataplexDatascansJobsListCmd.Flags().StringVar(&flagDataplexJobFormat, "format", "", "Output format (e.g. json)")
+	dataplexDatascansJobsListCmd.Flags().BoolVar(&flagDataplexJobURI, "uri", false, "Print resource names")
 
 	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
 	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexDatascan, "datascan", "", "Data scan ID")
@@ -120,12 +123,13 @@ func init() {
 	dataplexDatascansDescribeCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
 	dataplexDatascansListCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scans")
 	dataplexDatascansListCmd.Flags().StringVar(&flagDataplexListFormat, "format", "", "Output format (e.g. json)")
+	dataplexDatascansListCmd.Flags().BoolVar(&flagDataplexListURI, "uri", false, "Print resource names")
 	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
 	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexDataSource, "data-source", "", "Data source entity (required)")
 	dataplexDatascansCreateCmd.MarkFlagRequired("data-source")
 	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexScanType, "type", "data-quality", "Scan type (data-quality or data-profile)")
 	dataplexDatascansDeleteCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
-	dataplexDatascansDeleteCmd.Flags().BoolVar(&flagDataplexQuiet, "quiet", false, "Suppress confirmation prompt")
+	// --quiet is provided by the global persistent flag
 
 	dataplexDatascansJobsCmd.AddCommand(dataplexDatascansJobsListCmd)
 	dataplexDatascansJobsCmd.AddCommand(dataplexDatascansJobsDescribeCmd)
@@ -215,6 +219,13 @@ func runDataplexDatascansJobsList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	if flagDataplexJobURI {
+		for _, job := range allJobs {
+			fmt.Println(job.Name)
+		}
+		return nil
 	}
 
 	if flagDataplexJobFormat == "json" {
@@ -314,6 +325,13 @@ func runDataplexDatascansList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
+	if flagDataplexListURI {
+		for _, ds := range allScans {
+			fmt.Println(ds.Name)
+		}
+		return nil
+	}
+
 	if flagDataplexListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -376,7 +394,7 @@ func runDataplexDatascansDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !flagDataplexQuiet {
+	if !flagQuiet {
 		fmt.Printf("You are about to delete data scan [%s]. This action cannot be undone.\n", args[0])
 		fmt.Print("Do you want to continue (Y/n)? ")
 		var answer string

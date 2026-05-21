@@ -63,6 +63,7 @@ var (
 	flagDataflowListFormat    string
 	flagDataflowListFilter    string
 	flagDataflowListStatus    string
+	flagDataflowListURI       bool
 	flagDataflowCreatedAfter  string
 	flagDataflowCreatedBefore string
 	flagDataflowDescribeFull  bool
@@ -84,6 +85,7 @@ func init() {
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListFormat, "format", "", "Output format (e.g. json)")
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListFilter, "filter", "", "Client-side filter by job name (substring match)")
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowListStatus, "status", "", "Server-side status filter: active, all, or terminated")
+	dataflowJobsListCmd.Flags().BoolVar(&flagDataflowListURI, "uri", false, "Print resource names")
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowCreatedAfter, "created-after", "", "Filter jobs created after this time (RFC 3339)")
 	dataflowJobsListCmd.Flags().StringVar(&flagDataflowCreatedBefore, "created-before", "", "Filter jobs created before this time (RFC 3339)")
 
@@ -171,6 +173,13 @@ func runDataflowJobsList(cmd *cobra.Command, args []string) error {
 
 	// Client-side filters.
 	allJobs = filterDataflowJobs(allJobs)
+
+	if flagDataflowListURI {
+		for _, job := range allJobs {
+			fmt.Println(job.Id)
+		}
+		return nil
+	}
 
 	if flagDataflowListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)

@@ -60,7 +60,10 @@ var schedulerJobsListCmd = &cobra.Command{
 	RunE:  runSchedulerJobsList,
 }
 
-var flagSchedulerListFormat string
+var (
+	flagSchedulerListFormat string
+	flagSchedulerListURI    bool
+)
 
 // --- scheduler jobs create (#198) ---
 
@@ -106,7 +109,6 @@ var schedulerJobsDeleteCmd = &cobra.Command{
 	RunE:  runSchedulerJobsDelete,
 }
 
-var flagSchedDeleteQuiet bool
 
 // --- scheduler jobs update (#200) ---
 
@@ -144,6 +146,7 @@ func init() {
 	}
 
 	schedulerJobsListCmd.Flags().StringVar(&flagSchedulerListFormat, "format", "", "Output format (e.g. json)")
+	schedulerJobsListCmd.Flags().BoolVar(&flagSchedulerListURI, "uri", false, "Print resource names")
 
 	// create common flags
 	for _, c := range []*cobra.Command{schedulerJobsCreateHTTPCmd, schedulerJobsCreatePubsubCmd} {
@@ -183,8 +186,6 @@ func init() {
 	schedulerJobsUpdatePubsubCmd.Flags().StringToStringVar(&flagSchedAttributes, "attributes", nil, "Message attributes")
 	schedulerJobsUpdateCmd.AddCommand(schedulerJobsUpdateHTTPCmd)
 	schedulerJobsUpdateCmd.AddCommand(schedulerJobsUpdatePubsubCmd)
-
-	schedulerJobsDeleteCmd.Flags().BoolVar(&flagSchedDeleteQuiet, "quiet", false, "Suppress confirmation")
 
 	schedulerJobsCmd.AddCommand(schedulerJobsDescribeCmd)
 	schedulerJobsCmd.AddCommand(schedulerJobsListCmd)
@@ -337,6 +338,13 @@ func runSchedulerJobsList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
+	if flagSchedulerListURI {
+		for _, job := range allJobs {
+			fmt.Println(job.Name)
+		}
+		return nil
+	}
+
 	if flagSchedulerListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -458,7 +466,7 @@ func runSchedulerJobsDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !flagSchedDeleteQuiet {
+	if !flagQuiet {
 		fmt.Printf("You are about to delete scheduler job [%s].\n", args[0])
 		fmt.Print("Do you want to continue (Y/n)? ")
 		var answer string

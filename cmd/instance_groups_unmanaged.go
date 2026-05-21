@@ -53,7 +53,10 @@ var unmanagedListCmd = &cobra.Command{
 	RunE:  runUnmanagedList,
 }
 
-var flagUnmanagedListFormat string
+var (
+	flagUnmanagedListFormat string
+	flagUnmanagedListURI    bool
+)
 
 // --- unmanaged describe ---
 
@@ -91,6 +94,7 @@ func init() {
 	unmanagedRemoveInstancesCmd.MarkFlagRequired("instances")
 
 	unmanagedListCmd.Flags().StringVar(&flagUnmanagedListFormat, "format", "", "Output format (e.g. json)")
+	unmanagedListCmd.Flags().BoolVar(&flagUnmanagedListURI, "uri", false, "Print resource URIs")
 
 	unmanagedSetNamedPortsCmd.Flags().StringSliceVar(&flagNamedPorts, "named-ports", nil, "Named ports (NAME:PORT,...)")
 	unmanagedSetNamedPortsCmd.MarkFlagRequired("named-ports")
@@ -219,6 +223,13 @@ func runUnmanagedList(cmd *cobra.Command, args []string) error {
 			break
 		}
 		pageToken = resp.NextPageToken
+	}
+
+	if flagUnmanagedListURI {
+		for _, g := range groups {
+			fmt.Println(g.SelfLink)
+		}
+		return nil
 	}
 
 	if flagUnmanagedListFormat == "json" {

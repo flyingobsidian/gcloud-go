@@ -61,8 +61,9 @@ var artifactsDockerImagesListCmd = &cobra.Command{
 }
 
 var (
-	flagArtImgListFormat       string
-	flagArtImgListIncludeTags  bool
+	flagArtImgListFormat      string
+	flagArtImgListIncludeTags bool
+	flagArtImgListURI         bool
 )
 
 // --- artifacts docker images describe (#187) ---
@@ -83,7 +84,6 @@ var artifactsDockerImagesDeleteCmd = &cobra.Command{
 	RunE:  runArtifactsDockerImagesDelete,
 }
 
-var flagArtImgDeleteQuiet bool
 
 // --- scan extra flags (#189, #190) ---
 
@@ -106,9 +106,8 @@ func init() {
 
 	artifactsDockerImagesListCmd.Flags().StringVar(&flagArtImgListFormat, "format", "", "Output format (e.g. json)")
 	artifactsDockerImagesListCmd.Flags().BoolVar(&flagArtImgListIncludeTags, "include-tags", false, "Include image tags")
+	artifactsDockerImagesListCmd.Flags().BoolVar(&flagArtImgListURI, "uri", false, "Print resource names")
 	artifactsDockerImagesDescribeCmd.Flags().StringVar(&flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
-	artifactsDockerImagesDeleteCmd.Flags().BoolVar(&flagArtImgDeleteQuiet, "quiet", false, "Suppress confirmation prompt")
-
 	artifactsDockerImagesCmd.AddCommand(artifactsScanCmd)
 	artifactsDockerImagesCmd.AddCommand(artifactsListVulnerabilitiesCmd)
 	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesListCmd)
@@ -284,6 +283,13 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
+	if flagArtImgListURI {
+		for _, img := range allImages {
+			fmt.Println(img.Name)
+		}
+		return nil
+	}
+
 	if flagArtImgListFormat == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -354,7 +360,7 @@ func parseArtifactImageName(image string) (string, error) {
 // --- artifacts docker images delete (#188) ---
 
 func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
-	if !flagArtImgDeleteQuiet {
+	if !flagQuiet {
 		fmt.Printf("You are about to delete image [%s].\n", args[0])
 		fmt.Print("Do you want to continue (Y/n)? ")
 		var answer string

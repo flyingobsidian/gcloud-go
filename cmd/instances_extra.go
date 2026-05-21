@@ -12,6 +12,7 @@ import (
 	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
+	"gopkg.in/yaml.v3"
 )
 
 // --- instances describe ---
@@ -90,9 +91,9 @@ var instancesDeleteCmd = &cobra.Command{
 }
 
 var (
-	flagDeleteQuiet bool
 	flagDeleteDisks string
 	flagKeepDisks   string
+	flagDeleteAsync bool
 )
 
 func init() {
@@ -138,9 +139,10 @@ func init() {
 	instancesCmd.AddCommand(instancesCreateCmd)
 
 	// delete
-	instancesDeleteCmd.Flags().BoolVar(&flagDeleteQuiet, "quiet", false, "Suppress confirmation prompt")
+	// --quiet is provided by the global persistent flag
 	instancesDeleteCmd.Flags().StringVar(&flagDeleteDisks, "delete-disks", "", "Disk types to delete: all, data, or boot")
 	instancesDeleteCmd.Flags().StringVar(&flagKeepDisks, "keep-disks", "", "Disk types to keep: all, data, or boot")
+	instancesDeleteCmd.Flags().BoolVar(&flagDeleteAsync, "async", false, "Return immediately without waiting")
 	instancesCmd.AddCommand(instancesDeleteCmd)
 }
 
@@ -433,7 +435,7 @@ func runInstancesDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !flagDeleteQuiet {
+	if !flagQuiet {
 		fmt.Printf("The following instances will be deleted: %v\n", args)
 		fmt.Print("Do you want to continue (Y/n)? ")
 		var answer string
@@ -480,6 +482,11 @@ func runInstancesDelete(cmd *cobra.Command, args []string) error {
 		op, err := svc.Instances.Delete(project, zone, instance).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("deleting instance %s: %w", instance, err)
+		}
+
+		if flagDeleteAsync {
+			fmt.Printf("Delete operation started for [%s]: %s\n", instance, op.Name)
+			continue
 		}
 
 		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
@@ -574,9 +581,127 @@ func formatOutput(v any, format string) error {
 			return nil
 		}
 	}
+	if format == "yaml" {
+		return yamlEncode(v)
+	}
+	if isTableFormat(format) {
+		return tableEncode(v, extractTableFields(format))
+	}
+	if isValueFormat(format) {
+		return valueEncode(v, extractValueFields(format))
+	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+func isTableFormat(format string) bool {
+	return len(format) > 7 && strings.HasPrefix(format, "table(") && format[len(format)-1] == ')'
+}
+
+func extractTableFields(format string) []string {
+	inner := format[6 : len(format)-1]
+	var fields []string
+	for _, f := range strings.Split(inner, ",") {
+		fields = append(fields, strings.TrimSpace(f))
+	}
+	return fields
+}
+
+func isValueFormat(format string) bool {
+	return len(format) > 7 && strings.HasPrefix(format, "value(") && format[len(format)-1] == ')'
+}
+
+func extractValueFields(format string) []string {
+	inner := format[6 : len(format)-1]
+	var fields []string
+	for _, f := range strings.Split(inner, ",") {
+		fields = append(fields, strings.TrimSpace(f))
+	}
+	return fields
+}
+
+func yamlEncode(v any) error {
+	// Convert through JSON to get a clean map representation.
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	var m any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	out, err := yaml.Marshal(m)
+	if err != nil {
+		return err
+	}
+	fmt.Print(string(out))
+	return nil
+}
+
+func tableEncode(v any, fields []string) error {
+	// Print header.
+	fmt.Println(strings.Join(fields, "\t"))
+	// Extract values from JSON representation.
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		// Might be a list — try printing each item.
+		var items []map[string]any
+		if err := json.Unmarshal(data, &items); err != nil {
+			return fmt.Errorf("table format requires object or array output")
+		}
+		for _, item := range items {
+			printTableRow(item, fields)
+		}
+		return nil
+	}
+	printTableRow(m, fields)
+	return nil
+}
+
+func printTableRow(m map[string]any, fields []string) {
+	var vals []string
+	for _, f := range fields {
+		vals = append(vals, jsonFieldValue(m, f))
+	}
+	fmt.Println(strings.Join(vals, "\t"))
+}
+
+func valueEncode(v any, fields []string) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return fmt.Errorf("value format requires object output")
+	}
+	for _, f := range fields {
+		fmt.Println(jsonFieldValue(m, f))
+	}
+	return nil
+}
+
+func jsonFieldValue(m map[string]any, field string) string {
+	// Support dotted paths like "networkInterfaces[0].networkIP".
+	parts := strings.Split(field, ".")
+	var current any = m
+	for _, part := range parts {
+		switch c := current.(type) {
+		case map[string]any:
+			current = c[part]
+		default:
+			return ""
+		}
+	}
+	if current == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", current)
 }
 
 func isGetFormat(format string) bool {
