@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+func TestRoleResourceName(t *testing.T) {
+	got := roleResourceName("my-project", "myRole")
+	want := "projects/my-project/roles/myRole"
+	if got != want {
+		t.Errorf("roleResourceName() = %q, want %q", got, want)
+	}
+}
+
 func TestBuildCreateRoleRequest(t *testing.T) {
 	flagRoleTitle = "My Role"
 	flagRoleDescription = "does things"

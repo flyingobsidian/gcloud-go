@@ -23,6 +23,13 @@ var roleCreateCmd = &cobra.Command{
 	RunE:  runRolesCreate,
 }
 
+var roleDeleteCmd = &cobra.Command{
+	Use:   "delete ROLE_ID",
+	Short: "Delete a custom IAM role",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runRolesDelete,
+}
+
 var (
 	flagRoleTitle       string
 	flagRoleDescription string
@@ -36,7 +43,14 @@ func init() {
 	roleCreateCmd.Flags().StringSliceVar(&flagRolePermissions, "permissions", nil, "Comma-separated list of permissions the role grants")
 	roleCreateCmd.Flags().StringVar(&flagRoleStage, "stage", "", "Launch stage: ALPHA, BETA, GA, DEPRECATED, DISABLED, or EAP")
 	rolesCmd.AddCommand(roleCreateCmd)
+	rolesCmd.AddCommand(roleDeleteCmd)
 	iamCmd.AddCommand(rolesCmd)
+}
+
+// roleResourceName returns the full resource name for a project-level custom
+// role, e.g. projects/my-project/roles/myRole.
+func roleResourceName(project, roleID string) string {
+	return fmt.Sprintf("projects/%s/roles/%s", project, roleID)
 }
 
 // buildCreateRoleRequest builds the API request from the role ID and the
@@ -70,5 +84,26 @@ func runRolesCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Created role [%s].\n", args[0])
+	return yamlEncode(role)
+}
+
+func runRolesDelete(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	svc, err := gcp.IAMService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+
+	role, err := svc.Projects.Roles.Delete(roleResourceName(project, args[0])).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("deleting role: %w", err)
+	}
+
+	fmt.Printf("Deleted role [%s].\n", args[0])
 	return yamlEncode(role)
 }
