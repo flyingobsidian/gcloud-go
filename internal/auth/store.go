@@ -3,6 +3,7 @@ package auth
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -249,21 +250,21 @@ func (s *CredentialStore) Revoke(account string) error {
 		return fmt.Errorf("account name %q contains path separators", account)
 	}
 
-	var errs []string
+	var errs []error
 
 	// Remove from SQLite.
 	if err := s.deleteFromSQLite(account); err != nil {
-		errs = append(errs, fmt.Sprintf("sqlite: %v", err))
+		errs = append(errs, fmt.Errorf("sqlite: %w", err))
 	}
 
 	// Remove JSON file.
 	jsonPath := filepath.Join(s.configDir, "credentials", account+".json")
 	if err := os.Remove(jsonPath); err != nil && !os.IsNotExist(err) {
-		errs = append(errs, fmt.Sprintf("json file: %v", err))
+		errs = append(errs, fmt.Errorf("json file: %w", err))
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("revoking %s: %s", account, strings.Join(errs, "; "))
+		return fmt.Errorf("revoking %s: %w", account, errors.Join(errs...))
 	}
 	return nil
 }
