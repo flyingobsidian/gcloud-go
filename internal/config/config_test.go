@@ -222,3 +222,26 @@ func TestConfigDir(t *testing.T) {
 		}
 	})
 }
+
+func TestDeleteActiveConfigurationResetsToDefault(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLOUDSDK_CONFIG", dir)
+
+	if err := CreateConfiguration("temp"); err != nil {
+		t.Fatalf("CreateConfiguration: %v", err)
+	}
+	if err := ActivateConfiguration("temp"); err != nil {
+		t.Fatalf("ActivateConfiguration: %v", err)
+	}
+	if got := ActiveConfigName(); got != "temp" {
+		t.Fatalf("active config = %q, want temp", got)
+	}
+
+	if err := DeleteConfiguration("temp"); err != nil {
+		t.Fatalf("DeleteConfiguration returned error: %v", err)
+	}
+
+	if got := ActiveConfigName(); got != "default" {
+		t.Errorf("active config after delete = %q, want default", got)
+	}
+}
