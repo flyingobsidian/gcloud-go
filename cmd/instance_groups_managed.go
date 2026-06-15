@@ -60,7 +60,7 @@ var (
 func init() {
 	// list-instances
 	managedListInstancesCmd.Flags().StringVar(&flagManagedRegion, "region", "", "Region of the managed instance group")
-	managedListInstancesCmd.Flags().StringVar(&flagManagedListFormat, "format", "", "Output format (e.g. json)")
+	managedListInstancesCmd.Flags().StringVar(&flagManagedListFormat, "format", "", "Output format (e.g. json, 'csv(NAME,ZONE,STATUS)', 'get(NAME)')")
 
 	// describe
 	managedDescribeCmd.Flags().StringVar(&flagManagedDescribeRegion, "region", "", "Region")
@@ -116,25 +116,7 @@ func runManagedListInstances(cmd *cobra.Command, args []string) error {
 			pageToken = resp.NextPageToken
 		}
 
-		if flagManagedListFormat == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(allInstances)
-		}
-
-		fmt.Printf("%-40s %-10s %-15s %-20s %-15s\n", "NAME", "ZONE", "STATUS", "ACTION", "HEALTH")
-		for _, mi := range allInstances {
-			name := path.Base(mi.Instance)
-			zone := extractZoneFromURL(mi.Instance)
-			health := ""
-			if mi.InstanceHealth != nil {
-				for _, h := range mi.InstanceHealth {
-					health = h.DetailedHealthState
-				}
-			}
-			fmt.Printf("%-40s %-10s %-15s %-20s %-15s\n", name, zone, mi.InstanceStatus, mi.CurrentAction, health)
-		}
-		return nil
+		return formatManagedInstances(allInstances, flagManagedListFormat, true)
 	}
 
 	// Zonal MIG fallback.
@@ -161,24 +143,78 @@ func runManagedListInstances(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagManagedListFormat == "json" {
+	return formatManagedInstances(allInstances, flagManagedListFormat, false)
+}
+
+// formatManagedInstances renders managed instances per --format. It supports
+// json, get(FIELD) and csv(FIELDS); otherwise it prints the default table.
+// showZone includes the ZONE column in the default table (regional listings
+// span zones; zonal listings do not).
+func formatManagedInstances(instances []*compute.ManagedInstance, format string, showZone bool) error {
+	switch {
+	case format == "json":
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(allInstances)
+		return enc.Encode(instances)
+	case isGetFormat(format):
+		field := extractGetField(format)
+		for _, mi := range instances {
+			fmt.Println(managedInstanceField(mi, field))
+		}
+		return nil
+	case isCsvFormat(format):
+		fields := extractCsvFields(format)
+		for _, mi := range instances {
+			vals := make([]string, 0, len(fields))
+			for _, f := range fields {
+				vals = append(vals, managedInstanceField(mi, f))
+			}
+			fmt.Println(strings.Join(vals, ","))
+		}
+		return nil
 	}
 
+	if showZone {
+		fmt.Printf("%-40s %-10s %-15s %-20s %-15s\n", "NAME", "ZONE", "STATUS", "ACTION", "HEALTH")
+		for _, mi := range instances {
+			fmt.Printf("%-40s %-10s %-15s %-20s %-15s\n",
+				managedInstanceField(mi, "NAME"), managedInstanceField(mi, "ZONE"),
+				managedInstanceField(mi, "STATUS"), managedInstanceField(mi, "ACTION"),
+				managedInstanceField(mi, "HEALTH"))
+		}
+		return nil
+	}
 	fmt.Printf("%-40s %-15s %-20s %-15s\n", "NAME", "STATUS", "ACTION", "HEALTH")
-	for _, mi := range allInstances {
-		name := path.Base(mi.Instance)
+	for _, mi := range instances {
+		fmt.Printf("%-40s %-15s %-20s %-15s\n",
+			managedInstanceField(mi, "NAME"), managedInstanceField(mi, "STATUS"),
+			managedInstanceField(mi, "ACTION"), managedInstanceField(mi, "HEALTH"))
+	}
+	return nil
+}
+
+// managedInstanceField extracts a display column from a managed instance.
+// Field names match the default table columns and are case-insensitive.
+func managedInstanceField(mi *compute.ManagedInstance, field string) string {
+	switch strings.ToUpper(field) {
+	case "NAME":
+		return path.Base(mi.Instance)
+	case "ZONE":
+		return extractZoneFromURL(mi.Instance)
+	case "STATUS":
+		return mi.InstanceStatus
+	case "ACTION":
+		return mi.CurrentAction
+	case "HEALTH":
 		health := ""
 		if mi.InstanceHealth != nil {
 			for _, h := range mi.InstanceHealth {
 				health = h.DetailedHealthState
 			}
 		}
-		fmt.Printf("%-40s %-15s %-20s %-15s\n", name, mi.InstanceStatus, mi.CurrentAction, health)
+		return health
 	}
-	return nil
+	return ""
 }
 
 func runManagedDescribe(cmd *cobra.Command, args []string) error {
