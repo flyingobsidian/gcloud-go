@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 
 	"golang.org/x/oauth2"
@@ -16,15 +16,15 @@ import (
 )
 
 const (
-	tunnelHost = "tunnel.cloudproxy.app"
+	tunnelHost  = "tunnel.cloudproxy.app"
 	subprotocol = "relay.tunnel.cloudproxy.app"
 
 	maxDataFrameSize = 16384
 
-	tagConnectSuccessSID  = 0x0001
+	tagConnectSuccessSID   = 0x0001
 	tagReconnectSuccessACK = 0x0002
-	tagData               = 0x0004
-	tagACK                = 0x0007
+	tagData                = 0x0004
+	tagACK                 = 0x0007
 
 	tagLen    = 2
 	headerLen = 6 // tag(2) + length(4)
@@ -32,23 +32,23 @@ const (
 
 // TunnelConfig holds parameters for an IAP tunnel connection.
 type TunnelConfig struct {
-	Project    string
-	Zone       string
-	Instance   string
-	Interface  string
-	Port       int
+	Project     string
+	Zone        string
+	Instance    string
+	Interface   string
+	Port        int
 	TokenSource oauth2.TokenSource
 }
 
 // Tunnel represents an active IAP tunnel.
 type Tunnel struct {
-	cfg       TunnelConfig
-	conn      *websocket.Conn
-	sid       []byte
-	bytesSent uint64
-	bytesRecv uint64
+	cfg        TunnelConfig
+	conn       *websocket.Conn
+	sid        []byte
+	bytesSent  uint64
+	bytesRecv  uint64
 	bytesAcked uint64
-	mu        sync.Mutex
+	mu         sync.Mutex
 }
 
 // Listen starts a local TCP listener that proxies connections through the IAP tunnel.
@@ -59,6 +59,13 @@ func Listen(ctx context.Context, cfg TunnelConfig, localPort int) (net.Listener,
 	if err != nil {
 		return nil, fmt.Errorf("listening on %s: %w", addr, err)
 	}
+
+	// Close the listener when the context is cancelled so the accept loop
+	// terminates instead of leaking if the caller never closes it directly.
+	go func() {
+		<-ctx.Done()
+		ln.Close()
+	}()
 
 	go func() {
 		for {
