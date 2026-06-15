@@ -2,12 +2,18 @@ Read the [readme](/README.md) for an overview of the repo.
 
 # Development
 
+Develop new features and bug fixes in a separate branch.
+
+See [`patterns.md`](/patterns.md) for a list of Golang patterns to follow and anti-patterns to avoid.
+
 ## git branches
 
 Do not commit to the `main` branch. Use feature/bugfix branches, named as follows:
 
 - Issue number followed by `-` (if addressing an Issue)
 - short representation of the feature/bug name, all lowercase, with dashes
+
+Do not prefix branch names with `issue-`.
 
 Examples:
 - `123-improve-some-feature`
