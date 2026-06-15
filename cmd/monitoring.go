@@ -53,12 +53,13 @@ var monitoringSnoozesCreateCmd = &cobra.Command{
 }
 
 var (
-	flagSnoozeDisplayName string
-	flagSnoozeStartTime   string
-	flagSnoozeEndTime     string
-	flagSnoozePolicies    []string
-	flagSnoozeFilter      string
-	flagSnoozeFromFile    string
+	flagSnoozeDisplayName  string
+	flagSnoozeStartTime    string
+	flagSnoozeEndTime      string
+	flagSnoozePolicies     []string
+	flagSnoozeFilter       string
+	flagSnoozeFromFile     string
+	flagSnoozeCreateFormat string
 )
 
 // --- snoozes describe ---
@@ -128,11 +129,11 @@ var monitoringPoliciesCreateCmd = &cobra.Command{
 }
 
 var (
-	flagPolCreateFromFile     string
-	flagPolCreateDisplayName  string
-	flagPolCreateEnabled      bool
-	flagPolCreateNoEnabled    bool
-	flagPolCreateChannels     []string
+	flagPolCreateFromFile      string
+	flagPolCreateDisplayName   string
+	flagPolCreateEnabled       bool
+	flagPolCreateNoEnabled     bool
+	flagPolCreateChannels      []string
 	flagPolCreateDocumentation string
 )
 
@@ -146,12 +147,12 @@ var monitoringPoliciesUpdateCmd = &cobra.Command{
 }
 
 var (
-	flagPolUpdateFromFile       string
-	flagPolUpdateEnabled        bool
-	flagPolUpdateNoEnabled      bool
-	flagPolUpdateFields         string
-	flagPolAddChannels          []string
-	flagPolRemoveChannels       []string
+	flagPolUpdateFromFile  string
+	flagPolUpdateEnabled   bool
+	flagPolUpdateNoEnabled bool
+	flagPolUpdateFields    string
+	flagPolAddChannels     []string
+	flagPolRemoveChannels  []string
 )
 
 // --- policies delete ---
@@ -162,7 +163,6 @@ var monitoringPoliciesDeleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE:  runMonitoringPoliciesDelete,
 }
-
 
 // --- channels ---
 
@@ -224,7 +224,6 @@ var monitoringChannelsDeleteCmd = &cobra.Command{
 	RunE:  runMonitoringChannelsDelete,
 }
 
-
 // --- snoozes list filter ---
 var flagSnoozesListFilter string
 
@@ -262,6 +261,7 @@ func init() {
 	monitoringSnoozesCreateCmd.Flags().StringSliceVar(&flagSnoozePolicies, "criteria-policies", nil, "Alert policy resource names to snooze")
 	monitoringSnoozesCreateCmd.Flags().StringVar(&flagSnoozeFilter, "criteria-filter", "", "Filter for snooze criteria")
 	monitoringSnoozesCreateCmd.Flags().StringVar(&flagSnoozeFromFile, "snooze-from-file", "", "JSON file containing snooze definition")
+	monitoringSnoozesCreateCmd.Flags().StringVar(&flagSnoozeCreateFormat, "format", "", "Output format (e.g. json, yaml, 'value(name)')")
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesCreateCmd)
 
 	monitoringSnoozesListCmd.Flags().StringVar(&flagSnoozesListFormat, "format", "", "Output format (e.g. json)")
@@ -410,6 +410,10 @@ func runMonitoringSnoozesCreate(cmd *cobra.Command, args []string) error {
 	result, err := svc.Projects.Snoozes.Create(fmt.Sprintf("projects/%s", project), snooze).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating snooze: %w", err)
+	}
+
+	if flagSnoozeCreateFormat != "" {
+		return formatOutput(result, flagSnoozeCreateFormat)
 	}
 
 	fmt.Printf("Created snooze [%s].\n", result.Name)
