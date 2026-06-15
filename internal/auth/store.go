@@ -68,7 +68,11 @@ func (s *CredentialStore) Store(credFile string) (string, error) {
 	}
 
 	// Store in SQLite credentials.db (best-effort for gcloud compatibility).
-	_ = s.storeToSQLite(account, data)
+	if err := s.storeToSQLite(account, data); err != nil {
+		// Best-effort for gcloud compatibility; log so consistent failures are
+		// observable without burdening the caller.
+		fmt.Fprintf(os.Stderr, "warning: writing %s to SQLite credentials.db failed: %v\n", account, err)
+	}
 
 	// Also store as JSON file for fallback.
 	jsonDir := filepath.Join(s.configDir, "credentials")
@@ -221,7 +225,11 @@ func (s *CredentialStore) StoreRaw(account string, data []byte) error {
 		return fmt.Errorf("account name %q contains path separators", account)
 	}
 
-	_ = s.storeToSQLite(account, data)
+	if err := s.storeToSQLite(account, data); err != nil {
+		// Best-effort for gcloud compatibility; log so consistent failures are
+		// observable without burdening the caller.
+		fmt.Fprintf(os.Stderr, "warning: writing %s to SQLite credentials.db failed: %v\n", account, err)
+	}
 
 	jsonDir := filepath.Join(s.configDir, "credentials")
 	if err := os.MkdirAll(jsonDir, 0700); err != nil {
