@@ -78,17 +78,15 @@ func init() {
 
 func runManagedListInstances(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, _, err := resolveProjectZone()
+	// Resolve only the project here. The zone is resolved later, on the zonal
+	// path, so that supplying --region does not trigger a zone prompt/requirement.
+	props, err := loadProps()
 	if err != nil {
-		// Try with just project if zone not set.
-		props, loadErr := loadProps()
-		if loadErr != nil {
-			return err
-		}
-		project = resolveProjectOnly(props)
-		if project == "" {
-			return err
-		}
+		return err
+	}
+	project := resolveProjectOnly(props)
+	if project == "" {
+		return fmt.Errorf("project is required; set via --project flag, CLOUDSDK_CORE_PROJECT env, or config")
 	}
 	region := flagManagedRegion
 
