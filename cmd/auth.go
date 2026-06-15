@@ -225,7 +225,9 @@ func runAuthLoginBrowser() error {
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v1/userinfo")
 	if err == nil {
 		defer resp.Body.Close()
-		var info struct{ Email string `json:"email"` }
+		var info struct {
+			Email string `json:"email"`
+		}
 		if json.NewDecoder(resp.Body).Decode(&info) == nil && info.Email != "" {
 			account = info.Email
 		}
@@ -240,7 +242,9 @@ func runAuthLoginBrowser() error {
 	}
 
 	// Store credential data directly.
-	_ = store.StoreRaw(account, data)
+	if err := store.StoreRaw(account, data); err != nil {
+		return fmt.Errorf("storing credentials: %w", err)
+	}
 
 	props, err := config.Load()
 	if err != nil {
@@ -371,10 +375,13 @@ func runAuthRevoke(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Revoked credentials for: [%s]\n", acct)
 		}
 		// Clear active account from config.
-		props, _ := config.Load()
-		if props != nil {
-			props.Core.Account = ""
-			_ = props.Save()
+		props, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
+		props.Core.Account = ""
+		if err := props.Save(); err != nil {
+			return fmt.Errorf("saving config: %w", err)
 		}
 		return nil
 	}
@@ -382,8 +389,11 @@ func runAuthRevoke(cmd *cobra.Command, args []string) error {
 	// Determine which accounts to revoke.
 	accounts := args
 	if len(accounts) == 0 {
-		props, _ := config.Load()
-		if props != nil && props.Core.Account != "" {
+		props, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
+		if props.Core.Account != "" {
 			accounts = []string{props.Core.Account}
 		}
 		if len(accounts) == 0 {
@@ -399,14 +409,17 @@ func runAuthRevoke(cmd *cobra.Command, args []string) error {
 	}
 
 	// If we revoked the active account, clear it from config.
-	props, _ := config.Load()
-	if props != nil {
-		for _, account := range accounts {
-			if props.Core.Account == account {
-				props.Core.Account = ""
-				_ = props.Save()
-				break
+	props, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	for _, account := range accounts {
+		if props.Core.Account == account {
+			props.Core.Account = ""
+			if err := props.Save(); err != nil {
+				return fmt.Errorf("saving config: %w", err)
 			}
+			break
 		}
 	}
 
