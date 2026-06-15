@@ -187,7 +187,9 @@ func DeleteConfiguration(name string) error {
 
 	// If this was the active config, reset to default.
 	if ActiveConfigName() == name {
-		_ = os.WriteFile(filepath.Join(dir, "active_config"), []byte("default\n"), 0600)
+		if err := os.WriteFile(filepath.Join(dir, "active_config"), []byte("default\n"), 0600); err != nil {
+			return fmt.Errorf("resetting active config to default: %w", err)
+		}
 	}
 
 	return nil
