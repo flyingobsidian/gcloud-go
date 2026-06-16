@@ -68,3 +68,54 @@ func TestSnoozeField(t *testing.T) {
 		}
 	}
 }
+
+func TestSnoozeNameAcceptsFullResource(t *testing.T) {
+	if got := snoozeName("P", "projects/P/snoozes/1234"); got != "projects/P/snoozes/1234" {
+		t.Errorf("full resource name should pass through, got %q", got)
+	}
+	if got := snoozeName("P", "1234"); got != "projects/P/snoozes/1234" {
+		t.Errorf("bare id should be expanded, got %q", got)
+	}
+}
+
+func TestFormatSnoozeDefaultsToYAML(t *testing.T) {
+	s := &monitoring.Snooze{Name: "projects/P/snoozes/1234", DisplayName: "SnoozeName1"}
+	out := captureStdout(t, func() {
+		if err := formatSnooze(s, ""); err != nil {
+			t.Fatalf("formatSnooze: %v", err)
+		}
+	})
+	if strings.HasPrefix(strings.TrimSpace(out), "---") {
+		t.Errorf("single describe should not emit a document separator, got:\n%s", out)
+	}
+	if !strings.Contains(out, "name: projects/P/snoozes/1234") {
+		t.Errorf("yaml output missing name, got:\n%s", out)
+	}
+	if !strings.Contains(out, "displayName: SnoozeName1") {
+		t.Errorf("yaml output missing displayName, got:\n%s", out)
+	}
+}
+
+func TestFormatSnoozeTableAligned(t *testing.T) {
+	s := &monitoring.Snooze{Name: "projects/P/snoozes/1234", DisplayName: "SnoozeName1"}
+	out := captureStdout(t, func() {
+		if err := formatSnooze(s, "table(name,display_name)"); err != nil {
+			t.Fatalf("formatSnooze: %v", err)
+		}
+	})
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected heading + 1 row, got %d lines: %q", len(lines), out)
+	}
+	// Headings are uppercased.
+	if got := strings.Fields(lines[0]); len(got) != 2 || got[0] != "NAME" || got[1] != "DISPLAY_NAME" {
+		t.Errorf("heading = %q, want NAME DISPLAY_NAME", lines[0])
+	}
+	if got := strings.Fields(lines[1]); len(got) != 2 || got[0] != "projects/P/snoozes/1234" || got[1] != "SnoozeName1" {
+		t.Errorf("row = %q, want projects/P/snoozes/1234 SnoozeName1", lines[1])
+	}
+	// Columns are aligned: the second column starts at the same offset.
+	if strings.Index(lines[0], "DISPLAY_NAME") != strings.Index(lines[1], "SnoozeName1") {
+		t.Errorf("columns not aligned:\n%q\n%q", lines[0], lines[1])
+	}
+}

@@ -71,6 +71,8 @@ var monitoringSnoozesDescribeCmd = &cobra.Command{
 	RunE:  runMonitoringSnoozesDescribe,
 }
 
+var flagSnoozeDescribeFormat string
+
 // --- snoozes list ---
 
 var monitoringSnoozesListCmd = &cobra.Command{
@@ -269,6 +271,7 @@ func init() {
 	monitoringSnoozesListCmd.Flags().BoolVar(&flagSnoozesListURI, "uri", false, "Print resource names")
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesListCmd)
 
+	monitoringSnoozesDescribeCmd.Flags().StringVar(&flagSnoozeDescribeFormat, "format", "", "Output format: yaml (default), json, 'table(name,display_name)'")
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesDescribeCmd)
 
 	monitoringSnoozesUpdateCmd.Flags().StringVar(&flagSnoozeUpdateDisplayName, "display-name", "", "New display name")
@@ -421,6 +424,10 @@ func runMonitoringSnoozesCreate(cmd *cobra.Command, args []string) error {
 }
 
 func snoozeName(project, snoozeID string) string {
+	// Accept either a bare snooze ID or a full resource name.
+	if strings.HasPrefix(snoozeID, "projects/") {
+		return snoozeID
+	}
 	return fmt.Sprintf("projects/%s/snoozes/%s", project, snoozeID)
 }
 
@@ -441,7 +448,68 @@ func runMonitoringSnoozesDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing snooze: %w", err)
 	}
 
-	return formatOutput(snooze, "")
+	return formatSnooze(snooze, flagSnoozeDescribeFormat)
+}
+
+// formatSnooze renders a single snooze per --format. The default (empty) format
+// is yaml, matching gcloud. It also supports json and csv(COLS)/table(COLS).
+func formatSnooze(s *monitoring.Snooze, format string) error {
+	switch {
+	case format == "" || format == "yaml":
+		return yamlEncode(s)
+	case format == "json":
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(s)
+	case isCsvFormat(format):
+		return printSnoozeColumns([]*monitoring.Snooze{s}, extractCsvFields(format), ",")
+	case isTableFormat(format):
+		return printSnoozeTable([]*monitoring.Snooze{s}, extractTableFields(format))
+	}
+	return yamlEncode(s)
+}
+
+// printSnoozeTable prints an aligned table with uppercased column headings,
+// auto-sizing each column to the widest value (matching gcloud table output).
+func printSnoozeTable(snoozes []*monitoring.Snooze, fields []string) error {
+	headers := make([]string, len(fields))
+	widths := make([]int, len(fields))
+	for i, f := range fields {
+		headers[i] = strings.ToUpper(f)
+		widths[i] = len(headers[i])
+	}
+	rows := make([][]string, 0, len(snoozes))
+	for _, s := range snoozes {
+		row := make([]string, len(fields))
+		for i, f := range fields {
+			row[i] = snoozeField(s, f)
+			if len(row[i]) > widths[i] {
+				widths[i] = len(row[i])
+			}
+		}
+		rows = append(rows, row)
+	}
+
+	printRow := func(cols []string) {
+		var b strings.Builder
+		for i, c := range cols {
+			if i > 0 {
+				b.WriteString("  ")
+			}
+			if i < len(cols)-1 {
+				fmt.Fprintf(&b, "%-*s", widths[i], c)
+			} else {
+				b.WriteString(c)
+			}
+		}
+		fmt.Println(b.String())
+	}
+
+	printRow(headers)
+	for _, row := range rows {
+		printRow(row)
+	}
+	return nil
 }
 
 func runMonitoringSnoozesList(cmd *cobra.Command, args []string) error {
