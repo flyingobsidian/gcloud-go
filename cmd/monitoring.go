@@ -264,7 +264,7 @@ func init() {
 	monitoringSnoozesCreateCmd.Flags().StringVar(&flagSnoozeCreateFormat, "format", "", "Output format (e.g. json, yaml, 'value(name)')")
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesCreateCmd)
 
-	monitoringSnoozesListCmd.Flags().StringVar(&flagSnoozesListFormat, "format", "", "Output format (e.g. json)")
+	monitoringSnoozesListCmd.Flags().StringVar(&flagSnoozesListFormat, "format", "", "Output format: yaml (default), json, 'csv(NAME,DISPLAY_NAME)'")
 	monitoringSnoozesListCmd.Flags().StringVar(&flagSnoozesListFilter, "filter", "", "Filter expression")
 	monitoringSnoozesListCmd.Flags().BoolVar(&flagSnoozesListURI, "uri", false, "Print resource names")
 	monitoringSnoozesCmd.AddCommand(monitoringSnoozesListCmd)
@@ -484,17 +484,64 @@ func runMonitoringSnoozesList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if flagSnoozesListFormat == "json" {
+	return formatSnoozesList(allSnoozes, flagSnoozesListFormat)
+}
+
+// formatSnoozesList renders snoozes per --format. The default (empty) format is
+// yaml, matching gcloud. It also supports json and csv(COLS)/table(COLS); any
+// other value falls back to the default NAME/DISPLAY_NAME table.
+func formatSnoozesList(snoozes []*monitoring.Snooze, format string) error {
+	switch {
+	case format == "" || format == "yaml":
+		for _, s := range snoozes {
+			fmt.Println("---")
+			if err := yamlEncode(s); err != nil {
+				return err
+			}
+		}
+		return nil
+	case format == "json":
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(allSnoozes)
+		return enc.Encode(snoozes)
+	case isCsvFormat(format):
+		return printSnoozeColumns(snoozes, extractCsvFields(format), ",")
+	case isTableFormat(format):
+		return printSnoozeColumns(snoozes, extractTableFields(format), "\t")
 	}
 
+	// Default columnar table.
 	fmt.Printf("%-60s %s\n", "NAME", "DISPLAY_NAME")
-	for _, s := range allSnoozes {
+	for _, s := range snoozes {
 		fmt.Printf("%-60s %s\n", s.Name, s.DisplayName)
 	}
 	return nil
+}
+
+// printSnoozeColumns prints a heading row of the requested column names (as
+// given) followed by one row per snooze, joined by sep.
+func printSnoozeColumns(snoozes []*monitoring.Snooze, fields []string, sep string) error {
+	fmt.Println(strings.Join(fields, sep))
+	for _, s := range snoozes {
+		vals := make([]string, len(fields))
+		for i, f := range fields {
+			vals[i] = snoozeField(s, f)
+		}
+		fmt.Println(strings.Join(vals, sep))
+	}
+	return nil
+}
+
+// snoozeField extracts a display column from a snooze. Column names are
+// case-insensitive.
+func snoozeField(s *monitoring.Snooze, field string) string {
+	switch strings.ToUpper(field) {
+	case "NAME":
+		return s.Name
+	case "DISPLAY_NAME", "DISPLAYNAME":
+		return s.DisplayName
+	}
+	return ""
 }
 
 func runMonitoringSnoozesUpdate(cmd *cobra.Command, args []string) error {
