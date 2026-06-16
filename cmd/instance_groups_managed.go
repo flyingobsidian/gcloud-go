@@ -164,6 +164,12 @@ func formatManagedInstances(instances []*compute.ManagedInstance, format string,
 		return nil
 	case isCsvFormat(format):
 		fields := extractCsvFields(format)
+		// Heading row, using the canonical lowercase column names (matching gcloud).
+		headings := make([]string, len(fields))
+		for i, f := range fields {
+			headings[i] = strings.ToLower(f)
+		}
+		fmt.Println(strings.Join(headings, ","))
 		for _, mi := range instances {
 			vals := make([]string, 0, len(fields))
 			for _, f := range fields {
