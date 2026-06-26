@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path"
+	"strings"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
@@ -26,7 +29,15 @@ var unmanagedAddInstancesCmd = &cobra.Command{
 
 var flagInstances []string
 
+var (
+	flagUnmanagedLIFilter string
+	flagUnmanagedLIFormat string
+)
+
 func init() {
+	unmanagedListInstancesCmd.Flags().StringVar(&flagUnmanagedLIFilter, "filter", "", "Client-side filter by instance name (substring match)")
+	unmanagedListInstancesCmd.Flags().StringVar(&flagUnmanagedLIFormat, "format", "", "Output format (e.g. json, 'csv(NAME,STATUS)')")
+
 	unmanagedAddInstancesCmd.Flags().StringSliceVar(&flagInstances, "instances", nil, "Instance names to add (comma-separated)")
 	unmanagedAddInstancesCmd.MarkFlagRequired("instances")
 
@@ -66,17 +77,81 @@ func runUnmanagedListInstances(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if len(allItems) == 0 {
-		fmt.Println("No instances in group.")
+	allItems = filterUnmanagedInstances(allItems, flagUnmanagedLIFilter)
+
+	return formatUnmanagedInstances(allItems, flagUnmanagedLIFormat)
+}
+
+// filterUnmanagedInstances keeps only the instances whose name contains filter
+// (case-insensitive). An empty filter returns all instances.
+func filterUnmanagedInstances(items []*compute.InstanceWithNamedPorts, filter string) []*compute.InstanceWithNamedPorts {
+	if filter == "" {
+		return items
+	}
+	needle := strings.ToLower(filter)
+	out := make([]*compute.InstanceWithNamedPorts, 0, len(items))
+	for _, it := range items {
+		if strings.Contains(strings.ToLower(path.Base(it.Instance)), needle) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// formatUnmanagedInstances renders the instances per --format. It supports json,
+// get(FIELD) and csv(FIELDS); otherwise it prints the default NAME/STATUS table.
+func formatUnmanagedInstances(items []*compute.InstanceWithNamedPorts, format string) error {
+	switch {
+	case format == "json":
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(items)
+	case isGetFormat(format):
+		field := extractGetField(format)
+		for _, it := range items {
+			fmt.Println(unmanagedInstanceField(it, field))
+		}
+		return nil
+	case isCsvFormat(format):
+		fields := extractCsvFields(format)
+		headings := make([]string, len(fields))
+		for i, f := range fields {
+			headings[i] = strings.ToLower(f)
+		}
+		fmt.Println(strings.Join(headings, ","))
+		for _, it := range items {
+			vals := make([]string, len(fields))
+			for i, f := range fields {
+				vals[i] = unmanagedInstanceField(it, f)
+			}
+			fmt.Println(strings.Join(vals, ","))
+		}
 		return nil
 	}
 
+	if len(items) == 0 {
+		fmt.Println("No instances in group.")
+		return nil
+	}
 	fmt.Printf("%-40s %s\n", "NAME", "STATUS")
-	for _, item := range allItems {
-		name := path.Base(item.Instance)
-		fmt.Printf("%-40s %s\n", name, item.Status)
+	for _, it := range items {
+		fmt.Printf("%-40s %s\n", unmanagedInstanceField(it, "NAME"), unmanagedInstanceField(it, "STATUS"))
 	}
 	return nil
+}
+
+// unmanagedInstanceField extracts a display column from an instance. Field names
+// are case-insensitive.
+func unmanagedInstanceField(it *compute.InstanceWithNamedPorts, field string) string {
+	switch strings.ToUpper(field) {
+	case "NAME":
+		return path.Base(it.Instance)
+	case "STATUS":
+		return it.Status
+	case "ZONE":
+		return extractZoneFromURL(it.Instance)
+	}
+	return ""
 }
 
 func runUnmanagedAddInstances(cmd *cobra.Command, args []string) error {
