@@ -230,7 +230,7 @@ var monitoringChannelsDeleteCmd = &cobra.Command{
 var flagSnoozesListFilter string
 
 func init() {
-	monitoringPoliciesListCmd.Flags().StringVar(&flagMonPoliciesFormat, "format", "", "Output format (e.g. json)")
+	monitoringPoliciesListCmd.Flags().StringVar(&flagMonPoliciesFormat, "format", "", "Output format: yaml (default), json")
 	monitoringPoliciesListCmd.Flags().StringVar(&flagMonPoliciesFilter, "filter", "", "Filter expression")
 	monitoringPoliciesListCmd.Flags().BoolVar(&flagMonPoliciesURI, "uri", false, "Print resource names")
 
@@ -345,14 +345,30 @@ func runMonitoringPoliciesList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if flagMonPoliciesFormat == "json" {
+	return formatPoliciesList(allPolicies, flagMonPoliciesFormat)
+}
+
+// formatPoliciesList renders alert policies per --format. The default (empty)
+// format is yaml, matching gcloud. It also supports json; any other value
+// prints the NAME/ENABLED/DISPLAY_NAME table.
+func formatPoliciesList(policies []*monitoring.AlertPolicy, format string) error {
+	switch {
+	case format == "" || format == "yaml":
+		for _, p := range policies {
+			fmt.Println("---")
+			if err := yamlEncode(p); err != nil {
+				return err
+			}
+		}
+		return nil
+	case format == "json":
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(allPolicies)
+		return enc.Encode(policies)
 	}
 
 	fmt.Printf("%-60s %-10s %s\n", "NAME", "ENABLED", "DISPLAY_NAME")
-	for _, p := range allPolicies {
+	for _, p := range policies {
 		fmt.Printf("%-60s %-10t %s\n", p.Name, p.Enabled, p.DisplayName)
 	}
 	return nil
