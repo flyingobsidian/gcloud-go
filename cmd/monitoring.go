@@ -362,9 +362,22 @@ func formatPoliciesList(policies []*monitoring.AlertPolicy, format string) error
 		}
 		return nil
 	case format == "json":
+		// AlertPolicy's generated MarshalJSON HTML-escapes operators (so a
+		// filter like "severity>=ERROR" comes out with the ">" unicode-escaped).
+		// Round-trip through a generic value, which decodes those escapes, then
+		// re-encode with HTML escaping disabled so operators appear literally.
+		data, err := json.Marshal(policies)
+		if err != nil {
+			return err
+		}
+		var generic any
+		if err := json.Unmarshal(data, &generic); err != nil {
+			return err
+		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(policies)
+		enc.SetEscapeHTML(false)
+		return enc.Encode(generic)
 	}
 
 	fmt.Printf("%-60s %-10s %s\n", "NAME", "ENABLED", "DISPLAY_NAME")

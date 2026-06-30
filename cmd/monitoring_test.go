@@ -146,3 +146,24 @@ func TestFormatPoliciesListDefaultsToYAML(t *testing.T) {
 		t.Errorf("yaml output missing enabled, got:\n%s", out)
 	}
 }
+
+func TestFormatPoliciesListJSONDoesNotHTMLEscape(t *testing.T) {
+	policies := []*monitoring.AlertPolicy{
+		{
+			Name:        "projects/P/alertPolicies/123",
+			DisplayName: "severity>=ERROR",
+		},
+	}
+	out := captureStdout(t, func() {
+		if err := formatPoliciesList(policies, "json"); err != nil {
+			t.Fatalf("formatPoliciesList: %v", err)
+		}
+	})
+	if !strings.Contains(out, "severity>=ERROR") {
+		t.Errorf("expected literal comparison operator in json output, got:\n%s", out)
+	}
+	// The default encoder would emit the HTML/unicode escape ">".
+	if strings.Contains(out, "\\u003e") {
+		t.Errorf("json output should not contain an escaped operator, got:\n%s", out)
+	}
+}
