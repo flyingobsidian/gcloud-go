@@ -119,3 +119,30 @@ func TestFormatSnoozeTableAligned(t *testing.T) {
 		t.Errorf("columns not aligned:\n%q\n%q", lines[0], lines[1])
 	}
 }
+
+func TestFormatPoliciesListDefaultsToYAML(t *testing.T) {
+	policies := []*monitoring.AlertPolicy{
+		{
+			Name:        "projects/P/alertPolicies/123",
+			DisplayName: "some_policy",
+			Enabled:     true,
+		},
+	}
+	out := captureStdout(t, func() {
+		if err := formatPoliciesList(policies, ""); err != nil {
+			t.Fatalf("formatPoliciesList: %v", err)
+		}
+	})
+	if !strings.HasPrefix(strings.TrimSpace(out), "---") {
+		t.Errorf("yaml output should start with a document separator, got:\n%s", out)
+	}
+	if !strings.Contains(out, "name: projects/P/alertPolicies/123") {
+		t.Errorf("yaml output missing policy name, got:\n%s", out)
+	}
+	if !strings.Contains(out, "displayName: some_policy") {
+		t.Errorf("yaml output missing displayName, got:\n%s", out)
+	}
+	if !strings.Contains(out, "enabled: true") {
+		t.Errorf("yaml output missing enabled, got:\n%s", out)
+	}
+}
