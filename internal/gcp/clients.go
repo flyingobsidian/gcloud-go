@@ -14,6 +14,7 @@ import (
 	monitoring "google.golang.org/api/monitoring/v3"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
 	"google.golang.org/api/option"
+	orgpolicy "google.golang.org/api/orgpolicy/v2"
 	oslogin "google.golang.org/api/oslogin/v1"
 	redis "google.golang.org/api/redis/v1"
 	storage "google.golang.org/api/storage/v1"
@@ -99,6 +100,14 @@ func CloudResourceManagerService(ctx context.Context, account string) (*cloudres
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return cloudresourcemanager.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func OrgPolicyService(ctx context.Context, account string) (*orgpolicy.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return orgpolicy.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func OnDemandScanningService(ctx context.Context, account string) (*ondemandscanning.Service, error) {
