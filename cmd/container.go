@@ -1,0 +1,40 @@
+package cmd
+
+import "github.com/spf13/cobra"
+
+// --- gcloud container (#320) ---
+//
+// Container/GKE is a very large surface. This stub registers the top-level
+// subgroups and common commands so callers can discover them; individual
+// commands should be wired up to google.golang.org/api/container/v1 in
+// follow-up PRs.
+
+var containerCmd = &cobra.Command{Use: "container", Short: "Manage Google Kubernetes Engine (stubbed)"}
+
+func init() {
+	crud := []string{"create", "delete", "describe", "list", "update"}
+	registerStubGroup(containerCmd, "ai", "Manage AI-related workloads", "profiles")
+	registerStubGroup(containerCmd, "attached", "Manage attached clusters", append(crud, "generate-install-manifest", "import", "get-credentials")...)
+	registerStubGroup(containerCmd, "aws", "(DEPRECATED) Manage AWS clusters", crud...)
+	registerStubGroup(containerCmd, "azure", "(DEPRECATED) Manage Azure clusters", crud...)
+	registerStubGroup(containerCmd, "bare-metal", "Manage Anthos on bare metal", crud...)
+	registerStubGroup(containerCmd, "binauthz", "Manage Binary Authorization attestations",
+		"create", "delete", "describe", "list", "sign", "verify", "policy")
+	registerStubGroup(containerCmd, "clusters", "Manage GKE clusters", append(crud,
+		"get-credentials", "resize", "upgrade", "check-upgrade", "list-upgrades",
+		"get-recommendations", "set-legacy-authorization")...)
+	registerStubGroup(containerCmd, "fleet", "Manage fleet features and services",
+		"create", "describe", "list", "update", "delete", "features", "memberships", "operations")
+	registerStubGroup(containerCmd, "hub", "Alias for fleet",
+		"create", "describe", "list", "update", "delete")
+	registerStubGroup(containerCmd, "images", "Manage container images",
+		"delete", "describe", "list", "list-tags", "add-tag", "remove-tag", "untag")
+	registerStubGroup(containerCmd, "node-pools", "Manage node pools", append(crud, "rollback")...)
+	registerStubGroup(containerCmd, "operations", "Manage operations", "describe", "list", "wait", "cancel")
+	registerStubGroup(containerCmd, "subnets", "Manage subnets", "list-usable")
+	registerStubGroup(containerCmd, "vmware", "Manage Anthos on VMware", crud...)
+	registerStubGroup(containerCmd, "workload", "Manage Workload Optimizer",
+		"list-recommendations", "get-recommendation", "apply-recommendation")
+	registerStubCommand(containerCmd, "get-server-config", "Get GKE server config")
+	rootCmd.AddCommand(containerCmd)
+}
