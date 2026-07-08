@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
+	apikeys "google.golang.org/api/apikeys/v2"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 	cloudasset "google.golang.org/api/cloudasset/v1"
 	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v3"
@@ -18,6 +19,8 @@ import (
 	orgpolicy "google.golang.org/api/orgpolicy/v2"
 	oslogin "google.golang.org/api/oslogin/v1"
 	redis "google.golang.org/api/redis/v1"
+	servicenetworking "google.golang.org/api/servicenetworking/v1"
+	serviceusage "google.golang.org/api/serviceusage/v1"
 	storage "google.golang.org/api/storage/v1"
 )
 
@@ -101,6 +104,30 @@ func CloudResourceManagerService(ctx context.Context, account string) (*cloudres
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return cloudresourcemanager.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ServiceUsageService(ctx context.Context, account string) (*serviceusage.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return serviceusage.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func APIKeysService(ctx context.Context, account string) (*apikeys.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return apikeys.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ServiceNetworkingService(ctx context.Context, account string) (*servicenetworking.APIService, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return servicenetworking.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func CloudAssetService(ctx context.Context, account string) (*cloudasset.Service, error) {
