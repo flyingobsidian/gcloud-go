@@ -6,6 +6,7 @@ import (
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
+	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v3"
 	cloudiam "google.golang.org/api/iam/v1"
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 	dataflow "google.golang.org/api/dataflow/v1b3"
@@ -90,6 +91,14 @@ func IAMService(ctx context.Context, account string) (*cloudiam.Service, error) 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return cloudiam.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func CloudResourceManagerService(ctx context.Context, account string) (*cloudresourcemanager.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return cloudresourcemanager.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func OnDemandScanningService(ctx context.Context, account string) (*ondemandscanning.Service, error) {
