@@ -7,6 +7,7 @@ import (
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	apikeys "google.golang.org/api/apikeys/v2"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
+	assuredworkloads "google.golang.org/api/assuredworkloads/v1"
 	cloudasset "google.golang.org/api/cloudasset/v1"
 	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v3"
 	cloudiam "google.golang.org/api/iam/v1"
@@ -104,6 +105,14 @@ func CloudResourceManagerService(ctx context.Context, account string) (*cloudres
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return cloudresourcemanager.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func AssuredWorkloadsService(ctx context.Context, account string) (*assuredworkloads.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return assuredworkloads.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func ServiceUsageService(ctx context.Context, account string) (*serviceusage.Service, error) {
