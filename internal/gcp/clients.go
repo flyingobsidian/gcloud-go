@@ -8,7 +8,9 @@ import (
 	apikeys "google.golang.org/api/apikeys/v2"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 	assuredworkloads "google.golang.org/api/assuredworkloads/v1"
+	billingbudgets "google.golang.org/api/billingbudgets/v1"
 	cloudasset "google.golang.org/api/cloudasset/v1"
+	cloudbilling "google.golang.org/api/cloudbilling/v1"
 	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v3"
 	cloudiam "google.golang.org/api/iam/v1"
 	iamcredentials "google.golang.org/api/iamcredentials/v1"
@@ -154,6 +156,22 @@ func OrgPolicyService(ctx context.Context, account string) (*orgpolicy.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return orgpolicy.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func CloudBillingService(ctx context.Context, account string) (*cloudbilling.APIService, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return cloudbilling.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func BillingBudgetsService(ctx context.Context, account string) (*billingbudgets.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return billingbudgets.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func IAMCredentialsService(ctx context.Context, account string) (*iamcredentials.Service, error) {
