@@ -27,6 +27,8 @@ var projectDescribeCmd = &cobra.Command{
 	RunE:  runProjectDescribe,
 }
 
+var flagProjectDescribeFormat string
+
 var projectCreateCmd = &cobra.Command{
 	Use:   "create PROJECT_ID",
 	Short: "Create a new project",
@@ -127,6 +129,8 @@ var (
 )
 
 func init() {
+	projectDescribeCmd.Flags().StringVar(&flagProjectDescribeFormat, "format", "", "Output format: yaml (default), json, csv(FIELDS), table(FIELDS), text(FIELDS), value(FIELDS), config(FIELDS), get(FIELD)")
+
 	projectCreateCmd.Flags().StringVar(&flagProjectCreateName, "name", "", "Display name for the new project (defaults to the project ID)")
 	projectCreateCmd.Flags().StringVar(&flagProjectCreateFolder, "folder", "", "Parent folder ID (mutually exclusive with --organization)")
 	projectCreateCmd.Flags().StringVar(&flagProjectCreateOrg, "organization", "", "Parent organization ID (mutually exclusive with --folder)")
@@ -204,7 +208,7 @@ func runProjectDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing project: %w", err)
 	}
-	return yamlEncode(project)
+	return emitFormatted(project, flagProjectDescribeFormat)
 }
 
 func runProjectCreate(cmd *cobra.Command, args []string) error {
