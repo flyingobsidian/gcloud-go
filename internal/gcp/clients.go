@@ -11,6 +11,7 @@ import (
 	cloudasset "google.golang.org/api/cloudasset/v1"
 	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v3"
 	cloudiam "google.golang.org/api/iam/v1"
+	iamcredentials "google.golang.org/api/iamcredentials/v1"
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 	dataflow "google.golang.org/api/dataflow/v1b3"
 	dataplex "google.golang.org/api/dataplex/v1"
@@ -153,6 +154,14 @@ func OrgPolicyService(ctx context.Context, account string) (*orgpolicy.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return orgpolicy.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func IAMCredentialsService(ctx context.Context, account string) (*iamcredentials.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return iamcredentials.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func OnDemandScanningService(ctx context.Context, account string) (*ondemandscanning.Service, error) {
