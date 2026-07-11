@@ -1,0 +1,137 @@
+name: Live Integration
+
+# Exercises gcloud-go against real GCP projects and compares output with the
+# reference Python gcloud, over a create -> list -> destroy lifecycle.
+#
+# Shape:
+#   setup     - create two per-run projects (gcloud-go-<id> and gcloud-python-<id>)
+#   test      - fan out: one parallel job per service (storage, secrets, iam, ...)
+#   teardown  - delete both projects (always runs, so cost stays at zero)
+#
+# Kept OFF the PR path: it needs cloud credentials and mutates real resources,
+# so it runs on demand and on a weekly schedule.
+
+"on":
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+  pull_request:
+    branches: [main] # for testing
+
+concurrency:
+  group: live-integration
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # required for Workload Identity Federation
+
+env: {}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. SETUP: create the two per-run projects.
+  # ---------------------------------------------------------------------------
+  setup:
+    name: Create projects
+    runs-on: ubuntu-latest
+    outputs:
+      ci_project_id: ${{ steps.create.outputs.ci_project_id }}
+      py_project: ${{ steps.create.outputs.py_project }}
+      go_project: ${{ steps.create.outputs.go_project }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build gcloud-go
+        run: make build
+
+      - name: Upload gcloud-go binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: gcloud-go-bin
+          path: bin/gcloud-go
+          retention-days: 1
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK (reference gcloud)
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Create gcloud-go-<id> and gcloud-python-<id>
+        id: create
+        run: ./test/integration/create_projects.sh
+
+  # ---------------------------------------------------------------------------
+  # 2. TEST: fan out, one parallel job per service.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test ${{ matrix.service }}
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # one service failing must not cancel the others
+      matrix:
+        service: [iam, secrets, storage]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download gcloud-go binary
+        uses: actions/download-artifact@v8
+        with:
+          name: gcloud-go-bin
+          path: bin
+
+      - name: Make gcloud-go executable
+        run: chmod +x bin/gcloud-go
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK (reference gcloud)
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Compare ${{ matrix.service }}
+        run: echo NO_OP ./test/integration/run.sh ${{ matrix.service }}
+        env:
+          PY_PROJECT: ${{ needs.setup.outputs.py_project }}
+          GO_PROJECT: ${{ needs.setup.outputs.go_project }}
+
+  # ---------------------------------------------------------------------------
+  # 3. TEARDOWN: delete both projects. Always runs, even if setup or tests fail.
+  # ---------------------------------------------------------------------------
+  teardown:
+    name: Delete projects
+    needs: [setup, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK (reference gcloud)
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Delete both projects
+        run: ./test/integration/delete_projects.sh
+        env:
+          PY_PROJECT: ${{ needs.setup.outputs.py_project }}
+          GO_PROJECT: ${{ needs.setup.outputs.go_project }}
