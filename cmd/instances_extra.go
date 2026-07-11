@@ -12,7 +12,6 @@ import (
 	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
-	"gopkg.in/yaml.v3"
 )
 
 // --- instances describe ---
@@ -573,6 +572,11 @@ func resolveRegion() (string, string, error) {
 	return project, region, nil
 }
 
+// formatOutput renders v to stdout for the compute-instance command family.
+// It keeps the compute.Instance get(FIELD) alias table wired to
+// getInstanceField (which handles gcloud aliases like INTERNAL_IP), and
+// defers all other formatting to emitFormatted so there is a single
+// implementation of yaml/json/table/etc. across the codebase.
 func formatOutput(v any, format string) error {
 	if isGetFormat(format) {
 		field := extractGetField(format)
@@ -581,18 +585,10 @@ func formatOutput(v any, format string) error {
 			return nil
 		}
 	}
-	if format == "yaml" {
-		return yamlEncode(v)
+	if format == "" {
+		format = "json"
 	}
-	if isTableFormat(format) {
-		return tableEncode(v, extractTableFields(format))
-	}
-	if isValueFormat(format) {
-		return valueEncode(v, extractValueFields(format))
-	}
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+	return emitFormatted(v, format)
 }
 
 func isTableFormat(format string) bool {
@@ -621,87 +617,10 @@ func extractValueFields(format string) []string {
 	return fields
 }
 
+// yamlEncode prints v as YAML to stdout. Thin wrapper around emitFormatted so
+// the yaml serialization logic lives in exactly one place (format.go).
 func yamlEncode(v any) error {
-	// Convert through JSON to get a clean map representation.
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	var m any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-	out, err := yaml.Marshal(m)
-	if err != nil {
-		return err
-	}
-	fmt.Print(string(out))
-	return nil
-}
-
-func tableEncode(v any, fields []string) error {
-	// Print header.
-	fmt.Println(strings.Join(fields, "\t"))
-	// Extract values from JSON representation.
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		// Might be a list — try printing each item.
-		var items []map[string]any
-		if err := json.Unmarshal(data, &items); err != nil {
-			return fmt.Errorf("table format requires object or array output")
-		}
-		for _, item := range items {
-			printTableRow(item, fields)
-		}
-		return nil
-	}
-	printTableRow(m, fields)
-	return nil
-}
-
-func printTableRow(m map[string]any, fields []string) {
-	var vals []string
-	for _, f := range fields {
-		vals = append(vals, jsonFieldValue(m, f))
-	}
-	fmt.Println(strings.Join(vals, "\t"))
-}
-
-func valueEncode(v any, fields []string) error {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return fmt.Errorf("value format requires object output")
-	}
-	for _, f := range fields {
-		fmt.Println(jsonFieldValue(m, f))
-	}
-	return nil
-}
-
-func jsonFieldValue(m map[string]any, field string) string {
-	// Support dotted paths like "networkInterfaces[0].networkIP".
-	parts := strings.Split(field, ".")
-	var current any = m
-	for _, part := range parts {
-		switch c := current.(type) {
-		case map[string]any:
-			current = c[part]
-		default:
-			return ""
-		}
-	}
-	if current == nil {
-		return ""
-	}
-	return fmt.Sprintf("%v", current)
+	return emitFormatted(v, "yaml")
 }
 
 func isGetFormat(format string) bool {
