@@ -753,13 +753,13 @@ func runSecretsDelete(cmd *cobra.Command, args []string) error {
 	}
 
 	if !flagQuiet {
-		fmt.Printf("You are about to delete secret [%s]. This action cannot be undone.\n", secretID)
-		fmt.Print("Do you want to continue (Y/n)? ")
+		fmt.Fprintf(os.Stderr, "You are about to delete secret [%s]. This action cannot be undone.\n", secretID)
+		fmt.Fprint(os.Stderr, "Do you want to continue (Y/n)? ")
 		var answer string
 		fmt.Scanln(&answer)
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "" && answer != "y" && answer != "yes" {
-			fmt.Println("Aborted.")
+			fmt.Fprintln(os.Stderr, "Aborted.")
 			return nil
 		}
 	}
@@ -779,7 +779,7 @@ func runSecretsDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting secret: %w", err)
 	}
 
-	fmt.Printf("Deleted secret [%s].\n", secretID)
+	fmt.Fprintf(os.Stderr, "Deleted secret [%s].\n", secretID)
 	return nil
 }
 
