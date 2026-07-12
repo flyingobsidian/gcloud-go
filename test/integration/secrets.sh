@@ -40,6 +40,7 @@ delete_secrets() {
     local nochecks="${1:-}"
     local pargs
     pargs=(
+        "--quiet" # do not ask for confirmation
         "secrets"
         "delete"
         "test-secret-$object_uid"

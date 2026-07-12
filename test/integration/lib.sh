@@ -48,9 +48,8 @@ run_capture() {
     printf '  $ %s\n' "$*"
     "$@" >"$out" 2>"${out}.err"
     local rc=$?
-    if [ $rc -ne 0 ]; then
-        sed 's/^/    stderr: /' "${out}.err" | head -n 20
-    fi
+    sed 's/^/    stdout: /' "${out}"
+    sed 's/^/    stderr: /' "${out}.err"
     return $rc
 }
 
