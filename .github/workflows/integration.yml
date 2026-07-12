@@ -26,6 +26,8 @@ jobs:
   build:
     name: Build gcloud-go
     runs-on: ubuntu-latest
+    outputs:
+      object_uid: ${{ steps.uid.outputs.object_uid }}
     steps:
       - uses: actions/checkout@v6
 
@@ -42,6 +44,10 @@ jobs:
           name: gcloud-go-bin
           path: bin/gcloud-go
           retention-days: 1
+
+      - name: Generate unique object id
+        id: uid
+        run: echo "object_uid=$(uuidgen | cut -d- -f1)" >> "$GITHUB_OUTPUT"
 
   test:
     name: Test ${{ matrix.service }}
@@ -79,3 +85,42 @@ jobs:
         env:
           PY_PROJECT: fo-gcloud-py-testci
           GO_PROJECT: fo-gcloud-go-testci
+          OBJECT_UID: ${{ needs.build.outputs.object_uid }}
+
+  tidyup:
+    name: Tidy up ${{ matrix.service }}
+    needs: [build, test]
+    if: always()
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [secrets]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download gcloud-go binary
+        uses: actions/download-artifact@v8
+        with:
+          name: gcloud-go-bin
+          path: bin
+
+      - name: Make gcloud-go executable
+        run: chmod +x bin/gcloud-go
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK (reference gcloud)
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Tidy up ${{ matrix.service }}
+        run: ./test/integration/${{ matrix.service }}.sh tidy
+        env:
+          PY_PROJECT: fo-gcloud-py-testci
+          GO_PROJECT: fo-gcloud-go-testci
+          OBJECT_UID: ${{ needs.build.outputs.object_uid }}

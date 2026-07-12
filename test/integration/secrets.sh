@@ -44,9 +44,6 @@ delete_secrets() {
         "delete"
         "test-secret-$object_uid"
     )
-    if [[ "$nochecks" == "nochecks" ]]; then
-        set +e
-    fi
     run_capture "$py_out" "$gcloud_py" --project="$py_project" "${pargs[@]}"
     run_capture "$go_out" "$gcloud_go" --project="$go_project" "${pargs[@]}"
 
@@ -85,6 +82,7 @@ tidy() {
 }
 
 if [[ "${1:-}" == tidy ]]; then
+    set +e
     tidy
 else
     process
