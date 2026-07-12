@@ -1,23 +1,5 @@
 #!/usr/bin/env bash
 
-report() { # kind label detail
-    local kind="$1" label="$2" detail="${3:-}"
-    case "$kind" in
-        PASS)
-            PASS_COUNT=$((PASS_COUNT + 1)); RESULTS+=("PASS  $label")
-            printf '%s[PASS]%s %s\n' "$_c_green" "$_c_reset" "$label"
-            ;;
-        FAIL)
-            FAIL_COUNT=$((FAIL_COUNT + 1)); RESULTS+=("FAIL  $label")
-            printf '%s[FAIL]%s %s -- %s\n' "$_c_red" "$_c_reset" "$label" "$detail"
-            ;;
-        GAP)
-            GAP_COUNT=$((GAP_COUNT + 1));  RESULTS+=("GAP   $label")
-            printf '%s[GAP ]%s %s -- %s\n' "$_c_yellow" "$_c_reset" "$label" "$detail"
-            ;;
-    esac
-}
-
 # normalize_json: read JSON on stdin, strip volatile / server-assigned fields,
 # sort object keys and array elements so semantically-equal payloads compare
 # equal regardless of ordering or timestamps.
@@ -67,39 +49,30 @@ _neutralize() {
     sed "${sed_args[@]}"
 }
 
-# cmp_json LABEL GO_JSON PY_JSON: neutralize, normalize and diff two JSON files.
 cmp_json() {
-    local label="$1" go_json="$2" py_json="$3"
-    _neutralize <"$go_json" | normalize_json >"${go_json}.norm"
+    local label="${1:?label is required}"
+    local py_json="${2:?py_json is required}"
+    local go_json="${3:?go_json is required}"
     _neutralize <"$py_json" | normalize_json >"${py_json}.norm"
-    if diff -u "${py_json}.norm" "${go_json}.norm" >"${go_json}.diff"; then
-        report PASS "$label"
-    else
-        report FAIL "$label" "normalized output differs (see diff below)"
-        sed 's/^/    /' "${go_json}.diff" | head -n 40
+    _neutralize <"$go_json" | normalize_json >"${go_json}.norm"
+    if ! diff -u "${py_json}.norm" "${go_json}.norm" >"${go_json}.diff"; then
+        echo "FAIL $label: normalised output differs (see diff below)"
+        sed 's/^/    /' "${go_json}.diff"
+        return 1
     fi
+    return 0
 }
 
-# cmp_text LABEL GO_TXT PY_TXT: neutralize, sort and diff (order-insensitive).
 cmp_text() {
-    local label="$1" go_txt="$2" py_txt="$3"
-    _neutralize <"$go_txt" | sort >"${go_txt}.norm"
-    _neutralize <"$py_txt" | sort >"${py_txt}.norm"
-    if diff -u "${py_txt}.norm" "${go_txt}.norm" >"${go_txt}.diff"; then
-        report PASS "$label"
-    else
-        report FAIL "$label" "listing differs"
-        sed 's/^/    /' "${go_txt}.diff" | head -n 40
+    local label="${1:?label is required}"
+    local py_txt="${2:?py_txt is required}"
+    local go_txt="${3:?go_txt is required}"
+    _neutralize <"$py_txt" >"${py_txt}.norm"
+    _neutralize <"$go_txt" >"${go_txt}.norm"
+    if ! diff -u "${py_txt}.norm" "${go_txt}.norm" >"${go_txt}.diff"; then
+        echo "FAIL $label: listing differs (see diff below)"
+        sed 's/^/    /' "${go_txt}.diff"
+        return 1
     fi
-}
-
-print_summary() {
-    echo
-    echo "==================== SUMMARY ===================="
-    printf '%s\n' "${RESULTS[@]}"
-    echo "------------------------------------------------"
-    printf 'PASS=%d  FAIL=%d  GAP=%d\n' "$PASS_COUNT" "$FAIL_COUNT" "$GAP_COUNT"
-    echo "================================================"
-    # A GAP (missing gcloud-go subcommand) is informational, not a failure.
-    [ "$FAIL_COUNT" -eq 0 ]
+    return 0
 }

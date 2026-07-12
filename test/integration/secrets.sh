@@ -33,7 +33,7 @@ create_secrets() {
     run_capture "$py_out" "$gcloud_py" --project="$py_project" "${pargs[@]}"
     run_capture "$go_out" "$gcloud_go" --project="$go_project" "${pargs[@]}"
 
-    # TBD: Check results
+    cmp_text "create secrets" "$py_out" "$go_out"
 }
 
 delete_secrets() {
@@ -52,7 +52,7 @@ delete_secrets() {
         return 0
     fi
 
-    # TBD: Check results
+    cmp_text "delete secrets" "$py_out" "$go_out"
 }
 
 process() {
