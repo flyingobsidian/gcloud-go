@@ -89,3 +89,18 @@ func TestReadDataFileNotFound(t *testing.T) {
 func writeTestFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0600)
 }
+
+func TestLastPathSegment(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"projects/110445118606/secrets/test-secret-06448752/versions/1", "1"},
+		{"projects/110445118606/secrets/test-secret-06448752", "test-secret-06448752"},
+		{"projects/p/locations/us-central1/secrets/foo/versions/2", "2"},
+		{"bare", "bare"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := lastPathSegment(c.in); got != c.want {
+			t.Errorf("lastPathSegment(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
