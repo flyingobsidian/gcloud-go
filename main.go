@@ -10,12 +10,14 @@ import (
 )
 
 func main() {
-	if err := cmd.Execute(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			os.Exit(exitErr.ExitCode())
-		}
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
+	executed, err := cmd.Execute()
+	if err == nil {
+		return
 	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		os.Exit(exitErr.ExitCode())
+	}
+	fmt.Fprintln(os.Stderr, cmd.FormatCLIError(executed, err))
+	os.Exit(1)
 }

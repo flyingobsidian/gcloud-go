@@ -45,6 +45,9 @@ func versionTemplate() string {
 	return fmt.Sprintf("gcloud-go %s (Golang)\nGo %s %s/%s\n", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+// Execute runs the root command and returns the resolved subcommand along
+// with any error. Callers use the returned *cobra.Command to render the
+// dotted-path error prefix ("gcloud.secrets.delete") that Python gcloud uses.
+func Execute() (*cobra.Command, error) {
+	return rootCmd.ExecuteC()
 }
