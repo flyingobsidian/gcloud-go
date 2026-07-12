@@ -1,28 +1,4 @@
-# shellcheck shell=bash
-# Shared helpers for the live integration comparison suite.
-#
-# These functions compare gcloud-go against the reference Python gcloud by
-# running the same logical operation with each and diffing normalized output.
-# Nothing here calls `exit`; every check records PASS / FAIL / GAP so the
-# caller can run its cleanup trap and report a summary.
-
-: "${GO_BIN:?GO_BIN must point at the gcloud-go binary}"
-: "${GCLOUD_BIN:=gcloud}"
-# GO_PROJECT / PY_PROJECT are the two per-run projects gcloud-go and Python
-# gcloud operate in respectively. They may be empty for single-project use.
-: "${GO_PROJECT:=}"
-: "${PY_PROJECT:=}"
-
-# Result accounting.
-PASS_COUNT=0
-FAIL_COUNT=0
-GAP_COUNT=0
-declare -a RESULTS=()
-
-_c_green="$(printf '\033[32m')"
-_c_red="$(printf '\033[31m')"
-_c_yellow="$(printf '\033[33m')"
-_c_reset="$(printf '\033[0m')"
+#!/usr/bin/env bash
 
 report() { # kind label detail
     local kind="$1" label="$2" detail="${3:-}"
