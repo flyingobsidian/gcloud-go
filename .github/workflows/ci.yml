@@ -8,8 +8,29 @@ on:
     branches: [main]
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      sh: ${{ steps.filter.outputs.sh }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'cmd/**/*.go'
+              - 'internal/**/*.go'
+            sh:
+              - '**/*.sh'
+
   test:
     name: Unit Tests
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -23,6 +44,17 @@ jobs:
 
       - name: Unit tests
         run: make test
+
+  shellcheck:
+    name: ShellCheck
+    needs: changes
+    if: needs.changes.outputs.sh == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run ShellCheck
+        run: shellcheck $(git ls-files '*.sh')
 
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})

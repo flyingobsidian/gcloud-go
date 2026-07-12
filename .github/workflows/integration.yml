@@ -1,0 +1,126 @@
+name: Live Integration
+
+# Exercise gcloud-go against real GCP projects and compare output with the
+# reference Python gcloud, over a create -> list -> destroy lifecycle.
+# The projects are permanent:
+# - fo-gcloud-go - contains non-test long-lived objects.
+# - fo-gcloud-py-testci - for working with the reference Python gcloud.
+# - fo-gcloud-go-testci - for working with gcloud-go.
+
+"on":
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+  pull_request:
+    branches: [main] # for testing
+
+concurrency:
+  group: live-integration
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # required for Workload Identity Federation
+
+jobs:
+  build:
+    name: Build gcloud-go
+    runs-on: ubuntu-latest
+    outputs:
+      object_uid: ${{ steps.uid.outputs.object_uid }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build gcloud-go
+        run: make build
+
+      - name: Upload gcloud-go binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: gcloud-go-bin
+          path: bin/gcloud-go
+          retention-days: 1
+
+      - name: Generate unique object id
+        id: uid
+        run: echo "object_uid=$(uuidgen | cut -d- -f1)" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test ${{ matrix.service }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # one service failing must not cancel the others
+      matrix:
+        service: [secrets]
+    steps:
+      - uses: actions/checkout@v6
+
+      # Reuse the binary built above rather than rebuilding per matrix leg.
+      - name: Download gcloud-go binary
+        uses: actions/download-artifact@v8
+        with:
+          name: gcloud-go-bin
+          path: bin
+
+      - name: Make gcloud-go executable
+        run: chmod +x bin/gcloud-go
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK (reference gcloud)
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Compare ${{ matrix.service }}
+        run: ./test/integration/${{ matrix.service }}.sh
+        env:
+          PY_PROJECT: fo-gcloud-py-testci
+          GO_PROJECT: fo-gcloud-go-testci
+          OBJECT_UID: ${{ needs.build.outputs.object_uid }}
+
+  tidyup:
+    name: Tidy up ${{ matrix.service }}
+    needs: [build, test]
+    if: always()
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [secrets]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download gcloud-go binary
+        uses: actions/download-artifact@v8
+        with:
+          name: gcloud-go-bin
+          path: bin
+
+      - name: Make gcloud-go executable
+        run: chmod +x bin/gcloud-go
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK (reference gcloud)
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Tidy up ${{ matrix.service }}
+        run: ./test/integration/${{ matrix.service }}.sh tidy
+        env:
+          PY_PROJECT: fo-gcloud-py-testci
+          GO_PROJECT: fo-gcloud-go-testci
+          OBJECT_UID: ${{ needs.build.outputs.object_uid }}
