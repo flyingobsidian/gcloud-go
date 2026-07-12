@@ -420,19 +420,17 @@ func runSecretsCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating secret: %w", err)
 	}
 
-	fmt.Printf("Created secret [%s].\n", created.Name)
-
-	// If --data-file provided, add initial version.
+	// Match Python gcloud: when --data-file is supplied, emit only the
+	// version-created message; otherwise emit the secret-created message.
+	// Both messages go to stderr via secrets_log.
 	if flagDataFile != "" {
 		data, err := readDataFile(flagDataFile)
 		if err != nil {
 			return err
 		}
-		if err := addVersion(ctx, svc, created.Name, data); err != nil {
-			return err
-		}
+		return addVersion(ctx, svc, created.Name, data)
 	}
-
+	fmt.Fprintf(os.Stderr, "Created secret [%s].\n", secretID)
 	return nil
 }
 
@@ -812,6 +810,18 @@ func addVersion(ctx context.Context, svc *secretmanager.Service, parent string, 
 	if err != nil {
 		return fmt.Errorf("adding secret version: %w", err)
 	}
-	fmt.Printf("Created version [%s].\n", ver.Name)
+	// Emit "Created version [N] of the secret [ID]." to stderr, matching
+	// secrets_log.Versions().Created() in the Python reference.
+	fmt.Fprintf(os.Stderr, "Created version [%s] of the secret [%s].\n",
+		lastPathSegment(ver.Name), lastPathSegment(parent))
 	return nil
+}
+
+// lastPathSegment returns the substring after the final "/" in name, or name
+// itself when there is no "/".
+func lastPathSegment(name string) string {
+	if i := strings.LastIndexByte(name, '/'); i >= 0 {
+		return name[i+1:]
+	}
+	return name
 }
