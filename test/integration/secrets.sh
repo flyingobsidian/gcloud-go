@@ -55,8 +55,6 @@ delete_secrets() {
 }
 
 process() {
-    local py_out go_out
-
     echo ">>> secrets"
 
     create_secrets
