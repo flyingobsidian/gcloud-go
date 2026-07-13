@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud apphub (#300) ---
 
-var apphubCmd = &cobra.Command{Use: "apphub", Short: "Manage App Hub (stubbed)"}
+var apphubCmd = &cobra.Command{Use: "apphub", Short: "Manage App Hub"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
