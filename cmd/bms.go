@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud bms (#310) ---
 
-var bmsCmd = &cobra.Command{Use: "bms", Short: "Manage Bare Metal Solution (stubbed)"}
+var bmsCmd = &cobra.Command{Use: "bms", Short: "Manage Bare Metal Solution"}
 
 func init() {
 	crud := []string{"describe", "list", "update"}
