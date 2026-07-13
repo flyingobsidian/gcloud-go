@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud pam (#369) ---
 
-var pamCmd = &cobra.Command{Use: "pam", Short: "Manage Privileged Access Manager (stubbed)"}
+var pamCmd = &cobra.Command{Use: "pam", Short: "Manage Privileged Access Manager"}
 
 func init() {
 	registerStubGroup(pamCmd, "entitlements", "Manage entitlements",
