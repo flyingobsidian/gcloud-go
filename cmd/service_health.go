@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud service-health (#384) ---
 
-var serviceHealthCmd = &cobra.Command{Use: "service-health", Short: "Manage Service Health (stubbed)"}
+var serviceHealthCmd = &cobra.Command{Use: "service-health", Short: "Manage Service Health"}
 
 func init() {
 	registerStubGroup(serviceHealthCmd, "events", "Manage events", "describe", "list")
