@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud deployment-manager (#328) ---
 
-var deploymentManagerCmd = &cobra.Command{Use: "deployment-manager", Short: "Manage Deployment Manager (stubbed)"}
+var deploymentManagerCmd = &cobra.Command{Use: "deployment-manager", Short: "Manage Deployment Manager"}
 
 func init() {
 	registerStubGroup(deploymentManagerCmd, "deployments", "Manage deployments",
