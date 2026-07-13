@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud domains (#332) ---
 
-var domainsCmd = &cobra.Command{Use: "domains", Short: "Manage Cloud Domains (stubbed)"}
+var domainsCmd = &cobra.Command{Use: "domains", Short: "Manage Cloud Domains"}
 
 func init() {
 	registerStubGroup(domainsCmd, "registrations", "Manage domain registrations",
