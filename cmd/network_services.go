@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud network-services (#364) ---
 
-var networkServicesCmd = &cobra.Command{Use: "network-services", Short: "Manage Network Services (stubbed)"}
+var networkServicesCmd = &cobra.Command{Use: "network-services", Short: "Manage Network Services"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
@@ -32,5 +32,8 @@ func init() {
 	registerStubGroup(networkServicesCmd, "service-lb-policies", "Manage service LB policies", crud...)
 	registerStubGroup(networkServicesCmd, "tcp-routes", "Manage TCP routes", crud...)
 	registerStubGroup(networkServicesCmd, "tls-routes", "Manage TLS routes", crud...)
+		registerStubGroup(networkServicesCmd, "agent-gateways", "Manage agent-gateways", "list", "describe")
+	registerStubGroup(networkServicesCmd, "multicast-domain-activations", "Manage multicast-domain-activations", "list", "describe")
+	registerStubGroup(networkServicesCmd, "multicast-domain-groups", "Manage multicast-domain-groups", "list", "describe")
 	rootCmd.AddCommand(networkServicesCmd)
 }
