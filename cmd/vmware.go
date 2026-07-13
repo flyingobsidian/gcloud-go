@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud vmware (#395) ---
 
-var vmwareCmd = &cobra.Command{Use: "vmware", Short: "Manage VMware Engine (stubbed)"}
+var vmwareCmd = &cobra.Command{Use: "vmware", Short: "Manage VMware Engine"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
