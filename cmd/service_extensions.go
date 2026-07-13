@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud service-extensions (#383) ---
 
-var serviceExtensionsCmd = &cobra.Command{Use: "service-extensions", Short: "Manage Service Extensions (stubbed)"}
+var serviceExtensionsCmd = &cobra.Command{Use: "service-extensions", Short: "Manage Service Extensions"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
