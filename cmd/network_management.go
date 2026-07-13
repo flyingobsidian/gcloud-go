@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud network-management (#362) ---
 
-var networkManagementCmd = &cobra.Command{Use: "network-management", Short: "Manage Network Management (stubbed)"}
+var networkManagementCmd = &cobra.Command{Use: "network-management", Short: "Manage Network Management"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
