@@ -167,6 +167,20 @@ func init() {
 	redisInstancesCmd.AddCommand(redisInstancesExportCmd)
 	redisInstancesCmd.AddCommand(redisInstancesImportCmd)
 	redisCmd.AddCommand(redisInstancesCmd)
+
+	// gcloud-python redis subgroups not yet implemented (#544).
+	registerStubGroup(redisCmd, "acl-policies",
+		"Manage ACL policies on Memorystore for Redis",
+		"create", "delete", "describe", "list", "update")
+	registerStubGroup(redisCmd, "clusters",
+		"Manage Memorystore for Redis Cluster",
+		"create", "delete", "describe", "list", "update")
+	registerStubGroup(redisCmd, "operations",
+		"Manage long-running redis operations",
+		"cancel", "delete", "describe", "list", "wait")
+	registerStubGroup(redisCmd, "regions", "List regions with Redis available", "list")
+	registerStubGroup(redisCmd, "zones", "List zones with Redis available", "list")
+
 	rootCmd.AddCommand(redisCmd)
 }
 
