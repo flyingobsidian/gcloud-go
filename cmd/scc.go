@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud scc (#381) ---
 
-var sccCmd = &cobra.Command{Use: "scc", Short: "Manage Security Command Center (stubbed)"}
+var sccCmd = &cobra.Command{Use: "scc", Short: "Manage Security Command Center"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
