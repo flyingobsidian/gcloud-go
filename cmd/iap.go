@@ -8,7 +8,7 @@ import "github.com/spf13/cobra"
 // SSH tunneling. This surface registration exposes the gcloud-python iap
 // subcommand set as stubs so callers can discover them.
 
-var iapCmd = &cobra.Command{Use: "iap", Short: "Manage IAP (stubbed)"}
+var iapCmd = &cobra.Command{Use: "iap", Short: "Manage IAP"}
 
 func init() {
 	registerStubGroup(iapCmd, "oauth-brands", "(DEPRECATED) Manage OAuth brands", "create", "describe", "list")
