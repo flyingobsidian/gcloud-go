@@ -6,7 +6,7 @@ import "github.com/spf13/cobra"
 
 var beyondcorpCmd = &cobra.Command{
 	Use:   "beyondcorp",
-	Short: "Manage BeyondCorp resources (stubbed)",
+	Short: "Manage BeyondCorp resources",
 }
 
 func init() {
