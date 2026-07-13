@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud workbench (#396) ---
 
-var workbenchCmd = &cobra.Command{Use: "workbench", Short: "Manage Vertex AI Workbench (stubbed)"}
+var workbenchCmd = &cobra.Command{Use: "workbench", Short: "Manage Vertex AI Workbench"}
 
 func init() {
 	registerStubGroup(workbenchCmd, "executions", "Manage executions", "create", "delete", "describe", "list")
