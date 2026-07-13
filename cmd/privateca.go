@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud privateca (#374) ---
 
-var privatecaCmd = &cobra.Command{Use: "privateca", Short: "Manage Private CA (stubbed)"}
+var privatecaCmd = &cobra.Command{Use: "privateca", Short: "Manage Private CA"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
