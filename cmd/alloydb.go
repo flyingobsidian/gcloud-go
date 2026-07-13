@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud alloydb (#293) ---
 
-var alloydbCmd = &cobra.Command{Use: "alloydb", Short: "Manage AlloyDB (stubbed)"}
+var alloydbCmd = &cobra.Command{Use: "alloydb", Short: "Manage AlloyDB"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
