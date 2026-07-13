@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud datalineage (#323) ---
 
-var datalineageCmd = &cobra.Command{Use: "datalineage", Short: "Manage Data Lineage (stubbed)"}
+var datalineageCmd = &cobra.Command{Use: "datalineage", Short: "Manage Data Lineage"}
 
 func init() {
 	registerStubGroup(datalineageCmd, "config", "Manage Data Lineage config", "describe", "update")
