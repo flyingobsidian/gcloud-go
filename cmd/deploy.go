@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud deploy (#327) ---
 
-var deployCmd = &cobra.Command{Use: "deploy", Short: "Manage Cloud Deploy (stubbed)"}
+var deployCmd = &cobra.Command{Use: "deploy", Short: "Manage Cloud Deploy"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
