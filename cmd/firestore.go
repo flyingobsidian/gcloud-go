@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud firestore (#341) ---
 
-var firestoreCmd = &cobra.Command{Use: "firestore", Short: "Manage Cloud Firestore (stubbed)"}
+var firestoreCmd = &cobra.Command{Use: "firestore", Short: "Manage Cloud Firestore"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
@@ -18,5 +18,6 @@ func init() {
 	for _, name := range []string{"bulk-delete", "export", "import"} {
 		registerStubCommand(firestoreCmd, name, "Not yet implemented")
 	}
+		registerStubGroup(firestoreCmd, "backups", "Manage backups", "list", "describe")
 	rootCmd.AddCommand(firestoreCmd)
 }
