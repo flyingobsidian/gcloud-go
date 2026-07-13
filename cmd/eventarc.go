@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud eventarc (#338) ---
 
-var eventarcCmd = &cobra.Command{Use: "eventarc", Short: "Manage Eventarc (stubbed)"}
+var eventarcCmd = &cobra.Command{Use: "eventarc", Short: "Manage Eventarc"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
