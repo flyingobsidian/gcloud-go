@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud recaptcha (#378) ---
 
-var recaptchaCmd = &cobra.Command{Use: "recaptcha", Short: "Manage reCAPTCHA (stubbed)"}
+var recaptchaCmd = &cobra.Command{Use: "recaptcha", Short: "Manage reCAPTCHA"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
