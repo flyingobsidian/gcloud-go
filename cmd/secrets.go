@@ -259,6 +259,23 @@ func init() {
 	secretsCmd.AddCommand(secretsDescribeCmd)
 	secretsCmd.AddCommand(secretsDeleteCmd)
 	secretsCmd.AddCommand(secretsUpdateCmd)
+
+	// gcloud-python secrets commands/subgroups not yet implemented (#546).
+	registerStubCommand(secretsCmd, "add-iam-policy-binding",
+		"Add an IAM policy binding to a secret")
+	registerStubCommand(secretsCmd, "get-iam-policy",
+		"Get the IAM policy for a secret")
+	registerStubCommand(secretsCmd, "remove-iam-policy-binding",
+		"Remove an IAM policy binding from a secret")
+	registerStubCommand(secretsCmd, "set-iam-policy",
+		"Set the IAM policy for a secret")
+	registerStubGroup(secretsCmd, "replication",
+		"Manage secret replication",
+		"get", "set", "update")
+	registerStubGroup(secretsCmd, "locations",
+		"Manage / list Secret Manager locations",
+		"describe", "list")
+
 	rootCmd.AddCommand(secretsCmd)
 }
 
