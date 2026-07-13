@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud looker (#351) ---
 
-var lookerCmd = &cobra.Command{Use: "looker", Short: "Manage Looker (stubbed)"}
+var lookerCmd = &cobra.Command{Use: "looker", Short: "Manage Looker"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
