@@ -76,3 +76,23 @@ func TestParseDpkgOutputEmpty(t *testing.T) {
 		t.Errorf("got %d packages for empty input, want 0", len(pkgs))
 	}
 }
+
+// TestArtifactsStubSubcommandsRegistered checks the subgroups added in #537
+// are present on the artifacts command.
+func TestArtifactsStubSubcommandsRegistered(t *testing.T) {
+	want := []string{
+		"apt", "attachments", "docker", "files", "generic", "go",
+		"image-streaming-cache", "locations", "operations", "packages",
+		"print-settings", "projects", "repositories", "rules", "sbom",
+		"settings", "tags", "versions", "vpcsc-config", "vulnerabilities", "yum",
+	}
+	got := map[string]bool{}
+	for _, c := range artifactsCmd.Commands() {
+		got[c.Name()] = true
+	}
+	for _, name := range want {
+		if !got[name] {
+			t.Errorf("artifacts subcommand %q not registered", name)
+		}
+	}
+}

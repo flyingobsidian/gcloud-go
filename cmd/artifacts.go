@@ -115,6 +115,33 @@ func init() {
 	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesDeleteCmd)
 	artifactsDockerCmd.AddCommand(artifactsDockerImagesCmd)
 	artifactsCmd.AddCommand(artifactsDockerCmd)
+
+	// Stub registrations for artifacts subgroups present in gcloud-python but
+	// not yet implemented in gcloud-go (#537). Registered so `--help` lists
+	// them and later PRs can fill in real behavior per subgroup.
+	registerStubGroup(artifactsCmd, "apt", "Manage Apt package operations", "list", "delete")
+	registerStubGroup(artifactsCmd, "attachments", "Manage artifact attachments", "create", "delete", "describe", "list")
+	registerStubGroup(artifactsCmd, "files", "Manage individual files in a repository", "delete", "describe", "list")
+	registerStubGroup(artifactsCmd, "generic", "Manage generic package format", "download", "upload")
+	registerStubGroup(artifactsCmd, "go", "Manage Go modules", "upload")
+	registerStubGroup(artifactsCmd, "image-streaming-cache", "Manage image streaming caches", "create", "delete", "describe", "list")
+	registerStubGroup(artifactsCmd, "locations", "List regional metadata", "list", "describe")
+	registerStubGroup(artifactsCmd, "operations", "Manage long-running operations", "describe", "list", "wait")
+	registerStubGroup(artifactsCmd, "packages", "Manage packages", "delete", "describe", "list")
+	registerStubCommand(artifactsCmd, "print-settings", "Print client configuration settings")
+	registerStubGroup(artifactsCmd, "projects", "Manage per-project Artifact Registry settings", "describe")
+	registerStubGroup(artifactsCmd, "repositories", "Manage Artifact Registry repositories",
+		"add-iam-policy-binding", "create", "delete", "describe", "get-iam-policy",
+		"list", "remove-iam-policy-binding", "set-iam-policy", "update", "upgrade-to-remote")
+	registerStubGroup(artifactsCmd, "rules", "Manage cleanup rules", "create", "delete", "describe", "list", "update")
+	registerStubGroup(artifactsCmd, "sbom", "Manage SBOMs (Software Bill of Materials)", "export", "load")
+	registerStubGroup(artifactsCmd, "settings", "Manage Artifact Registry settings", "describe", "enable-upgrade-redirection", "disable-upgrade-redirection")
+	registerStubGroup(artifactsCmd, "tags", "Manage Docker/other tags", "create", "delete", "describe", "list", "update")
+	registerStubGroup(artifactsCmd, "versions", "Manage package versions", "delete", "describe", "list", "tag")
+	registerStubGroup(artifactsCmd, "vpcsc-config", "Manage VPC-SC configuration", "allow", "deny", "describe")
+	registerStubGroup(artifactsCmd, "vulnerabilities", "Manage vulnerability reports", "list", "load-vex")
+	registerStubGroup(artifactsCmd, "yum", "Manage Yum package operations", "list", "delete")
+
 	rootCmd.AddCommand(artifactsCmd)
 }
 
