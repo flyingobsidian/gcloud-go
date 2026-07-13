@@ -190,6 +190,33 @@ func init() {
 
 	workloadIdentityPoolsCmd.AddCommand(createCredConfigCmd)
 	iamCmd.AddCommand(workloadIdentityPoolsCmd)
+
+	// gcloud-python iam subcommands and subgroups not yet implemented (#542).
+	registerStubCommand(iamCmd, "list-grantable-roles",
+		"List IAM roles grantable on a resource")
+	registerStubCommand(iamCmd, "list-testable-permissions",
+		"List permissions testable on a resource")
+	registerStubGroup(iamCmd, "oauth-clients",
+		"Manage IAM OAuth clients",
+		"create", "delete", "describe", "list", "update",
+		"credentials")
+	registerStubGroup(iamCmd, "policies",
+		"Manage custom IAM Deny policies",
+		"create", "delete", "describe", "list", "update")
+	registerStubGroup(iamCmd, "policy-bindings",
+		"Manage IAM policy bindings",
+		"create", "delete", "describe", "list", "update")
+	registerStubGroup(iamCmd, "principal-access-boundary-policies",
+		"Manage Principal Access Boundary policies",
+		"create", "delete", "describe", "list", "update")
+	registerStubGroup(iamCmd, "simulator",
+		"Simulate IAM policy changes",
+		"create", "list", "get")
+	registerStubGroup(iamCmd, "workforce-pools",
+		"Manage Workforce Identity Federation pools",
+		"create", "delete", "describe", "list", "update", "undelete",
+		"providers")
+
 	rootCmd.AddCommand(iamCmd)
 }
 
