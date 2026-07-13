@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud ai (#291) ---
 
-var aiCmd = &cobra.Command{Use: "ai", Short: "Manage Vertex AI (stubbed)"}
+var aiCmd = &cobra.Command{Use: "ai", Short: "Manage Vertex AI"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
