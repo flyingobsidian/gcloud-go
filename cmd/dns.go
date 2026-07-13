@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud dns (#331) ---
 
-var dnsCmd = &cobra.Command{Use: "dns", Short: "Manage Cloud DNS (stubbed)"}
+var dnsCmd = &cobra.Command{Use: "dns", Short: "Manage Cloud DNS"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
