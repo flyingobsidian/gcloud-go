@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud apihub (#298) ---
 
-var apihubCmd = &cobra.Command{Use: "apihub", Short: "Manage API Hub (stubbed)"}
+var apihubCmd = &cobra.Command{Use: "apihub", Short: "Manage API Hub"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
@@ -19,5 +19,7 @@ func init() {
 	registerStubGroup(apihubCmd, "operations", "Manage operations", "cancel", "delete", "describe", "list")
 	registerStubGroup(apihubCmd, "plugins", "Manage plugins", append(crud, "enable", "disable")...)
 	registerStubGroup(apihubCmd, "runtime-project-attachments", "Manage runtime project attachments", "create", "describe", "list", "delete")
+		registerStubGroup(apihubCmd, "addons", "Manage addons", "list", "describe")
+	registerStubGroup(apihubCmd, "api-hub-instances", "Manage api-hub-instances", "list", "describe")
 	rootCmd.AddCommand(apihubCmd)
 }
