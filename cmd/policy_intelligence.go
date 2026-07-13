@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud policy-intelligence (#371) ---
 
-var policyIntelligenceCmd = &cobra.Command{Use: "policy-intelligence", Short: "Policy Intelligence (stubbed)"}
+var policyIntelligenceCmd = &cobra.Command{Use: "policy-intelligence", Short: "Policy Intelligence"}
 
 func init() {
 	simulate := &cobra.Command{Use: "simulate", Short: "Simulate policy changes"}
