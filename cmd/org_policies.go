@@ -10,7 +10,7 @@ import "github.com/spf13/cobra"
 // gcloud-python surface; the underlying operations are stubs pending
 // consolidation with the resource-manager implementations.
 
-var orgPoliciesTopCmd = &cobra.Command{Use: "org-policies", Short: "Manage Organization Policies (stubbed)"}
+var orgPoliciesTopCmd = &cobra.Command{Use: "org-policies", Short: "Manage Organization Policies"}
 
 func init() {
 	for _, name := range []string{
