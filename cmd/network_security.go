@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud network-security (#363) ---
 
-var networkSecurityCmd = &cobra.Command{Use: "network-security", Short: "Manage Network Security (stubbed)"}
+var networkSecurityCmd = &cobra.Command{Use: "network-security", Short: "Manage Network Security"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
@@ -32,5 +32,9 @@ func init() {
 	registerStubGroup(networkSecurityCmd, "ull-mirroring-collectors", "Manage ULL mirroring collectors", crud...)
 	registerStubGroup(networkSecurityCmd, "ull-mirroring-engines", "Manage ULL mirroring engines", crud...)
 	registerStubGroup(networkSecurityCmd, "url-lists", "Manage URL lists", crud...)
+		registerStubGroup(networkSecurityCmd, "backend-authentication-configs", "Manage backend-authentication-configs", "list", "describe")
+	registerStubGroup(networkSecurityCmd, "dns-threat-detectors", "Manage dns-threat-detectors", "list", "describe")
+	registerStubGroup(networkSecurityCmd, "intercept-endpoint-group-associations", "Manage intercept-endpoint-group-associations", "list", "describe")
+	registerStubGroup(networkSecurityCmd, "mirroring-endpoint-group-associations", "Manage mirroring-endpoint-group-associations", "list", "describe")
 	rootCmd.AddCommand(networkSecurityCmd)
 }
