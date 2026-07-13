@@ -227,6 +227,44 @@ func init() {
 	storageCmd.AddCommand(storageRsyncCmd)
 	storageCmd.AddCommand(storageDuCmd)
 	storageCmd.AddCommand(storageHashCmd)
+
+	// gcloud-python storage subcommands/subgroups not yet implemented (#547).
+	registerStubGroup(storageCmd, "batch-operations",
+		"Manage long-running batch storage jobs",
+		"create", "delete", "describe", "list")
+	registerStubCommand(storageCmd, "diagnose", "Diagnose Cloud Storage issues")
+	registerStubGroup(storageCmd, "folders",
+		"Manage hierarchical-namespace folders",
+		"create", "delete", "describe", "list", "rename")
+	registerStubGroup(storageCmd, "hmac",
+		"Manage HMAC keys for service accounts",
+		"create", "delete", "describe", "list", "update")
+	registerStubGroup(storageCmd, "insights",
+		"Manage Storage Insights",
+		"describe", "list")
+	registerStubGroup(storageCmd, "intelligence-configs",
+		"Manage Storage Intelligence configurations",
+		"describe", "update")
+	registerStubGroup(storageCmd, "intelligence-findings",
+		"Manage Storage Intelligence findings",
+		"list", "describe")
+	registerStubGroup(storageCmd, "managed-folders",
+		"Manage managed folders",
+		"create", "delete", "describe", "list")
+	registerStubGroup(storageCmd, "objects",
+		"Manage Cloud Storage objects (object-scoped ops)",
+		"describe", "list", "update", "compose")
+	registerStubGroup(storageCmd, "operations",
+		"Manage long-running storage operations",
+		"cancel", "describe", "list", "wait")
+	registerStubCommand(storageCmd, "restore",
+		"Restore soft-deleted objects")
+	registerStubGroup(storageCmd, "service-agent",
+		"Manage the Cloud Storage service agent",
+		"describe")
+	registerStubCommand(storageCmd, "sign-url",
+		"Generate a signed URL for an object")
+
 	rootCmd.AddCommand(storageCmd)
 }
 
