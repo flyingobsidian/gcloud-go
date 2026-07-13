@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud data-catalog (#321) ---
 
-var dataCatalogCmd = &cobra.Command{Use: "data-catalog", Short: "Manage Data Catalog (stubbed)"}
+var dataCatalogCmd = &cobra.Command{Use: "data-catalog", Short: "Manage Data Catalog"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
