@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud developer-connect (#330) ---
 
-var developerConnectCmd = &cobra.Command{Use: "developer-connect", Short: "Manage Developer Connect (stubbed)"}
+var developerConnectCmd = &cobra.Command{Use: "developer-connect", Short: "Manage Developer Connect"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
