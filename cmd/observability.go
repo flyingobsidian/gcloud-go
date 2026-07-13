@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud observability (#366) ---
 
-var observabilityCmd = &cobra.Command{Use: "observability", Short: "Manage Observability resources (stubbed)"}
+var observabilityCmd = &cobra.Command{Use: "observability", Short: "Manage Observability resources"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
