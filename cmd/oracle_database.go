@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud oracle-database (#367) ---
 
-var oracleDatabaseCmd = &cobra.Command{Use: "oracle-database", Short: "Manage Oracle Database (stubbed)"}
+var oracleDatabaseCmd = &cobra.Command{Use: "oracle-database", Short: "Manage Oracle Database"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
@@ -30,5 +30,13 @@ func init() {
 	registerStubGroup(oracleDatabaseCmd, "odb-networks", "Manage ODB networks", crud...)
 	registerStubGroup(oracleDatabaseCmd, "operations", "Manage operations", "cancel", "describe", "list")
 	registerStubGroup(oracleDatabaseCmd, "pluggable-databases", "Manage pluggable databases", crud...)
+		registerStubGroup(oracleDatabaseCmd, "autonomous-db-versions", "Manage autonomous-db-versions", "list", "describe")
+	registerStubGroup(oracleDatabaseCmd, "database-character-sets", "Manage database-character-sets", "list", "describe")
+	registerStubGroup(oracleDatabaseCmd, "databases", "Manage databases", "list", "describe")
+	registerStubGroup(oracleDatabaseCmd, "db-system-initial-storage-sizes", "Manage db-system-initial-storage-sizes", "list", "describe")
+	registerStubGroup(oracleDatabaseCmd, "db-systems", "Manage db-systems", "list", "describe")
+	registerStubGroup(oracleDatabaseCmd, "db-versions", "Manage db-versions", "list", "describe")
+	registerStubGroup(oracleDatabaseCmd, "exadb-vm-clusters", "Manage exadb-vm-clusters", "list", "describe")
+	registerStubGroup(oracleDatabaseCmd, "exascale-db-storage-vaults", "Manage exascale-db-storage-vaults", "list", "describe")
 	rootCmd.AddCommand(oracleDatabaseCmd)
 }
