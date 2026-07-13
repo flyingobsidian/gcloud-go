@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud filestore (#339) ---
 
-var filestoreCmd = &cobra.Command{Use: "filestore", Short: "Manage Filestore (stubbed)"}
+var filestoreCmd = &cobra.Command{Use: "filestore", Short: "Manage Filestore"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
