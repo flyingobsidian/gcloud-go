@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud memorystore (#355) ---
 
-var memorystoreCmd = &cobra.Command{Use: "memorystore", Short: "Manage Memorystore for Valkey (stubbed)"}
+var memorystoreCmd = &cobra.Command{Use: "memorystore", Short: "Manage Memorystore for Valkey"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
