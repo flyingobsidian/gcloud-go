@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud infra-manager (#348) ---
 
-var infraManagerCmd = &cobra.Command{Use: "infra-manager", Short: "Manage Infrastructure Manager (stubbed)"}
+var infraManagerCmd = &cobra.Command{Use: "infra-manager", Short: "Manage Infrastructure Manager"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
