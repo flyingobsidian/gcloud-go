@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud workflows (#397) ---
 
-var workflowsCmd = &cobra.Command{Use: "workflows", Short: "Manage Cloud Workflows (stubbed)"}
+var workflowsCmd = &cobra.Command{Use: "workflows", Short: "Manage Cloud Workflows"}
 
 func init() {
 	registerStubGroup(workflowsCmd, "executions", "Manage workflow executions", "cancel", "describe", "list", "wait", "wait-last")
