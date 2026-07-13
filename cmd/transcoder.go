@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud transcoder (#392) ---
 
-var transcoderCmd = &cobra.Command{Use: "transcoder", Short: "Manage Transcoder (stubbed)"}
+var transcoderCmd = &cobra.Command{Use: "transcoder", Short: "Manage Transcoder"}
 
 func init() {
 	registerStubGroup(transcoderCmd, "jobs", "Manage transcoder jobs", "create", "delete", "describe", "list")
