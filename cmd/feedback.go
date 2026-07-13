@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os/exec"
-	"runtime"
 
 	"github.com/spf13/cobra"
 )
@@ -39,18 +37,3 @@ func runFeedback(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func openBrowser(url string) {
-	var cmd string
-	var args []string
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = "open"
-	case "windows":
-		cmd = "rundll32"
-		args = []string{"url.dll,FileProtocolHandler"}
-	default:
-		cmd = "xdg-open"
-	}
-	args = append(args, url)
-	_ = exec.Command(cmd, args...).Start()
-}
