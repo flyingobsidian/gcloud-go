@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud agent-registry (#290) ---
 
-var agentRegistryCmd = &cobra.Command{Use: "agent-registry", Short: "Manage Agent Registry (stubbed)"}
+var agentRegistryCmd = &cobra.Command{Use: "agent-registry", Short: "Manage Agent Registry"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
