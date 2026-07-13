@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud active-directory (#289) ---
 
-var activeDirectoryCmd = &cobra.Command{Use: "active-directory", Short: "Manage Managed Microsoft AD (stubbed)"}
+var activeDirectoryCmd = &cobra.Command{Use: "active-directory", Short: "Manage Managed Microsoft AD"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
