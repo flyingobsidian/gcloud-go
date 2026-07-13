@@ -116,6 +116,14 @@ func init() {
 	dataflowJobsCmd.AddCommand(dataflowJobsDrainCmd)
 	dataflowJobsCmd.AddCommand(dataflowJobsRunCmd)
 	dataflowCmd.AddCommand(dataflowJobsCmd)
+
+	// gcloud-python subgroups not yet implemented (#540).
+	registerStubGroup(dataflowCmd, "flex-template", "Manage Dataflow Flex Templates",
+		"build", "run")
+	registerStubGroup(dataflowCmd, "snapshots", "Manage Dataflow job snapshots",
+		"create", "delete", "describe", "list")
+	registerStubGroup(dataflowCmd, "yaml", "Run Beam YAML pipelines", "run")
+
 	rootCmd.AddCommand(dataflowCmd)
 }
 
