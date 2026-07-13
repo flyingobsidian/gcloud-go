@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud vector-search (#394) ---
 
-var vectorSearchCmd = &cobra.Command{Use: "vector-search", Short: "Manage Vector Search (stubbed)"}
+var vectorSearchCmd = &cobra.Command{Use: "vector-search", Short: "Manage Vector Search"}
 
 func init() {
 	registerStubGroup(vectorSearchCmd, "collections", "Manage collections",
