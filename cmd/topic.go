@@ -10,7 +10,7 @@ import "github.com/spf13/cobra"
 
 var topicCmd = &cobra.Command{
 	Use:   "topic",
-	Short: "gcloud supplementary help topics (stubbed)",
+	Short: "gcloud supplementary help topics",
 }
 
 func init() {
