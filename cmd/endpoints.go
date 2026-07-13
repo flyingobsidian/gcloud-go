@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud endpoints (#336) ---
 
-var endpointsCmd = &cobra.Command{Use: "endpoints", Short: "Manage Endpoints services (stubbed)"}
+var endpointsCmd = &cobra.Command{Use: "endpoints", Short: "Manage Endpoints services"}
 
 func init() {
 	registerStubGroup(endpointsCmd, "configs", "View service configurations", "describe", "list")
