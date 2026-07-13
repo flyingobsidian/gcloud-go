@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud logging (#350) ---
 
-var loggingCmd = &cobra.Command{Use: "logging", Short: "Manage Cloud Logging (stubbed)"}
+var loggingCmd = &cobra.Command{Use: "logging", Short: "Manage Cloud Logging"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
