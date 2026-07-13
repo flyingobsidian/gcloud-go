@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud edge-cloud (#334) ---
 
-var edgeCloudCmd = &cobra.Command{Use: "edge-cloud", Short: "Manage Distributed Cloud Edge (stubbed)"}
+var edgeCloudCmd = &cobra.Command{Use: "edge-cloud", Short: "Manage Distributed Cloud Edge"}
 
 func init() {
 	container := &cobra.Command{Use: "container", Short: "Manage Edge Container resources"}
