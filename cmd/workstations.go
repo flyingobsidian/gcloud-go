@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud workstations (#400) ---
 
-var workstationsCmd = &cobra.Command{Use: "workstations", Short: "Manage Cloud Workstations (stubbed)"}
+var workstationsCmd = &cobra.Command{Use: "workstations", Short: "Manage Cloud Workstations"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
