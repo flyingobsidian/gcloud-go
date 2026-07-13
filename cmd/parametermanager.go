@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud parametermanager (#370) ---
 
-var parameterManagerCmd = &cobra.Command{Use: "parametermanager", Short: "Manage Parameter Manager (stubbed)"}
+var parameterManagerCmd = &cobra.Command{Use: "parametermanager", Short: "Manage Parameter Manager"}
 
 func init() {
 	registerStubGroup(parameterManagerCmd, "parameters", "Manage parameters",
