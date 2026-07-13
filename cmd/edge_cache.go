@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud edge-cache (#333) ---
 
-var edgeCacheCmd = &cobra.Command{Use: "edge-cache", Short: "Manage Media CDN Edge Cache (stubbed)"}
+var edgeCacheCmd = &cobra.Command{Use: "edge-cache", Short: "Manage Media CDN Edge Cache"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
