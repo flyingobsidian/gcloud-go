@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud tasks (#389) ---
 
-var tasksCmd = &cobra.Command{Use: "tasks", Short: "Manage Cloud Tasks (stubbed)"}
+var tasksCmd = &cobra.Command{Use: "tasks", Short: "Manage Cloud Tasks"}
 
 func init() {
 	registerStubGroup(tasksCmd, "locations", "Manage locations", "describe", "list")
@@ -14,5 +14,6 @@ func init() {
 	for _, name := range []string{"buffer", "create-app-engine-task", "create-http-task", "delete", "describe", "list", "run"} {
 		registerStubCommand(tasksCmd, name, "Not yet implemented")
 	}
+		registerStubGroup(tasksCmd, "cmek-config", "Manage cmek-config", "list", "describe")
 	rootCmd.AddCommand(tasksCmd)
 }
