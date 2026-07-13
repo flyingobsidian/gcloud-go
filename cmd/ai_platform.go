@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud ai-platform (#292) ---
 
-var aiPlatformCmd = &cobra.Command{Use: "ai-platform", Short: "Manage AI Platform (stubbed)"}
+var aiPlatformCmd = &cobra.Command{Use: "ai-platform", Short: "Manage AI Platform"}
 
 func init() {
 	registerStubGroup(aiPlatformCmd, "jobs", "AI Platform jobs", "cancel", "describe", "list", "stream-logs", "submit", "update")
