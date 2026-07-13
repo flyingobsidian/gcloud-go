@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud identity (#346) ---
 
-var identityCmd = &cobra.Command{Use: "identity", Short: "Manage Cloud Identity (stubbed)"}
+var identityCmd = &cobra.Command{Use: "identity", Short: "Manage Cloud Identity"}
 
 func init() {
 	groups := &cobra.Command{Use: "groups", Short: "Manage Cloud Identity Groups"}
