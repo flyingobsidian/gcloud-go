@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud source-manager (#386) ---
 
-var sourceManagerCmd = &cobra.Command{Use: "source-manager", Short: "Manage Secure Source Manager (stubbed)"}
+var sourceManagerCmd = &cobra.Command{Use: "source-manager", Short: "Manage Secure Source Manager"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
