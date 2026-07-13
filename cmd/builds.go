@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud builds (#312) ---
 
-var buildsCmd = &cobra.Command{Use: "builds", Short: "Manage Cloud Build (stubbed)"}
+var buildsCmd = &cobra.Command{Use: "builds", Short: "Manage Cloud Build"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
