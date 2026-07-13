@@ -9,7 +9,7 @@ import "github.com/spf13/cobra"
 // standalone `gcloud workload-identity` surface called out in gcloud-python
 // as a stub pending consolidation with the iam implementations.
 
-var workloadIdentityCmd = &cobra.Command{Use: "workload-identity", Short: "Manage Workload Identity (stubbed)"}
+var workloadIdentityCmd = &cobra.Command{Use: "workload-identity", Short: "Manage Workload Identity"}
 
 func init() {
 	registerStubGroup(workloadIdentityCmd, "service-agents", "Manage Workload Identity service agents", "list", "describe")
