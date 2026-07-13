@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud service-directory (#382) ---
 
-var serviceDirectoryCmd = &cobra.Command{Use: "service-directory", Short: "Manage Service Directory (stubbed)"}
+var serviceDirectoryCmd = &cobra.Command{Use: "service-directory", Short: "Manage Service Directory"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
