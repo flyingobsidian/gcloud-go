@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud datastore (#325) ---
 
-var datastoreCmd = &cobra.Command{Use: "datastore", Short: "Manage Cloud Datastore (stubbed)"}
+var datastoreCmd = &cobra.Command{Use: "datastore", Short: "Manage Cloud Datastore"}
 
 func init() {
 	registerStubGroup(datastoreCmd, "indexes", "Manage Datastore indexes", "create", "list", "cleanup")
