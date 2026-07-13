@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud sql (#388) ---
 
-var sqlCmd = &cobra.Command{Use: "sql", Short: "Manage Cloud SQL (stubbed)"}
+var sqlCmd = &cobra.Command{Use: "sql", Short: "Manage Cloud SQL"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
