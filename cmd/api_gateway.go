@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud api-gateway (#296) ---
 
-var apiGatewayCmd = &cobra.Command{Use: "api-gateway", Short: "Manage API Gateway (stubbed)"}
+var apiGatewayCmd = &cobra.Command{Use: "api-gateway", Short: "Manage API Gateway"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
