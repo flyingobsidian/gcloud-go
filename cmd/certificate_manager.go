@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud certificate-manager (#313) ---
 
-var certificateManagerCmd = &cobra.Command{Use: "certificate-manager", Short: "Manage Certificate Manager (stubbed)"}
+var certificateManagerCmd = &cobra.Command{Use: "certificate-manager", Short: "Manage Certificate Manager"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
