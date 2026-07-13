@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud datastream (#326) ---
 
-var datastreamCmd = &cobra.Command{Use: "datastream", Short: "Manage Datastream (stubbed)"}
+var datastreamCmd = &cobra.Command{Use: "datastream", Short: "Manage Datastream"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
