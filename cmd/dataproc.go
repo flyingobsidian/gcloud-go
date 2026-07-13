@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud dataproc (#324) ---
 
-var dataprocCmd = &cobra.Command{Use: "dataproc", Short: "Manage Dataproc (stubbed)"}
+var dataprocCmd = &cobra.Command{Use: "dataproc", Short: "Manage Dataproc"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
