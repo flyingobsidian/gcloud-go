@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud database-migration (#322) ---
 
-var databaseMigrationCmd = &cobra.Command{Use: "database-migration", Short: "Manage Database Migration Service (stubbed)"}
+var databaseMigrationCmd = &cobra.Command{Use: "database-migration", Short: "Manage Database Migration Service"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
