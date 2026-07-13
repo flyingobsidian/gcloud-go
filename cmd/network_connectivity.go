@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud network-connectivity (#361) ---
 
-var networkConnectivityCmd = &cobra.Command{Use: "network-connectivity", Short: "Manage Network Connectivity (stubbed)"}
+var networkConnectivityCmd = &cobra.Command{Use: "network-connectivity", Short: "Manage Network Connectivity"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
