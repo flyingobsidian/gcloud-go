@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud apigee (#297) ---
 
-var apigeeCmd = &cobra.Command{Use: "apigee", Short: "Manage Apigee (stubbed)"}
+var apigeeCmd = &cobra.Command{Use: "apigee", Short: "Manage Apigee"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
