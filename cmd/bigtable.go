@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud bigtable (#308) ---
 
-var bigtableCmd = &cobra.Command{Use: "bigtable", Short: "Manage Cloud Bigtable (stubbed)"}
+var bigtableCmd = &cobra.Command{Use: "bigtable", Short: "Manage Cloud Bigtable"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
