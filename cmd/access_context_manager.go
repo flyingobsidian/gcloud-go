@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud access-context-manager (#288) ---
 
-var accessContextManagerCmd = &cobra.Command{Use: "access-context-manager", Short: "Manage Access Context Manager (stubbed)"}
+var accessContextManagerCmd = &cobra.Command{Use: "access-context-manager", Short: "Manage Access Context Manager"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
