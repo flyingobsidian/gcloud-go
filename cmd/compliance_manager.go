@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud compliance-manager (#317) ---
 
-var complianceManagerCmd = &cobra.Command{Use: "compliance-manager", Short: "Manage Compliance Manager (stubbed)"}
+var complianceManagerCmd = &cobra.Command{Use: "compliance-manager", Short: "Manage Compliance Manager"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
