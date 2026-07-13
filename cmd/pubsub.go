@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud pubsub (#377) ---
 
-var pubsubCmd = &cobra.Command{Use: "pubsub", Short: "Manage Cloud Pub/Sub (stubbed)"}
+var pubsubCmd = &cobra.Command{Use: "pubsub", Short: "Manage Cloud Pub/Sub"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
