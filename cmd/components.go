@@ -9,7 +9,7 @@ import "github.com/spf13/cobra"
 // a component model; these commands are registered as stubs so callers can
 // discover the surface, but they do not perform installation.
 
-var componentsCmd = &cobra.Command{Use: "components", Short: "Manage Google Cloud CLI components (stubbed)"}
+var componentsCmd = &cobra.Command{Use: "components", Short: "Manage Google Cloud CLI components"}
 
 func init() {
 	registerStubGroup(componentsCmd, "repositories", "Manage additional component repositories", "add", "list", "remove")
