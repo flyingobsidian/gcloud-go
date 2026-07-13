@@ -9,7 +9,7 @@ import "github.com/spf13/cobra"
 // commands should be wired up to google.golang.org/api/container/v1 in
 // follow-up PRs.
 
-var containerCmd = &cobra.Command{Use: "container", Short: "Manage Google Kubernetes Engine (stubbed)"}
+var containerCmd = &cobra.Command{Use: "container", Short: "Manage Google Kubernetes Engine"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
