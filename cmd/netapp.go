@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud netapp (#360) ---
 
-var netappCmd = &cobra.Command{Use: "netapp", Short: "Manage Cloud NetApp Files (stubbed)"}
+var netappCmd = &cobra.Command{Use: "netapp", Short: "Manage Cloud NetApp Files"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
