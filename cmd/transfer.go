@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud transfer (#393) ---
 
-var transferCmd = &cobra.Command{Use: "transfer", Short: "Manage Storage Transfer Service (stubbed)"}
+var transferCmd = &cobra.Command{Use: "transfer", Short: "Manage Storage Transfer Service"}
 
 func init() {
 	registerStubGroup(transferCmd, "agent-pools", "Manage on-premise transfer agent pools", "create", "delete", "describe", "list", "update")
