@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud migration (#357) ---
 
-var migrationCmd = &cobra.Command{Use: "migration", Short: "Migrate to Virtual Machines (stubbed)"}
+var migrationCmd = &cobra.Command{Use: "migration", Short: "Migrate to Virtual Machines"}
 
 func init() {
 	vms := &cobra.Command{Use: "vms", Short: "Migrate to VMs"}
