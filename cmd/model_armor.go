@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud model-armor (#359) ---
 
-var modelArmorCmd = &cobra.Command{Use: "model-armor", Short: "Manage Model Armor (stubbed)"}
+var modelArmorCmd = &cobra.Command{Use: "model-armor", Short: "Manage Model Armor"}
 
 func init() {
 	registerStubGroup(modelArmorCmd, "floorsettings", "Manage floor settings", "describe", "update")
