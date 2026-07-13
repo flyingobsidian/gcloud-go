@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud emulators (#335) ---
 
-var emulatorsCmd = &cobra.Command{Use: "emulators", Short: "Local emulators (stubbed)"}
+var emulatorsCmd = &cobra.Command{Use: "emulators", Short: "Local emulators"}
 
 func init() {
 	registerStubGroup(emulatorsCmd, "firestore", "Manage local Firestore emulator", "start", "env-init")
