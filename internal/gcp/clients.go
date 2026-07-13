@@ -16,6 +16,7 @@ import (
 	iamcredentials "google.golang.org/api/iamcredentials/v1"
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 	dataflow "google.golang.org/api/dataflow/v1b3"
+	datamigration "google.golang.org/api/datamigration/v1"
 	dataplex "google.golang.org/api/dataplex/v1"
 	monitoring "google.golang.org/api/monitoring/v3"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
@@ -44,6 +45,14 @@ func DataflowService(ctx context.Context, account string) (*dataflow.Service, er
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return dataflow.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func DataMigrationService(ctx context.Context, account string) (*datamigration.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return datamigration.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func StorageService(ctx context.Context, account string) (*storage.Service, error) {
