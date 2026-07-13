@@ -168,9 +168,18 @@ var monitoringPoliciesDeleteCmd = &cobra.Command{
 
 // --- channels ---
 
+// monitoringChannelsCmd is registered under its gcloud-python name
+// "notification-channels", with "channels" kept as a deprecated alias for
+// backwards compatibility (#543).
 var monitoringChannelsCmd = &cobra.Command{
-	Use:   "channels",
+	Use:   "notification-channels",
 	Short: "Manage notification channels",
+}
+
+var monitoringChannelsAliasCmd = &cobra.Command{
+	Use:        "channels",
+	Short:      "(DEPRECATED) alias for gcloud monitoring notification-channels",
+	Deprecated: "use `gcloud monitoring notification-channels` instead.",
 }
 
 var monitoringChannelsListCmd = &cobra.Command{
@@ -302,6 +311,14 @@ func init() {
 	monitoringCmd.AddCommand(monitoringPoliciesCmd)
 	monitoringCmd.AddCommand(monitoringSnoozesCmd)
 	monitoringCmd.AddCommand(monitoringChannelsCmd)
+	monitoringCmd.AddCommand(monitoringChannelsAliasCmd)
+
+	// gcloud-python monitoring subgroups not yet implemented (#543).
+	registerStubGroup(monitoringCmd, "dashboards", "Manage custom dashboards",
+		"create", "delete", "describe", "list", "update")
+	registerStubGroup(monitoringCmd, "uptime", "Manage uptime checks",
+		"create", "delete", "describe", "list", "update")
+
 	rootCmd.AddCommand(monitoringCmd)
 }
 
