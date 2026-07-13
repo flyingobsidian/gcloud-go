@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud ml (#358) ---
 
-var mlCmd = &cobra.Command{Use: "ml", Short: "Google Cloud ML APIs (stubbed)"}
+var mlCmd = &cobra.Command{Use: "ml", Short: "Google Cloud ML APIs"}
 
 func init() {
 	registerStubGroup(mlCmd, "language", "Natural Language API",
