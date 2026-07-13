@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud notebooks (#365) ---
 
-var notebooksCmd = &cobra.Command{Use: "notebooks", Short: "Manage AI Platform Notebooks (stubbed)"}
+var notebooksCmd = &cobra.Command{Use: "notebooks", Short: "Manage AI Platform Notebooks"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
