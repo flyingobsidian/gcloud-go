@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud colab (#316) ---
 
-var colabCmd = &cobra.Command{Use: "colab", Short: "Manage Colab Enterprise (stubbed)"}
+var colabCmd = &cobra.Command{Use: "colab", Short: "Manage Colab Enterprise"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list"}
