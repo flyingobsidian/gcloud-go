@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud source (#385) ---
 
-var sourceCmd = &cobra.Command{Use: "source", Short: "Manage Cloud Source Repositories (stubbed)"}
+var sourceCmd = &cobra.Command{Use: "source", Short: "Manage Cloud Source Repositories"}
 
 func init() {
 	registerStubGroup(sourceCmd, "project-configs", "Manage project configuration", "describe", "update")
