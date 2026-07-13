@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud run (#380) ---
 
-var runCmd = &cobra.Command{Use: "run", Short: "Manage Cloud Run (stubbed)"}
+var runCmd = &cobra.Command{Use: "run", Short: "Manage Cloud Run"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
