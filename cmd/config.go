@@ -27,16 +27,27 @@ Examples:
 	RunE: runConfigSet,
 }
 
-var configGetValueCmd = &cobra.Command{
-	Use:   "get-value PROPERTY",
+var configGetCmd = &cobra.Command{
+	Use:   "get PROPERTY",
 	Short: "Print the value of a configuration property",
 	Long: `Print the value of a configuration property. Property can be specified as SECTION/PROPERTY or just PROPERTY for core section.
 
 Examples:
-  gcloud config get-value project
-  gcloud config get-value compute/zone`,
+  gcloud config get project
+  gcloud config get compute/zone`,
 	Args: cobra.ExactArgs(1),
-	RunE: runConfigGetValue,
+	RunE: runConfigGet,
+}
+
+// configGetValueCmd remains registered as a deprecated alias for
+// backwards-compat, matching gcloud-python. See #536.
+var configGetValueCmd = &cobra.Command{
+	Use:        "get-value PROPERTY",
+	Short:      "(DEPRECATED) alias for gcloud config get",
+	Deprecated: "use `gcloud config get` instead.",
+	Hidden:     false,
+	Args:       cobra.ExactArgs(1),
+	RunE:       runConfigGet,
 }
 
 var configUnsetCmd = &cobra.Command{
@@ -67,6 +78,7 @@ func init() {
 	configListCmd.Flags().BoolVar(&flagConfigListAll, "all", false, "Show all properties including unset ones")
 	configListCmd.Flags().StringVar(&flagConfigListFilter, "filter", "", "Filter output by section name")
 	configCmd.AddCommand(configSetCmd)
+	configCmd.AddCommand(configGetCmd)
 	configCmd.AddCommand(configGetValueCmd)
 	configCmd.AddCommand(configUnsetCmd)
 	configCmd.AddCommand(configListCmd)
@@ -117,7 +129,7 @@ func runConfigUnset(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runConfigGetValue(cmd *cobra.Command, args []string) error {
+func runConfigGet(cmd *cobra.Command, args []string) error {
 	section, key := parseProperty(args[0])
 
 	props, err := config.Load()
