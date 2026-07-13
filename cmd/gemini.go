@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud gemini (#343) ---
 
-var geminiCmd = &cobra.Command{Use: "gemini", Short: "Manage Gemini Code Assist / Cloud Assist (stubbed)"}
+var geminiCmd = &cobra.Command{Use: "gemini", Short: "Manage Gemini Code Assist / Cloud Assist"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
