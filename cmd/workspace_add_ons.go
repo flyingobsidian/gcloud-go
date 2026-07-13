@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud workspace-add-ons (#399) ---
 
-var workspaceAddOnsCmd = &cobra.Command{Use: "workspace-add-ons", Short: "Manage Google Workspace Add-ons (stubbed)"}
+var workspaceAddOnsCmd = &cobra.Command{Use: "workspace-add-ons", Short: "Manage Google Workspace Add-ons"}
 
 func init() {
 	registerStubGroup(workspaceAddOnsCmd, "deployments", "Manage deployments",
