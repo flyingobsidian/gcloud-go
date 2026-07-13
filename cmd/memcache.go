@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud memcache (#354) ---
 
-var memcacheCmd = &cobra.Command{Use: "memcache", Short: "Manage Memorystore for Memcached (stubbed)"}
+var memcacheCmd = &cobra.Command{Use: "memcache", Short: "Manage Memorystore for Memcached"}
 
 func init() {
 	registerStubGroup(memcacheCmd, "instances", "Manage instances", "create", "delete", "describe", "list", "update", "upgrade", "apply-parameters")
