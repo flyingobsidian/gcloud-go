@@ -6,7 +6,7 @@ import "github.com/spf13/cobra"
 
 var biglakeCmd = &cobra.Command{
 	Use:   "biglake",
-	Short: "Manage BigLake resources (stubbed)",
+	Short: "Manage BigLake resources",
 }
 
 func init() {
