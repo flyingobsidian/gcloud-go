@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud managed-kafka (#353) ---
 
-var managedKafkaCmd = &cobra.Command{Use: "managed-kafka", Short: "Manage Managed Service for Apache Kafka (stubbed)"}
+var managedKafkaCmd = &cobra.Command{Use: "managed-kafka", Short: "Manage Managed Service for Apache Kafka"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
