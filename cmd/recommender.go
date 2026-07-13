@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud recommender (#379) ---
 
-var recommenderCmd = &cobra.Command{Use: "recommender", Short: "Manage Cloud Recommender (stubbed)"}
+var recommenderCmd = &cobra.Command{Use: "recommender", Short: "Manage Cloud Recommender"}
 
 func init() {
 	registerStubGroup(recommenderCmd, "insight-type-config", "Manage insight type configuration", "describe", "update")
