@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud kms (#349) ---
 
-var kmsCmd = &cobra.Command{Use: "kms", Short: "Manage Cloud KMS (stubbed)"}
+var kmsCmd = &cobra.Command{Use: "kms", Short: "Manage Cloud KMS"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
