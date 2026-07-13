@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud composer (#319) ---
 
-var composerCmd = &cobra.Command{Use: "composer", Short: "Manage Cloud Composer (stubbed)"}
+var composerCmd = &cobra.Command{Use: "composer", Short: "Manage Cloud Composer"}
 
 func init() {
 	registerStubGroup(composerCmd, "environments", "Manage Composer environments",
