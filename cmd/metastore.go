@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud metastore (#356) ---
 
-var metastoreCmd = &cobra.Command{Use: "metastore", Short: "Manage Dataproc Metastore (stubbed)"}
+var metastoreCmd = &cobra.Command{Use: "metastore", Short: "Manage Dataproc Metastore"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
