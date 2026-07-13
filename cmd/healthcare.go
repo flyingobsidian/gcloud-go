@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud healthcare (#344) ---
 
-var healthcareCmd = &cobra.Command{Use: "healthcare", Short: "Manage Cloud Healthcare API (stubbed)"}
+var healthcareCmd = &cobra.Command{Use: "healthcare", Short: "Manage Cloud Healthcare API"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
