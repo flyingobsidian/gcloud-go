@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud design-center (#329) ---
 
-var designCenterCmd = &cobra.Command{Use: "design-center", Short: "Manage Design Center (stubbed)"}
+var designCenterCmd = &cobra.Command{Use: "design-center", Short: "Manage Design Center"}
 
 func init() {
 	registerStubGroup(designCenterCmd, "locations", "Manage locations", "describe", "list")
