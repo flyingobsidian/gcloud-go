@@ -14,7 +14,7 @@ import (
 
 var backupDRCmd = &cobra.Command{
 	Use:   "backup-dr",
-	Short: "Manage Backup and DR (stubbed)",
+	Short: "Manage Backup and DR",
 }
 
 var backupDRGroups = []struct {
