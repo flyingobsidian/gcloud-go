@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud anthos (#295) ---
 
-var anthosCmd = &cobra.Command{Use: "anthos", Short: "Anthos commands (stubbed)"}
+var anthosCmd = &cobra.Command{Use: "anthos", Short: "Anthos commands"}
 
 func init() {
 	registerStubGroup(anthosCmd, "auth", "Authenticate clusters", "login", "token")
