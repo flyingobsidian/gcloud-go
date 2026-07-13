@@ -8,7 +8,7 @@ var databaseMigrationCmd = &cobra.Command{Use: "database-migration", Short: "Man
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(databaseMigrationCmd, "connection-profiles", "Manage connection profiles", crud...)
+	// connection-profiles is implemented in database_migration_connection_profiles.go (#782).
 	registerStubGroup(databaseMigrationCmd, "conversion-workspaces", "Manage conversion workspaces", append(crud, "convert", "commit", "rollback", "apply", "seed")...)
 	registerStubGroup(databaseMigrationCmd, "migration-jobs", "Manage migration jobs", append(crud, "start", "stop", "resume", "promote", "verify", "restart")...)
 	registerStubGroup(databaseMigrationCmd, "objects", "Manage migration job objects", "describe", "list", "lookup")
