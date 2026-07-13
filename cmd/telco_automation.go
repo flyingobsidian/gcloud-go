@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud telco-automation (#390) ---
 
-var telcoAutomationCmd = &cobra.Command{Use: "telco-automation", Short: "Manage Telco Automation (stubbed)"}
+var telcoAutomationCmd = &cobra.Command{Use: "telco-automation", Short: "Manage Telco Automation"}
 
 func init() {
 	registerStubGroup(telcoAutomationCmd, "operations", "Manage operations", "cancel", "delete", "describe", "list")
