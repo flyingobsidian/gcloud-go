@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 // --- gcloud spanner (#387) ---
 
-var spannerCmd = &cobra.Command{Use: "spanner", Short: "Manage Cloud Spanner (stubbed)"}
+var spannerCmd = &cobra.Command{Use: "spanner", Short: "Manage Cloud Spanner"}
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
@@ -17,5 +17,6 @@ func init() {
 	registerStubGroup(spannerCmd, "rows", "Manage rows", "delete", "insert", "read", "update")
 	registerStubGroup(spannerCmd, "samples", "Sample apps", "list", "run")
 	registerStubCommand(spannerCmd, "cli", "Interactive Spanner shell")
+		registerStubGroup(spannerCmd, "backup-schedules", "Manage backup-schedules", "list", "describe")
 	rootCmd.AddCommand(spannerCmd)
 }
