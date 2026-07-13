@@ -9,7 +9,7 @@ import "github.com/spf13/cobra"
 
 var batchCmd = &cobra.Command{
 	Use:   "batch",
-	Short: "Manage Batch jobs and tasks (stubbed)",
+	Short: "Manage Batch jobs and tasks",
 }
 
 func init() {
