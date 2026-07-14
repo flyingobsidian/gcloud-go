@@ -192,10 +192,6 @@ func init() {
 	iamCmd.AddCommand(workloadIdentityPoolsCmd)
 
 	// gcloud-python iam subcommands and subgroups not yet implemented (#542).
-	registerStubGroup(iamCmd, "oauth-clients",
-		"Manage IAM OAuth clients",
-		"create", "delete", "describe", "list", "update",
-		"credentials")
 	registerStubGroup(iamCmd, "policy-bindings",
 		"Manage IAM policy bindings",
 		"create", "delete", "describe", "list", "update")
