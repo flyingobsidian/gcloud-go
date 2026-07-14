@@ -18,8 +18,10 @@ import (
 	dataflow "google.golang.org/api/dataflow/v1b3"
 	datamigration "google.golang.org/api/datamigration/v1"
 	dataplex "google.golang.org/api/dataplex/v1"
+	eventarc "google.golang.org/api/eventarc/v1"
 	monitoring "google.golang.org/api/monitoring/v3"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
+	"golang.org/x/oauth2"
 	"google.golang.org/api/option"
 	orgpolicy "google.golang.org/api/orgpolicy/v2"
 	oslogin "google.golang.org/api/oslogin/v1"
@@ -197,4 +199,24 @@ func OnDemandScanningService(ctx context.Context, account string) (*ondemandscan
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return ondemandscanning.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func EventarcService(ctx context.Context, account string) (*eventarc.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return eventarc.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// PlatformTokenSource returns an OAuth token source with the cloud-platform
+// scope for callers that need to make raw HTTP requests against Google Cloud
+// endpoints not covered by a generated Go client (for example
+// eventarcpublishing.googleapis.com).
+func PlatformTokenSource(ctx context.Context, account string) (oauth2.TokenSource, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return ts, nil
 }
