@@ -23,6 +23,7 @@ import (
 	aiplatform "google.golang.org/api/aiplatform/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	transcoder "google.golang.org/api/transcoder/v1"
+	managedkafka "google.golang.org/api/managedkafka/v1"
 	privateca "google.golang.org/api/privateca/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
 	policysimulator "google.golang.org/api/policysimulator/v1"
@@ -255,6 +256,14 @@ func PrivateCAService(ctx context.Context, account string) (*privateca.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return privateca.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ManagedKafkaService(ctx context.Context, account string) (*managedkafka.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return managedkafka.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func TranscoderService(ctx context.Context, account string) (*transcoder.Service, error) {
