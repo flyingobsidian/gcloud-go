@@ -9,7 +9,6 @@ var eventarcCmd = &cobra.Command{Use: "eventarc", Short: "Manage Eventarc"}
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
 	registerStubGroup(eventarcCmd, "attributes", "Manage attributes", "list")
-	registerStubGroup(eventarcCmd, "audit-logs-provider", "Explore audit log providers", "list", "describe")
 	registerStubGroup(eventarcCmd, "channel-connections", "Manage channel connections", "create", "delete", "describe", "list")
 	registerStubGroup(eventarcCmd, "channels", "Manage channels", crud...)
 	registerStubGroup(eventarcCmd, "enrollments", "Manage enrollments", crud...)
