@@ -23,6 +23,7 @@ import (
 	aiplatform "google.golang.org/api/aiplatform/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	transcoder "google.golang.org/api/transcoder/v1"
+	privateca "google.golang.org/api/privateca/v1"
 	monitoring "google.golang.org/api/monitoring/v3"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
 	"golang.org/x/oauth2"
@@ -219,6 +220,14 @@ func FirestoreService(ctx context.Context, account string) (*firestore.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return firestore.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func PrivateCAService(ctx context.Context, account string) (*privateca.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return privateca.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func TranscoderService(ctx context.Context, account string) (*transcoder.Service, error) {
