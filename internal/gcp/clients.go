@@ -34,6 +34,7 @@ import (
 	recommender "google.golang.org/api/recommender/v1"
 	servicedirectory "google.golang.org/api/servicedirectory/v1"
 	looker "google.golang.org/api/looker/v1"
+	batchapi "google.golang.org/api/batch/v1"
 	privateca "google.golang.org/api/privateca/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
 	policysimulator "google.golang.org/api/policysimulator/v1"
@@ -266,6 +267,14 @@ func PrivateCAService(ctx context.Context, account string) (*privateca.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return privateca.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func BatchService(ctx context.Context, account string) (*batchapi.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return batchapi.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func LookerService(ctx context.Context, account string) (*looker.Service, error) {
