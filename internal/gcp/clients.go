@@ -20,6 +20,8 @@ import (
 	dataplex "google.golang.org/api/dataplex/v1"
 	eventarc "google.golang.org/api/eventarc/v1"
 	firestore "google.golang.org/api/firestore/v1"
+	aiplatform "google.golang.org/api/aiplatform/v1"
+	notebooks "google.golang.org/api/notebooks/v2"
 	monitoring "google.golang.org/api/monitoring/v3"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
 	"golang.org/x/oauth2"
@@ -216,6 +218,26 @@ func FirestoreService(ctx context.Context, account string) (*firestore.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return firestore.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func NotebooksService(ctx context.Context, account string) (*notebooks.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return notebooks.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if region != "" {
+		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-aiplatform.googleapis.com/", region)))
+	}
+	return aiplatform.NewService(ctx, opts...)
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
