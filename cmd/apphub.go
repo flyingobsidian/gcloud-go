@@ -7,13 +7,8 @@ import "github.com/spf13/cobra"
 var apphubCmd = &cobra.Command{Use: "apphub", Short: "Manage App Hub"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(apphubCmd, "applications", "Manage applications", append(crud, "services", "workloads")...)
-	registerStubGroup(apphubCmd, "boundary", "Manage boundaries", "describe", "update")
-	registerStubGroup(apphubCmd, "discovered-services", "Manage discovered services", "describe", "list", "lookup", "find-unregistered")
-	registerStubGroup(apphubCmd, "discovered-workloads", "Manage discovered workloads", "describe", "list", "lookup", "find-unregistered")
-	registerStubGroup(apphubCmd, "locations", "Manage locations", "describe", "list")
-	registerStubGroup(apphubCmd, "operations", "Manage operations", "cancel", "delete", "describe", "list")
-	registerStubGroup(apphubCmd, "service-projects", "Manage service projects", "add", "remove", "describe", "list", "lookup")
+	// All subgroups (applications with nested services + workloads, boundary,
+	// discovered-services, discovered-workloads, locations, operations,
+	// service-projects) are implemented in apphub_all.go.
 	rootCmd.AddCommand(apphubCmd)
 }
