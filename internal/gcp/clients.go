@@ -24,6 +24,9 @@ import (
 	notebooks "google.golang.org/api/notebooks/v2"
 	transcoder "google.golang.org/api/transcoder/v1"
 	privateca "google.golang.org/api/privateca/v1"
+	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
+	policysimulator "google.golang.org/api/policysimulator/v1"
+	policytroubleshooter "google.golang.org/api/policytroubleshooter/v1"
 	monitoring "google.golang.org/api/monitoring/v3"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
 	"golang.org/x/oauth2"
@@ -220,6 +223,30 @@ func FirestoreService(ctx context.Context, account string) (*firestore.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return firestore.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func PolicySimulatorService(ctx context.Context, account string) (*policysimulator.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return policysimulator.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func PolicyTroubleshooterService(ctx context.Context, account string) (*policytroubleshooter.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return policytroubleshooter.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func PolicyAnalyzerService(ctx context.Context, account string) (*policyanalyzer.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return policyanalyzer.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func PrivateCAService(ctx context.Context, account string) (*privateca.Service, error) {
