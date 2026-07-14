@@ -28,6 +28,7 @@ import (
 	certificatemanager "google.golang.org/api/certificatemanager/v1"
 	apphub "google.golang.org/api/apphub/v1"
 	apigateway "google.golang.org/api/apigateway/v1"
+	alloydb "google.golang.org/api/alloydb/v1"
 	privateca "google.golang.org/api/privateca/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
 	policysimulator "google.golang.org/api/policysimulator/v1"
@@ -260,6 +261,14 @@ func PrivateCAService(ctx context.Context, account string) (*privateca.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return privateca.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func AlloyDBService(ctx context.Context, account string) (*alloydb.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return alloydb.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func APIGatewayService(ctx context.Context, account string) (*apigateway.Service, error) {
