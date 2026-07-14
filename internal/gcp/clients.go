@@ -53,6 +53,8 @@ import (
 	policytroubleshooter "google.golang.org/api/policytroubleshooter/v1"
 	monitoring "google.golang.org/api/monitoring/v3"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
+	securitycenter "google.golang.org/api/securitycenter/v1"
+	securityposture "google.golang.org/api/securityposture/v1"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/option"
 	orgpolicy "google.golang.org/api/orgpolicy/v2"
@@ -499,6 +501,22 @@ func AgentRegistryService(ctx context.Context, account string) (*agentregistry.A
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return agentregistry.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func SecurityCenterService(ctx context.Context, account string) (*securitycenter.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return securitycenter.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func SecurityPostureService(ctx context.Context, account string) (*securityposture.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return securityposture.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
