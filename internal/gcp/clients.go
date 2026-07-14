@@ -42,6 +42,7 @@ import (
 	cloudbuild2 "google.golang.org/api/cloudbuild/v2"
 	pubsub "google.golang.org/api/pubsub/v1"
 	iamv2 "google.golang.org/api/iam/v2"
+	accessapproval "google.golang.org/api/accessapproval/v1"
 	privateca "google.golang.org/api/privateca/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
 	policysimulator "google.golang.org/api/policysimulator/v1"
@@ -314,6 +315,14 @@ func IAMV2Service(ctx context.Context, account string) (*iamv2.Service, error) {
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return iamv2.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func AccessApprovalService(ctx context.Context, account string) (*accessapproval.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return accessapproval.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func ObservabilityService(ctx context.Context, account string) (*observability.Service, error) {
