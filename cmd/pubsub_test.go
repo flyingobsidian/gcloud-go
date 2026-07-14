@@ -27,6 +27,25 @@ func TestPubsubTopicsSubcommands(t *testing.T) {
 	})
 }
 
+func TestPubsubSchemasSubcommands(t *testing.T) {
+	g := pubsubSubgroup("schemas")
+	if g == nil {
+		t.Fatal("pubsub schemas missing")
+	}
+	assertSubcommands(t, g, []string{
+		"commit", "create", "delete", "delete-revision", "describe",
+		"list", "list-revisions", "rollback", "validate-message", "validate-schema",
+	})
+}
+
+func TestPubsubSnapshotsSubcommands(t *testing.T) {
+	g := pubsubSubgroup("snapshots")
+	if g == nil {
+		t.Fatal("pubsub snapshots missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list"})
+}
+
 func TestPubsubSubscriptionsSubcommands(t *testing.T) {
 	g := pubsubSubgroup("subscriptions")
 	if g == nil {
