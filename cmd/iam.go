@@ -196,9 +196,6 @@ func init() {
 		"Manage IAM OAuth clients",
 		"create", "delete", "describe", "list", "update",
 		"credentials")
-	registerStubGroup(iamCmd, "policies",
-		"Manage custom IAM Deny policies",
-		"create", "delete", "describe", "list", "update")
 	registerStubGroup(iamCmd, "policy-bindings",
 		"Manage IAM policy bindings",
 		"create", "delete", "describe", "list", "update")
