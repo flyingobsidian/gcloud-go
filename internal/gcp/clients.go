@@ -44,6 +44,7 @@ import (
 	iamv2 "google.golang.org/api/iam/v2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
 	agentregistry "google.golang.org/api/agentregistry/v1alpha"
+	config1 "google.golang.org/api/config/v1"
 	metastore "google.golang.org/api/metastore/v1"
 	privateca "google.golang.org/api/privateca/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
@@ -473,6 +474,14 @@ func AIPlatformService(ctx context.Context, account, region string) (*aiplatform
 		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-aiplatform.googleapis.com/", region)))
 	}
 	return aiplatform.NewService(ctx, opts...)
+}
+
+func InfraManagerService(ctx context.Context, account string) (*config1.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return config1.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AgentRegistryService(ctx context.Context, account string) (*agentregistry.APIService, error) {
