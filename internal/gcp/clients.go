@@ -25,6 +25,8 @@ import (
 	transcoder "google.golang.org/api/transcoder/v1"
 	managedkafka "google.golang.org/api/managedkafka/v1"
 	datastream "google.golang.org/api/datastream/v1"
+	deploymentmanager "google.golang.org/api/deploymentmanager/v2"
+	deploymentmanagerbeta "google.golang.org/api/deploymentmanager/v2beta"
 	certificatemanager "google.golang.org/api/certificatemanager/v1"
 	apphub "google.golang.org/api/apphub/v1"
 	apigateway "google.golang.org/api/apigateway/v1"
@@ -544,6 +546,22 @@ func SecurityPostureService(ctx context.Context, account string) (*securitypostu
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return securityposture.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func DeploymentManagerService(ctx context.Context, account string) (*deploymentmanager.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return deploymentmanager.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func DeploymentManagerBetaService(ctx context.Context, account string) (*deploymentmanagerbeta.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return deploymentmanagerbeta.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
