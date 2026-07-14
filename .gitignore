@@ -1,3 +1,4 @@
 *.gz
 google-cloud-sdk*
 bin/gcloud-go*
+issues.tsv
