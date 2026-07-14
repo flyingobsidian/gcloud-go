@@ -7,13 +7,8 @@ import "github.com/spf13/cobra"
 var privatecaCmd = &cobra.Command{Use: "privateca", Short: "Manage Private CA"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(privatecaCmd, "certificates", "Manage certificates", append(crud, "revoke", "export")...)
-	registerStubGroup(privatecaCmd, "locations", "Manage locations", "list", "describe")
-	registerStubGroup(privatecaCmd, "operations", "Manage operations", "cancel", "delete", "describe", "list")
-	registerStubGroup(privatecaCmd, "pools", "Manage CA pools", append(crud, "get-iam-policy", "set-iam-policy", "add-iam-policy-binding", "remove-iam-policy-binding")...)
-	registerStubGroup(privatecaCmd, "roots", "Manage root CAs", append(crud, "activate", "disable", "enable", "undelete", "publish-crl", "get-iam-policy", "set-iam-policy", "add-iam-policy-binding", "remove-iam-policy-binding")...)
-	registerStubGroup(privatecaCmd, "subordinates", "Manage subordinate CAs", append(crud, "activate", "disable", "enable", "undelete", "publish-crl", "get-iam-policy", "set-iam-policy", "add-iam-policy-binding", "remove-iam-policy-binding")...)
-	registerStubGroup(privatecaCmd, "templates", "Manage certificate templates", append(crud, "get-iam-policy", "set-iam-policy", "add-iam-policy-binding", "remove-iam-policy-binding")...)
+	// All subgroups (certificates, locations, operations, pools, roots,
+	// subordinates, templates) are implemented in dedicated privateca_*.go
+	// files.
 	rootCmd.AddCommand(privatecaCmd)
 }
