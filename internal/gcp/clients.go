@@ -44,6 +44,7 @@ import (
 	iamv2 "google.golang.org/api/iam/v2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
 	agentregistry "google.golang.org/api/agentregistry/v1alpha"
+	cloudidentity "google.golang.org/api/cloudidentity/v1"
 	config1 "google.golang.org/api/config/v1"
 	publicca "google.golang.org/api/publicca/v1"
 	metastore "google.golang.org/api/metastore/v1"
@@ -503,6 +504,14 @@ func AgentRegistryService(ctx context.Context, account string) (*agentregistry.A
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return agentregistry.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func CloudIdentityService(ctx context.Context, account string) (*cloudidentity.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return cloudidentity.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func NetworkSecurityService(ctx context.Context, account string) (*networksecurity.Service, error) {
