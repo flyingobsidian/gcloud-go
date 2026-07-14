@@ -7,12 +7,8 @@ import "github.com/spf13/cobra"
 var certificateManagerCmd = &cobra.Command{Use: "certificate-manager", Short: "Manage Certificate Manager"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(certificateManagerCmd, "certificates", "Manage certificates", crud...)
-	registerStubGroup(certificateManagerCmd, "dns-authorizations", "Manage DNS authorizations", crud...)
-	registerStubGroup(certificateManagerCmd, "issuance-configs", "Manage issuance configs", crud...)
-	registerStubGroup(certificateManagerCmd, "maps", "Manage certificate maps", crud...)
-	registerStubGroup(certificateManagerCmd, "operations", "Manage operations", "describe", "list")
-	registerStubGroup(certificateManagerCmd, "trust-configs", "Manage trust configs", crud...)
+	// All subgroups (certificates, dns-authorizations, issuance-configs, maps
+	// (with entries), operations, trust-configs) are implemented in
+	// certificate_manager_all.go.
 	rootCmd.AddCommand(certificateManagerCmd)
 }
