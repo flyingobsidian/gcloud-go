@@ -52,6 +52,8 @@ import (
 	policysimulator "google.golang.org/api/policysimulator/v1"
 	policytroubleshooter "google.golang.org/api/policytroubleshooter/v1"
 	monitoring "google.golang.org/api/monitoring/v3"
+	networksecurity "google.golang.org/api/networksecurity/v1"
+	networksecuritybeta "google.golang.org/api/networksecurity/v1beta1"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
 	securitycenter "google.golang.org/api/securitycenter/v1"
 	securityposture "google.golang.org/api/securityposture/v1"
@@ -501,6 +503,22 @@ func AgentRegistryService(ctx context.Context, account string) (*agentregistry.A
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return agentregistry.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func NetworkSecurityService(ctx context.Context, account string) (*networksecurity.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return networksecurity.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func NetworkSecurityBetaService(ctx context.Context, account string) (*networksecuritybeta.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return networksecuritybeta.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func SecurityCenterService(ctx context.Context, account string) (*securitycenter.Service, error) {
