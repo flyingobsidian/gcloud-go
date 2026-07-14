@@ -43,6 +43,7 @@ import (
 	pubsub "google.golang.org/api/pubsub/v1"
 	iamv2 "google.golang.org/api/iam/v2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
+	metastore "google.golang.org/api/metastore/v1"
 	privateca "google.golang.org/api/privateca/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
 	policysimulator "google.golang.org/api/policysimulator/v1"
@@ -323,6 +324,14 @@ func AccessApprovalService(ctx context.Context, account string) (*accessapproval
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return accessapproval.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func MetastoreService(ctx context.Context, account string) (*metastore.APIService, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return metastore.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func ObservabilityService(ctx context.Context, account string) (*observability.Service, error) {
