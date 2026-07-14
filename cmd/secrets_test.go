@@ -3,6 +3,8 @@ package cmd
 import (
 	"os"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestReadDataFileStdin(t *testing.T) {
@@ -88,6 +90,43 @@ func TestReadDataFileNotFound(t *testing.T) {
 
 func writeTestFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0600)
+}
+
+func secretsSubgroup(name string) *cobra.Command {
+	for _, c := range secretsCmd.Commands() {
+		if c.Name() == name {
+			return c
+		}
+	}
+	return nil
+}
+
+func TestSecretsIamCommands(t *testing.T) {
+	names := make(map[string]bool)
+	for _, c := range secretsCmd.Commands() {
+		names[c.Name()] = true
+	}
+	for _, want := range []string{"add-iam-policy-binding", "get-iam-policy", "remove-iam-policy-binding", "set-iam-policy"} {
+		if !names[want] {
+			t.Errorf("missing subcommand: secrets %s", want)
+		}
+	}
+}
+
+func TestSecretsReplicationSubcommands(t *testing.T) {
+	g := secretsSubgroup("replication")
+	if g == nil {
+		t.Fatal("secrets replication missing")
+	}
+	assertSubcommands(t, g, []string{"get", "set", "update"})
+}
+
+func TestSecretsLocationsSubcommands(t *testing.T) {
+	g := secretsSubgroup("locations")
+	if g == nil {
+		t.Fatal("secrets locations missing")
+	}
+	assertSubcommands(t, g, []string{"describe", "list"})
 }
 
 func TestLastPathSegment(t *testing.T) {
