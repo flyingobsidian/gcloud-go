@@ -32,6 +32,7 @@ import (
 	cloudtasks "google.golang.org/api/cloudtasks/v2"
 	memcache "google.golang.org/api/memcache/v1"
 	recommender "google.golang.org/api/recommender/v1"
+	servicedirectory "google.golang.org/api/servicedirectory/v1"
 	privateca "google.golang.org/api/privateca/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
 	policysimulator "google.golang.org/api/policysimulator/v1"
@@ -264,6 +265,14 @@ func PrivateCAService(ctx context.Context, account string) (*privateca.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return privateca.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ServiceDirectoryService(ctx context.Context, account string) (*servicedirectory.APIService, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return servicedirectory.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func RecommenderService(ctx context.Context, account string) (*recommender.Service, error) {
