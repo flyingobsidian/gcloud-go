@@ -42,6 +42,9 @@ import (
 	beyondcorp "google.golang.org/api/beyondcorp/v1"
 	cloudbuild "google.golang.org/api/cloudbuild/v1"
 	cloudbuild2 "google.golang.org/api/cloudbuild/v2"
+	cloudfunctionsv1 "google.golang.org/api/cloudfunctions/v1"
+	cloudfunctionsv2 "google.golang.org/api/cloudfunctions/v2"
+	logging "google.golang.org/api/logging/v2"
 	pubsub "google.golang.org/api/pubsub/v1"
 	iamv2 "google.golang.org/api/iam/v2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
@@ -562,6 +565,30 @@ func DeploymentManagerBetaService(ctx context.Context, account string) (*deploym
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return deploymentmanagerbeta.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func CloudFunctionsV1Service(ctx context.Context, account string) (*cloudfunctionsv1.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return cloudfunctionsv1.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func CloudFunctionsV2Service(ctx context.Context, account string) (*cloudfunctionsv2.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return cloudfunctionsv2.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func LoggingService(ctx context.Context, account string) (*logging.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return logging.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
