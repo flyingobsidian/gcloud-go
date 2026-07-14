@@ -7,13 +7,8 @@ import "github.com/spf13/cobra"
 var managedKafkaCmd = &cobra.Command{Use: "managed-kafka", Short: "Manage Managed Service for Apache Kafka"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(managedKafkaCmd, "acls", "Manage ACLs", append(crud, "add-acl-entry", "remove-acl-entry")...)
-	registerStubGroup(managedKafkaCmd, "clusters", "Manage clusters", crud...)
-	registerStubGroup(managedKafkaCmd, "connect-clusters", "Manage connect clusters", crud...)
-	registerStubGroup(managedKafkaCmd, "connectors", "Manage connectors", append(crud, "pause", "resume", "restart", "stop")...)
-	registerStubGroup(managedKafkaCmd, "consumer-groups", "Manage consumer groups", crud...)
-	registerStubGroup(managedKafkaCmd, "operations", "Manage operations", "cancel", "describe", "list")
-	registerStubGroup(managedKafkaCmd, "topics", "Manage topics", crud...)
+	// All subgroups (acls, clusters, connect-clusters, connectors,
+	// consumer-groups, operations, topics) are implemented in
+	// managed_kafka_all.go.
 	rootCmd.AddCommand(managedKafkaCmd)
 }
