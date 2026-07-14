@@ -128,7 +128,6 @@ func init() {
 	registerStubGroup(artifactsCmd, "locations", "List regional metadata", "list", "describe")
 	registerStubGroup(artifactsCmd, "operations", "Manage long-running operations", "describe", "list", "wait")
 	registerStubGroup(artifactsCmd, "packages", "Manage packages", "delete", "describe", "list")
-	registerStubCommand(artifactsCmd, "print-settings", "Print client configuration settings")
 	registerStubGroup(artifactsCmd, "projects", "Manage per-project Artifact Registry settings", "describe")
 	registerStubGroup(artifactsCmd, "repositories", "Manage Artifact Registry repositories",
 		"add-iam-policy-binding", "create", "delete", "describe", "get-iam-policy",
