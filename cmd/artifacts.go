@@ -139,7 +139,6 @@ func init() {
 	registerStubGroup(artifactsCmd, "versions", "Manage package versions", "delete", "describe", "list", "tag")
 	registerStubGroup(artifactsCmd, "vpcsc-config", "Manage VPC-SC configuration", "allow", "deny", "describe")
 	registerStubGroup(artifactsCmd, "vulnerabilities", "Manage vulnerability reports", "list", "load-vex")
-	registerStubGroup(artifactsCmd, "yum", "Manage Yum package operations", "list", "delete")
 
 	rootCmd.AddCommand(artifactsCmd)
 }
