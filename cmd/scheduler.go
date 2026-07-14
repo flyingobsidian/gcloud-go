@@ -197,17 +197,8 @@ func init() {
 	schedulerJobsCmd.AddCommand(schedulerJobsUpdateCmd)
 	schedulerCmd.AddCommand(schedulerJobsCmd)
 
-	// gcloud-python scheduler subgroups not yet implemented (#545).
-	registerStubGroup(schedulerCmd, "cmek-config",
-		"Manage Customer-Managed Encryption Key configuration",
-		"describe", "update", "clear")
-	registerStubGroup(schedulerCmd, "locations",
-		"Manage / list Cloud Scheduler locations",
-		"list", "describe")
-	registerStubGroup(schedulerCmd, "operations",
-		"Manage long-running scheduler operations",
-		"cancel", "delete", "describe", "list")
-
+	// cmek-config, locations, operations subgroups are implemented in
+	// scheduler_extras.go.
 	rootCmd.AddCommand(schedulerCmd)
 }
 
