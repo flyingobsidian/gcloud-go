@@ -19,6 +19,7 @@ import (
 	datamigration "google.golang.org/api/datamigration/v1"
 	dataplex "google.golang.org/api/dataplex/v1"
 	eventarc "google.golang.org/api/eventarc/v1"
+	firestore "google.golang.org/api/firestore/v1"
 	monitoring "google.golang.org/api/monitoring/v3"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
 	"golang.org/x/oauth2"
@@ -207,6 +208,14 @@ func EventarcService(ctx context.Context, account string) (*eventarc.Service, er
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return eventarc.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func FirestoreService(ctx context.Context, account string) (*firestore.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return firestore.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform

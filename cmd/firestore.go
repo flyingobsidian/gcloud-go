@@ -7,17 +7,12 @@ import "github.com/spf13/cobra"
 var firestoreCmd = &cobra.Command{Use: "firestore", Short: "Manage Cloud Firestore"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(firestoreCmd, "databases", "Manage databases", append(crud, "restore", "clone")...)
-	registerStubGroup(firestoreCmd, "fields", "Manage field metadata", "describe", "list", "update")
-	registerStubGroup(firestoreCmd, "indexes", "Manage indexes",
-		"composite", "fields")
-	registerStubGroup(firestoreCmd, "locations", "Manage locations", "list", "describe")
-	registerStubGroup(firestoreCmd, "operations", "Manage operations", "cancel", "delete", "describe", "list")
-	registerStubGroup(firestoreCmd, "user-creds", "Manage user credentials", "create", "delete", "describe", "list", "enable", "disable", "reset-password")
+	// Subgroups (databases, backups, fields, indexes, locations, operations,
+	// user-creds) are implemented in dedicated firestore_*.go files. The three
+	// top-level bulk-delete / export / import commands remain stubs pending
+	// their own implementations.
 	for _, name := range []string{"bulk-delete", "export", "import"} {
 		registerStubCommand(firestoreCmd, name, "Not yet implemented")
 	}
-		registerStubGroup(firestoreCmd, "backups", "Manage backups", "list", "describe")
 	rootCmd.AddCommand(firestoreCmd)
 }
