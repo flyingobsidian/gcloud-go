@@ -36,6 +36,7 @@ import (
 	looker "google.golang.org/api/looker/v1"
 	batchapi "google.golang.org/api/batch/v1"
 	datalineage "google.golang.org/api/datalineage/v1"
+	observability "google.golang.org/api/observability/v1"
 	privateca "google.golang.org/api/privateca/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
 	policysimulator "google.golang.org/api/policysimulator/v1"
@@ -268,6 +269,14 @@ func PrivateCAService(ctx context.Context, account string) (*privateca.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return privateca.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ObservabilityService(ctx context.Context, account string) (*observability.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return observability.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func DataLineageService(ctx context.Context, account string) (*datalineage.Service, error) {
