@@ -15,7 +15,5 @@ func init() {
 	registerStubGroup(pubsubCmd, "message-transforms", "Manage Cloud Pub/Sub message transforms", "test")
 	registerStubGroup(pubsubCmd, "schemas", "Manage Pub/Sub schemas", append(crud, "commit", "revisions", "validate-schema", "validate-message")...)
 	registerStubGroup(pubsubCmd, "snapshots", "Manage Pub/Sub snapshots", crud...)
-	registerStubGroup(pubsubCmd, "subscriptions", "Manage Pub/Sub subscriptions", append(crud, "ack", "pull", "seek", "modify-message-ack-deadline", "modify-push-config")...)
-	registerStubGroup(pubsubCmd, "topics", "Manage Pub/Sub topics", append(crud, "publish", "list-subscriptions", "list-snapshots", "detach-subscription")...)
 	rootCmd.AddCommand(pubsubCmd)
 }
