@@ -60,6 +60,8 @@ import (
 	agentregistry "google.golang.org/api/agentregistry/v1alpha"
 	apihub "google.golang.org/api/apihub/v1"
 	appengine "google.golang.org/api/appengine/v1"
+	ids "google.golang.org/api/ids/v1"
+	recaptchaenterprise "google.golang.org/api/recaptchaenterprise/v1"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
 	config1 "google.golang.org/api/config/v1"
 	publicca "google.golang.org/api/publicca/v1"
@@ -718,6 +720,22 @@ func DatastoreService(ctx context.Context, account string) (*datastore.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return datastore.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func IDSService(ctx context.Context, account string) (*ids.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return ids.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ReCaptchaEnterpriseService(ctx context.Context, account string) (*recaptchaenterprise.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return recaptchaenterprise.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func ApiHubService(ctx context.Context, account string) (*apihub.Service, error) {

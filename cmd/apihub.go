@@ -19,6 +19,5 @@ func init() {
 	registerStubGroup(apihubCmd, "operations", "Manage operations", "cancel", "delete", "describe", "list")
 	registerStubGroup(apihubCmd, "plugins", "Manage plugins", append(crud, "enable", "disable")...)
 	registerStubGroup(apihubCmd, "runtime-project-attachments", "Manage runtime project attachments", "create", "describe", "list", "delete")
-	registerStubGroup(apihubCmd, "addons", "Manage addons", "list", "describe")
 	rootCmd.AddCommand(apihubCmd)
 }
