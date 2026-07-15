@@ -14,10 +14,13 @@ import (
 	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v3"
 	cloudiam "google.golang.org/api/iam/v1"
 	iamcredentials "google.golang.org/api/iamcredentials/v1"
+	cloudlocationfinder "google.golang.org/api/cloudlocationfinder/v1"
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 	dataflow "google.golang.org/api/dataflow/v1b3"
 	datamigration "google.golang.org/api/datamigration/v1"
 	dataplex "google.golang.org/api/dataplex/v1"
+	datastore "google.golang.org/api/datastore/v1"
+	parametermanager "google.golang.org/api/parametermanager/v1"
 	eventarc "google.golang.org/api/eventarc/v1"
 	firestore "google.golang.org/api/firestore/v1"
 	aiplatform "google.golang.org/api/aiplatform/v1"
@@ -697,6 +700,30 @@ func NetworkManagementService(ctx context.Context, account string) (*networkmana
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return networkmanagement.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func CloudLocationFinderService(ctx context.Context, account string) (*cloudlocationfinder.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return cloudlocationfinder.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func DatastoreService(ctx context.Context, account string) (*datastore.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return datastore.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ParameterManagerService(ctx context.Context, account string) (*parametermanager.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return parametermanager.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform

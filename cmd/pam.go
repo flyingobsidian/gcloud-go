@@ -7,8 +7,6 @@ import "github.com/spf13/cobra"
 var pamCmd = &cobra.Command{Use: "pam", Short: "Manage Privileged Access Manager"}
 
 func init() {
-	registerStubGroup(pamCmd, "entitlements", "Manage entitlements",
-		"create", "delete", "describe", "list", "update", "search")
 	registerStubGroup(pamCmd, "grants", "Manage grants",
 		"approve", "create", "deny", "describe", "list", "revoke", "search")
 	registerStubGroup(pamCmd, "operations", "Manage PAM operations", "describe", "list")
