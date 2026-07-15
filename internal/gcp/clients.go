@@ -59,6 +59,7 @@ import (
 	policysimulator "google.golang.org/api/policysimulator/v1"
 	policytroubleshooter "google.golang.org/api/policytroubleshooter/v1"
 	monitoring "google.golang.org/api/monitoring/v3"
+	networkconnectivity "google.golang.org/api/networkconnectivity/v1"
 	networksecurity "google.golang.org/api/networksecurity/v1"
 	networksecuritybeta "google.golang.org/api/networksecurity/v1beta1"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
@@ -522,6 +523,14 @@ func CloudIdentityService(ctx context.Context, account string) (*cloudidentity.S
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return cloudidentity.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func NetworkConnectivityService(ctx context.Context, account string) (*networkconnectivity.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return networkconnectivity.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func NetworkSecurityService(ctx context.Context, account string) (*networksecurity.Service, error) {
