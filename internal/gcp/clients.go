@@ -71,6 +71,7 @@ import (
 	redis "google.golang.org/api/redis/v1"
 	servicenetworking "google.golang.org/api/servicenetworking/v1"
 	serviceusage "google.golang.org/api/serviceusage/v1"
+	sqladmin "google.golang.org/api/sqladmin/v1"
 	storage "google.golang.org/api/storage/v1"
 )
 
@@ -598,6 +599,14 @@ func LoggingService(ctx context.Context, account string) (*logging.Service, erro
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return logging.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func SQLAdminService(ctx context.Context, account string) (*sqladmin.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return sqladmin.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
