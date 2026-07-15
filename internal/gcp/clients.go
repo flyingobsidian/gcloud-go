@@ -49,6 +49,7 @@ import (
 	iamv2 "google.golang.org/api/iam/v2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
 	agentregistry "google.golang.org/api/agentregistry/v1alpha"
+	appengine "google.golang.org/api/appengine/v1"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
 	config1 "google.golang.org/api/config/v1"
 	publicca "google.golang.org/api/publicca/v1"
@@ -581,6 +582,14 @@ func CloudFunctionsV2Service(ctx context.Context, account string) (*cloudfunctio
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return cloudfunctionsv2.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func AppEngineService(ctx context.Context, account string) (*appengine.APIService, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return appengine.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func LoggingService(ctx context.Context, account string) (*logging.Service, error) {
