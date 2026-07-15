@@ -313,12 +313,6 @@ func init() {
 	monitoringCmd.AddCommand(monitoringChannelsCmd)
 	monitoringCmd.AddCommand(monitoringChannelsAliasCmd)
 
-	// gcloud-python monitoring subgroups not yet implemented (#543).
-	registerStubGroup(monitoringCmd, "dashboards", "Manage custom dashboards",
-		"create", "delete", "describe", "list", "update")
-	registerStubGroup(monitoringCmd, "uptime", "Manage uptime checks",
-		"create", "delete", "describe", "list", "update")
-
 	rootCmd.AddCommand(monitoringCmd)
 }
 

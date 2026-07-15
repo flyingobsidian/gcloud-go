@@ -28,6 +28,10 @@ import (
 	deploymentmanager "google.golang.org/api/deploymentmanager/v2"
 	deploymentmanagerbeta "google.golang.org/api/deploymentmanager/v2beta"
 	domains "google.golang.org/api/domains/v1"
+	filestore "google.golang.org/api/file/v1"
+	monitoringv1 "google.golang.org/api/monitoring/v1"
+	networkmanagement "google.golang.org/api/networkmanagement/v1"
+	workflowexecutions "google.golang.org/api/workflowexecutions/v1"
 	securesourcemanager "google.golang.org/api/securesourcemanager/v1"
 	certificatemanager "google.golang.org/api/certificatemanager/v1"
 	apphub "google.golang.org/api/apphub/v1"
@@ -661,6 +665,38 @@ func DomainsService(ctx context.Context, account string) (*domains.Service, erro
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return domains.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func FilestoreService(ctx context.Context, account string) (*filestore.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return filestore.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func WorkflowExecutionsService(ctx context.Context, account string) (*workflowexecutions.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return workflowexecutions.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func MonitoringV1Service(ctx context.Context, account string) (*monitoringv1.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return monitoringv1.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func NetworkManagementService(ctx context.Context, account string) (*networkmanagement.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return networkmanagement.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
