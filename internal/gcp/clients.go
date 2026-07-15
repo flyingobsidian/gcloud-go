@@ -58,6 +58,7 @@ import (
 	iamv2 "google.golang.org/api/iam/v2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
 	agentregistry "google.golang.org/api/agentregistry/v1alpha"
+	apihub "google.golang.org/api/apihub/v1"
 	appengine "google.golang.org/api/appengine/v1"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
 	config1 "google.golang.org/api/config/v1"
@@ -78,6 +79,7 @@ import (
 	"google.golang.org/api/option"
 	orgpolicy "google.golang.org/api/orgpolicy/v2"
 	oslogin "google.golang.org/api/oslogin/v1"
+	pubsublite "google.golang.org/api/pubsublite/v1"
 	redis "google.golang.org/api/redis/v1"
 	servicenetworking "google.golang.org/api/servicenetworking/v1"
 	serviceusage "google.golang.org/api/serviceusage/v1"
@@ -716,6 +718,31 @@ func DatastoreService(ctx context.Context, account string) (*datastore.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return datastore.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ApiHubService(ctx context.Context, account string) (*apihub.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return apihub.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// PubSubLiteService returns a pubsublite client wired to the region-specific
+// endpoint. Pub/Sub Lite is a regional service: admin operations for a given
+// location must be routed through <region>-pubsublite.googleapis.com, where
+// the region is derived from the (regional or zonal) location the resource
+// lives in.
+func PubSubLiteService(ctx context.Context, account, region string) (*pubsublite.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if region != "" {
+		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-pubsublite.googleapis.com/", region)))
+	}
+	return pubsublite.NewService(ctx, opts...)
 }
 
 func ParameterManagerService(ctx context.Context, account string) (*parametermanager.Service, error) {
