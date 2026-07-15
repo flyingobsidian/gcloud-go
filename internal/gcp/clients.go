@@ -71,8 +71,11 @@ import (
 	redis "google.golang.org/api/redis/v1"
 	servicenetworking "google.golang.org/api/servicenetworking/v1"
 	serviceusage "google.golang.org/api/serviceusage/v1"
+	servicemanagement "google.golang.org/api/servicemanagement/v1"
 	sqladmin "google.golang.org/api/sqladmin/v1"
 	storage "google.golang.org/api/storage/v1"
+	storagetransfer "google.golang.org/api/storagetransfer/v1"
+	vmmigration "google.golang.org/api/vmmigration/v1"
 )
 
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
@@ -607,6 +610,30 @@ func SQLAdminService(ctx context.Context, account string) (*sqladmin.Service, er
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return sqladmin.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func StorageTransferService(ctx context.Context, account string) (*storagetransfer.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return storagetransfer.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ServiceManagementService(ctx context.Context, account string) (*servicemanagement.APIService, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return servicemanagement.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func VMMigrationService(ctx context.Context, account string) (*vmmigration.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return vmmigration.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
