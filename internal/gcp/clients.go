@@ -27,6 +27,8 @@ import (
 	datastream "google.golang.org/api/datastream/v1"
 	deploymentmanager "google.golang.org/api/deploymentmanager/v2"
 	deploymentmanagerbeta "google.golang.org/api/deploymentmanager/v2beta"
+	domains "google.golang.org/api/domains/v1"
+	securesourcemanager "google.golang.org/api/securesourcemanager/v1"
 	certificatemanager "google.golang.org/api/certificatemanager/v1"
 	apphub "google.golang.org/api/apphub/v1"
 	apigateway "google.golang.org/api/apigateway/v1"
@@ -643,6 +645,22 @@ func VMMigrationService(ctx context.Context, account string) (*vmmigration.Servi
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return vmmigration.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func SecureSourceManagerService(ctx context.Context, account string) (*securesourcemanager.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return securesourcemanager.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func DomainsService(ctx context.Context, account string) (*domains.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return domains.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
