@@ -61,6 +61,7 @@ import (
 	apihub "google.golang.org/api/apihub/v1"
 	appengine "google.golang.org/api/appengine/v1"
 	ids "google.golang.org/api/ids/v1"
+	netapp "google.golang.org/api/netapp/v1"
 	recaptchaenterprise "google.golang.org/api/recaptchaenterprise/v1"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
 	config1 "google.golang.org/api/config/v1"
@@ -720,6 +721,14 @@ func DatastoreService(ctx context.Context, account string) (*datastore.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return datastore.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func NetAppService(ctx context.Context, account string) (*netapp.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return netapp.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func IDSService(ctx context.Context, account string) (*ids.Service, error) {
