@@ -62,6 +62,8 @@ import (
 	appengine "google.golang.org/api/appengine/v1"
 	ids "google.golang.org/api/ids/v1"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
+	composer "google.golang.org/api/composer/v1"
+	datacatalog "google.golang.org/api/datacatalog/v1"
 	netapp "google.golang.org/api/netapp/v1"
 	recaptchaenterprise "google.golang.org/api/recaptchaenterprise/v1"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
@@ -738,6 +740,22 @@ func BigtableAdminService(ctx context.Context, account string) (*bigtableadmin.S
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return bigtableadmin.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ComposerService(ctx context.Context, account string) (*composer.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return composer.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func DataCatalogService(ctx context.Context, account string) (*datacatalog.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return datacatalog.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func IDSService(ctx context.Context, account string) (*ids.Service, error) {
