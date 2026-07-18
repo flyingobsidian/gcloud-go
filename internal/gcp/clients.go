@@ -61,6 +61,7 @@ import (
 	apihub "google.golang.org/api/apihub/v1"
 	appengine "google.golang.org/api/appengine/v1"
 	ids "google.golang.org/api/ids/v1"
+	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
 	netapp "google.golang.org/api/netapp/v1"
 	recaptchaenterprise "google.golang.org/api/recaptchaenterprise/v1"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
@@ -729,6 +730,14 @@ func NetAppService(ctx context.Context, account string) (*netapp.Service, error)
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return netapp.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func BigtableAdminService(ctx context.Context, account string) (*bigtableadmin.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return bigtableadmin.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func IDSService(ctx context.Context, account string) (*ids.Service, error) {
