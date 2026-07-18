@@ -80,7 +80,7 @@ func runDCOpCancel(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	if err := dcDo(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
 	fmt.Printf("Cancel request issued for operation %s.\n", args[0])
@@ -93,7 +93,7 @@ func runDCOpDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	if err := dcDo(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
 	fmt.Printf("Deleted operation %s.\n", args[0])
@@ -107,7 +107,7 @@ func runDCOpDescribe(cmd *cobra.Command, args []string) error {
 	}
 	ctx := context.Background()
 	var got map[string]any
-	if err := dcDo(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
 	return emitFormatted(got, flagDCOpFormat)
@@ -124,7 +124,7 @@ func runDCOpList(cmd *cobra.Command, args []string) error {
 	}
 	ctx := context.Background()
 	parent := fmt.Sprintf("%s/operations", dcLocationName(project, flagDCOpLocation))
-	items, err := dcPaginate(ctx, "/"+parent, base, "operations", flagDCOpPageSize)
+	items, err := designCenterRest.paginate(ctx, "/"+parent, base, "operations", flagDCOpPageSize)
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
@@ -146,7 +146,7 @@ func runDCOpWait(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	op, err := dcWaitOperation(ctx, name, flagDCOpTimeout)
+	op, err := designCenterRest.waitOperation(ctx, name, flagDCOpTimeout)
 	if err != nil {
 		return err
 	}

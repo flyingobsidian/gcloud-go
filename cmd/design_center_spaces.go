@@ -117,7 +117,7 @@ func runDCSpaceCreate(cmd *cobra.Command, args []string) error {
 	q := url.Values{}
 	q.Set("spaceId", args[0])
 	var op map[string]any
-	if err := dcDo(ctx, http.MethodPost, "/"+parent+"/spaces", q, body, &op); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodPost, "/"+parent+"/spaces", q, body, &op); err != nil {
 		return fmt.Errorf("creating space: %w", err)
 	}
 	fmt.Printf("Create request issued for space [%s].\n", args[0])
@@ -135,7 +135,7 @@ func runDCSpaceDelete(cmd *cobra.Command, args []string) error {
 	}
 	ctx := context.Background()
 	var op map[string]any
-	if err := dcDo(ctx, http.MethodDelete, "/"+name, q, nil, &op); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodDelete, "/"+name, q, nil, &op); err != nil {
 		return fmt.Errorf("deleting space: %w", err)
 	}
 	fmt.Printf("Delete request issued for space [%s].\n", args[0])
@@ -149,7 +149,7 @@ func runDCSpaceDescribe(cmd *cobra.Command, args []string) error {
 	}
 	ctx := context.Background()
 	var got map[string]any
-	if err := dcDo(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing space: %w", err)
 	}
 	return emitFormatted(got, flagDCSpaceFormat)
@@ -165,7 +165,7 @@ func runDCSpaceList(cmd *cobra.Command, args []string) error {
 		base.Set("filter", flagDCSpaceFilter)
 	}
 	ctx := context.Background()
-	items, err := dcPaginate(ctx, "/"+parent+"/spaces", base, "spaces", flagDCSpacePageSize)
+	items, err := designCenterRest.paginate(ctx, "/"+parent+"/spaces", base, "spaces", flagDCSpacePageSize)
 	if err != nil {
 		return fmt.Errorf("listing spaces: %w", err)
 	}
@@ -191,7 +191,7 @@ func runDCSpaceUpdate(cmd *cobra.Command, args []string) error {
 	}
 	ctx := context.Background()
 	var op map[string]any
-	if err := dcDo(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating space: %w", err)
 	}
 	fmt.Printf("Update request issued for space [%s].\n", args[0])
@@ -207,7 +207,7 @@ func runDCSpaceGetIam(cmd *cobra.Command, args []string) error {
 	q.Set("options.requestedPolicyVersion", "3")
 	ctx := context.Background()
 	var got map[string]any
-	if err := dcDo(ctx, http.MethodGet, "/"+name+":getIamPolicy", q, nil, &got); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodGet, "/"+name+":getIamPolicy", q, nil, &got); err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 	return emitFormatted(got, flagDCSpaceFormat)
@@ -225,7 +225,7 @@ func runDCSpaceSetIam(cmd *cobra.Command, args []string) error {
 	policy["version"] = 3
 	ctx := context.Background()
 	var got map[string]any
-	if err := dcDo(ctx, http.MethodPost, "/"+name+":setIamPolicy", nil, map[string]any{"policy": policy}, &got); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodPost, "/"+name+":setIamPolicy", nil, map[string]any{"policy": policy}, &got); err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
 	return emitFormatted(got, flagDCSpaceFormat)
@@ -238,7 +238,7 @@ func runDCSpaceTestIam(cmd *cobra.Command, args []string) error {
 	}
 	ctx := context.Background()
 	var got map[string]any
-	if err := dcDo(ctx, http.MethodPost, "/"+name+":testIamPermissions", nil, map[string]any{
+	if err := designCenterRest.do(ctx, http.MethodPost, "/"+name+":testIamPermissions", nil, map[string]any{
 		"permissions": flagDCSpaceTestPerms,
 	}, &got); err != nil {
 		return fmt.Errorf("testing IAM permissions: %w", err)

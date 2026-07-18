@@ -48,7 +48,7 @@ func runDCLocDescribe(cmd *cobra.Command, args []string) error {
 	}
 	ctx := context.Background()
 	var got map[string]any
-	if err := dcDo(ctx, http.MethodGet, "/"+dcLocationName(project, args[0]), nil, nil, &got); err != nil {
+	if err := designCenterRest.do(ctx, http.MethodGet, "/"+dcLocationName(project, args[0]), nil, nil, &got); err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
 	return emitFormatted(got, flagDCLocFormat)
@@ -64,7 +64,7 @@ func runDCLocList(cmd *cobra.Command, args []string) error {
 		base.Set("filter", flagDCLocFilter)
 	}
 	ctx := context.Background()
-	items, err := dcPaginate(ctx, fmt.Sprintf("/projects/%s/locations", project), base, "locations", flagDCLocPageSize)
+	items, err := designCenterRest.paginate(ctx, fmt.Sprintf("/projects/%s/locations", project), base, "locations", flagDCLocPageSize)
 	if err != nil {
 		return fmt.Errorf("listing locations: %w", err)
 	}
