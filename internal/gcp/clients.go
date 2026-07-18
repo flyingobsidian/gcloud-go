@@ -62,6 +62,7 @@ import (
 	appengine "google.golang.org/api/appengine/v1"
 	ids "google.golang.org/api/ids/v1"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
+	clouddeploy "google.golang.org/api/clouddeploy/v1"
 	composer "google.golang.org/api/composer/v1"
 	datacatalog "google.golang.org/api/datacatalog/v1"
 	dataproc "google.golang.org/api/dataproc/v1"
@@ -757,6 +758,14 @@ func DataCatalogService(ctx context.Context, account string) (*datacatalog.Servi
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return datacatalog.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func CloudDeployService(ctx context.Context, account string) (*clouddeploy.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return clouddeploy.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func DataprocService(ctx context.Context, account, region string) (*dataproc.Service, error) {
