@@ -64,6 +64,7 @@ import (
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
 	composer "google.golang.org/api/composer/v1"
 	datacatalog "google.golang.org/api/datacatalog/v1"
+	dataproc "google.golang.org/api/dataproc/v1"
 	netapp "google.golang.org/api/netapp/v1"
 	recaptchaenterprise "google.golang.org/api/recaptchaenterprise/v1"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
@@ -756,6 +757,18 @@ func DataCatalogService(ctx context.Context, account string) (*datacatalog.Servi
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return datacatalog.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func DataprocService(ctx context.Context, account, region string) (*dataproc.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if region != "" {
+		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-dataproc.googleapis.com/", region)))
+	}
+	return dataproc.NewService(ctx, opts...)
 }
 
 func IDSService(ctx context.Context, account string) (*ids.Service, error) {
