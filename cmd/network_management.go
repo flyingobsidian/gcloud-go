@@ -11,17 +11,21 @@ import (
 	networkmanagement "google.golang.org/api/networkmanagement/v1"
 )
 
-// --- gcloud network-management (#953, #955, #956) ---
+// --- gcloud network-management (#953, #954, #955, #956) ---
 //
-// Note: the "network-monitoring-providers" subgroup (#954) is deferred: the
-// google.golang.org/api/networkmanagement/v1 client at v0.279.0 does not
-// expose the underlying REST resource, so we keep it registered as a stub so
-// users still see it in `--help`.
+// The "network-monitoring-providers" subgroup (#954) is not modeled by
+// google.golang.org/api/networkmanagement/v1; it lives on the v1beta1 REST
+// surface and is implemented via the shared restClient in
+// network_management_network_monitoring_providers.go.
 
 var networkManagementCmd = &cobra.Command{
 	Use:   "network-management",
 	Short: "Manage Network Management (Network Intelligence Center)",
 }
+
+// netmgmtMonRest talks to the v1beta1 REST surface of
+// networkmanagement.googleapis.com which exposes networkMonitoringProviders.
+var netmgmtMonRest = newRESTClient("https://networkmanagement.googleapis.com/v1beta1")
 
 // Common flags across the network-management surface. Connectivity tests and
 // network-monitoring providers all live under `locations/global`, so we
@@ -277,14 +281,6 @@ func init() {
 	netmgmtVFLCmd.AddCommand(
 		netmgmtVFLCreateCmd, netmgmtVFLDeleteCmd, netmgmtVFLDescribeCmd,
 		netmgmtVFLListCmd, netmgmtVFLUpdateCmd,
-	)
-
-	// network-monitoring-providers (#954): not modeled by the Go client
-	// google.golang.org/api/networkmanagement/v1 at v0.279.0. Keep as stubs so
-	// the subgroup still appears in --help and users get a clear message.
-	registerStubGroup(networkManagementCmd, "network-monitoring-providers",
-		"(Not yet implemented) Manage network monitoring providers",
-		"create", "delete", "describe", "list", "update",
 	)
 
 	networkManagementCmd.AddCommand(
