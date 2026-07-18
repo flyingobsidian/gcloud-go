@@ -18,6 +18,5 @@ func init() {
 	registerStubGroup(bigtableCmd, "materialized-views", "Manage materialized views", crud...)
 	registerStubGroup(bigtableCmd, "operations", "Manage operations", "cancel", "describe", "list")
 	registerStubGroup(bigtableCmd, "schema-bundles", "Manage schema bundles", crud...)
-	registerStubGroup(bigtableCmd, "tables", "Query tables", "create", "delete", "describe", "list", "restore", "update")
 	rootCmd.AddCommand(bigtableCmd)
 }
