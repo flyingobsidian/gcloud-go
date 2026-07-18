@@ -94,6 +94,8 @@ import (
 	oslogin "google.golang.org/api/oslogin/v1"
 	pubsublite "google.golang.org/api/pubsublite/v1"
 	redis "google.golang.org/api/redis/v1"
+	runv1 "google.golang.org/api/run/v1"
+	runv2 "google.golang.org/api/run/v2"
 	servicenetworking "google.golang.org/api/servicenetworking/v1"
 	serviceusage "google.golang.org/api/serviceusage/v1"
 	servicemanagement "google.golang.org/api/servicemanagement/v1"
@@ -883,6 +885,37 @@ func ParameterManagerService(ctx context.Context, account string) (*parameterman
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return parametermanager.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// RunV1Service returns a Cloud Run v1 (Knative-style) client. Cloud Run's v1
+// surface is regional; pass an empty region for the multi-region default
+// endpoint or a region name (e.g. "us-central1") to route calls through
+// https://REGION-run.googleapis.com/.
+func RunV1Service(ctx context.Context, account, region string) (*runv1.APIService, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if region != "" {
+		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-run.googleapis.com/", region)))
+	}
+	return runv1.NewService(ctx, opts...)
+}
+
+// RunV2Service returns a Cloud Run v2 client. Cloud Run v2 supports both a
+// global and per-region endpoint; pass a region to pin the call to
+// https://REGION-run.googleapis.com/ (recommended for regional resources).
+func RunV2Service(ctx context.Context, account, region string) (*runv2.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if region != "" {
+		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-run.googleapis.com/", region)))
+	}
+	return runv2.NewService(ctx, opts...)
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
