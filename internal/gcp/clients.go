@@ -76,6 +76,7 @@ import (
 	config1 "google.golang.org/api/config/v1"
 	publicca "google.golang.org/api/publicca/v1"
 	metastore "google.golang.org/api/metastore/v1"
+	ml "google.golang.org/api/ml/v1"
 	privateca "google.golang.org/api/privateca/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
 	policysimulator "google.golang.org/api/policysimulator/v1"
@@ -537,6 +538,18 @@ func AIPlatformBetaService(ctx context.Context, account, region string) (*aiplat
 		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-aiplatform.googleapis.com/", region)))
 	}
 	return aiplatformbeta.NewService(ctx, opts...)
+}
+
+// MLService returns a client for the legacy Cloud ML Engine API
+// (google.golang.org/api/ml/v1), which backs the `gcloud ai-platform`
+// surface. This is distinct from Vertex AI (`gcloud ai ...`), which uses
+// the newer aiplatform.googleapis.com API and is region-scoped.
+func MLService(ctx context.Context, account string) (*ml.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return ml.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func PublicCAService(ctx context.Context, account string) (*publicca.Service, error) {
