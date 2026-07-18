@@ -1,19 +1,103 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
+)
 
 // --- gcloud access-context-manager (#288) ---
 
 var accessContextManagerCmd = &cobra.Command{Use: "access-context-manager", Short: "Manage Access Context Manager"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(accessContextManagerCmd, "authorized-orgs", "Manage authorized org descriptions", crud...)
-	registerStubGroup(accessContextManagerCmd, "cloud-bindings", "Manage cloud access bindings", crud...)
-	registerStubGroup(accessContextManagerCmd, "levels", "Manage access levels", append(crud, "conditions", "replace-all")...)
-	registerStubGroup(accessContextManagerCmd, "perimeters", "Manage service perimeters", append(crud, "dry-run", "commit", "replace-all")...)
-	registerStubGroup(accessContextManagerCmd, "policies", "Manage policies", crud...)
-	registerStubGroup(accessContextManagerCmd, "supported-permissions", "VPC-SC supported permissions", "list")
-	registerStubGroup(accessContextManagerCmd, "supported-services", "VPC-SC supported services", "list", "describe")
 	rootCmd.AddCommand(accessContextManagerCmd)
+}
+
+// acmPolicyResource turns a numeric policy id into the long-form parent
+// used by all AccessPolicies-scoped APIs: accessPolicies/POLICY_ID.
+func acmPolicyResource(policy string) string {
+	return "accessPolicies/" + policy
+}
+
+// acmIamFlags registers the shared --member/--role/--condition-* flags on c.
+func acmIamFlags(c *cobra.Command, member, role, condExpr, condTitle, condDesc *string) {
+	c.Flags().StringVar(member, "member", "", "IAM member (required)")
+	c.Flags().StringVar(role, "role", "", "IAM role to bind (required)")
+	c.Flags().StringVar(condExpr, "condition-expression", "", "CEL expression for a conditional binding")
+	c.Flags().StringVar(condTitle, "condition-title", "", "Title for a conditional binding")
+	c.Flags().StringVar(condDesc, "condition-description", "", "Description for a conditional binding")
+	_ = c.MarkFlagRequired("member")
+	_ = c.MarkFlagRequired("role")
+}
+
+func acmBuildCondition(expr, title, desc string) *accesscontextmanager.Expr {
+	if expr == "" && title == "" && desc == "" {
+		return nil
+	}
+	return &accesscontextmanager.Expr{Expression: expr, Title: title, Description: desc}
+}
+
+func acmCondsEqual(a, b *accesscontextmanager.Expr) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Expression == b.Expression && a.Title == b.Title && a.Description == b.Description
+}
+
+func acmAddBinding(policy *accesscontextmanager.Policy, role, member string, cond *accesscontextmanager.Expr) {
+	for _, b := range policy.Bindings {
+		if b.Role != role || !acmCondsEqual(b.Condition, cond) {
+			continue
+		}
+		for _, m := range b.Members {
+			if m == member {
+				return
+			}
+		}
+		b.Members = append(b.Members, member)
+		return
+	}
+	policy.Bindings = append(policy.Bindings, &accesscontextmanager.Binding{
+		Role: role, Members: []string{member}, Condition: cond,
+	})
+}
+
+func acmRemoveBinding(policy *accesscontextmanager.Policy, role, member string, cond *accesscontextmanager.Expr, allConds bool) bool {
+	changed := false
+	kept := policy.Bindings[:0]
+	for _, b := range policy.Bindings {
+		match := b.Role == role && (allConds || acmCondsEqual(b.Condition, cond))
+		if !match {
+			kept = append(kept, b)
+			continue
+		}
+		newMembers := b.Members[:0]
+		for _, m := range b.Members {
+			if m == member {
+				continue
+			}
+			newMembers = append(newMembers, m)
+		}
+		if len(newMembers) != len(b.Members) {
+			changed = true
+		}
+		b.Members = newMembers
+		if len(b.Members) > 0 {
+			kept = append(kept, b)
+		} else {
+			changed = true
+		}
+	}
+	policy.Bindings = kept
+	return changed
+}
+
+func acmUpdatedIam(who string) {
+	fmt.Fprintf(os.Stderr, "Updated IAM policy for %s.\n", who)
 }
