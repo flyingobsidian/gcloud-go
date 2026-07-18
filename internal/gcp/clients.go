@@ -57,6 +57,7 @@ import (
 	pubsub "google.golang.org/api/pubsub/v1"
 	iamv2 "google.golang.org/api/iam/v2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
+	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
 	agentregistry "google.golang.org/api/agentregistry/v1alpha"
 	apihub "google.golang.org/api/apihub/v1"
 	appengine "google.golang.org/api/appengine/v1"
@@ -363,6 +364,14 @@ func AccessApprovalService(ctx context.Context, account string) (*accessapproval
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return accessapproval.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func AccessContextManagerService(ctx context.Context, account string) (*accesscontextmanager.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return accesscontextmanager.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func MetastoreService(ctx context.Context, account string) (*metastore.APIService, error) {
