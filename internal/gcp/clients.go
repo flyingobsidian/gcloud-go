@@ -66,6 +66,7 @@ import (
 	composer "google.golang.org/api/composer/v1"
 	datacatalog "google.golang.org/api/datacatalog/v1"
 	dataproc "google.golang.org/api/dataproc/v1"
+	dns "google.golang.org/api/dns/v1"
 	netapp "google.golang.org/api/netapp/v1"
 	recaptchaenterprise "google.golang.org/api/recaptchaenterprise/v1"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
@@ -766,6 +767,14 @@ func CloudDeployService(ctx context.Context, account string) (*clouddeploy.Servi
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return clouddeploy.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func DNSService(ctx context.Context, account string) (*dns.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return dns.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func DataprocService(ctx context.Context, account, region string) (*dataproc.Service, error) {
