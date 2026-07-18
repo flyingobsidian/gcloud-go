@@ -45,6 +45,7 @@ import (
 	recommender "google.golang.org/api/recommender/v1"
 	servicedirectory "google.golang.org/api/servicedirectory/v1"
 	looker "google.golang.org/api/looker/v1"
+	managedidentities "google.golang.org/api/managedidentities/v1"
 	batchapi "google.golang.org/api/batch/v1"
 	datalineage "google.golang.org/api/datalineage/v1"
 	observability "google.golang.org/api/observability/v1"
@@ -784,6 +785,14 @@ func DNSService(ctx context.Context, account string) (*dns.Service, error) {
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return dns.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func ManagedIdentitiesService(ctx context.Context, account string) (*managedidentities.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return managedidentities.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func DataprocService(ctx context.Context, account, region string) (*dataproc.Service, error) {
