@@ -24,6 +24,7 @@ import (
 	eventarc "google.golang.org/api/eventarc/v1"
 	firestore "google.golang.org/api/firestore/v1"
 	aiplatform "google.golang.org/api/aiplatform/v1"
+	aiplatformbeta "google.golang.org/api/aiplatform/v1beta1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	transcoder "google.golang.org/api/transcoder/v1"
 	managedkafka "google.golang.org/api/managedkafka/v1"
@@ -521,6 +522,21 @@ func AIPlatformService(ctx context.Context, account, region string) (*aiplatform
 		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-aiplatform.googleapis.com/", region)))
 	}
 	return aiplatform.NewService(ctx, opts...)
+}
+
+// AIPlatformBetaService returns a regional aiplatform v1beta1 client. v1beta1
+// exposes surfaces that are not yet in v1 -- most notably
+// PublishersModelsService.List for Model Garden.
+func AIPlatformBetaService(ctx context.Context, account, region string) (*aiplatformbeta.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if region != "" {
+		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-aiplatform.googleapis.com/", region)))
+	}
+	return aiplatformbeta.NewService(ctx, opts...)
 }
 
 func PublicCAService(ctx context.Context, account string) (*publicca.Service, error) {
