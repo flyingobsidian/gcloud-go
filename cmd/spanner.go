@@ -14,15 +14,10 @@ import (
 var spannerCmd = &cobra.Command{Use: "spanner", Short: "Manage Cloud Spanner"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	// `backups` is implemented in spanner_backups.go (#1206); the remaining
-	// subgroups stay as stubs until their own issues land.
-	registerStubGroup(spannerCmd, "databases", "Manage databases", append(crud, "execute-sql", "ddl", "sessions", "restore", "add-split-points", "change-quorum")...)
-	registerStubGroup(spannerCmd, "instance-configs", "Manage instance configs", crud...)
-	registerStubGroup(spannerCmd, "instance-partitions", "Manage instance partitions", crud...)
-	registerStubGroup(spannerCmd, "instances", "Manage instances", append(crud, "get-iam-policy", "set-iam-policy", "add-iam-policy-binding", "remove-iam-policy-binding", "move")...)
-	registerStubGroup(spannerCmd, "operations", "Manage operations", "cancel", "describe", "list")
-	registerStubGroup(spannerCmd, "rows", "Manage rows", "delete", "insert", "read", "update")
+	// backups (#1206), databases (#1207), instance-configs (#1208),
+	// instance-partitions (#1209), instances (#1210), operations (#1211),
+	// and rows (#1212) live in their own files. samples, cli, and
+	// backup-schedules remain stubs pending their own issues.
 	registerStubGroup(spannerCmd, "samples", "Sample apps", "list", "run")
 	registerStubCommand(spannerCmd, "cli", "Interactive Spanner shell")
 	registerStubGroup(spannerCmd, "backup-schedules", "Manage backup-schedules", "list", "describe")
@@ -74,6 +69,30 @@ func spannerBackup(instance, backup string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%s/backups/%s", inst, backup), nil
+}
+
+// spannerInstanceConfig returns a fully qualified instance config name.
+func spannerInstanceConfig(cfg string) (string, error) {
+	if strings.HasPrefix(cfg, "projects/") {
+		return cfg, nil
+	}
+	project, err := spannerProject()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/instanceConfigs/%s", project, cfg), nil
+}
+
+// spannerInstancePartition returns a fully qualified instance partition name.
+func spannerInstancePartition(instance, partition string) (string, error) {
+	if strings.HasPrefix(partition, "projects/") {
+		return partition, nil
+	}
+	inst, err := spannerInstance(instance)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/instancePartitions/%s", inst, partition), nil
 }
 
 // spIamMemberFlags binds the standard IAM member/role/condition flags shared by
