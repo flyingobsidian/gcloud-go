@@ -16,11 +16,20 @@ import (
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
 )
 
+// --- gcloud artifacts (root) ---
+
 var artifactsCmd = &cobra.Command{
 	Use:   "artifacts",
 	Short: "Manage Artifact Registry",
 }
 
+// artifactsRest is used for the handful of Artifact Registry surfaces that are
+// not (yet) exposed by the generated Go client, e.g. imageStreamingCaches,
+// per-location settings, SBOM export/load, and vulnerabilities.
+var artifactsRest = newRESTClient("https://artifactregistry.googleapis.com/v1")
+
+// artifactsDockerCmd and artifactsDockerImagesCmd are shared parents used by
+// the vulnerability-scan surface below.
 var artifactsDockerCmd = &cobra.Command{
 	Use:   "docker",
 	Short: "Manage Docker resources",
@@ -30,6 +39,123 @@ var artifactsDockerImagesCmd = &cobra.Command{
 	Use:   "images",
 	Short: "Manage Docker images",
 }
+
+// --- shared parent resolution helpers ---
+
+// artProjectParent returns "projects/PROJECT".
+func artProjectParent(project string) string {
+	return "projects/" + project
+}
+
+// artLocationParent returns "projects/PROJECT/locations/LOCATION".
+func artLocationParent(project, location string) string {
+	return fmt.Sprintf("projects/%s/locations/%s", project, location)
+}
+
+// artRepoParent returns "projects/PROJECT/locations/LOCATION/repositories/REPO".
+func artRepoParent(project, location, repo string) string {
+	return fmt.Sprintf("projects/%s/locations/%s/repositories/%s", project, location, repo)
+}
+
+// artFullName returns raw if it already looks like a fully-qualified
+// "projects/..." resource name; otherwise it joins parent and raw.
+func artFullName(parent, raw string) string {
+	if strings.HasPrefix(raw, "projects/") {
+		return raw
+	}
+	return parent + "/" + raw
+}
+
+// --- shared IAM helpers ---
+
+// artIamBuildCondition returns a *artifactregistry.Expr or nil.
+func artIamBuildCondition(expr, title, desc string) *artifactregistry.Expr {
+	if expr == "" && title == "" && desc == "" {
+		return nil
+	}
+	return &artifactregistry.Expr{Expression: expr, Title: title, Description: desc}
+}
+
+// artIamCondsEqual reports whether two IAM condition exprs are equivalent.
+func artIamCondsEqual(a, b *artifactregistry.Expr) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Expression == b.Expression && a.Title == b.Title && a.Description == b.Description
+}
+
+// artIamAddBinding adds (role, member[, cond]) to policy in-place.
+func artIamAddBinding(policy *artifactregistry.Policy, role, member string, cond *artifactregistry.Expr) {
+	for _, b := range policy.Bindings {
+		if b.Role != role || !artIamCondsEqual(b.Condition, cond) {
+			continue
+		}
+		for _, m := range b.Members {
+			if m == member {
+				return
+			}
+		}
+		b.Members = append(b.Members, member)
+		return
+	}
+	policy.Bindings = append(policy.Bindings, &artifactregistry.Binding{
+		Role: role, Members: []string{member}, Condition: cond,
+	})
+}
+
+// artIamRemoveBinding removes (role, member[, cond]) from policy in-place.
+// If allConds is true, matching bindings across all conditions are cleared.
+func artIamRemoveBinding(policy *artifactregistry.Policy, role, member string, cond *artifactregistry.Expr, allConds bool) bool {
+	changed := false
+	kept := policy.Bindings[:0]
+	for _, b := range policy.Bindings {
+		match := b.Role == role && (allConds || artIamCondsEqual(b.Condition, cond))
+		if !match {
+			kept = append(kept, b)
+			continue
+		}
+		newMembers := b.Members[:0]
+		for _, m := range b.Members {
+			if m == member {
+				continue
+			}
+			newMembers = append(newMembers, m)
+		}
+		if len(newMembers) != len(b.Members) {
+			changed = true
+		}
+		b.Members = newMembers
+		if len(b.Members) > 0 {
+			kept = append(kept, b)
+		} else {
+			changed = true
+		}
+	}
+	policy.Bindings = kept
+	return changed
+}
+
+// artUpdatedIam prints the standard "Updated IAM policy for ..." message.
+func artUpdatedIam(who string) {
+	fmt.Fprintf(os.Stderr, "Updated IAM policy for %s.\n", who)
+}
+
+// artIamMemberFlags binds the common --member/--role/--condition-* flags for a
+// (add|remove)-iam-policy-binding subcommand.
+func artIamMemberFlags(c *cobra.Command, member, role, condExpr, condTitle, condDesc *string) {
+	c.Flags().StringVar(member, "member", "", "IAM member (required)")
+	c.Flags().StringVar(role, "role", "", "IAM role to bind (required)")
+	c.Flags().StringVar(condExpr, "condition-expression", "", "CEL expression for a conditional binding")
+	c.Flags().StringVar(condTitle, "condition-title", "", "Title for a conditional binding")
+	c.Flags().StringVar(condDesc, "condition-description", "", "Description for a conditional binding")
+	_ = c.MarkFlagRequired("member")
+	_ = c.MarkFlagRequired("role")
+}
+
+// --- existing scan/list-vulnerabilities surface (docker images scan/etc.) ---
 
 var artifactsScanCmd = &cobra.Command{
 	Use:   "scan IMAGE",
@@ -51,8 +177,6 @@ Example:
 	RunE: runArtifactsListVulnerabilities,
 }
 
-// --- artifacts docker images list (#186) ---
-
 var artifactsDockerImagesListCmd = &cobra.Command{
 	Use:   "list REPOSITORY",
 	Short: "List Docker images in a repository",
@@ -66,16 +190,12 @@ var (
 	flagArtImgListURI         bool
 )
 
-// --- artifacts docker images describe (#187) ---
-
 var artifactsDockerImagesDescribeCmd = &cobra.Command{
 	Use:   "describe IMAGE",
 	Short: "Describe a Docker image",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runArtifactsDockerImagesDescribe,
 }
-
-// --- artifacts docker images delete (#188) ---
 
 var artifactsDockerImagesDeleteCmd = &cobra.Command{
 	Use:   "delete IMAGE",
@@ -84,16 +204,13 @@ var artifactsDockerImagesDeleteCmd = &cobra.Command{
 	RunE:  runArtifactsDockerImagesDelete,
 }
 
-
-// --- scan extra flags (#189, #190) ---
-
 var (
-	flagArtifactsScanLocation     string
-	flagArtifactsScanFormat       string
-	flagArtifactsVulnFormat       string
-	flagArtifactsScanRemote       bool
-	flagArtifactsScanAsync        bool
-	flagArtifactsScanExtraTypes   []string
+	flagArtifactsScanLocation   string
+	flagArtifactsScanFormat     string
+	flagArtifactsVulnFormat     string
+	flagArtifactsScanRemote     bool
+	flagArtifactsScanAsync      bool
+	flagArtifactsScanExtraTypes []string
 )
 
 func init() {
@@ -108,6 +225,7 @@ func init() {
 	artifactsDockerImagesListCmd.Flags().BoolVar(&flagArtImgListIncludeTags, "include-tags", false, "Include image tags")
 	artifactsDockerImagesListCmd.Flags().BoolVar(&flagArtImgListURI, "uri", false, "Print resource names")
 	artifactsDockerImagesDescribeCmd.Flags().StringVar(&flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
+
 	artifactsDockerImagesCmd.AddCommand(artifactsScanCmd)
 	artifactsDockerImagesCmd.AddCommand(artifactsListVulnerabilitiesCmd)
 	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesListCmd)
@@ -115,30 +233,6 @@ func init() {
 	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesDeleteCmd)
 	artifactsDockerCmd.AddCommand(artifactsDockerImagesCmd)
 	artifactsCmd.AddCommand(artifactsDockerCmd)
-
-	// Stub registrations for artifacts subgroups present in gcloud-python but
-	// not yet implemented in gcloud-go (#537). Registered so `--help` lists
-	// them and later PRs can fill in real behavior per subgroup.
-	registerStubGroup(artifactsCmd, "apt", "Manage Apt package operations", "list", "delete")
-	registerStubGroup(artifactsCmd, "attachments", "Manage artifact attachments", "create", "delete", "describe", "list")
-	registerStubGroup(artifactsCmd, "files", "Manage individual files in a repository", "delete", "describe", "list")
-	registerStubGroup(artifactsCmd, "generic", "Manage generic package format", "download", "upload")
-	registerStubGroup(artifactsCmd, "go", "Manage Go modules", "upload")
-	registerStubGroup(artifactsCmd, "image-streaming-cache", "Manage image streaming caches", "create", "delete", "describe", "list")
-	registerStubGroup(artifactsCmd, "locations", "List regional metadata", "list", "describe")
-	registerStubGroup(artifactsCmd, "operations", "Manage long-running operations", "describe", "list", "wait")
-	registerStubGroup(artifactsCmd, "packages", "Manage packages", "delete", "describe", "list")
-	registerStubGroup(artifactsCmd, "projects", "Manage per-project Artifact Registry settings", "describe")
-	registerStubGroup(artifactsCmd, "repositories", "Manage Artifact Registry repositories",
-		"add-iam-policy-binding", "create", "delete", "describe", "get-iam-policy",
-		"list", "remove-iam-policy-binding", "set-iam-policy", "update", "upgrade-to-remote")
-	registerStubGroup(artifactsCmd, "rules", "Manage cleanup rules", "create", "delete", "describe", "list", "update")
-	registerStubGroup(artifactsCmd, "sbom", "Manage SBOMs (Software Bill of Materials)", "export", "load")
-	registerStubGroup(artifactsCmd, "settings", "Manage Artifact Registry settings", "describe", "enable-upgrade-redirection", "disable-upgrade-redirection")
-	registerStubGroup(artifactsCmd, "tags", "Manage Docker/other tags", "create", "delete", "describe", "list", "update")
-	registerStubGroup(artifactsCmd, "versions", "Manage package versions", "delete", "describe", "list", "tag")
-	registerStubGroup(artifactsCmd, "vpcsc-config", "Manage VPC-SC configuration", "allow", "deny", "describe")
-	registerStubGroup(artifactsCmd, "vulnerabilities", "Manage vulnerability reports", "list", "load-vex")
 
 	rootCmd.AddCommand(artifactsCmd)
 }
@@ -167,8 +261,6 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 	}
 
 	if !flagArtifactsScanRemote {
-		// Local scan: extract packages from the image using Docker, then send
-		// the package list to the API for vulnerability analysis.
 		fmt.Fprintf(os.Stderr, "Locally extracting packages from %s...\n", image)
 		pkgs, err := extractLocalPackages(ctx, image)
 		if err != nil {
@@ -193,7 +285,6 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Poll the operation until done.
 	fmt.Fprintf(os.Stderr, "Scanning %s...\n", image)
 	for !op.Done {
 		time.Sleep(5 * time.Second)
@@ -213,7 +304,6 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 		return enc.Encode(op.Response)
 	}
 
-	// The scan resource name is in the response.
 	fmt.Printf("Scan completed. Operation: %s\n", op.Name)
 	fmt.Println("Use 'gcloud artifacts docker images list-vulnerabilities' with the scan resource to view results.")
 	return nil
@@ -268,8 +358,6 @@ func runArtifactsListVulnerabilities(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// --- artifacts docker images list (#186) ---
-
 func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
@@ -277,12 +365,9 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Repository arg is like: LOCATION-docker.pkg.dev/PROJECT/REPO
 	parent := fmt.Sprintf("projects/-/locations/-/repositories/-/packages/-")
-	// Try to parse the repository path into the API format.
 	parts := strings.Split(strings.TrimSuffix(args[0], "/"), "/")
 	if len(parts) >= 3 {
-		// e.g., us-docker.pkg.dev/my-project/my-repo
 		host := parts[0]
 		location := strings.TrimSuffix(host, "-docker.pkg.dev")
 		project := parts[1]
@@ -343,8 +428,6 @@ func truncateDigest(uri string) string {
 	return ""
 }
 
-// --- artifacts docker images describe (#187) ---
-
 func runArtifactsDockerImagesDescribe(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
@@ -352,7 +435,6 @@ func runArtifactsDockerImagesDescribe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Parse the image path. Format: LOCATION-docker.pkg.dev/PROJECT/REPO/IMAGE[@sha256:DIGEST]
 	image := args[0]
 	name, err := parseArtifactImageName(image)
 	if err != nil {
@@ -368,8 +450,6 @@ func runArtifactsDockerImagesDescribe(cmd *cobra.Command, args []string) error {
 }
 
 func parseArtifactImageName(image string) (string, error) {
-	// Input: us-docker.pkg.dev/project/repo/image@sha256:abc123
-	// Output: projects/project/locations/us/repositories/repo/dockerImages/image@sha256:abc123
 	parts := strings.SplitN(image, "/", 4)
 	if len(parts) < 4 {
 		return "", fmt.Errorf("invalid image path: expected LOCATION-docker.pkg.dev/PROJECT/REPO/IMAGE")
@@ -381,8 +461,6 @@ func parseArtifactImageName(image string) (string, error) {
 	imagePart := parts[3]
 	return fmt.Sprintf("projects/%s/locations/%s/repositories/%s/dockerImages/%s", project, location, repo, imagePart), nil
 }
-
-// --- artifacts docker images delete (#188) ---
 
 func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
 	if !flagQuiet {
@@ -403,7 +481,6 @@ func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Parse image path to get the package name.
 	parts := strings.SplitN(args[0], "/", 4)
 	if len(parts) < 4 {
 		return fmt.Errorf("invalid image path: expected LOCATION-docker.pkg.dev/PROJECT/REPO/IMAGE")
@@ -414,7 +491,6 @@ func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
 	repo := parts[2]
 	imagePart := parts[3]
 
-	// Strip tag/digest for package name.
 	pkgName := imagePart
 	if idx := strings.Index(pkgName, "@"); idx >= 0 {
 		pkgName = pkgName[:idx]
@@ -432,17 +508,14 @@ func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// extractLocalPackages runs Docker to extract installed OS packages from
-// the image. It tries dpkg (Debian/Ubuntu), rpm (RHEL/CentOS), and apk
-// (Alpine) in sequence, matching the local extraction that gcloud's
-// local-extract binary performs.
+// --- package extraction helpers (unchanged from earlier revisions) ---
+
 func extractLocalPackages(ctx context.Context, image string) ([]*ondemandscanning.PackageData, error) {
 	dockerBin, err := exec.LookPath("docker")
 	if err != nil {
 		return nil, fmt.Errorf("docker not found in PATH: %w", err)
 	}
 
-	// Detect OS and extract packages. Try each package manager in order.
 	type extractor struct {
 		name    string
 		cmd     string
@@ -451,52 +524,16 @@ func extractLocalPackages(ctx context.Context, image string) ([]*ondemandscannin
 	}
 
 	extractors := []extractor{
-		{
-			name:    "dpkg",
-			cmd:     `dpkg-query -W -f '${Package}\t${Version}\t${Architecture}\n'`,
-			cpeBase: "cpe:/o:debian:debian_linux",
-			parse:   parseDpkgOutput,
-		},
-		{
-			name:    "rpm",
-			cmd:     `rpm -qa --queryformat '%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n'`,
-			cpeBase: "cpe:/o:redhat:enterprise_linux",
-			parse:   parseRpmOutput,
-		},
-		{
-			name:    "apk",
-			cmd:     `apk info -v 2>/dev/null | sort`,
-			cpeBase: "cpe:/o:alpine:alpine_linux",
-			parse:   parseApkOutput,
-		},
+		{name: "dpkg", cmd: `dpkg-query -W -f '${Package}\t${Version}\t${Architecture}\n'`, cpeBase: "cpe:/o:debian:debian_linux", parse: parseDpkgOutput},
+		{name: "rpm", cmd: `rpm -qa --queryformat '%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n'`, cpeBase: "cpe:/o:redhat:enterprise_linux", parse: parseRpmOutput},
+		{name: "apk", cmd: `apk info -v 2>/dev/null | sort`, cpeBase: "cpe:/o:alpine:alpine_linux", parse: parseApkOutput},
 	}
 
-	// Application-level extractors (for --additional-package-types or expanded extraction).
 	appExtractors := []extractor{
-		{
-			name:    "go",
-			cmd:     `find / -name go.sum -exec cat {} \; 2>/dev/null`,
-			cpeBase: "cpe:/a:golang:go",
-			parse:   parseGoSumOutput,
-		},
-		{
-			name:    "pip",
-			cmd:     `pip list --format=freeze 2>/dev/null || pip3 list --format=freeze 2>/dev/null`,
-			cpeBase: "cpe:/a:python:python",
-			parse:   parsePipOutput,
-		},
-		{
-			name:    "npm",
-			cmd:     `find / -name package.json -not -path '*/node_modules/.package-lock.json' -exec sh -c 'cat "$1" 2>/dev/null' _ {} \; 2>/dev/null | head -5000`,
-			cpeBase: "cpe:/a:npmjs:npm",
-			parse:   parseNpmOutput,
-		},
-		{
-			name:    "maven",
-			cmd:     `find / -name pom.xml -exec grep -h '<artifactId>\|<version>' {} \; 2>/dev/null | head -5000`,
-			cpeBase: "cpe:/a:apache:maven",
-			parse:   parseMavenOutput,
-		},
+		{name: "go", cmd: `find / -name go.sum -exec cat {} \; 2>/dev/null`, cpeBase: "cpe:/a:golang:go", parse: parseGoSumOutput},
+		{name: "pip", cmd: `pip list --format=freeze 2>/dev/null || pip3 list --format=freeze 2>/dev/null`, cpeBase: "cpe:/a:python:python", parse: parsePipOutput},
+		{name: "npm", cmd: `find / -name package.json -not -path '*/node_modules/.package-lock.json' -exec sh -c 'cat "$1" 2>/dev/null' _ {} \; 2>/dev/null | head -5000`, cpeBase: "cpe:/a:npmjs:npm", parse: parseNpmOutput},
+		{name: "maven", cmd: `find / -name pom.xml -exec grep -h '<artifactId>\|<version>' {} \; 2>/dev/null | head -5000`, cpeBase: "cpe:/a:apache:maven", parse: parseMavenOutput},
 	}
 
 	wantExtra := make(map[string]bool)
@@ -505,7 +542,6 @@ func extractLocalPackages(ctx context.Context, image string) ([]*ondemandscannin
 	}
 
 	var allPkgs []*ondemandscanning.PackageData
-	// Run OS extractors first.
 	for _, ext := range extractors {
 		cmd := exec.CommandContext(ctx, dockerBin, "run", "--rm", "--entrypoint", "sh", image, "-c", ext.cmd)
 		var stdout, stderr bytes.Buffer
@@ -525,10 +561,9 @@ func extractLocalPackages(ctx context.Context, image string) ([]*ondemandscannin
 			}
 		}
 		allPkgs = append(allPkgs, pkgs...)
-		break // Only use the first successful OS extractor
+		break
 	}
 
-	// Run application extractors if requested.
 	if len(wantExtra) > 0 {
 		for _, ext := range appExtractors {
 			if !wantExtra[strings.ToUpper(ext.name)] {
@@ -608,8 +643,6 @@ func parseApkOutput(output string) []*ondemandscanning.PackageData {
 		if line == "" {
 			continue
 		}
-		// apk info -v output: "package-name-1.2.3-r0"
-		// Split on last hyphen that precedes a digit to separate name from version.
 		name, version := splitApkPackage(line)
 		if name == "" {
 			continue
@@ -623,9 +656,7 @@ func parseApkOutput(output string) []*ondemandscanning.PackageData {
 	return pkgs
 }
 
-// splitApkPackage splits "package-name-1.2.3-r0" into ("package-name", "1.2.3-r0").
 func splitApkPackage(s string) (string, string) {
-	// Find the last hyphen followed by a digit.
 	for i := len(s) - 1; i > 0; i-- {
 		if s[i] == '-' && i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9' {
 			return s[:i], s[i+1:]
@@ -634,7 +665,6 @@ func splitApkPackage(s string) (string, string) {
 	return s, ""
 }
 
-// parseGoSumOutput parses go.sum lines: "module v1.2.3 h1:hash="
 func parseGoSumOutput(output string) []*ondemandscanning.PackageData {
 	seen := make(map[string]bool)
 	var pkgs []*ondemandscanning.PackageData
@@ -660,7 +690,6 @@ func parseGoSumOutput(output string) []*ondemandscanning.PackageData {
 	return pkgs
 }
 
-// parsePipOutput parses "pip list --format=freeze" output: "package==version"
 func parsePipOutput(output string) []*ondemandscanning.PackageData {
 	var pkgs []*ondemandscanning.PackageData
 	for _, line := range strings.Split(output, "\n") {
@@ -681,14 +710,12 @@ func parsePipOutput(output string) []*ondemandscanning.PackageData {
 	return pkgs
 }
 
-// parseNpmOutput is a basic parser for package.json name/version.
 func parseNpmOutput(output string) []*ondemandscanning.PackageData {
 	var pkgs []*ondemandscanning.PackageData
 	type pkgJSON struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 	}
-	// Try to parse each JSON object in the output.
 	decoder := json.NewDecoder(strings.NewReader(output))
 	for decoder.More() {
 		var p pkgJSON
@@ -706,7 +733,6 @@ func parseNpmOutput(output string) []*ondemandscanning.PackageData {
 	return pkgs
 }
 
-// parseMavenOutput parses artifactId and version from Maven pom.xml grep output.
 func parseMavenOutput(output string) []*ondemandscanning.PackageData {
 	var pkgs []*ondemandscanning.PackageData
 	lines := strings.Split(output, "\n")
