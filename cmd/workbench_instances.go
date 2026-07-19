@@ -316,7 +316,7 @@ func runWBIUpdate(cmd *cobra.Command, args []string) error {
 	return wbiFinishOp(ctx, svc, op, "Update instance", args[0], flagWBIAsync)
 }
 
-func wbiInvokeAction(name string, verb string, action func(svc *notebooks.Service, resourceName string, ctx context.Context) (*notebooks.Operation, error)) error {
+func wbiInvokeAction(name string, verb string, action func(ctx context.Context, svc *notebooks.Service, resourceName string) (*notebooks.Operation, error)) error {
 	project, err := resolveProject()
 	if err != nil {
 		return err
@@ -326,7 +326,7 @@ func wbiInvokeAction(name string, verb string, action func(svc *notebooks.Servic
 	if err != nil {
 		return err
 	}
-	op, err := action(svc, wbiName(name, project, flagWBILocation), ctx)
+	op, err := action(ctx, svc, wbiName(name, project, flagWBILocation))
 	if err != nil {
 		return fmt.Errorf("%s: %w", strings.ToLower(verb), err)
 	}
@@ -334,45 +334,45 @@ func wbiInvokeAction(name string, verb string, action func(svc *notebooks.Servic
 }
 
 func runWBIStart(cmd *cobra.Command, args []string) error {
-	return wbiInvokeAction(args[0], "Start instance", func(svc *notebooks.Service, name string, ctx context.Context) (*notebooks.Operation, error) {
+	return wbiInvokeAction(args[0], "Start instance", func(ctx context.Context, svc *notebooks.Service, name string) (*notebooks.Operation, error) {
 		return svc.Projects.Locations.Instances.Start(name, &notebooks.StartInstanceRequest{}).Context(ctx).Do()
 	})
 }
 
 func runWBIStop(cmd *cobra.Command, args []string) error {
-	return wbiInvokeAction(args[0], "Stop instance", func(svc *notebooks.Service, name string, ctx context.Context) (*notebooks.Operation, error) {
+	return wbiInvokeAction(args[0], "Stop instance", func(ctx context.Context, svc *notebooks.Service, name string) (*notebooks.Operation, error) {
 		return svc.Projects.Locations.Instances.Stop(name, &notebooks.StopInstanceRequest{}).Context(ctx).Do()
 	})
 }
 
 func runWBIReset(cmd *cobra.Command, args []string) error {
-	return wbiInvokeAction(args[0], "Reset instance", func(svc *notebooks.Service, name string, ctx context.Context) (*notebooks.Operation, error) {
+	return wbiInvokeAction(args[0], "Reset instance", func(ctx context.Context, svc *notebooks.Service, name string) (*notebooks.Operation, error) {
 		return svc.Projects.Locations.Instances.Reset(name, &notebooks.ResetInstanceRequest{}).Context(ctx).Do()
 	})
 }
 
 func runWBIDiagnose(cmd *cobra.Command, args []string) error {
-	return wbiInvokeAction(args[0], "Diagnose instance", func(svc *notebooks.Service, name string, ctx context.Context) (*notebooks.Operation, error) {
+	return wbiInvokeAction(args[0], "Diagnose instance", func(ctx context.Context, svc *notebooks.Service, name string) (*notebooks.Operation, error) {
 		return svc.Projects.Locations.Instances.Diagnose(name, &notebooks.DiagnoseInstanceRequest{}).Context(ctx).Do()
 	})
 }
 
 func runWBIUpgrade(cmd *cobra.Command, args []string) error {
-	return wbiInvokeAction(args[0], "Upgrade instance", func(svc *notebooks.Service, name string, ctx context.Context) (*notebooks.Operation, error) {
+	return wbiInvokeAction(args[0], "Upgrade instance", func(ctx context.Context, svc *notebooks.Service, name string) (*notebooks.Operation, error) {
 		return svc.Projects.Locations.Instances.Upgrade(name, &notebooks.UpgradeInstanceRequest{}).Context(ctx).Do()
 	})
 }
 
 func runWBIRollback(cmd *cobra.Command, args []string) error {
 	req := &notebooks.RollbackInstanceRequest{TargetSnapshot: flagWBISnapshot, RevisionId: flagWBIRevision}
-	return wbiInvokeAction(args[0], "Rollback instance", func(svc *notebooks.Service, name string, ctx context.Context) (*notebooks.Operation, error) {
+	return wbiInvokeAction(args[0], "Rollback instance", func(ctx context.Context, svc *notebooks.Service, name string) (*notebooks.Operation, error) {
 		return svc.Projects.Locations.Instances.Rollback(name, req).Context(ctx).Do()
 	})
 }
 
 func runWBIRestore(cmd *cobra.Command, args []string) error {
 	req := &notebooks.RestoreInstanceRequest{Snapshot: &notebooks.Snapshot{ProjectId: "", SnapshotId: flagWBIRestoreSource}}
-	return wbiInvokeAction(args[0], "Restore instance", func(svc *notebooks.Service, name string, ctx context.Context) (*notebooks.Operation, error) {
+	return wbiInvokeAction(args[0], "Restore instance", func(ctx context.Context, svc *notebooks.Service, name string) (*notebooks.Operation, error) {
 		return svc.Projects.Locations.Instances.Restore(name, req).Context(ctx).Do()
 	})
 }
@@ -385,7 +385,7 @@ func runWBIResizeDisk(cmd *cobra.Command, args []string) error {
 	default:
 		req.DataDisk = &notebooks.DataDisk{DiskSizeGb: flagWBIDiskSize}
 	}
-	return wbiInvokeAction(args[0], "Resize disk", func(svc *notebooks.Service, name string, ctx context.Context) (*notebooks.Operation, error) {
+	return wbiInvokeAction(args[0], "Resize disk", func(ctx context.Context, svc *notebooks.Service, name string) (*notebooks.Operation, error) {
 		return svc.Projects.Locations.Instances.ResizeDisk(name, req).Context(ctx).Do()
 	})
 }

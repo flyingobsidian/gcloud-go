@@ -293,27 +293,27 @@ func runDMMJUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func runDMMJStart(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Start", flagDMMJAsync, func(svc *datamigration.Service, name string, ctx context.Context) (*datamigration.Operation, error) {
+	return dmMJInvokeAction(args[0], "Start", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		req := &datamigration.StartMigrationJobRequest{SkipValidation: flagDMMJSkipValidate}
 		return svc.Projects.Locations.MigrationJobs.Start(name, req).Context(ctx).Do()
 	})
 }
 
 func runDMMJStop(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Stop", flagDMMJAsync, func(svc *datamigration.Service, name string, ctx context.Context) (*datamigration.Operation, error) {
+	return dmMJInvokeAction(args[0], "Stop", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		return svc.Projects.Locations.MigrationJobs.Stop(name, &datamigration.StopMigrationJobRequest{}).Context(ctx).Do()
 	})
 }
 
 func runDMMJResume(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Resume", flagDMMJAsync, func(svc *datamigration.Service, name string, ctx context.Context) (*datamigration.Operation, error) {
+	return dmMJInvokeAction(args[0], "Resume", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		req := &datamigration.ResumeMigrationJobRequest{SkipValidation: flagDMMJSkipValidate}
 		return svc.Projects.Locations.MigrationJobs.Resume(name, req).Context(ctx).Do()
 	})
 }
 
 func runDMMJRestart(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Restart", flagDMMJAsync, func(svc *datamigration.Service, name string, ctx context.Context) (*datamigration.Operation, error) {
+	return dmMJInvokeAction(args[0], "Restart", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		req := &datamigration.RestartMigrationJobRequest{
 			SkipValidation:       flagDMMJSkipValidate,
 			RestartFailedObjects: flagDMMJRestartFailed,
@@ -323,19 +323,19 @@ func runDMMJRestart(cmd *cobra.Command, args []string) error {
 }
 
 func runDMMJPromote(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Promote", flagDMMJAsync, func(svc *datamigration.Service, name string, ctx context.Context) (*datamigration.Operation, error) {
+	return dmMJInvokeAction(args[0], "Promote", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		return svc.Projects.Locations.MigrationJobs.Promote(name, &datamigration.PromoteMigrationJobRequest{}).Context(ctx).Do()
 	})
 }
 
 func runDMMJVerify(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Verify", flagDMMJAsync, func(svc *datamigration.Service, name string, ctx context.Context) (*datamigration.Operation, error) {
+	return dmMJInvokeAction(args[0], "Verify", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		return svc.Projects.Locations.MigrationJobs.Verify(name, &datamigration.VerifyMigrationJobRequest{}).Context(ctx).Do()
 	})
 }
 
 func runDMMJDemoteDestination(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Demote destination", flagDMMJAsync, func(svc *datamigration.Service, name string, ctx context.Context) (*datamigration.Operation, error) {
+	return dmMJInvokeAction(args[0], "Demote destination", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		return svc.Projects.Locations.MigrationJobs.DemoteDestination(name, &datamigration.DemoteDestinationRequest{}).Context(ctx).Do()
 	})
 }
@@ -390,7 +390,7 @@ func runDMMJFetchSourceObjects(cmd *cobra.Command, args []string) error {
 // dmMJInvokeAction wraps the common "resolve project → build service → run
 // action call that returns an Operation → optionally wait" pattern used by
 // start/stop/resume/restart/promote/verify/demote actions.
-func dmMJInvokeAction(name, verb string, async bool, action func(svc *datamigration.Service, resourceName string, ctx context.Context) (*datamigration.Operation, error)) error {
+func dmMJInvokeAction(name, verb string, async bool, action func(ctx context.Context, svc *datamigration.Service, resourceName string) (*datamigration.Operation, error)) error {
 	project, err := resolveProject()
 	if err != nil {
 		return err
@@ -400,7 +400,7 @@ func dmMJInvokeAction(name, verb string, async bool, action func(svc *datamigrat
 	if err != nil {
 		return err
 	}
-	op, err := action(svc, dmMJResourceName(name, project, flagDMMJRegion), ctx)
+	op, err := action(ctx, svc, dmMJResourceName(name, project, flagDMMJRegion))
 	if err != nil {
 		return fmt.Errorf("%s migration job: %w", strings.ToLower(verb), err)
 	}
