@@ -1,16 +1,101 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+	notebooksv1 "google.golang.org/api/notebooks/v1"
+)
 
 // --- gcloud notebooks (#365) ---
+//
+// Cloud AI Platform Notebooks (`gcloud notebooks`) is served by the
+// notebooks.googleapis.com API. The v1 surface covers user-managed Environments,
+// Instances and managed Runtimes; the subcommand files below hang off this
+// parent command.
 
-var notebooksCmd = &cobra.Command{Use: "notebooks", Short: "Manage AI Platform Notebooks"}
+var notebooksCmd = &cobra.Command{Use: "notebooks", Short: "Manage Cloud AI Platform Notebooks"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(notebooksCmd, "environments", "Manage notebook environments", "create", "delete", "describe", "list")
-	registerStubGroup(notebooksCmd, "instances", "Manage notebook instances", append(crud, "start", "stop", "reset", "register", "diagnose", "upgrade", "check-upgradability", "get-health", "set-accelerator", "set-labels", "set-machine-type", "add-metadata", "rollback", "migrate")...)
-	registerStubGroup(notebooksCmd, "locations", "View locations", "list", "describe")
-	registerStubGroup(notebooksCmd, "runtimes", "Manage runtimes", append(crud, "start", "stop", "reset", "migrate", "diagnose", "refresh-runtime-token-internal", "upgrade")...)
 	rootCmd.AddCommand(notebooksCmd)
+}
+
+func notebooksIamMemberFlags(c *cobra.Command, member, role, condExpr, condTitle, condDesc *string) {
+	c.Flags().StringVar(member, "member", "", "IAM member (required)")
+	c.Flags().StringVar(role, "role", "", "IAM role to bind (required)")
+	c.Flags().StringVar(condExpr, "condition-expression", "", "CEL expression for a conditional binding")
+	c.Flags().StringVar(condTitle, "condition-title", "", "Title for a conditional binding")
+	c.Flags().StringVar(condDesc, "condition-description", "", "Description for a conditional binding")
+	_ = c.MarkFlagRequired("member")
+	_ = c.MarkFlagRequired("role")
+}
+
+func notebooksIamBuildCondition(expr, title, desc string) *notebooksv1.Expr {
+	if expr == "" && title == "" && desc == "" {
+		return nil
+	}
+	return &notebooksv1.Expr{Expression: expr, Title: title, Description: desc}
+}
+
+func notebooksIamCondsEqual(a, b *notebooksv1.Expr) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Expression == b.Expression && a.Title == b.Title && a.Description == b.Description
+}
+
+func notebooksIamAddBinding(policy *notebooksv1.Policy, role, member string, cond *notebooksv1.Expr) {
+	for _, b := range policy.Bindings {
+		if b.Role != role || !notebooksIamCondsEqual(b.Condition, cond) {
+			continue
+		}
+		for _, m := range b.Members {
+			if m == member {
+				return
+			}
+		}
+		b.Members = append(b.Members, member)
+		return
+	}
+	policy.Bindings = append(policy.Bindings, &notebooksv1.Binding{
+		Role: role, Members: []string{member}, Condition: cond,
+	})
+}
+
+func notebooksIamRemoveBinding(policy *notebooksv1.Policy, role, member string, cond *notebooksv1.Expr, allConds bool) bool {
+	changed := false
+	kept := policy.Bindings[:0]
+	for _, b := range policy.Bindings {
+		match := b.Role == role && (allConds || notebooksIamCondsEqual(b.Condition, cond))
+		if !match {
+			kept = append(kept, b)
+			continue
+		}
+		newMembers := b.Members[:0]
+		for _, m := range b.Members {
+			if m == member {
+				continue
+			}
+			newMembers = append(newMembers, m)
+		}
+		if len(newMembers) != len(b.Members) {
+			changed = true
+		}
+		b.Members = newMembers
+		if len(b.Members) > 0 {
+			kept = append(kept, b)
+		} else {
+			changed = true
+		}
+	}
+	policy.Bindings = kept
+	return changed
+}
+
+func notebooksUpdatedIam(who string) {
+	fmt.Fprintf(os.Stderr, "Updated IAM policy for %s.\n", who)
 }
