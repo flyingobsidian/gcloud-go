@@ -54,3 +54,25 @@ func nonEmptyJSONFields(v any) []string {
 func joinMask(fields []string) string {
 	return strings.Join(fields, ",")
 }
+
+// saveAsYAML writes v to path as YAML (round-tripped through JSON so that
+// Google API Go types, which only carry JSON tags, marshal with the correct
+// field names).
+func saveAsYAML(path string, v any) error {
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("marshalling resource: %w", err)
+	}
+	var generic any
+	if err := json.Unmarshal(jsonBytes, &generic); err != nil {
+		return fmt.Errorf("normalising resource: %w", err)
+	}
+	out, err := yaml.Marshal(generic)
+	if err != nil {
+		return fmt.Errorf("encoding YAML: %w", err)
+	}
+	if err := os.WriteFile(path, out, 0600); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	return nil
+}
