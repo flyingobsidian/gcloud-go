@@ -25,7 +25,10 @@ import (
 	firestore "google.golang.org/api/firestore/v1"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 	aiplatformbeta "google.golang.org/api/aiplatform/v1beta1"
+	iap "google.golang.org/api/iap/v1"
+	networkservices "google.golang.org/api/networkservices/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
+	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
 	managedkafka "google.golang.org/api/managedkafka/v1"
 	datastream "google.golang.org/api/datastream/v1"
@@ -513,6 +516,41 @@ func NotebooksService(ctx context.Context, account string) (*notebooks.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return notebooks.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// NotebooksV1Service returns a Cloud Notebooks v1 client. The v1 API exposes
+// the User-Managed Notebook Environments, Instances, and Managed Runtimes
+// surfaces that gcloud's `notebooks` command tree targets; v2 covers only a
+// subset (Instances).
+func NotebooksV1Service(ctx context.Context, account string) (*notebooksv1.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return notebooksv1.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// IAPService returns a Cloud Identity-Aware Proxy v1 client. Backs
+// `gcloud iap oauth-brands`, `gcloud iap oauth-clients`, `gcloud iap settings`
+// and `gcloud iap tcp dest-groups`.
+func IAPService(ctx context.Context, account string) (*iap.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return iap.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// NetworkServicesService returns a Network Services v1 client. The v1 client
+// covers the IAM-only Media CDN Edge Cache surfaces; the full EdgeCache CRUD
+// endpoints (keysets, origins, services) are reached via a raw REST client in
+// cmd/edge_cache.go because they are not generated in google.golang.org/api.
+func NetworkServicesService(ctx context.Context, account string) (*networkservices.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return networkservices.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
