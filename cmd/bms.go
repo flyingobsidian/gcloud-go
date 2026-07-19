@@ -1,19 +1,40 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/spf13/cobra"
+)
 
 // --- gcloud bms (#310) ---
 
 var bmsCmd = &cobra.Command{Use: "bms", Short: "Manage Bare Metal Solution"}
 
 func init() {
-	crud := []string{"describe", "list", "update"}
-	registerStubGroup(bmsCmd, "instances", "Manage bare metal instances", append(crud, "reset", "start", "stop", "enable-interactive-serial-console", "disable-interactive-serial-console", "rename")...)
-	registerStubGroup(bmsCmd, "networks", "Manage networks", crud...)
-	registerStubGroup(bmsCmd, "nfs-shares", "Manage NFS shares", append(crud, "rename")...)
-	registerStubGroup(bmsCmd, "operations", "Manage operations", "describe", "list")
-	registerStubGroup(bmsCmd, "os-images", "Manage OS images", "list")
-	registerStubGroup(bmsCmd, "ssh-keys", "Manage SSH keys", "create", "delete", "list")
-	registerStubGroup(bmsCmd, "volumes", "Manage volumes", append(crud, "rename", "resize", "restore")...)
 	rootCmd.AddCommand(bmsCmd)
+}
+
+// bmsLocationParent returns projects/PROJECT/locations/LOCATION.
+func bmsLocationParent(location string) (string, error) {
+	project, err := resolveProject()
+	if err != nil {
+		return "", err
+	}
+	if location == "" {
+		return "", fmt.Errorf("--location is required")
+	}
+	return fmt.Sprintf("projects/%s/locations/%s", project, location), nil
+}
+
+// bmsResource returns projects/.../COLLECTION/ID.
+func bmsResource(location, collection, id string) (string, error) {
+	if strings.HasPrefix(id, "projects/") {
+		return id, nil
+	}
+	parent, err := bmsLocationParent(location)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/%s/%s", parent, collection, id), nil
 }

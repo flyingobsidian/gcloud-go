@@ -33,6 +33,7 @@ import (
 	developerconnect "google.golang.org/api/developerconnect/v1"
 	workstations "google.golang.org/api/workstations/v1"
 	sourcerepo "google.golang.org/api/sourcerepo/v1"
+	baremetalsolution "google.golang.org/api/baremetalsolution/v2"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -595,6 +596,15 @@ func SourceRepoService(ctx context.Context, account string) (*sourcerepo.Service
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return sourcerepo.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// BareMetalSolutionService returns a Bare Metal Solution v2 client.
+func BareMetalSolutionService(ctx context.Context, account string) (*baremetalsolution.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return baremetalsolution.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
