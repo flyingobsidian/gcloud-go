@@ -25,6 +25,8 @@ import (
 	firestore "google.golang.org/api/firestore/v1"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 	aiplatformbeta "google.golang.org/api/aiplatform/v1beta1"
+	cloudkms "google.golang.org/api/cloudkms/v1"
+	kmsinventory "google.golang.org/api/kmsinventory/v1"
 	iap "google.golang.org/api/iap/v1"
 	networkservices "google.golang.org/api/networkservices/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
@@ -954,6 +956,27 @@ func RunV2Service(ctx context.Context, account, region string) (*runv2.Service, 
 		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-run.googleapis.com/", region)))
 	}
 	return runv2.NewService(ctx, opts...)
+}
+
+// KMSService returns a Cloud KMS v1 client for key rings, keys, versions,
+// EKM connections, import jobs, key handles, retired resources, and
+// single-tenant HSM management.
+func KMSService(ctx context.Context, account string) (*cloudkms.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return cloudkms.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// KMSInventoryService returns a KMS Inventory v1 client for listing keys and
+// searching resources protected by a Cloud KMS key.
+func KMSInventoryService(ctx context.Context, account string) (*kmsinventory.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return kmsinventory.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
