@@ -38,6 +38,7 @@ import (
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 	apigee "google.golang.org/api/apigee/v1"
 	storagebatchoperations "google.golang.org/api/storagebatchoperations/v1"
+	oracledatabase "google.golang.org/api/oracledatabase/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -645,6 +646,15 @@ func StorageBatchOperationsService(ctx context.Context, account string) (*storag
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return storagebatchoperations.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// OracleDatabaseService returns an Oracle Database v1 client.
+func OracleDatabaseService(ctx context.Context, account string) (*oracledatabase.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return oracledatabase.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
