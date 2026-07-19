@@ -29,6 +29,7 @@ import (
 	kmsinventory "google.golang.org/api/kmsinventory/v1"
 	iap "google.golang.org/api/iap/v1"
 	networkservices "google.golang.org/api/networkservices/v1"
+	networkservicesbeta "google.golang.org/api/networkservices/v1beta1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -554,6 +555,16 @@ func NetworkServicesService(ctx context.Context, account string) (*networkservic
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return networkservices.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// NetworkServicesBetaService returns a Network Services v1beta1 client. Some
+// surfaces (e.g. agent-gateways) are only exposed on v1beta1 as of this build.
+func NetworkServicesBetaService(ctx context.Context, account string) (*networkservicesbeta.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return networkservicesbeta.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {

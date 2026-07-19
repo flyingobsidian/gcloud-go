@@ -78,3 +78,27 @@ func TestNetworkServicesOperationsSubcommands(t *testing.T) {
 	}
 	assertSubcommands(t, g, []string{"cancel", "describe", "list", "wait"})
 }
+
+func TestNetworkServicesServiceBindingsSubcommands(t *testing.T) {
+	g := networkServicesSubgroup("service-bindings")
+	if g == nil {
+		t.Fatal("network-services service-bindings missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "export", "import", "list", "update"})
+}
+
+func TestNetworkServicesServiceLbPoliciesSubcommands(t *testing.T) {
+	g := networkServicesSubgroup("service-lb-policies")
+	if g == nil {
+		t.Fatal("network-services service-lb-policies missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "export", "import", "list", "update"})
+}
+
+func TestNetworkServicesAgentGatewaysSubcommands(t *testing.T) {
+	g := networkServicesSubgroup("agent-gateways")
+	if g == nil {
+		t.Fatal("network-services agent-gateways missing")
+	}
+	assertSubcommands(t, g, []string{"delete", "describe", "export", "import", "list"})
+}
