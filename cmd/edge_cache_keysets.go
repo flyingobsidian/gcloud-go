@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -193,7 +194,8 @@ func runEdgeCacheKeysetsImport(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Import (update) request issued for edge-cache keyset [%s].\n", args[0])
 		return emitFormatted(op, flagEdgeCacheKeysetsFormat)
 	}
-	if !strings.Contains(err.Error(), "HTTP 404") {
+	var httpErr *restError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("importing edge-cache keyset: %w", err)
 	}
 	parent, perr := edgeCacheKeysetsParent()

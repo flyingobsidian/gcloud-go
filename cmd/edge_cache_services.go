@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -176,7 +177,8 @@ func runEdgeCacheServicesImport(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Import (update) request issued for edge-cache service [%s].\n", args[0])
 		return emitFormatted(op, flagEdgeCacheServicesFormat)
 	}
-	if !strings.Contains(err.Error(), "HTTP 404") {
+	var httpErr *restError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("importing edge-cache service: %w", err)
 	}
 	parent, perr := edgeCacheServicesParent()

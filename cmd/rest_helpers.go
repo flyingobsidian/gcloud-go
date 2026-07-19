@@ -22,6 +22,20 @@ type restClient struct {
 	endpoint string
 }
 
+// restError is returned by restClient.do when the HTTP response is non-2xx.
+// Callers use errors.As to inspect StatusCode and Body for structured checks
+// (e.g. treating 404 as "resource does not exist").
+type restError struct {
+	Method     string
+	URL        string
+	StatusCode int
+	Body       string
+}
+
+func (e *restError) Error() string {
+	return fmt.Sprintf("%s %s: HTTP %d: %s", e.Method, e.URL, e.StatusCode, e.Body)
+}
+
 func newRESTClient(endpoint string) *restClient {
 	return &restClient{endpoint: strings.TrimRight(endpoint, "/")}
 }
@@ -61,7 +75,12 @@ func (c *restClient) do(ctx context.Context, method, path string, query url.Valu
 		return fmt.Errorf("reading response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("%s %s: HTTP %d: %s", method, u, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return &restError{
+			Method:     method,
+			URL:        u,
+			StatusCode: resp.StatusCode,
+			Body:       strings.TrimSpace(string(respBody)),
+		}
 	}
 	if out != nil && len(respBody) > 0 {
 		if err := json.Unmarshal(respBody, out); err != nil {
