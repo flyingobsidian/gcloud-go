@@ -32,6 +32,7 @@ import (
 	networkservicesbeta "google.golang.org/api/networkservices/v1beta1"
 	developerconnect "google.golang.org/api/developerconnect/v1"
 	workstations "google.golang.org/api/workstations/v1"
+	sourcerepo "google.golang.org/api/sourcerepo/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -585,6 +586,15 @@ func WorkstationsService(ctx context.Context, account string) (*workstations.Ser
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return workstations.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// SourceRepoService returns a Cloud Source Repositories v1 client.
+func SourceRepoService(ctx context.Context, account string) (*sourcerepo.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return sourcerepo.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
