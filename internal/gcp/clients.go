@@ -31,6 +31,7 @@ import (
 	networkservices "google.golang.org/api/networkservices/v1"
 	networkservicesbeta "google.golang.org/api/networkservices/v1beta1"
 	developerconnect "google.golang.org/api/developerconnect/v1"
+	workstations "google.golang.org/api/workstations/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -575,6 +576,15 @@ func DeveloperConnectService(ctx context.Context, account string) (*developercon
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return developerconnect.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// WorkstationsService returns a Cloud Workstations v1 client.
+func WorkstationsService(ctx context.Context, account string) (*workstations.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return workstations.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
