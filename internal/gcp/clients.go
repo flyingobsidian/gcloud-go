@@ -42,6 +42,7 @@ import (
 	networkmanagement "google.golang.org/api/networkmanagement/v1"
 	workflowexecutions "google.golang.org/api/workflowexecutions/v1"
 	securesourcemanager "google.golang.org/api/securesourcemanager/v1"
+	spanner "google.golang.org/api/spanner/v1"
 	certificatemanager "google.golang.org/api/certificatemanager/v1"
 	apphub "google.golang.org/api/apphub/v1"
 	apigateway "google.golang.org/api/apigateway/v1"
@@ -977,6 +978,15 @@ func KMSInventoryService(ctx context.Context, account string) (*kmsinventory.Ser
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return kmsinventory.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// SpannerService returns a Cloud Spanner v1 client.
+func SpannerService(ctx context.Context, account string) (*spanner.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return spanner.NewService(ctx, option.WithTokenSource(ts))
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform

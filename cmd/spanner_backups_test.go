@@ -2,34 +2,27 @@ package cmd
 
 import (
 	"testing"
-	"context"
-	"google.golang.org/api/spanner/v1"
+
+	"github.com/spf13/cobra"
 )
 
-func TestSpannerBackups_Create(t *testing.T) {
-	// Test setup would go here
+func spannerSubgroup(name string) *cobra.Command {
+	for _, c := range spannerCmd.Commands() {
+		if c.Name() == name {
+			return c
+		}
+	}
+	return nil
 }
 
-func TestSpannerBackups_Delete(t *testing.T) {
-	// Test setup would go here
-}
-
-func TestSpannerBackups_Describe(t *testing.T) {
-	// Test setup would go here
-}
-
-func TestSpannerBackups_List(t *testing.T) {
-	// Test setup would go here
-}
-
-func TestSpannerBackups_Copy(t *testing.T) {
-	// Test setup would go here
-}
-
-func TestSpannerBackups_UpdateMetadata(t *testing.T) {
-	// Test setup would go here
-}
-
-func TestSpannerBackups_IAM(t *testing.T) {
-	// Test setup would go here
+func TestSpannerBackupsSubcommands(t *testing.T) {
+	g := spannerSubgroup("backups")
+	if g == nil {
+		t.Fatal("spanner backups missing")
+	}
+	assertSubcommands(t, g, []string{
+		"add-iam-policy-binding", "copy", "create", "delete", "describe",
+		"get-iam-policy", "list", "remove-iam-policy-binding",
+		"set-iam-policy", "update-metadata",
+	})
 }
