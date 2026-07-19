@@ -35,6 +35,7 @@ import (
 	sourcerepo "google.golang.org/api/sourcerepo/v1"
 	baremetalsolution "google.golang.org/api/baremetalsolution/v2"
 	healthcare "google.golang.org/api/healthcare/v1"
+	vmwareengine "google.golang.org/api/vmwareengine/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -615,6 +616,15 @@ func HealthcareService(ctx context.Context, account string) (*healthcare.Service
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return healthcare.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// VmwareEngineService returns a VMware Engine v1 client.
+func VmwareEngineService(ctx context.Context, account string) (*vmwareengine.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return vmwareengine.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
