@@ -1,19 +1,70 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/spf13/cobra"
+)
 
 // --- gcloud bigtable (#308) ---
 
 var bigtableCmd = &cobra.Command{Use: "bigtable", Short: "Manage Cloud Bigtable"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(bigtableCmd, "app-profiles", "Manage app profiles", crud...)
-	registerStubGroup(bigtableCmd, "authorized-views", "Manage authorized views", crud...)
-	registerStubGroup(bigtableCmd, "backups", "Manage backups", append(crud, "restore")...)
-	registerStubGroup(bigtableCmd, "clusters", "Manage clusters", crud...)
-	registerStubGroup(bigtableCmd, "hot-tablets", "Manage hot tablets", "list")
-	registerStubGroup(bigtableCmd, "instances", "Manage instances", append(crud, "get-iam-policy", "set-iam-policy", "add-iam-policy-binding", "remove-iam-policy-binding")...)
-	registerStubGroup(bigtableCmd, "logical-views", "Manage logical views", crud...)
 	rootCmd.AddCommand(bigtableCmd)
+}
+
+// btProjectName returns "projects/PROJECT" for the resolved project.
+func btProjectName() (string, error) {
+	project, err := resolveProject()
+	if err != nil {
+		return "", err
+	}
+	return "projects/" + project, nil
+}
+
+// btInstanceName returns projects/.../instances/INSTANCE.
+func btInstanceName(instance string) (string, error) {
+	if instance == "" {
+		return "", fmt.Errorf("--instance is required")
+	}
+	if strings.HasPrefix(instance, "projects/") {
+		return instance, nil
+	}
+	project, err := btProjectName()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/instances/%s", project, instance), nil
+}
+
+// btClusterName returns projects/.../instances/INSTANCE/clusters/CLUSTER.
+func btClusterName(instance, cluster string) (string, error) {
+	if cluster == "" {
+		return "", fmt.Errorf("--cluster is required")
+	}
+	if strings.HasPrefix(cluster, "projects/") {
+		return cluster, nil
+	}
+	inst, err := btInstanceName(instance)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/clusters/%s", inst, cluster), nil
+}
+
+// btTableName returns projects/.../instances/INSTANCE/tables/TABLE.
+func btTableName(instance, table string) (string, error) {
+	if table == "" {
+		return "", fmt.Errorf("--table is required")
+	}
+	if strings.HasPrefix(table, "projects/") {
+		return table, nil
+	}
+	inst, err := btInstanceName(instance)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/tables/%s", inst, table), nil
 }
