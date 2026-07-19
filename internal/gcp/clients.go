@@ -30,6 +30,7 @@ import (
 	iap "google.golang.org/api/iap/v1"
 	networkservices "google.golang.org/api/networkservices/v1"
 	networkservicesbeta "google.golang.org/api/networkservices/v1beta1"
+	developerconnect "google.golang.org/api/developerconnect/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -565,6 +566,15 @@ func NetworkServicesBetaService(ctx context.Context, account string) (*networkse
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return networkservicesbeta.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// DeveloperConnectService returns a Developer Connect v1 client.
+func DeveloperConnectService(ctx context.Context, account string) (*developerconnect.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return developerconnect.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
