@@ -12,14 +12,10 @@ import (
 var healthcareCmd = &cobra.Command{Use: "healthcare", Short: "Manage Cloud Healthcare API"}
 
 func init() {
-	crud := []string{"create", "delete", "describe", "list", "update"}
-	// consent-stores, dicom-stores, fhir-stores, hl7v2-stores are still
-	// stubs pending their own issues; datasets (#1221) and operations
-	// (#1225) are implemented in dedicated files.
-	registerStubGroup(healthcareCmd, "consent-stores", "Manage consent stores", append(crud, "get-iam-policy", "set-iam-policy", "evaluate-user-consents", "query-accessible-data", "check-data-access", "attributes")...)
-	registerStubGroup(healthcareCmd, "dicom-stores", "Manage DICOM stores", append(crud, "get-iam-policy", "set-iam-policy", "export", "import", "deidentify", "search")...)
-	registerStubGroup(healthcareCmd, "fhir-stores", "Manage FHIR stores", append(crud, "get-iam-policy", "set-iam-policy", "export", "import", "deidentify", "rollback")...)
-	registerStubGroup(healthcareCmd, "hl7v2-stores", "Manage HL7v2 stores", append(crud, "get-iam-policy", "set-iam-policy", "export", "import")...)
+	// consent-stores (#1220), dicom-stores (#1222), fhir-stores (#1223),
+	// hl7v2-stores (#1224), datasets (#1221) and operations (#1225) are
+	// implemented in dedicated files. Specialty verbs (deidentify/export/
+	// import/rollback/search/etc.) will land under separate issues.
 	rootCmd.AddCommand(healthcareCmd)
 }
 
