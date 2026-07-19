@@ -83,6 +83,57 @@ Check error conditions at function entry and return immediately upon failure. Ke
 **Error Handling at Boundaries**
 Handle errors once at appropriate abstraction levels rather than repeatedly throughout call chains. Either handle an error (log, recover) or return it for upstream handling—not both. This avoids duplicated logging and establishes clear ownership of error responses.[^7]
 
+**Repository Pattern**
+Abstract all data-access operations behind a clean interface so application and business logic are decoupled from persistence concerns. Define an interface (e.g. GetOrCreateHour, UpdateHour) that is agnostic to the specific database, then provide concrete implementations for each backend (in-memory, MySQL, Firestore). Centralises queries instead of scattering them through service code, supports transactional updates via closure-based callbacks, and eliminates vendor lock-in—the domain layer stays focused on business logic rather than persistence mechanics.[^9][^10]
+
+**Service Layer / Application Layer**
+A dedicated layer that encapsulates business logic and domain rules, sitting between controllers/handlers and data repositories. Isolating logic from HTTP handlers and storage details lets the same logic be reused from multiple interfaces (HTTP, gRPC, events) without modification, clarifies where domain rules belong, and improves testability.[^8][^9]
+
+**Controller Layer / Thin Handlers**
+HTTP handlers manage request handling and response formatting while delegating actual business logic to the service/application layer. Keeping handlers thin prevents them from becoming bloated with domain logic and keeps them focused on routing and serialisation.[^9]
+
+**Data Transfer Object (DTO) / One Model, One Responsibility**
+Create separate structs for each layer—HTTP request, HTTP response, database model, domain model—with explicit conversion functions between them, rather than one struct carrying json, gorm, and validate tags for every responsibility. Decouples internal data models from external clients so layers can evolve independently and a change in one layer does not unexpectedly break another.[^8][^9]
+
+**Builder Pattern**
+Constructs complex objects through a chainable sequence of configuration methods rather than a massive constructor parameter list. Improves readability when an object has many optional fields and clearly shows each configuration step.[^9]
+
+**Adapter Pattern**
+Allows incompatible interfaces to work together by wrapping one interface and translating it into another the client expects. Essential when integrating legacy systems or third-party libraries whose interfaces do not align with application expectations.[^9]
+
+**Observer Pattern**
+A publish-subscribe mechanism where multiple listeners receive notifications about state changes or events in a subject. Creates loose coupling between event producers and consumers, enabling event-driven architectures where new observers can be added without modifying existing code.[^9]
+
+**Strategy Pattern**
+Encapsulates interchangeable algorithms into separate objects implementing a common interface, selectable at runtime. Eliminates complex conditional logic by delegating algorithm choice to a context object, making code extensible when new algorithmic variants are needed.[^9]
+
+**Separation of Concerns**
+Isolate distinct responsibilities into separate functions, structs, or layers. Improves maintainability and testability and lets developers modify one section without unexpected side effects.[^9]
+
+**Dependency Injection with Externalised Configuration**
+Receive dependencies and configuration from external sources (constructor parameters, environment variables, config files) rather than creating them internally or hardcoding them. Enables per-environment configuration, easier testing through mock injection, and code that explicitly shows what each component requires.[^9]
+
+**Loose Coupling**
+Design components with clear boundaries so they can be modified or replaced independently without cascading effects. Focus on how packages and structs reference each other rather than on directory structure—proper decoupling makes organisation naturally apparent, and a broken part can be replaced without affecting the rest of the project.[^8]
+
+**Duplication Removes Coupling**
+Accept some code repetition as the cost of loose coupling: duplicate-but-independent code is often preferable to a shared abstraction that forces interdependence between layers. If duplication later becomes a real problem, it is trivial to refactor compared with untangling coupled code.[^8]
+
+**Generate the Repetitive Parts**
+Use code-generation tools (oapi-codegen, sqlboiler, sqlc, protoc/gRPC) to produce models and boilerplate from a specification rather than hand-writing them or relying on reflection-based "magic". Generated code retains strong types and compile-time safety and is easier to understand than reflect-based alternatives.[^8]
+
+**Explicit Structure Tags**
+Always fill struct tags completely, even when the tag value matches the field name, so that renaming a field during refactoring cannot silently break an API contract or corrupt stored data. Makes intent explicit and protects contracts and storage integrity.[^8]
+
+**Write Obvious Code**
+Favour explicit, verbose code that clearly expresses intent over clever shortcuts, and use encapsulation so structs are always in a valid state. Explicitness lets teammates understand behaviour without tracing implicit logic.[^8]
+
+**Start with the Domain**
+Model storage methods and types around product behaviour rather than the database schema, hiding implementation details such as transactions inside repository methods. Storage methods should use domain language (e.g. CreateTeam with implicit owner assignment) rather than exposing raw CRUD operations, so the code speaks the same language as the business.[^8]
+
+**CQRS (Command Query Responsibility Segregation)**
+Separate read and write operations into two distinct models and sets of handlers instead of one model serving both. Command handlers receive structured command objects and perform domain operations (modifying state, returning no data); query handlers work with read-model interfaces to fetch optimised data without side effects. Both live in an Application struct that ports like HTTP or gRPC invoke. Enables read and write models to evolve independently and lays the foundation for asynchronous command buses, polyglot persistence, and event sourcing.[^11]
+
 ## Anti-patterns to Avoid
 
 **Ignoring Errors**
@@ -157,6 +208,48 @@ Both logging an error and returning it to the caller. Creates redundant logging 
 **Goroutine Leaks**
 Failing to provide a mechanism to stop goroutines after their work is complete or after input channels close, resulting in perpetual background goroutine execution and resource exhaustion. Always ensure goroutines can terminate—use context cancellation, done channels, or WaitGroups to manage goroutine lifecycles.[^5]
 
+**The Single Model**
+Using one struct with multiple tags (json, gorm, validate) to serve API responses, database storage, and validation simultaneously. Creates strong coupling between layers so that touching the model can unexpectedly break the API, storage, or validation; easy to fall into when over-applying DRY. Use separate models per layer with explicit conversions instead.[^8][^9]
+
+**The Distributed Monolith**
+Splitting an application into microservices before understanding proper boundaries, then connecting them in tightly-coupled ways. Produces all the problems of a monolith plus network complexity—what matters is not how many times you split the application but how you connect the pieces.[^8]
+
+**Choosing Magic to Save Time**
+Overusing libraries with implicit behaviours and complex struct tags to avoid verbosity, sacrificing compile-time checks and clarity (e.g. relying on field-name defaults, or cryptic validator syntax like required_without=LastName instead of explicit validation logic). Prefer explicit code and generated boilerplate over reflection-driven magic.[^8]
+
+**Omitting Structure Tags**
+Skipping struct tags when a library uses them by default, so a field rename during refactoring silently breaks an API contract or corrupts stored data. Even when field names happen to match tag values, explicit tags guard against accidental coupling.[^8]
+
+**Mixing Logic and Details**
+Placing business logic directly in HTTP handlers, or tightly coupling application rules to implementation details such as database transactions. Locks the logic into a specific technology and makes it impossible to reuse from a different interface (gRPC, events).[^8]
+
+**Over-simplification**
+Modelling complex behaviour using only primitive types without proper encapsulation or validation. The code looks simple but fails to represent real product requirements, scattering validation throughout the codebase.[^8]
+
+**Starting with the Database Schema**
+Designing models from the SQL table structure rather than product behaviour, which exposes implementation details and forces the team to speak a different language from the rest of the business—a major red flag when you start speaking differently than your business team.[^8]
+
+**Starting with a CRUD**
+Assuming a web application is fundamentally create/read/update/delete and designing around those operations. Ignores that business value comes from special rules and domain-specific logic, not the standard CRUD operations.[^8]
+
+**Overthinking the Directory Structure**
+Separating directories before writing any code or fully understanding requirements, treating package layout as more important than actual coupling. Directory organisation is just a convention and is unlikely to be right before any code exists; the real problem is coupling through shared models.[^8]
+
+**God Object**
+A struct that handles too many unrelated responsibilities, creating excessive coupling and complexity. Becomes difficult to test, maintain, and modify because a change in one responsibility cascades unexpectedly through many features. Break large structs into focused, single-responsibility units.[^9]
+
+**Spaghetti Code**
+Code lacking clear structure, with tangled control flow and intermixed concerns that make logic hard to follow. Results in code that is hard to debug, modify, or test because the relationships between components are not apparent.[^9]
+
+**Over-Engineering**
+Creating unnecessary abstractions and complex solutions for simple problems, adding layers that provide no proportional value. Sacrifices readability and maintainability by introducing complexity that outweighs any flexibility gained.[^9]
+
+**Hardcoding Configuration**
+Embedding configuration values directly in source code rather than externalising them to environment variables or config files. Makes the application inflexible, prevents per-environment configuration, and requires recompilation for simple setting changes.[^9]
+
+**Tight Coupling**
+Components depending directly on concrete implementations rather than abstractions, making changes expensive and testing difficult. Changing one component forces cascading changes throughout dependent components; depend on abstractions and inject dependencies instead.[^9]
+
 [^1]: See [Go Patterns and Anti-Patterns](https://appmaster.io/blog/go-patterns-anti-patterns).
 [^2]: See [Go Interfaces: Design Patterns and Anti-Patterns](https://reintech.ai/blog/go-interfaces-design-patterns-and-anti-patterns).
 [^3]: See [Go by Common: Avoiding Anti-Patterns in Go Programming](https://www.devzery.com/post/go-by-common).
@@ -164,3 +257,7 @@ Failing to provide a mechanism to stop goroutines after their work is complete o
 [^5]: See [Mastering 6 Golang Concurrency Patterns](https://reliasoftware.com/blog/golang-concurrency-patterns).
 [^6]: See [A practical guide to error handling in Go](https://www.datadoghq.com/blog/go-error-handling/).
 [^7]: See [Error Handling Best Practices in Go](https://www.bytesizego.com/blog/error-handling-golang).
+[^8]: See [Common Anti-Patterns in Go Web Applications — Three Dots Labs](https://threedots.tech/post/common-anti-patterns-in-go-web-applications/).
+[^9]: See [Mastering Golang: Design Patterns & Refactoring for Clean, Scalable Code — Robert Benyamin](https://medium.com/@robertbenyamino/mastering-golang-design-patterns-refactoring-for-clean-scalable-code-163b681a515a).
+[^10]: See [The Repository Pattern in Go — Three Dots Labs](https://threedots.tech/post/repository-pattern-in-go/).
+[^11]: See [Basic CQRS in Go — Three Dots Labs](https://threedots.tech/post/basic-cqrs-in-go/).
