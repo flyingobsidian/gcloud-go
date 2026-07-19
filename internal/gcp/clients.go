@@ -37,6 +37,7 @@ import (
 	healthcare "google.golang.org/api/healthcare/v1"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 	apigee "google.golang.org/api/apigee/v1"
+	storagebatchoperations "google.golang.org/api/storagebatchoperations/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -635,6 +636,15 @@ func ApigeeService(ctx context.Context, account string) (*apigee.Service, error)
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return apigee.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// StorageBatchOperationsService returns a Storage Batch Operations v1 client.
+func StorageBatchOperationsService(ctx context.Context, account string) (*storagebatchoperations.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return storagebatchoperations.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {

@@ -229,9 +229,6 @@ func init() {
 	storageCmd.AddCommand(storageHashCmd)
 
 	// gcloud-python storage subcommands/subgroups not yet implemented (#547).
-	registerStubGroup(storageCmd, "batch-operations",
-		"Manage long-running batch storage jobs",
-		"create", "delete", "describe", "list")
 	registerStubCommand(storageCmd, "diagnose", "Diagnose Cloud Storage issues")
 	registerStubGroup(storageCmd, "folders",
 		"Manage hierarchical-namespace folders",
