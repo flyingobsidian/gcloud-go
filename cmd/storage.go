@@ -239,8 +239,6 @@ func init() {
 	registerStubGroup(storageCmd, "intelligence-findings",
 		"Manage Storage Intelligence findings",
 		"list", "describe")
-	registerStubCommand(storageCmd, "restore",
-		"Restore soft-deleted objects")
 	registerStubCommand(storageCmd, "sign-url",
 		"Generate a signed URL for an object")
 
