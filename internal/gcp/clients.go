@@ -40,6 +40,7 @@ import (
 	storagebatchoperations "google.golang.org/api/storagebatchoperations/v1"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 	container "google.golang.org/api/container/v1"
+	gkehub "google.golang.org/api/gkehub/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -665,6 +666,15 @@ func ContainerService(ctx context.Context, account string) (*container.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return container.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// GKEHubService returns a GKE Hub (fleet) v1 client.
+func GKEHubService(ctx context.Context, account string) (*gkehub.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return gkehub.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
