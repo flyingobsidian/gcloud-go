@@ -39,6 +39,7 @@ import (
 	apigee "google.golang.org/api/apigee/v1"
 	storagebatchoperations "google.golang.org/api/storagebatchoperations/v1"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
+	container "google.golang.org/api/container/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -655,6 +656,15 @@ func OracleDatabaseService(ctx context.Context, account string) (*oracledatabase
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return oracledatabase.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// ContainerService returns a GKE (container) v1 client.
+func ContainerService(ctx context.Context, account string) (*container.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return container.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
