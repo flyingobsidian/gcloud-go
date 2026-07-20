@@ -41,6 +41,7 @@ import (
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 	container "google.golang.org/api/container/v1"
 	gkehub "google.golang.org/api/gkehub/v1"
+	gkeonprem "google.golang.org/api/gkeonprem/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -675,6 +676,16 @@ func GKEHubService(ctx context.Context, account string) (*gkehub.Service, error)
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return gkehub.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// GKEOnPremService returns an Anthos-on-Prem (gkeonprem) v1 client. It
+// backs `container bare-metal` and `container vmware`.
+func GKEOnPremService(ctx context.Context, account string) (*gkeonprem.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return gkeonprem.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
