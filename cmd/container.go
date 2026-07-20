@@ -26,7 +26,6 @@ func init() {
 		"create", "describe", "list", "update", "delete")
 	registerStubGroup(containerCmd, "images", "Manage container images",
 		"delete", "describe", "list", "list-tags", "add-tag", "remove-tag", "untag")
-	registerStubGroup(containerCmd, "node-pools", "Manage node pools", append(crud, "rollback")...)
 	registerStubGroup(containerCmd, "subnets", "Manage subnets", "list-usable")
 	registerStubGroup(containerCmd, "vmware", "Manage Anthos on VMware", crud...)
 	registerStubGroup(containerCmd, "workload", "Manage Workload Optimizer",
