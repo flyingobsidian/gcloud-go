@@ -98,8 +98,6 @@ func init() {
 	authCmd.AddCommand(authActivateServiceAccountCmd)
 
 	// Stubs for gcloud-python auth subcommands not yet implemented (#538).
-	registerStubCommand(authCmd, "print-identity-token",
-		"Print an identity token for the active account")
 	registerStubGroup(authCmd, "enterprise-certificate-config",
 		"Manage enterprise certificate configuration for certificate-based auth",
 		"create", "delete", "describe", "list", "update")
