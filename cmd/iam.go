@@ -201,10 +201,6 @@ func init() {
 	registerStubGroup(iamCmd, "simulator",
 		"Simulate IAM policy changes",
 		"create", "list", "get")
-	registerStubGroup(iamCmd, "workforce-pools",
-		"Manage Workforce Identity Federation pools",
-		"create", "delete", "describe", "list", "update", "undelete",
-		"providers")
 
 	rootCmd.AddCommand(iamCmd)
 }
