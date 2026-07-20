@@ -198,9 +198,6 @@ func init() {
 	registerStubGroup(iamCmd, "principal-access-boundary-policies",
 		"Manage Principal Access Boundary policies",
 		"create", "delete", "describe", "list", "update")
-	registerStubGroup(iamCmd, "simulator",
-		"Simulate IAM policy changes",
-		"create", "list", "get")
 
 	rootCmd.AddCommand(iamCmd)
 }
