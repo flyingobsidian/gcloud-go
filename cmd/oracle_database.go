@@ -8,8 +8,6 @@ var oracleDatabaseCmd = &cobra.Command{Use: "oracle-database", Short: "Manage Or
 
 func init() {
 	crud := []string{"create", "delete", "describe", "list", "update"}
-	registerStubGroup(oracleDatabaseCmd, "autonomous-database-backups", "Manage autonomous database backups", crud...)
-	registerStubGroup(oracleDatabaseCmd, "autonomous-databases", "Manage autonomous databases", append(crud, "generate-wallet", "restore", "restart", "stop", "start")...)
 	registerStubGroup(oracleDatabaseCmd, "backups", "Manage backups", crud...)
 	registerStubGroup(oracleDatabaseCmd, "db-nodes", "Manage DB nodes", "describe", "list", "action")
 	registerStubGroup(oracleDatabaseCmd, "db-servers", "Manage DB servers", "describe", "list")
