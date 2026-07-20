@@ -230,12 +230,6 @@ func init() {
 
 	// gcloud-python storage subcommands/subgroups not yet implemented (#547).
 	registerStubCommand(storageCmd, "diagnose", "Diagnose Cloud Storage issues")
-	registerStubGroup(storageCmd, "folders",
-		"Manage hierarchical-namespace folders",
-		"create", "delete", "describe", "list", "rename")
-	registerStubGroup(storageCmd, "hmac",
-		"Manage HMAC keys for service accounts",
-		"create", "delete", "describe", "list", "update")
 	registerStubGroup(storageCmd, "insights",
 		"Manage Storage Insights",
 		"describe", "list")
@@ -245,9 +239,6 @@ func init() {
 	registerStubGroup(storageCmd, "intelligence-findings",
 		"Manage Storage Intelligence findings",
 		"list", "describe")
-	registerStubGroup(storageCmd, "managed-folders",
-		"Manage managed folders",
-		"create", "delete", "describe", "list")
 	registerStubGroup(storageCmd, "objects",
 		"Manage Cloud Storage objects (object-scoped ops)",
 		"describe", "list", "update", "compose")
