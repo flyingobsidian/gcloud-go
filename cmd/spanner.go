@@ -20,7 +20,6 @@ func init() {
 	// backup-schedules remain stubs pending their own issues.
 	registerStubGroup(spannerCmd, "samples", "Sample apps", "list", "run")
 	registerStubCommand(spannerCmd, "cli", "Interactive Spanner shell")
-	registerStubGroup(spannerCmd, "backup-schedules", "Manage backup-schedules", "list", "describe")
 	rootCmd.AddCommand(spannerCmd)
 }
 
@@ -93,6 +92,18 @@ func spannerInstancePartition(instance, partition string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%s/instancePartitions/%s", inst, partition), nil
+}
+
+// spannerBackupSchedule returns a fully qualified backup schedule name.
+func spannerBackupSchedule(instance, database, schedule string) (string, error) {
+	if strings.HasPrefix(schedule, "projects/") {
+		return schedule, nil
+	}
+	db, err := spannerDatabase(instance, database)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/backupSchedules/%s", db, schedule), nil
 }
 
 // spIamMemberFlags binds the standard IAM member/role/condition flags shared by
