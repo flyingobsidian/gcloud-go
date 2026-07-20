@@ -30,6 +30,5 @@ func init() {
 	registerStubGroup(containerCmd, "vmware", "Manage Anthos on VMware", crud...)
 	registerStubGroup(containerCmd, "workload", "Manage Workload Optimizer",
 		"list-recommendations", "get-recommendation", "apply-recommendation")
-	registerStubCommand(containerCmd, "get-server-config", "Get GKE server config")
 	rootCmd.AddCommand(containerCmd)
 }
