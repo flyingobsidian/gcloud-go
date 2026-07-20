@@ -17,8 +17,6 @@ func init() {
 	registerStubGroup(containerCmd, "attached", "Manage attached clusters", append(crud, "generate-install-manifest", "import", "get-credentials")...)
 	registerStubGroup(containerCmd, "aws", "(DEPRECATED) Manage AWS clusters", crud...)
 	registerStubGroup(containerCmd, "azure", "(DEPRECATED) Manage Azure clusters", crud...)
-	registerStubGroup(containerCmd, "binauthz", "Manage Binary Authorization attestations",
-		"create", "delete", "describe", "list", "sign", "verify", "policy")
 	registerStubGroup(containerCmd, "images", "Manage container images",
 		"delete", "describe", "list", "list-tags", "add-tag", "remove-tag", "untag")
 	registerStubGroup(containerCmd, "subnets", "Manage subnets", "list-usable")

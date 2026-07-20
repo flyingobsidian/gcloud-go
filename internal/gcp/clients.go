@@ -42,6 +42,7 @@ import (
 	container "google.golang.org/api/container/v1"
 	gkehub "google.golang.org/api/gkehub/v1"
 	gkeonprem "google.golang.org/api/gkeonprem/v1"
+	binaryauthorization "google.golang.org/api/binaryauthorization/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -686,6 +687,15 @@ func GKEOnPremService(ctx context.Context, account string) (*gkeonprem.Service, 
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return gkeonprem.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// BinaryAuthorizationService returns a Binary Authorization v1 client.
+func BinaryAuthorizationService(ctx context.Context, account string) (*binaryauthorization.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return binaryauthorization.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
