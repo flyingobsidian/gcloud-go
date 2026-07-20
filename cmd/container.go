@@ -19,7 +19,6 @@ func init() {
 	registerStubGroup(containerCmd, "azure", "(DEPRECATED) Manage Azure clusters", crud...)
 	registerStubGroup(containerCmd, "images", "Manage container images",
 		"delete", "describe", "list", "list-tags", "add-tag", "remove-tag", "untag")
-	registerStubGroup(containerCmd, "subnets", "Manage subnets", "list-usable")
 	registerStubGroup(containerCmd, "workload", "Manage Workload Optimizer",
 		"list-recommendations", "get-recommendation", "apply-recommendation")
 	rootCmd.AddCommand(containerCmd)
