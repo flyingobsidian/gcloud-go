@@ -43,6 +43,7 @@ import (
 	gkehub "google.golang.org/api/gkehub/v1"
 	gkeonprem "google.golang.org/api/gkeonprem/v1"
 	binaryauthorization "google.golang.org/api/binaryauthorization/v1"
+	testing "google.golang.org/api/testing/v1"
 	notebooks "google.golang.org/api/notebooks/v2"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 	transcoder "google.golang.org/api/transcoder/v1"
@@ -696,6 +697,15 @@ func BinaryAuthorizationService(ctx context.Context, account string) (*binaryaut
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return binaryauthorization.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// TestingService returns a Firebase Test Lab v1 client.
+func TestingService(ctx context.Context, account string) (*testing.APIService, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return testing.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
