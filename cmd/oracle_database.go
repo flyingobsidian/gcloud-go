@@ -11,12 +11,5 @@ func init() {
 	registerStubGroup(oracleDatabaseCmd, "backups", "Manage backups", crud...)
 	registerStubGroup(oracleDatabaseCmd, "db-nodes", "Manage DB nodes", "describe", "list", "action")
 	registerStubGroup(oracleDatabaseCmd, "db-servers", "Manage DB servers", "describe", "list")
-	registerStubGroup(oracleDatabaseCmd, "goldengate-connection-assignments", "Manage GoldenGate connection assignments", crud...)
-	registerStubGroup(oracleDatabaseCmd, "goldengate-connection-types", "Manage GoldenGate connection types", "describe", "list")
-	registerStubGroup(oracleDatabaseCmd, "goldengate-connections", "Manage GoldenGate connections", crud...)
-	registerStubGroup(oracleDatabaseCmd, "goldengate-deployment-environments", "Manage GoldenGate deployment environments", "describe", "list")
-	registerStubGroup(oracleDatabaseCmd, "goldengate-deployment-types", "Manage GoldenGate deployment types", "describe", "list")
-	registerStubGroup(oracleDatabaseCmd, "goldengate-deployment-versions", "Manage GoldenGate deployment versions", "describe", "list")
-	registerStubGroup(oracleDatabaseCmd, "goldengate-deployments", "Manage GoldenGate deployments", crud...)
 	rootCmd.AddCommand(oracleDatabaseCmd)
 }
