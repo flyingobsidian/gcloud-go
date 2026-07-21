@@ -16,12 +16,8 @@ func init() {
 	// Groups implemented in dedicated files (this batch: endpoint-policies,
 	// gateways, grpc-routes, http-routes, meshes, tcp-routes, tls-routes,
 	// operations) unregister themselves from this stub list.
-	registerStubGroup(networkServicesCmd, "authz-extensions", "Manage authz extensions", crud...)
-	registerStubGroup(networkServicesCmd, "edge-cache-keysets", "Manage edge cache keysets", crud...)
-	registerStubGroup(networkServicesCmd, "edge-cache-origins", "Manage edge cache origins", crud...)
-	registerStubGroup(networkServicesCmd, "edge-cache-services", "Manage edge cache services", crud...)
-	registerStubGroup(networkServicesCmd, "lb-route-extensions", "Manage LB route extensions", crud...)
-	registerStubGroup(networkServicesCmd, "lb-traffic-extensions", "Manage LB traffic extensions", crud...)
+	// edge-cache-* live under the top-level `edge-cache` command (see cmd/edge_cache*.go).
+	// authz-extensions / lb-*-extensions live under `service-extensions` (see cmd/service_extensions*.go).
 	registerStubGroup(networkServicesCmd, "multicast-domains", "Manage multicast domains", crud...)
 	registerStubGroup(networkServicesCmd, "multicast-group-producer-activations", "Manage multicast group producer activations", crud...)
 	registerStubGroup(networkServicesCmd, "multicast-group-range-activations", "Manage multicast group range activations", crud...)
