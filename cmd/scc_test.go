@@ -174,3 +174,59 @@ func TestSccSourcesSubcommands(t *testing.T) {
 	}
 	assertSubcommands(t, g, []string{"describe", "list"})
 }
+
+// TestSccFindingsListAcceptsPositional guards the fix for #1723: `scc findings
+// list` (and `group`) must accept an optional PARENT positional to match
+// gcloud-python's surface.
+func TestSccFindingsListAcceptsPositional(t *testing.T) {
+	list := sccNestedSubgroup("findings", "list")
+	if list == nil {
+		t.Fatal("scc findings list missing")
+	}
+	if err := list.Args(list, []string{"organizations/1111111111111"}); err != nil {
+		t.Errorf("scc findings list should accept a PARENT positional, got: %v", err)
+	}
+	if err := list.Args(list, []string{"organizations/1", "extra"}); err == nil {
+		t.Error("scc findings list should reject extra positional args")
+	}
+
+	group := sccNestedSubgroup("findings", "group")
+	if group == nil {
+		t.Fatal("scc findings group missing")
+	}
+	if err := group.Args(group, []string{"organizations/1111111111111"}); err != nil {
+		t.Errorf("scc findings group should accept a PARENT positional, got: %v", err)
+	}
+}
+
+func TestSccResolveParentFromArg(t *testing.T) {
+	cases := []struct {
+		name    string
+		arg     string
+		want    string
+		wantErr bool
+	}{
+		{"org fully qualified", "organizations/123", "organizations/123", false},
+		{"folder fully qualified", "folders/456", "folders/456", false},
+		{"project fully qualified", "projects/my-proj", "projects/my-proj", false},
+		{"bare id defaults to org", "123456", "organizations/123456", false},
+		{"invalid kind", "widgets/1", "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := sccResolveParentFromArg(tc.arg)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("want error, got nil (result=%q)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
