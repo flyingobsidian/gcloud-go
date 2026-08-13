@@ -52,6 +52,7 @@ var (
 	flagSccFindingCompareDur     string
 	flagSccFindingReadTime       string
 	flagSccFindingFieldMask      string
+	flagSccFindingLocation       string
 )
 
 // --- scope resolution ---
@@ -83,6 +84,29 @@ func sccResolveParent() (string, error) {
 		return "", err
 	}
 	return "projects/" + project, nil
+}
+
+// sccResolveParentFromArg returns the SCC scope parent given an optional
+// positional argument. If arg is non-empty it takes precedence over the
+// --organization/--folder/--project flags (matching gcloud-python, which
+// accepts the parent as a positional). A bare ID (e.g. "1234567890") is
+// treated as an organization to preserve gcloud-python compatibility.
+func sccResolveParentFromArg(arg string) (string, error) {
+	if arg == "" {
+		return sccResolveParent()
+	}
+	if i := strings.Index(arg, "/"); i > 0 {
+		kind := arg[:i]
+		switch kind {
+		case "organizations", "folders", "projects":
+			return arg, nil
+		default:
+			return "", fmt.Errorf("invalid parent %q; expected organizations|folders|projects/{id}", arg)
+		}
+	}
+	// Bare ID: default to organizations (matches gcloud-python's positional
+	// parent handling when no resource type is specified).
+	return "organizations/" + arg, nil
 }
 
 // sccQualifyChild joins parent + collection + id (returning id unchanged if
@@ -270,12 +294,12 @@ var (
 		Args: cobra.ExactArgs(1), RunE: runSccFindingsCreate,
 	}
 	sccFindingsGroupCmd = &cobra.Command{
-		Use: "group", Short: "Group findings by fields",
-		Args: cobra.NoArgs, RunE: runSccFindingsGroup,
+		Use: "group [PARENT]", Short: "Group findings by fields",
+		Args: cobra.MaximumNArgs(1), RunE: runSccFindingsGroup,
 	}
 	sccFindingsListCmd = &cobra.Command{
-		Use: "list", Short: "List findings",
-		Args: cobra.NoArgs, RunE: runSccFindingsList,
+		Use: "list [PARENT]", Short: "List findings",
+		Args: cobra.MaximumNArgs(1), RunE: runSccFindingsList,
 	}
 	sccFindingsListMarksCmd = &cobra.Command{
 		Use: "list-marks FINDING", Short: "List security marks on a finding",
@@ -502,6 +526,8 @@ func init() {
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingCompareDur, "compare-duration", "", "Compare-duration for state-change results")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
 	sccFindingsListCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0, "Page size for list requests")
+	sccFindingsListCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
+		"Location of the resource. Default \"global\" targets the SCC V1 API; non-global values require SCC V2 (not yet available in this build).")
 	sccFindingsGroupCmd.Flags().StringVar(&flagSccFindingGroupBy, "group-by", "",
 		"Comma-separated list of fields to group by (required)")
 	_ = sccFindingsGroupCmd.MarkFlagRequired("group-by")
@@ -1760,7 +1786,11 @@ func runSccFindingsCreate(cmd *cobra.Command, args []string) error {
 }
 
 func runSccFindingsGroup(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+	pos := ""
+	if len(args) == 1 {
+		pos = args[0]
+	}
+	parent, err := sccResolveParentFromArg(pos)
 	if err != nil {
 		return err
 	}
@@ -1794,9 +1824,16 @@ func runSccFindingsGroup(cmd *cobra.Command, args []string) error {
 }
 
 func runSccFindingsList(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+	pos := ""
+	if len(args) == 1 {
+		pos = args[0]
+	}
+	parent, err := sccResolveParentFromArg(pos)
 	if err != nil {
 		return err
+	}
+	if flagSccFindingLocation != "" && flagSccFindingLocation != "global" {
+		return fmt.Errorf("--location=%q requires the SCC V2 API, which is not available in this build (google.golang.org/api). Only --location=global is supported.", flagSccFindingLocation)
 	}
 	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
 	ctx := context.Background()
