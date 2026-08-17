@@ -10,6 +10,7 @@ import (
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/flyingobsidian/gcloud-go/internal/config"
+	"github.com/flyingobsidian/gcloud-go/internal/gfilter"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
 )
@@ -172,6 +173,20 @@ func runInstancesList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// --filter is a gcloud client-side filter (see `gcloud topic filters`) —
+	// distinct from the Compute API's server-side filter (`field eq value`
+	// syntax). Passing gcloud syntax like `foo:bar` to the server returns
+	// no results (issue #1725). Compile up-front and apply after fetching.
+	filter, err := gfilter.Compile(flagListFilter)
+	if err != nil {
+		return fmt.Errorf("invalid --filter expression: %w", err)
+	}
+	if filter.UsesContainsOperator() {
+		fmt.Fprintf(os.Stderr,
+			"WARNING: --filter : operator evaluation is changing for consistency across Google APIs.  %s currently matches but will not match in the near future.  Run `gcloud topic filters` for details.\n",
+			flagListFilter)
+	}
+
 	ctx := context.Background()
 	svc, err := icompute.NewService(ctx, flagAccount)
 	if err != nil {
@@ -185,9 +200,6 @@ func runInstancesList(cmd *cobra.Command, args []string) error {
 		pageToken := ""
 		for {
 			call := svc.Instances.List(project, zone).Context(ctx)
-			if flagListFilter != "" {
-				call = call.Filter(flagListFilter)
-			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
@@ -205,9 +217,6 @@ func runInstancesList(cmd *cobra.Command, args []string) error {
 		pageToken := ""
 		for {
 			call := svc.Instances.AggregatedList(project).Context(ctx)
-			if flagListFilter != "" {
-				call = call.Filter(flagListFilter)
-			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
@@ -223,6 +232,17 @@ func runInstancesList(cmd *cobra.Command, args []string) error {
 			}
 			pageToken = resp.NextPageToken
 		}
+	}
+
+	// Apply the client-side --filter to the aggregated list.
+	if flagListFilter != "" {
+		kept := instances[:0]
+		for _, inst := range instances {
+			if filter.Match(inst) {
+				kept = append(kept, inst)
+			}
+		}
+		instances = kept
 	}
 
 	return formatInstanceList(instances)
