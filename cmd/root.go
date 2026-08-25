@@ -21,6 +21,7 @@ var (
 	flagBillingProject        string
 	flagConfiguration         string
 	flagFlagsFile             string
+	flagFilter                string
 	flagFlatten               []string
 	flagFormat                string
 	flagImpersonateSA         string
@@ -62,6 +63,8 @@ func init() {
 		"Named gcloud configuration to use for this invocation")
 	pf.StringVar(&flagFlagsFile, "flags-file", "",
 		"YAML/JSON file that supplies additional --flag=value pairs")
+	pf.StringVar(&flagFilter, "filter", "",
+		"Client-side filter expression (see 'gcloud topic filters')")
 	pf.StringSliceVar(&flagFlatten, "flatten", nil,
 		"Flatten name[] output slices in KEY into separate records")
 	pf.StringVar(&flagFormat, "format", "",

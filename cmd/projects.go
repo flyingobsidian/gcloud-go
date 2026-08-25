@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
+	"github.com/flyingobsidian/gcloud-go/internal/gfilter"
 	"github.com/spf13/cobra"
 	crm "google.golang.org/api/cloudresourcemanager/v3"
 )
@@ -453,7 +454,46 @@ func runProjectGetIamPolicy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return yamlEncode(policy)
+	return emitWithPipeline(policy)
+}
+
+// emitWithPipeline runs the standard gcloud output pipeline (--flatten →
+// --filter → --format) against v. When none of those global flags is set, it
+// falls back to the yaml dump that runProjectGetIamPolicy used before #1728.
+func emitWithPipeline(v any) error {
+	// Fast path: no pipeline modifiers → keep the historical yaml dump so
+	// commands that don't opt into fancy output stay byte-identical.
+	if len(flagFlatten) == 0 && flagFilter == "" && flagFormat == "" {
+		return yamlEncode(v)
+	}
+
+	records, err := flattenRecords(v, flagFlatten)
+	if err != nil {
+		return err
+	}
+
+	if flagFilter != "" {
+		filter, err := gfilter.Compile(flagFilter)
+		if err != nil {
+			return fmt.Errorf("invalid --filter expression: %w", err)
+		}
+		kept := records[:0]
+		for _, r := range records {
+			if filter.Match(r) {
+				kept = append(kept, r)
+			}
+		}
+		records = kept
+	}
+
+	// If --flatten was applied, hand the record list to emitFormatted so
+	// table/csv/etc. render one row per record. Without --flatten we pass
+	// through the original single value so scalar top-level policies still
+	// render sensibly.
+	if len(flagFlatten) > 0 {
+		return emitFormatted(records, flagFormat)
+	}
+	return emitFormatted(v, flagFormat)
 }
 
 func runProjectGetAncestorsIamPolicy(cmd *cobra.Command, args []string) error {
