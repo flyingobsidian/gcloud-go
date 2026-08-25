@@ -24,10 +24,25 @@ var unmanagedCmd = &cobra.Command{
 	Short: "Manage unmanaged instance groups",
 }
 
+// disksCmd is the real `compute disks` group. Its subcommands are attached
+// from their own files (see disks_resize.go for #1727). The `list`/`describe`
+// stubs registered by the stub-registration loop below are skipped for
+// "disks" so they don't shadow this real group.
+var disksCmd = &cobra.Command{
+	Use:   "disks",
+	Short: "Manage Compute Engine disks",
+}
+
 func init() {
 	instanceGroupsCmd.AddCommand(unmanagedCmd)
 	computeCmd.AddCommand(instancesCmd)
 	computeCmd.AddCommand(instanceGroupsCmd)
+	computeCmd.AddCommand(disksCmd)
+	// Preserve the previous stub-group behaviour for `list`/`describe` so
+	// existing users don't see a regression on those subcommand paths — they
+	// still return "not yet implemented" but at least appear in --help.
+	registerStubCommand(disksCmd, "list", "Not yet implemented")
+	registerStubCommand(disksCmd, "describe", "Not yet implemented")
 
 	// Stub registrations for compute subgroups present in gcloud-python but
 	// not yet implemented in gcloud-go (#539). Each is a placeholder so
@@ -43,7 +58,7 @@ func init() {
 		"connect-to-serial-port":            "Connect to a VM's serial port",
 		"copy-files":                        "Copy files to/from a VM (deprecated in favor of scp)",
 		"diagnose":                          "Diagnose instance issues",
-		"disks":                             "Manage Compute Engine disks",
+		// "disks" is a real group registered separately (see disksCmd above).
 		"disk-types":                        "List available disk types",
 		"external-vpn-gateways":             "Manage external VPN gateways",
 		"firewall-policies":                 "Manage hierarchical firewall policies",
