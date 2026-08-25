@@ -54,6 +54,76 @@ func TestProjectParent(t *testing.T) {
 	}
 }
 
+// TestGetIamPolicyPipeline exercises the exact --flatten/--filter/--format
+// invocation from #1728 against a fake policy value.
+func TestGetIamPolicyPipeline(t *testing.T) {
+	// Fake policy, matching the CRM v3 Policy JSON shape.
+	policy := map[string]any{
+		"bindings": []any{
+			map[string]any{
+				"role":    "roles/some.roleName",
+				"members": []any{"user:human@example.com", "serviceAccount:MY_SA@MY_PROJECT.iam.gserviceaccount.com"},
+			},
+			map[string]any{
+				"role":    "roles/other.role",
+				"members": []any{"user:human@example.com"},
+			},
+			map[string]any{
+				"role":    "roles/someOther.roleName",
+				"members": []any{"serviceAccount:MY_SA@MY_PROJECT.iam.gserviceaccount.com"},
+			},
+		},
+	}
+
+	// Save & restore globals.
+	prevFlatten, prevFilter, prevFormat := flagFlatten, flagFilter, flagFormat
+	defer func() { flagFlatten, flagFilter, flagFormat = prevFlatten, prevFilter, prevFormat }()
+
+	flagFlatten = []string{"bindings[].members"}
+	flagFilter = `bindings.members:serviceAccount:MY_SA@MY_PROJECT.iam.gserviceaccount.com`
+	flagFormat = "table(bindings.role)"
+
+	var emitErr error
+	out := captureStdout(t, func() { emitErr = emitWithPipeline(policy) })
+	if emitErr != nil {
+		t.Fatalf("emitWithPipeline: %v", emitErr)
+	}
+
+	if !strings.Contains(out, "ROLE") {
+		t.Errorf("expected table header 'ROLE' in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "roles/some.roleName") {
+		t.Errorf("expected roles/some.roleName in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "roles/someOther.roleName") {
+		t.Errorf("expected roles/someOther.roleName in output, got:\n%s", out)
+	}
+	if strings.Contains(out, "roles/other.role") {
+		t.Errorf("did not expect the role without matching member, got:\n%s", out)
+	}
+}
+
+// TestGetIamPolicyNoPipeline confirms the fallback path (no --flatten/filter/
+// format flags) still produces a yaml dump byte-for-byte identical to
+// yamlEncode(policy) — protecting existing users.
+func TestGetIamPolicyNoPipeline(t *testing.T) {
+	policy := map[string]any{"bindings": []any{map[string]any{"role": "roles/A"}}}
+
+	prevFlatten, prevFilter, prevFormat := flagFlatten, flagFilter, flagFormat
+	defer func() { flagFlatten, flagFilter, flagFormat = prevFlatten, prevFilter, prevFormat }()
+	flagFlatten, flagFilter, flagFormat = nil, "", ""
+
+	var err1, err2 error
+	got := captureStdout(t, func() { err1 = emitWithPipeline(policy) })
+	want := captureStdout(t, func() { err2 = yamlEncode(policy) })
+	if err1 != nil || err2 != nil {
+		t.Fatalf("encode errors: pipeline=%v, yaml=%v", err1, err2)
+	}
+	if got != want {
+		t.Errorf("emitWithPipeline(no flags) output diverged from yamlEncode:\n--got--\n%s\n--want--\n%s", got, want)
+	}
+}
+
 func TestProjectsCommandRegistered(t *testing.T) {
 	got := map[string]bool{}
 	for _, c := range projectsCmd.Commands() {
