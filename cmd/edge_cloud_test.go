@@ -49,6 +49,26 @@ func TestEdgeCloudContainerSurface(t *testing.T) {
 	}
 }
 
+// TestEdgeCloudNetworkingSurface guards #1716: the `networking` subgroup
+// must match gcloud-python -- no `interconnect-attachments`, and add
+// `routes`.
+func TestEdgeCloudNetworkingSurface(t *testing.T) {
+	networking := edgeCloudSubgroup("networking")
+	if networking == nil {
+		t.Fatal("edge-cloud networking missing")
+	}
+	names := map[string]bool{}
+	for _, c := range networking.Commands() {
+		names[c.Name()] = true
+	}
+	if names["interconnect-attachments"] {
+		t.Error("edge-cloud networking should NOT contain interconnect-attachments (not in gcloud-python)")
+	}
+	if !names["routes"] {
+		t.Error("edge-cloud networking should contain routes")
+	}
+}
+
 func childNames(c *cobra.Command) []string {
 	var out []string
 	for _, x := range c.Commands() {

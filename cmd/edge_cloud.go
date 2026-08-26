@@ -21,11 +21,11 @@ func init() {
 	edgeCloudCmd.AddCommand(container)
 
 	networking := &cobra.Command{Use: "networking", Short: "Manage Edge Network resources"}
-	registerStubGroup(networking, "interconnect-attachments", "Manage interconnect attachments", "create", "delete", "describe", "list")
 	registerStubGroup(networking, "interconnects", "Manage interconnects", "describe", "list")
 	registerStubGroup(networking, "networks", "Manage networks", "create", "delete", "describe", "list", "diagnose")
 	registerStubGroup(networking, "operations", "Manage operations", "describe", "list")
 	registerStubGroup(networking, "routers", "Manage routers", "create", "delete", "describe", "list", "update", "diagnose", "change-bgp-peering")
+	registerStubGroup(networking, "routes", "Manage routes", "create", "delete", "describe", "list")
 	registerStubGroup(networking, "subnets", "Manage subnets", "create", "delete", "describe", "list", "update")
 	registerStubGroup(networking, "zones", "Manage zones", "describe", "list", "initialize")
 	edgeCloudCmd.AddCommand(networking)
