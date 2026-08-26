@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"golang.org/x/oauth2"
 )
 
 func TestSccV2ParentPath(t *testing.T) {
@@ -63,6 +65,12 @@ func TestSccFindingsListV2(t *testing.T) {
 	orig := sccV2Rest
 	defer func() { sccV2Rest = orig }()
 	sccV2RestClientForTest(server.URL)
+
+	// Avoid the real auth path -- CI has no credentials. A synthetic static
+	// token is enough because the test server ignores the value beyond
+	// asserting the Bearer prefix.
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
 
 	// Save + reset flags between subtests.
 	saveOrg, saveSrc, saveLoc, saveFmt, saveFilter := flagSccOrg, flagSccFindingSource, flagSccFindingLocation, flagSccFormat, flagSccFilter
