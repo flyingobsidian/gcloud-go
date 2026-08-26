@@ -527,7 +527,7 @@ func init() {
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
 	sccFindingsListCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0, "Page size for list requests")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
-		"Location of the resource. Default \"global\" targets the SCC V1 API; non-global values require SCC V2 (not yet available in this build).")
+		"Location of the resource. Default \"global\" routes to the SCC V1 API (deprecated server-side); any other value routes to the SCC V2 API via REST.")
 	sccFindingsGroupCmd.Flags().StringVar(&flagSccFindingGroupBy, "group-by", "",
 		"Comma-separated list of fields to group by (required)")
 	_ = sccFindingsGroupCmd.MarkFlagRequired("group-by")
@@ -1832,8 +1832,14 @@ func runSccFindingsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	// --location routes to the SCC V2 API. gcloud-python does the same:
+	// default location "global" -> V1; any other value -> V2. The V1
+	// findings API is deprecated (returns INVALID_ARGUMENT server-side)
+	// so most users need V2. Since google.golang.org/api@v0.289.0 doesn't
+	// ship a generated securitycenter/v2 client, V2 is implemented via
+	// direct REST calls (see sccV2ListFindings).
 	if flagSccFindingLocation != "" && flagSccFindingLocation != "global" {
-		return fmt.Errorf("--location=%q requires the SCC V2 API, which is not available in this build (google.golang.org/api). Only --location=global is supported.", flagSccFindingLocation)
+		return sccV2ListFindings(parent)
 	}
 	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
 	ctx := context.Background()
