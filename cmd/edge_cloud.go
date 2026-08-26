@@ -9,11 +9,15 @@ var edgeCloudCmd = &cobra.Command{Use: "edge-cloud", Short: "Manage Distributed 
 func init() {
 	container := &cobra.Command{Use: "container", Short: "Manage Edge Container resources"}
 	registerStubGroup(container, "clusters", "Manage Edge clusters", "create", "delete", "describe", "list", "update", "upgrade", "get-credentials", "generate-access-token", "generate-offline-credential")
-	registerStubGroup(container, "node-pools", "Manage node pools", "create", "delete", "describe", "list", "update")
 	registerStubGroup(container, "machines", "Manage machines", "describe", "list")
 	registerStubGroup(container, "operations", "Manage operations", "describe", "list")
-	registerStubGroup(container, "server-config", "Server config", "describe")
+	registerStubGroup(container, "regions", "List Edge Container regions", "list")
+	registerStubGroup(container, "zones", "List Edge Container zones", "list")
 	registerStubGroup(container, "vpn-connections", "Manage VPN connections", "create", "delete", "describe", "list")
+	// gcloud-python exposes `get-server-config` as a leaf under
+	// `edge-cloud container`, not a subgroup with a `describe` sub. Match
+	// that shape.
+	registerStubCommand(container, "get-server-config", "Describe the Edge Container server config")
 	edgeCloudCmd.AddCommand(container)
 
 	networking := &cobra.Command{Use: "networking", Short: "Manage Edge Network resources"}
