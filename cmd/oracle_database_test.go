@@ -86,3 +86,14 @@ func TestOracleDbVersionsSubcommands(t *testing.T) {
 	}
 	assertSubcommands(t, g, []string{"list"})
 }
+
+// TestOracleNoExtraStubs guards #1721: none of the invented `backups`,
+// `db-nodes`, or `db-servers` stubs should be re-registered. gcloud-python's
+// oracle-database surface has no such subgroups.
+func TestOracleNoExtraStubs(t *testing.T) {
+	for _, gone := range []string{"backups", "db-nodes", "db-servers"} {
+		if oracleSubgroup(gone) != nil {
+			t.Errorf("oracle-database should NOT contain %q (not in gcloud-python)", gone)
+		}
+	}
+}
