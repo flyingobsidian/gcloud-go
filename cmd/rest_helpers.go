@@ -40,8 +40,25 @@ func newRESTClient(endpoint string) *restClient {
 	return &restClient{endpoint: strings.TrimRight(endpoint, "/")}
 }
 
+// restTokenSource is the function used to obtain an OAuth2 token source for
+// REST calls. Overridable by tests via SetRestTokenSourceForTest so unit
+// tests can run without real credentials.
+var restTokenSource = func(ctx context.Context, scopes ...string) (oauth2.TokenSource, error) {
+	return auth.TokenSource(ctx, flagAccount, scopes...)
+}
+
+// SetRestTokenSourceForTest overrides restTokenSource. Returns a restore
+// function that resets the previous value; callers use it in `defer`.
+func SetRestTokenSourceForTest(ts oauth2.TokenSource) (restore func()) {
+	prev := restTokenSource
+	restTokenSource = func(context.Context, ...string) (oauth2.TokenSource, error) {
+		return ts, nil
+	}
+	return func() { restTokenSource = prev }
+}
+
 func (c *restClient) do(ctx context.Context, method, path string, query url.Values, body any, out any) error {
-	ts, err := auth.TokenSource(ctx, flagAccount, "https://www.googleapis.com/auth/cloud-platform")
+	ts, err := restTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return fmt.Errorf("obtaining credentials: %w", err)
 	}
