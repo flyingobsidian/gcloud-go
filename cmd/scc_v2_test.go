@@ -33,11 +33,12 @@ func TestSccV2ParentPath(t *testing.T) {
 // checks that runSccFindingsList sends the right request and renders the
 // response through the standard table branch.
 func TestSccFindingsListV2(t *testing.T) {
-	var gotPath, gotQuery, gotAuth string
+	var gotPath, gotQuery, gotAuth, gotUserProject string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		gotQuery = r.URL.RawQuery
 		gotAuth = r.Header.Get("Authorization")
+		gotUserProject = r.Header.Get("X-Goog-User-Project")
 		resp := map[string]any{
 			"listFindingsResults": []any{
 				map[string]any{
@@ -72,6 +73,11 @@ func TestSccFindingsListV2(t *testing.T) {
 	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
 	defer restore()
 
+	// #1740: sccV2ListFindings requires a resolvable billing project and
+	// the shared restClient stamps it into X-Goog-User-Project.
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
 	// Save + reset flags between subtests.
 	saveOrg, saveSrc, saveLoc, saveFmt, saveFilter := flagSccOrg, flagSccFindingSource, flagSccFindingLocation, flagSccFormat, flagSccFilter
 	defer func() {
@@ -100,6 +106,9 @@ func TestSccFindingsListV2(t *testing.T) {
 	if gotAuth == "" || !strings.HasPrefix(strings.ToLower(gotAuth), "bearer ") {
 		t.Errorf("expected Bearer token in Authorization header, got %q", gotAuth)
 	}
+	if gotUserProject != "qp-123" {
+		t.Errorf("expected X-Goog-User-Project=qp-123 (#1740), got %q", gotUserProject)
+	}
 	for _, want := range []string{"NAME", "STATE", "CATEGORY", "f-abc", "OPEN_FIREWALL", "f-def"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q; got:\n%s", want, out)
@@ -116,6 +125,8 @@ func TestSccV2RejectsUnsupportedFlags(t *testing.T) {
 	}()
 	flagSccFindingLocation = "eu"
 	flagSccOrg = "1"
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
 
 	flagSccFindingCompareDur = "1h"
 	flagSccFindingReadTime = ""
@@ -129,5 +140,34 @@ func TestSccV2RejectsUnsupportedFlags(t *testing.T) {
 	if err := sccV2ListFindings("organizations/1"); err == nil ||
 		!strings.Contains(err.Error(), "--read-time") {
 		t.Errorf("expected --read-time rejection, got %v", err)
+	}
+}
+
+// TestSccV2RequiresBillingProject guards #1740: sccV2ListFindings must fail
+// early with a clear message when no billing / quota project can be
+// resolved.
+func TestSccV2RequiresBillingProject(t *testing.T) {
+	saveLoc, saveOrg := flagSccFindingLocation, flagSccOrg
+	defer func() { flagSccFindingLocation, flagSccOrg = saveLoc, saveOrg }()
+	flagSccFindingLocation = "eu"
+	flagSccOrg = "1"
+
+	restoreQP := SetRestUserProjectForTest("")
+	defer restoreQP()
+
+	err := sccV2ListFindings("organizations/1")
+	if err == nil {
+		t.Fatal("expected error when no billing project is resolvable")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"quota (billing) project is required",
+		"--billing-project",
+		"billing/quota_project",
+		"set-quota-project",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error message missing hint %q; got: %s", want, msg)
+		}
 	}
 }

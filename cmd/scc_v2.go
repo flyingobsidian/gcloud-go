@@ -38,6 +38,19 @@ func sccV2ParentPath(parent, source, location string) string {
 // sccV2ListFindings performs `GET /v2/{parent}/findings` and prints the
 // results using the same table/format branches as the V1 path.
 func sccV2ListFindings(parent string) error {
+	// SCC V2 rejects unauthenticated ADC user creds with PERMISSION_DENIED
+	// unless a quota project is set (#1740). Resolve it up-front so the
+	// user gets a clear message rather than an opaque server error; the
+	// value is transparently forwarded as x-goog-user-project by the
+	// shared restClient. Goes through restUserProject so tests can inject
+	// a synthetic project without touching global config or ADC.
+	if restUserProject() == "" {
+		return fmt.Errorf(
+			"a quota (billing) project is required for the SCC V2 API but none was found. " +
+				"Set one via --billing-project=PROJECT_ID, " +
+				"`gcloud config set billing/quota_project PROJECT_ID`, or " +
+				"`gcloud auth application-default set-quota-project PROJECT_ID`")
+	}
 	parentPath := sccV2ParentPath(parent, flagSccFindingSource, flagSccFindingLocation)
 
 	q := url.Values{}

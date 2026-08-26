@@ -232,6 +232,11 @@ func getPropertyValue(props *config.Properties, section, key string) (string, er
 		default:
 			return "", fmt.Errorf("unrecognized property: compute/%s", key)
 		}
+	case "billing":
+		if key == "quota_project" {
+			return props.Billing.QuotaProject, nil
+		}
+		return "", fmt.Errorf("unrecognized property: billing/%s", key)
 	case "dataflow":
 		if key == "region" {
 			return props.Dataflow.Region, nil
@@ -277,6 +282,12 @@ func setPropertyValue(props *config.Properties, section, key, value string) erro
 		default:
 			return fmt.Errorf("unrecognized property: compute/%s", key)
 		}
+	case "billing":
+		if key == "quota_project" {
+			props.Billing.QuotaProject = value
+			return nil
+		}
+		return fmt.Errorf("unrecognized property: billing/%s", key)
 	case "dataflow":
 		if key == "region" {
 			props.Dataflow.Region = value
