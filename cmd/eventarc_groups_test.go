@@ -94,3 +94,11 @@ func TestEventarcTriggersSubcommands(t *testing.T) {
 	}
 	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
 }
+
+// TestEventarcNoAttributes guards #1720: the invented `attributes` subgroup
+// (never present in gcloud-python) must not be re-registered.
+func TestEventarcNoAttributes(t *testing.T) {
+	if eventarcSubgroup("attributes") != nil {
+		t.Error("eventarc `attributes` subgroup should not exist (not in gcloud-python)")
+	}
+}
