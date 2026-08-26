@@ -12,6 +12,7 @@ import (
 type Properties struct {
 	Core      CoreProperties
 	Compute   ComputeProperties
+	Billing   BillingProperties
 	Dataflow  RegionProperty
 	Run       RegionProperty
 	Redis     RegionProperty
@@ -26,6 +27,14 @@ type CoreProperties struct {
 type ComputeProperties struct {
 	Zone   string
 	Region string
+}
+
+// BillingProperties mirrors gcloud-python's [billing] config section. Only
+// quota_project is used today; it drives the x-goog-user-project header on
+// REST calls so per-project quota is applied when the caller's credentials
+// aren't tied to a billing project.
+type BillingProperties struct {
+	QuotaProject string
 }
 
 // RegionProperty holds a region for service-specific sections.
@@ -240,6 +249,10 @@ func loadINI(path string) (*Properties, error) {
 			case "region":
 				p.Compute.Region = val
 			}
+		case "billing":
+			if key == "quota_project" {
+				p.Billing.QuotaProject = val
+			}
 		case "dataflow":
 			if key == "region" {
 				p.Dataflow.Region = val
@@ -280,6 +293,10 @@ func saveINI(path string, p *Properties) error {
 		if p.Compute.Region != "" {
 			fmt.Fprintf(&b, "region = %s\n", p.Compute.Region)
 		}
+	}
+
+	if p.Billing.QuotaProject != "" {
+		fmt.Fprintf(&b, "\n[billing]\nquota_project = %s\n", p.Billing.QuotaProject)
 	}
 
 	for _, s := range []struct {

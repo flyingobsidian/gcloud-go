@@ -57,6 +57,20 @@ func SetRestTokenSourceForTest(ts oauth2.TokenSource) (restore func()) {
 	return func() { restTokenSource = prev }
 }
 
+// restUserProject is the function used to look up the billing / quota
+// project stamped into the x-goog-user-project header. Package-level so
+// tests can override without having to plumb configuration through
+// environments.
+var restUserProject = resolveBillingProject
+
+// SetRestUserProjectForTest replaces restUserProject with a constant value.
+// The returned function restores the previous behaviour.
+func SetRestUserProjectForTest(project string) (restore func()) {
+	prev := restUserProject
+	restUserProject = func() string { return project }
+	return func() { restUserProject = prev }
+}
+
 func (c *restClient) do(ctx context.Context, method, path string, query url.Values, body any, out any) error {
 	ts, err := restTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
@@ -81,6 +95,15 @@ func (c *restClient) do(ctx context.Context, method, path string, query url.Valu
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	// Send the caller's billing / quota project when one is resolvable
+	// (--billing-project, billing/quota_project config, or ADC
+	// quota_project_id). Google's APIs charge quota against this project
+	// and refuse ADC user creds without a value (#1740). Passing an
+	// x-goog-user-project header mirrors what the official client
+	// libraries do when a quota project is configured.
+	if qp := restUserProject(); qp != "" {
+		req.Header.Set("X-Goog-User-Project", qp)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
