@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -88,6 +89,35 @@ func sccV2BulkMuteFindings(parent string) error {
 		return fmt.Errorf("bulk muting findings (V2): %w", err)
 	}
 	return emitFormatted(op, flagSccFormat)
+}
+
+// sccDatasetPattern is the shape gcloud-python validates --dataset against
+// (ValidateDataset in command_lib/scc/findings/util.py).
+var sccDatasetPattern = regexp.MustCompile(`^projects/[a-zA-Z0-9-]+/datasets/[a-zA-Z0-9_]+$`)
+
+// sccV2ExportFindings performs `POST /v2/{parent}/findings:export`, exporting
+// the findings under a source to a BigQuery dataset. Unlike the other findings
+// commands this one has no V1 equivalent: gcloud-python pins it to V2.
+func sccV2ExportFindings(parent string) error {
+	if restUserProject() == "" {
+		return errNoBillingProject("the SCC V2 API")
+	}
+	if !sccDatasetPattern.MatchString(flagSccFindingDataset) {
+		return fmt.Errorf(
+			"--dataset must match projects/[a-zA-Z0-9-]+/datasets/[a-zA-Z0-9_]+, got %q",
+			flagSccFindingDataset)
+	}
+	parentPath := sccV2ParentPath(parent, flagSccFindingSource, flagSccFindingLocation)
+	body := map[string]any{
+		"bigQueryDestination": map[string]any{"dataset": flagSccFindingDataset},
+	}
+
+	ctx := context.Background()
+	var resp map[string]any
+	if err := sccV2Rest.do(ctx, http.MethodPost, "/"+parentPath+"/findings:export", nil, body, &resp); err != nil {
+		return fmt.Errorf("exporting findings to BigQuery: %w", err)
+	}
+	return emitFormatted(resp, flagSccFormat)
 }
 
 // sccV2ListFindings performs `GET /v2/{parent}/findings` and prints the

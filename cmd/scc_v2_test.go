@@ -295,6 +295,75 @@ func TestSccBulkMuteV2Undefined(t *testing.T) {
 	}
 }
 
+// TestSccExportToBigQueryV2 checks the export request shape. gcloud-python
+// pins this command to V2, so it must reach the REST path without --location.
+func TestSccExportToBigQueryV2(t *testing.T) {
+	var gotPath, gotMethod string
+	var gotBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotMethod = r.URL.Path, r.Method
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"done": true})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveSrc, saveDataset, saveFmt := flagSccOrg, flagSccFindingSource, flagSccFindingDataset, flagSccFormat
+	defer func() {
+		flagSccOrg, flagSccFindingSource, flagSccFindingDataset, flagSccFormat =
+			saveOrg, saveSrc, saveDataset, saveFmt
+	}()
+	flagSccOrg = "123"
+	flagSccFindingSource = "456"
+	flagSccFindingDataset = "projects/my-project/datasets/findings_export"
+	flagSccFormat = "json"
+
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsExportBQ(sccFindingsExportBQCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsExportBQ: %v", err)
+		}
+	})
+
+	if gotMethod != http.MethodPost {
+		t.Errorf("method = %s, want POST", gotMethod)
+	}
+	want := "/organizations/123/sources/456/locations/global/findings:export"
+	if gotPath != want {
+		t.Errorf("request path = %q, want %q", gotPath, want)
+	}
+	dest, _ := gotBody["bigQueryDestination"].(map[string]any)
+	if dest == nil || dest["dataset"] != "projects/my-project/datasets/findings_export" {
+		t.Errorf("bigQueryDestination = %v, want the dataset", gotBody["bigQueryDestination"])
+	}
+}
+
+// TestSccExportToBigQueryRejectsBadDataset mirrors ValidateDataset upstream.
+func TestSccExportToBigQueryRejectsBadDataset(t *testing.T) {
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveDataset := flagSccOrg, flagSccFindingDataset
+	defer func() { flagSccOrg, flagSccFindingDataset = saveOrg, saveDataset }()
+	flagSccOrg = "123"
+
+	for _, dataset := range []string{"", "dataset_id", "projects/p/datasets/bad-name", "projects//datasets/d"} {
+		flagSccFindingDataset = dataset
+		err := runSccFindingsExportBQ(sccFindingsExportBQCmd, nil)
+		if err == nil || !strings.Contains(err.Error(), "--dataset must match") {
+			t.Errorf("--dataset=%q: expected a validation error, got %v", dataset, err)
+		}
+	}
+}
+
 func TestSccMuteStateEnum(t *testing.T) {
 	cases := []struct {
 		in      string

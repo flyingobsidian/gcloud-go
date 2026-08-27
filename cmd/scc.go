@@ -47,6 +47,7 @@ var (
 	flagSccFindingMuteState      string
 	flagSccFindingBulkMuteFilter string
 	flagSccFindingBulkMuteState  string
+	flagSccFindingDataset        string
 	flagSccFindingGroupBy        string
 	flagSccFindingCompareDur     string
 	flagSccFindingReadTime       string
@@ -298,6 +299,10 @@ var (
 		Use: "create FINDING_ID", Short: "Create a finding from a --config-file",
 		Args: cobra.ExactArgs(1), RunE: runSccFindingsCreate,
 	}
+	sccFindingsExportBQCmd = &cobra.Command{
+		Use: "export-to-bigquery [PARENT]", Short: "Export findings to a BigQuery dataset",
+		Args: cobra.MaximumNArgs(1), RunE: runSccFindingsExportBQ,
+	}
 	sccFindingsGroupCmd = &cobra.Command{
 		Use: "group [PARENT]", Short: "Group findings by fields",
 		Args: cobra.MaximumNArgs(1), RunE: runSccFindingsGroup,
@@ -502,15 +507,15 @@ func init() {
 	sccCmd.AddCommand(sccCustomModulesCmd)
 
 	// --- findings flags ---
-	findAll := []*cobra.Command{sccFindingsBulkMuteCmd, sccFindingsCreateCmd, sccFindingsGroupCmd,
-		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
+	findAll := []*cobra.Command{sccFindingsBulkMuteCmd, sccFindingsCreateCmd, sccFindingsExportBQCmd,
+		sccFindingsGroupCmd, sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
 		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd}
 	sccAddScopeFlags(findAll...)
-	sccAddFormatFlag(sccFindingsCreateCmd, sccFindingsGroupCmd, sccFindingsListCmd,
-		sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
-		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd)
-	for _, c := range []*cobra.Command{sccFindingsCreateCmd, sccFindingsGroupCmd,
+	sccAddFormatFlag(sccFindingsCreateCmd, sccFindingsExportBQCmd, sccFindingsGroupCmd,
 		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
+		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd)
+	for _, c := range []*cobra.Command{sccFindingsCreateCmd, sccFindingsExportBQCmd,
+		sccFindingsGroupCmd, sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
 		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd} {
 		c.Flags().StringVar(&flagSccFindingSource, "source", "-",
 			"Source id (or fully-qualified sources/{id}). Defaults to \"-\" (all sources)")
@@ -525,6 +530,11 @@ func init() {
 	sccFindingsCreateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the Finding body (required)")
 	_ = sccFindingsCreateCmd.MarkFlagRequired("config-file")
+	sccFindingsExportBQCmd.Flags().StringVar(&flagSccFindingDataset, "dataset", "",
+		"BigQuery dataset to export findings to, as projects/{project}/datasets/{dataset} (required)")
+	_ = sccFindingsExportBQCmd.MarkFlagRequired("dataset")
+	sccFindingsExportBQCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
+		sccLocationFlagHelp)
 	sccFindingsListCmd.Flags().StringVar(&flagSccFilter, "filter", "", "Server-side list filter")
 	sccFindingsListCmd.Flags().StringVar(&flagSccOrderBy, "order-by", "", "Server-side ordering expression")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingFieldMask, "field-mask", "", "Response field mask")
@@ -1794,6 +1804,21 @@ func runSccFindingsCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating finding: %w", err)
 	}
 	return emitFormatted(got, flagSccFormat)
+}
+
+// runSccFindingsExportBQ exports findings to BigQuery. gcloud-python pins this
+// command to the V2 API regardless of --location (surface/scc/findings/
+// export_to_bigquery.py sets version = "v2"), so there is no V1 branch here.
+func runSccFindingsExportBQ(cmd *cobra.Command, args []string) error {
+	pos := ""
+	if len(args) == 1 {
+		pos = args[0]
+	}
+	parent, err := sccResolveParentFromArg(pos)
+	if err != nil {
+		return err
+	}
+	return sccV2ExportFindings(parent)
 }
 
 func runSccFindingsGroup(cmd *cobra.Command, args []string) error {

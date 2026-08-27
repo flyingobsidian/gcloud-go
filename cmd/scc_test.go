@@ -28,6 +28,29 @@ func sccNestedSubgroup(parent, name string) *cobra.Command {
 	return nil
 }
 
+// assertExactSubcommands requires the command group to expose exactly the
+// wanted subcommands -- no more, no fewer. The shared assertSubcommands helper
+// only checks presence, which lets invented commands survive unnoticed.
+func assertExactSubcommands(t *testing.T, c *cobra.Command, want []string) {
+	t.Helper()
+	got := map[string]bool{}
+	for _, sc := range c.Commands() {
+		got[sc.Name()] = true
+	}
+	wanted := map[string]bool{}
+	for _, name := range want {
+		wanted[name] = true
+		if !got[name] {
+			t.Errorf("%s is missing subcommand %q", c.Name(), name)
+		}
+	}
+	for name := range got {
+		if !wanted[name] {
+			t.Errorf("%s has subcommand %q, which does not exist in gcloud-python", c.Name(), name)
+		}
+	}
+}
+
 func TestSccAssetsSubcommands(t *testing.T) {
 	g := sccSubgroup("assets")
 	if g == nil {
@@ -79,12 +102,13 @@ func TestSccFindingsSubcommands(t *testing.T) {
 	if g == nil {
 		t.Fatal("scc findings missing")
 	}
-	// The surface must match gcloud-python exactly: `set-state` never existed
-	// there (state is set through `findings update --state`), and the marks
-	// command is `update-marks`, not `update-security-marks`.
-	assertSubcommands(t, g, []string{
-		"bulk-mute", "create", "group", "list", "list-marks",
-		"set-mute", "update", "update-marks",
+	// Exact match, not just presence: the shared assertSubcommands helper only
+	// checks that the wanted commands exist, so it never caught the invented
+	// `set-state` (gcloud-python sets state through `findings update --state`)
+	// or `update-security-marks`, whose real name is `update-marks`.
+	assertExactSubcommands(t, g, []string{
+		"bulk-mute", "create", "export-to-bigquery", "group", "list",
+		"list-marks", "set-mute", "update", "update-marks",
 	})
 }
 
