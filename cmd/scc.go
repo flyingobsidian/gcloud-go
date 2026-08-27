@@ -45,8 +45,6 @@ var (
 	// findings flags
 	flagSccFindingSource         string
 	flagSccFindingMuteState      string
-	flagSccFindingState          string
-	flagSccFindingStartTime      string
 	flagSccFindingBulkMuteFilter string
 	flagSccFindingGroupBy        string
 	flagSccFindingCompareDur     string
@@ -309,16 +307,12 @@ var (
 		Use: "set-mute FINDING", Short: "Set the mute state of a finding",
 		Args: cobra.ExactArgs(1), RunE: runSccFindingsSetMute,
 	}
-	sccFindingsSetStateCmd = &cobra.Command{
-		Use: "set-state FINDING", Short: "Set the state of a finding",
-		Args: cobra.ExactArgs(1), RunE: runSccFindingsSetState,
-	}
 	sccFindingsUpdateCmd = &cobra.Command{
 		Use: "update FINDING", Short: "Update a finding from a --config-file",
 		Args: cobra.ExactArgs(1), RunE: runSccFindingsUpdate,
 	}
 	sccFindingsUpdateMarksCmd = &cobra.Command{
-		Use: "update-security-marks FINDING", Short: "Update security marks on a finding",
+		Use: "update-marks FINDING", Short: "Update security marks on a finding",
 		Args: cobra.ExactArgs(1), RunE: runSccFindingsUpdateMarks,
 	}
 )
@@ -502,14 +496,14 @@ func init() {
 
 	// --- findings flags ---
 	findAll := []*cobra.Command{sccFindingsBulkMuteCmd, sccFindingsCreateCmd, sccFindingsGroupCmd,
-		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd, sccFindingsSetStateCmd,
+		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
 		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd}
 	sccAddScopeFlags(findAll...)
 	sccAddFormatFlag(sccFindingsCreateCmd, sccFindingsGroupCmd, sccFindingsListCmd,
-		sccFindingsListMarksCmd, sccFindingsSetMuteCmd, sccFindingsSetStateCmd,
+		sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
 		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd)
 	for _, c := range []*cobra.Command{sccFindingsCreateCmd, sccFindingsGroupCmd,
-		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd, sccFindingsSetStateCmd,
+		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
 		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd} {
 		c.Flags().StringVar(&flagSccFindingSource, "source", "-",
 			"Source id (or fully-qualified sources/{id}). Defaults to \"-\" (all sources)")
@@ -538,11 +532,6 @@ func init() {
 	sccFindingsSetMuteCmd.Flags().StringVar(&flagSccFindingMuteState, "mute", "",
 		"Mute state (MUTE_UNSPECIFIED|MUTED|UNMUTED|UNDEFINED) (required)")
 	_ = sccFindingsSetMuteCmd.MarkFlagRequired("mute")
-	sccFindingsSetStateCmd.Flags().StringVar(&flagSccFindingState, "state", "",
-		"Finding state (STATE_UNSPECIFIED|ACTIVE|INACTIVE) (required)")
-	_ = sccFindingsSetStateCmd.MarkFlagRequired("state")
-	sccFindingsSetStateCmd.Flags().StringVar(&flagSccFindingStartTime, "start-time", "",
-		"Time at which the updated state takes effect (RFC3339)")
 	sccFindingsUpdateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the Finding body (required)")
 	_ = sccFindingsUpdateCmd.MarkFlagRequired("config-file")
@@ -2048,38 +2037,6 @@ func runSccFindingsSetMute(cmd *cobra.Command, args []string) error {
 	}
 	if err != nil {
 		return fmt.Errorf("setting mute: %w", err)
-	}
-	return emitFormatted(got, flagSccFormat)
-}
-
-func runSccFindingsSetState(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
-	if err != nil {
-		return err
-	}
-	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
-	name := sccQualifyChild(sourceParent, "findings", args[0])
-	req := &securitycenter.SetFindingStateRequest{
-		State:     flagSccFindingState,
-		StartTime: flagSccFindingStartTime,
-	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
-	if err != nil {
-		return err
-	}
-	scope, _ := splitScope(parent)
-	var got *securitycenter.Finding
-	switch scope {
-	case "organizations":
-		got, err = svc.Organizations.Sources.Findings.SetState(name, req).Context(ctx).Do()
-	case "folders":
-		got, err = svc.Folders.Sources.Findings.SetState(name, req).Context(ctx).Do()
-	case "projects":
-		got, err = svc.Projects.Sources.Findings.SetState(name, req).Context(ctx).Do()
-	}
-	if err != nil {
-		return fmt.Errorf("setting finding state: %w", err)
 	}
 	return emitFormatted(got, flagSccFormat)
 }

@@ -79,9 +79,12 @@ func TestSccFindingsSubcommands(t *testing.T) {
 	if g == nil {
 		t.Fatal("scc findings missing")
 	}
+	// The surface must match gcloud-python exactly: `set-state` never existed
+	// there (state is set through `findings update --state`), and the marks
+	// command is `update-marks`, not `update-security-marks`.
 	assertSubcommands(t, g, []string{
 		"bulk-mute", "create", "group", "list", "list-marks",
-		"set-mute", "set-state", "update", "update-security-marks",
+		"set-mute", "update", "update-marks",
 	})
 }
 
