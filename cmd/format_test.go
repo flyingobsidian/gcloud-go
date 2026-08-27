@@ -273,6 +273,64 @@ func TestEmitFlattenedWithFields(t *testing.T) {
 	}
 }
 
+// TestEmitFlattenedQuotesMultilineValue covers #1745: a value containing
+// newlines must be emitted as one physical line with `\n` escape sequences
+// inside double quotes -- matching gcloud-python's FlattenedPrinter.
+func TestEmitFlattenedQuotesMultilineValue(t *testing.T) {
+	obj := map[string]any{
+		"commonInstanceMetadata": map[string]any{
+			"items": []any{
+				map[string]any{
+					"key":   "ssh-keys",
+					"value": "user:ssh-rsa KEY1 user@host\nuser:ssh-rsa KEY2 user@host\nuser:ssh-rsa KEY3 user@host",
+				},
+			},
+		},
+	}
+	got := runFormat(t, obj, "flattened(commonInstanceMetadata.items)")
+	want := "commonInstanceMetadata.items[0].key:   ssh-keys\n" +
+		"commonInstanceMetadata.items[0].value: \"user:ssh-rsa KEY1 user@host\\nuser:ssh-rsa KEY2 user@host\\nuser:ssh-rsa KEY3 user@host\"\n"
+	if got != want {
+		t.Errorf("multiline flattened mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+	// The value line must render on exactly one physical line: the raw
+	// newlines have to become the two-character escape sequence \n.
+	if lines := strings.Count(got, "\n"); lines != 2 {
+		t.Errorf("expected 2 lines of output, got %d:\n%s", lines, got)
+	}
+}
+
+// TestFlattenedValueDisplay exercises the per-value quoting rules directly,
+// so regressions in the escape table (\, ", \f, \n, \r, \t) are caught even
+// when they don't happen to appear in a printer fixture.
+func TestFlattenedValueDisplay(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", ""},
+		{"plain", "plain"},
+		{"one line", "one line"},
+		// Newline forces quoting; embedded \n becomes the two-char escape.
+		{"a\nb", `"a\nb"`},
+		// Leading/trailing whitespace forces quoting.
+		{" leading", `" leading"`},
+		{"trailing ", `"trailing "`},
+		// Once we quote, backslashes and quotes must be escaped too.
+		{"has \"quote\" and \\slash\n", `"has \"quote\" and \\slash\n"`},
+		// Tabs / carriage returns / form feeds get their escapes only when
+		// quoting is already in effect (here forced by the newline).
+		{"tab\there\n", `"tab\there\n"`},
+		{"cr\rhere\n", `"cr\rhere\n"`},
+		{"ff\fhere\n", `"ff\fhere\n"`},
+		// A mid-string tab alone doesn't trigger quoting in gcloud-python;
+		// stay bug-compatible so operators diffing output see identical text.
+		{"mid\ttab", "mid\ttab"},
+	}
+	for _, c := range cases {
+		if got := flattenedValueDisplay(c.in); got != c.want {
+			t.Errorf("flattenedValueDisplay(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // TestEmitFlattenedNested asserts that nested objects and arrays produce
 // dotted-path leaves (metadata.items[0].key etc.).
 func TestEmitFlattenedNested(t *testing.T) {

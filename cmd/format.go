@@ -7,6 +7,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -327,7 +329,7 @@ func emitFlattened(w io.Writer, rows []map[string]any, fields []string) error {
 		}
 		for _, e := range entries {
 			pad := strings.Repeat(" ", width-len(e.key))
-			if _, err := fmt.Fprintf(w, "%s:%s %s\n", e.key, pad, e.val); err != nil {
+			if _, err := fmt.Fprintf(w, "%s:%s %s\n", e.key, pad, flattenedValueDisplay(e.val)); err != nil {
 				return err
 			}
 		}
@@ -372,6 +374,55 @@ func stringifyLeaf(v any) string {
 		return ""
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+// flattenedValueDisplay renders a leaf value for the "flattened" printer.
+// Each leaf must occupy a single line; when the raw value contains a newline
+// or has leading/trailing whitespace, we surround it with double quotes and
+// escape the special characters (\, ", \f, \n, \r, \t) so the output stays
+// on one line -- mirroring gcloud-python's FlattenedPrinter._StringQuote.
+func flattenedValueDisplay(s string) string {
+	if !flattenedNeedsQuoting(s) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 2)
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\f':
+			b.WriteString(`\f`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// flattenedNeedsQuoting reports whether a flattened value must be quoted to
+// stay on a single line. Matches gcloud-python: embedded newlines or leading/
+// trailing whitespace force quoting.
+func flattenedNeedsQuoting(s string) bool {
+	if strings.Contains(s, "\n") {
+		return true
+	}
+	if s == "" {
+		return false
+	}
+	first, _ := utf8.DecodeRuneInString(s)
+	last, _ := utf8.DecodeLastRuneInString(s)
+	return unicode.IsSpace(first) || unicode.IsSpace(last)
 }
 
 // lookupPath walks m via a dotted path and returns the value at that
