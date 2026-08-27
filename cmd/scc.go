@@ -540,7 +540,8 @@ func init() {
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingFieldMask, "field-mask", "", "Response field mask")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingCompareDur, "compare-duration", "", "Compare-duration for state-change results")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
-	sccFindingsListCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0, "Page size for list requests")
+	sccFindingsListCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0,
+		"Results per page. Unset lets the server choose: SCC findings.list defaults to 10, maximum 1000.")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
 		sccLocationFlagHelp)
 	sccFindingsGroupCmd.Flags().StringVar(&flagSccFindingGroupBy, "group-by", "",

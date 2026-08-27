@@ -179,6 +179,62 @@ func TestSccFindingsListRoutesGlobalToV2(t *testing.T) {
 	}
 }
 
+// TestSccFindingsListPageSize checks that --page-size reaches the query
+// string. Without it the SCC API applies its own default of 10 results per
+// page (max 1000), so a listing of any size makes far more calls than it
+// needs to.
+func TestSccFindingsListPageSize(t *testing.T) {
+	var gotPageSize []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPageSize = append(gotPageSize, r.URL.Query().Get("pageSize"))
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"listFindingsResults": []any{}})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveSrc, saveSize, saveFmt := flagSccOrg, flagSccFindingSource, flagSccPageSize, flagSccFormat
+	defer func() {
+		flagSccOrg, flagSccFindingSource, flagSccPageSize, flagSccFormat =
+			saveOrg, saveSrc, saveSize, saveFmt
+	}()
+	flagSccOrg = "1"
+	flagSccFindingSource = "-"
+	flagSccFormat = ""
+	withSccLocation(t, sccFindingsListCmd, "global")
+
+	// With the flag set, the value is forwarded verbatim.
+	flagSccPageSize = 1000
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsList: %v", err)
+		}
+	})
+	if len(gotPageSize) != 1 || gotPageSize[0] != "1000" {
+		t.Errorf("pageSize sent = %v, want [1000]", gotPageSize)
+	}
+
+	// Left unset, no pageSize is sent and the server default applies.
+	gotPageSize = nil
+	flagSccPageSize = 0
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsList: %v", err)
+		}
+	})
+	if len(gotPageSize) != 1 || gotPageSize[0] != "" {
+		t.Errorf("pageSize sent = %v, want no value", gotPageSize)
+	}
+}
+
 // TestSccLocationSpecified pins the routing rule itself: an explicit
 // --location selects V2 whatever its value, and omitting it stays on V1.
 func TestSccLocationSpecified(t *testing.T) {
