@@ -527,7 +527,7 @@ func init() {
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
 	sccFindingsListCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0, "Page size for list requests")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
-		"Location of the resource. Default \"global\" routes to the SCC V1 API (deprecated server-side); any other value routes to the SCC V2 API via REST.")
+		"Location of the resource. Passing --location routes to the SCC V2 API via REST, including --location=global; omitting it uses the SCC V1 API (deprecated server-side). Organizations without data residency controls must use \"global\".")
 	sccFindingsGroupCmd.Flags().StringVar(&flagSccFindingGroupBy, "group-by", "",
 		"Comma-separated list of fields to group by (required)")
 	_ = sccFindingsGroupCmd.MarkFlagRequired("group-by")
@@ -1823,6 +1823,17 @@ func runSccFindingsGroup(cmd *cobra.Command, args []string) error {
 	return emitFormatted(resp, flagSccFormat)
 }
 
+// sccLocationSpecified reports whether the caller passed --location, which is
+// what selects the SCC V2 API. cobra always supplies the command; a nil one
+// means no command line was parsed, so no location was given.
+func sccLocationSpecified(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	f := cmd.Flags().Lookup("location")
+	return f != nil && f.Changed
+}
+
 func runSccFindingsList(cmd *cobra.Command, args []string) error {
 	pos := ""
 	if len(args) == 1 {
@@ -1832,13 +1843,19 @@ func runSccFindingsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// --location routes to the SCC V2 API. gcloud-python does the same:
-	// default location "global" -> V1; any other value -> V2. The V1
-	// findings API is deprecated (returns INVALID_ARGUMENT server-side)
-	// so most users need V2. Since google.golang.org/api@v0.289.0 doesn't
-	// ship a generated securitycenter/v2 client, V2 is implemented via
+	// --location routes to the SCC V2 API. gcloud-python routes on whether
+	// --location was *specified*, not on the value it was given: any explicit
+	// location selects V2, "global" included (IsLocationSpecified /
+	// GetVersionFromArguments in command_lib/scc/util.py). Routing on the
+	// value instead made --location=global unreachable on V2, which is the
+	// only location an organization without data residency controls may use:
+	// regional endpoints there fail with DRZ_LOCATION_MISMATCH.
+	//
+	// The V1 findings API is deprecated (returns INVALID_ARGUMENT
+	// server-side), so most users need V2. Since google.golang.org/api@v0.289.0
+	// doesn't ship a generated securitycenter/v2 client, V2 is implemented via
 	// direct REST calls (see sccV2ListFindings).
-	if flagSccFindingLocation != "" && flagSccFindingLocation != "global" {
+	if sccLocationSpecified(cmd) {
 		return sccV2ListFindings(parent)
 	}
 	sourceParent := findingsSourceParent(parent, flagSccFindingSource)

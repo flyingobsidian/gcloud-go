@@ -66,12 +66,12 @@ func TestSccFindingsListV2LogsCurl(t *testing.T) {
 	}()
 	flagSccOrg = "1"
 	flagSccFindingSource = "-"
-	flagSccFindingLocation = "eu"
+	withSccLocation(t, "eu")
 	flagSccFilter = "state=\"ACTIVE\""
 	flagSccFormat = ""
 
 	_ = captureStdout(t, func() {
-		if err := runSccFindingsList(nil, nil); err != nil {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})
@@ -115,13 +115,13 @@ func TestSccFindingsListV2QuietByDefault(t *testing.T) {
 	httpDebugOut, flagVerbosity, flagLogHTTP = &debug, "warning", false
 	defer func() { httpDebugOut, flagVerbosity, flagLogHTTP = saveOut, saveVerbosity, saveLogHTTP }()
 
-	saveOrg, saveLoc := flagSccOrg, flagSccFindingLocation
-	defer func() { flagSccOrg, flagSccFindingLocation = saveOrg, saveLoc }()
+	saveOrg := flagSccOrg
+	defer func() { flagSccOrg = saveOrg }()
 	flagSccOrg = "1"
-	flagSccFindingLocation = "eu"
+	withSccLocation(t, "eu")
 
 	_ = captureStdout(t, func() {
-		if err := runSccFindingsList(nil, nil); err != nil {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})

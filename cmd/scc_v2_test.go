@@ -29,6 +29,25 @@ func TestSccV2ParentPath(t *testing.T) {
 	}
 }
 
+// withSccLocation sets --location the way parsing a command line would, so
+// that the V1/V2 routing in runSccFindingsList sees it as specified. The flag
+// is restored when the test ends.
+func withSccLocation(t *testing.T, location string) {
+	t.Helper()
+	f := sccFindingsListCmd.Flags().Lookup("location")
+	if f == nil {
+		t.Fatal("--location flag is not registered on scc findings list")
+	}
+	prev, prevChanged := f.Value.String(), f.Changed
+	if err := sccFindingsListCmd.Flags().Set("location", location); err != nil {
+		t.Fatalf("setting --location=%s: %v", location, err)
+	}
+	t.Cleanup(func() {
+		_ = f.Value.Set(prev)
+		f.Changed = prevChanged
+	})
+}
+
 // TestSccFindingsListV2 spins up an httptest.Server acting as SCC V2 and
 // checks that runSccFindingsList sends the right request and renders the
 // response through the standard table branch.
@@ -86,12 +105,12 @@ func TestSccFindingsListV2(t *testing.T) {
 	}()
 	flagSccOrg = "1"
 	flagSccFindingSource = "-"
-	flagSccFindingLocation = "eu"
+	withSccLocation(t, "eu")
 	flagSccFilter = "state=\"ACTIVE\""
 	flagSccFormat = ""
 
 	out := captureStdout(t, func() {
-		if err := runSccFindingsList(nil, nil); err != nil {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})
@@ -112,6 +131,62 @@ func TestSccFindingsListV2(t *testing.T) {
 	for _, want := range []string{"NAME", "STATE", "CATEGORY", "f-abc", "OPEN_FIREWALL", "f-def"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q; got:\n%s", want, out)
+		}
+	}
+}
+
+// TestSccFindingsListRoutesGlobalToV2 covers the case an organization without
+// data residency controls needs: --location=global must reach the V2 API at
+// locations/global, not fall back to V1. Regional endpoints are rejected there
+// with DRZ_LOCATION_MISMATCH, so global is the only location such an
+// organization can use.
+func TestSccFindingsListRoutesGlobalToV2(t *testing.T) {
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"listFindingsResults": []any{}})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveSrc, saveFmt := flagSccOrg, flagSccFindingSource, flagSccFormat
+	defer func() { flagSccOrg, flagSccFindingSource, flagSccFormat = saveOrg, saveSrc, saveFmt }()
+	flagSccOrg = "1057127509270"
+	flagSccFindingSource = "-"
+	flagSccFormat = ""
+	withSccLocation(t, "global")
+
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsList: %v", err)
+		}
+	})
+
+	want := "/organizations/1057127509270/sources/-/locations/global/findings"
+	if gotPath != want {
+		t.Errorf("request path = %q, want %q", gotPath, want)
+	}
+}
+
+// TestSccLocationSpecified pins the routing rule itself: an explicit
+// --location selects V2 whatever its value, and omitting it stays on V1.
+func TestSccLocationSpecified(t *testing.T) {
+	if sccLocationSpecified(sccFindingsListCmd) {
+		t.Error("expected --location to start unspecified")
+	}
+	for _, location := range []string{"global", "eu", "us"} {
+		withSccLocation(t, location)
+		if !sccLocationSpecified(sccFindingsListCmd) {
+			t.Errorf("--location=%s should route to V2", location)
 		}
 	}
 }
