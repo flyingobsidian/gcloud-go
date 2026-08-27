@@ -153,14 +153,14 @@ var secretsUpdateCmd = &cobra.Command{
 }
 
 var (
-	flagSecretUpdateLabels      map[string]string
-	flagSecretRemoveLabels      []string
-	flagSecretClearLabels       bool
-	flagSecretUpdateExpireTime  string
-	flagSecretUpdateTTL         string
-	flagSecretRemoveExpiration  bool
-	flagSecretNextRotationTime  string
-	flagSecretRotationPeriod    string
+	flagSecretUpdateLabels     map[string]string
+	flagSecretRemoveLabels     []string
+	flagSecretClearLabels      bool
+	flagSecretUpdateExpireTime string
+	flagSecretUpdateTTL        string
+	flagSecretRemoveExpiration bool
+	flagSecretNextRotationTime string
+	flagSecretRotationPeriod   string
 )
 
 // --- secrets delete ---

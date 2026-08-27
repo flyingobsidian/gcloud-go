@@ -91,14 +91,14 @@ var (
 )
 
 var (
-	flagMKLocation      string
-	flagMKConfigFile    string
-	flagMKUpdateMask    string
-	flagMKFormat        string
-	flagMKAsync         bool
-	flagMKCluster       string
-	flagMKConnectClust  string
-	flagMKAclOp         string
+	flagMKLocation     string
+	flagMKConfigFile   string
+	flagMKUpdateMask   string
+	flagMKFormat       string
+	flagMKAsync        bool
+	flagMKCluster      string
+	flagMKConnectClust string
+	flagMKAclOp        string
 )
 
 func init() {

@@ -286,10 +286,10 @@ func runSQLBackupRestore(cmd *cobra.Command, args []string) error {
 	}
 	req := &sqladmin.InstancesRestoreBackupRequest{
 		RestoreBackupContext: &sqladmin.RestoreBackupContext{
-			BackupRunId:      id,
-			Kind:             "sql#restoreBackupContext",
-			InstanceId:       instance,
-			Project:          project,
+			BackupRunId: id,
+			Kind:        "sql#restoreBackupContext",
+			InstanceId:  instance,
+			Project:     project,
 		},
 	}
 	op, err := svc.Instances.RestoreBackup(project, instance, req).Context(ctx).Do()
@@ -723,8 +723,8 @@ func runSQLImport(fileType string, cmd *cobra.Command, args []string) error {
 		bak := &sqladmin.ImportContextBakImportOptions{BakType: flagSQLBAKType}
 		if flagSQLEncryptionKey != "" {
 			bak.EncryptionOptions = &sqladmin.ImportContextBakImportOptionsEncryptionOptions{
-				PvkPath:  flagSQLPvKPath,
-				CertPath: flagSQLCertPath,
+				PvkPath:     flagSQLPvKPath,
+				CertPath:    flagSQLCertPath,
 				PvkPassword: flagSQLEncryptionKey,
 			}
 		}

@@ -37,9 +37,9 @@ var peeredDNSListCmd = &cobra.Command{
 }
 
 var (
-	flagPeeredDNSService   string
-	flagPeeredDNSNetwork   string
-	flagPeeredDNSDnsSuffix string
+	flagPeeredDNSService    string
+	flagPeeredDNSNetwork    string
+	flagPeeredDNSDnsSuffix  string
 	flagPeeredDNSListFormat string
 )
 

@@ -9,11 +9,17 @@ LDFLAGS := -s -w -X github.com/flyingobsidian/gcloud-go/cmd.Version=$(VERSION)
 build:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) .
 
+fmt:
+	go fmt ./...
+
 test:
 	go test ./...
 
 test-v:
 	go test ./... -v
+
+vet:
+	go vet ./...
 
 clean:
 	rm -f bin/$(BINARY)

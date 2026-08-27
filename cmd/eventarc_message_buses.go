@@ -54,22 +54,22 @@ var (
 )
 
 var (
-	flagEvMBLocation        string
-	flagEvMBConfigFile      string
-	flagEvMBUpdateMask      string
-	flagEvMBFormat          string
-	flagEvMBAsync           bool
-	flagEvMBListLimit       int64
-	flagEvMBListPage        int64
-	flagEvMBListFilter      string
-	flagEvMBListURI         bool
-	flagEvMBPublishEventID  string
-	flagEvMBPublishType     string
-	flagEvMBPublishSource   string
-	flagEvMBPublishData     string
-	flagEvMBPublishAttrs    []string
-	flagEvMBPublishJSON     string
-	flagEvMBPublishEnroll   string
+	flagEvMBLocation       string
+	flagEvMBConfigFile     string
+	flagEvMBUpdateMask     string
+	flagEvMBFormat         string
+	flagEvMBAsync          bool
+	flagEvMBListLimit      int64
+	flagEvMBListPage       int64
+	flagEvMBListFilter     string
+	flagEvMBListURI        bool
+	flagEvMBPublishEventID string
+	flagEvMBPublishType    string
+	flagEvMBPublishSource  string
+	flagEvMBPublishData    string
+	flagEvMBPublishAttrs   []string
+	flagEvMBPublishJSON    string
+	flagEvMBPublishEnroll  string
 )
 
 func init() {

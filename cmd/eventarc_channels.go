@@ -45,8 +45,8 @@ var (
 	flagEvChanFormat     string
 	flagEvChanAsync      bool
 	flagEvChanListLimit  int64
-	flagEvChanListPage int64
-	flagEvChanListURI  bool
+	flagEvChanListPage   int64
+	flagEvChanListURI    bool
 )
 
 func init() {

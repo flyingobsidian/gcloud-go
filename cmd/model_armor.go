@@ -129,12 +129,12 @@ var (
 		Args: cobra.ExactArgs(1), RunE: runMATplUpdate,
 	}
 	modelArmorTplSanitizeModelCmd = &cobra.Command{
-		Use: "sanitize-model-response TEMPLATE",
+		Use:   "sanitize-model-response TEMPLATE",
 		Short: "Send a model response through the template's filters",
 		Args:  cobra.ExactArgs(1), RunE: runMATplSanitizeModel,
 	}
 	modelArmorTplSanitizeUserCmd = &cobra.Command{
-		Use: "sanitize-user-prompt TEMPLATE",
+		Use:   "sanitize-user-prompt TEMPLATE",
 		Short: "Send a user prompt through the template's filters",
 		Args:  cobra.ExactArgs(1), RunE: runMATplSanitizeUser,
 	}

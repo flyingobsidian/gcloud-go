@@ -60,9 +60,9 @@ var (
 		Args: cobra.ExactArgs(1), RunE: runMemstoreInstGetCA,
 	}
 	memstoreInstGetSharedCACmd = &cobra.Command{
-		Use: "get-shared-regional-certificate-authority",
+		Use:   "get-shared-regional-certificate-authority",
 		Short: "Get the shared regional certificate authority for a Memorystore location",
-		Args: cobra.NoArgs, RunE: runMemstoreInstGetSharedCA,
+		Args:  cobra.NoArgs, RunE: runMemstoreInstGetSharedCA,
 	}
 	memstoreInstRescheduleMaintCmd = &cobra.Command{
 		Use: "reschedule-maintenance INSTANCE", Short: "Reschedule maintenance for a Memorystore instance",

@@ -77,16 +77,16 @@ var assuredWorkloadUpdateCmd = &cobra.Command{
 }
 
 var (
-	flagAssuredOrg      string
-	flagAssuredLocation string
-	flagAssuredEtag     string
-	flagAssuredDisplay  string
+	flagAssuredOrg              string
+	flagAssuredLocation         string
+	flagAssuredEtag             string
+	flagAssuredDisplay          string
 	flagAssuredComplianceRegime string
-	flagAssuredBillingAccount string
-	flagAssuredListFormat string
-	flagAssuredListFilter string
-	flagAssuredListPageSize int64
-	flagAssuredListLimit int64
+	flagAssuredBillingAccount   string
+	flagAssuredListFormat       string
+	flagAssuredListFilter       string
+	flagAssuredListPageSize     int64
+	flagAssuredListLimit        int64
 )
 
 func init() {

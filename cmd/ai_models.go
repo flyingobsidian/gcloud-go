@@ -16,14 +16,14 @@ import (
 var aiModelsCmd = &cobra.Command{Use: "models", Short: "Manage Vertex AI models"}
 
 var (
-	flagAIMRegion       string
-	flagAIMFormat       string
-	flagAIMConfigFile   string
-	flagAIMVersion      string
-	flagAIMFilter       string
-	flagAIMOrderBy      string
-	flagAIMPageSize     int64
-	flagAIMReadMask     string
+	flagAIMRegion     string
+	flagAIMFormat     string
+	flagAIMConfigFile string
+	flagAIMVersion    string
+	flagAIMFilter     string
+	flagAIMOrderBy    string
+	flagAIMPageSize   int64
+	flagAIMReadMask   string
 )
 
 var (

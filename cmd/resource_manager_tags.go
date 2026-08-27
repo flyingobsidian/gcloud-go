@@ -144,16 +144,16 @@ var (
 	flagTagValueListLimit    int64
 	flagTagValueListFormat   string
 
-	flagTagBindingParent          string
-	flagTagBindingTagValue        string
-	flagTagBindingTagValueNS      string
-	flagTagBindingLocation        string
-	flagTagBindingListParent      string
-	flagTagBindingListEffective   bool
-	flagTagBindingListLocation    string
-	flagTagBindingListPageSize    int64
-	flagTagBindingListLimit       int64
-	flagTagBindingListFormat      string
+	flagTagBindingParent        string
+	flagTagBindingTagValue      string
+	flagTagBindingTagValueNS    string
+	flagTagBindingLocation      string
+	flagTagBindingListParent    string
+	flagTagBindingListEffective bool
+	flagTagBindingListLocation  string
+	flagTagBindingListPageSize  int64
+	flagTagBindingListLimit     int64
+	flagTagBindingListFormat    string
 )
 
 func init() {

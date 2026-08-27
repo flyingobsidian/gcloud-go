@@ -79,12 +79,12 @@ var (
 )
 
 var (
-	flagMCRegion      string
-	flagMCConfigFile  string
-	flagMCUpdateMask  string
-	flagMCAsync       bool
-	flagMCNodeIDs     []string
-	flagMCApplyAll    bool
+	flagMCRegion     string
+	flagMCConfigFile string
+	flagMCUpdateMask string
+	flagMCAsync      bool
+	flagMCNodeIDs    []string
+	flagMCApplyAll   bool
 )
 
 // --- operations ---

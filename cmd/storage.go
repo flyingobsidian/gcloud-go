@@ -122,9 +122,9 @@ var storageRsyncCmd = &cobra.Command{
 }
 
 var (
-	flagRsyncRecurse       bool
+	flagRsyncRecurse         bool
 	flagRsyncDeleteUnmatched bool
-	flagRsyncDryRun        bool
+	flagRsyncDryRun          bool
 )
 
 // --- du ---

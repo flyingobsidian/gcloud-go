@@ -20,20 +20,20 @@ var parameterManagerCmd = &cobra.Command{
 }
 
 var (
-	flagPMLocation   string
-	flagPMFormat     string
-	flagPMFilter     string
-	flagPMOrderBy    string
-	flagPMPageSize   int64
-	flagPMFormatVal  string
-	flagPMKmsKey     string
-	flagPMLabels     []string
-	flagPMUpdateMask string
-	flagPMPayload    string
-	flagPMPayloadB64 string
+	flagPMLocation    string
+	flagPMFormat      string
+	flagPMFilter      string
+	flagPMOrderBy     string
+	flagPMPageSize    int64
+	flagPMFormatVal   string
+	flagPMKmsKey      string
+	flagPMLabels      []string
+	flagPMUpdateMask  string
+	flagPMPayload     string
+	flagPMPayloadB64  string
 	flagPMPayloadFile string
-	flagPMDisabled   bool
-	flagPMView       string
+	flagPMDisabled    bool
+	flagPMView        string
 )
 
 // --- parameters ---

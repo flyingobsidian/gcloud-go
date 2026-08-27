@@ -14,19 +14,19 @@ import (
 var dpWFCmd = &cobra.Command{Use: "workflow-templates", Short: "Manage Dataproc workflow templates"}
 
 var (
-	flagDPWFRegion        string
-	flagDPWFFormat        string
-	flagDPWFConfigFile    string
-	flagDPWFPageSize      int64
-	flagDPWFParams        map[string]string
-	flagDPWFRequestID     string
-	flagDPWFAddJobFile    string
-	flagDPWFRemoveJob     string
-	flagDPWFSelectorFile  string
-	flagDPWFManagedFile   string
-	flagDPWFDagTimeout    string
-	flagDPWFStepID        string
-	flagDPWFVersion       int64
+	flagDPWFRegion       string
+	flagDPWFFormat       string
+	flagDPWFConfigFile   string
+	flagDPWFPageSize     int64
+	flagDPWFParams       map[string]string
+	flagDPWFRequestID    string
+	flagDPWFAddJobFile   string
+	flagDPWFRemoveJob    string
+	flagDPWFSelectorFile string
+	flagDPWFManagedFile  string
+	flagDPWFDagTimeout   string
+	flagDPWFStepID       string
+	flagDPWFVersion      int64
 )
 
 var (

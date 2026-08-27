@@ -53,19 +53,19 @@ var (
 		Args: cobra.ExactArgs(1), RunE: runColabRTTGetIam,
 	}
 	colabRTTSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy RUNTIME_TEMPLATE POLICY_FILE",
+		Use:   "set-iam-policy RUNTIME_TEMPLATE POLICY_FILE",
 		Short: "Set the IAM policy for a runtime template",
 		Args:  cobra.ExactArgs(2), RunE: runColabRTTSetIam,
 	}
 	colabRTTAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding RUNTIME_TEMPLATE",
+		Use:   "add-iam-policy-binding RUNTIME_TEMPLATE",
 		Short: "Add an IAM policy binding to a runtime template",
-		Args: cobra.ExactArgs(1), RunE: runColabRTTAddIam,
+		Args:  cobra.ExactArgs(1), RunE: runColabRTTAddIam,
 	}
 	colabRTTRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding RUNTIME_TEMPLATE",
+		Use:   "remove-iam-policy-binding RUNTIME_TEMPLATE",
 		Short: "Remove an IAM policy binding from a runtime template",
-		Args: cobra.ExactArgs(1), RunE: runColabRTTRemoveIam,
+		Args:  cobra.ExactArgs(1), RunE: runColabRTTRemoveIam,
 	}
 )
 

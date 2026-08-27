@@ -16,26 +16,26 @@ import (
 // --- gcloud migration vms target-projects and image-imports (#895, #896) ---
 
 var (
-	flagMVMLocation      string
-	flagMVMFormat        string
-	flagMVMFilter        string
-	flagMVMAsync         bool
-	flagMVMTargetProj    string
-	flagMVMDescription   string
-	flagMVMUpdateMask    string
-	flagMVMConfigFile    string
-	flagMVMSourceFile    string
-	flagMVMImageName     string
-	flagMVMImportTP      string
-	flagMVMFamily        string
-	flagMVMLabels        []string
-	flagMVMAddLicenses   []string
-	flagMVMSingleRegion  bool
-	flagMVMKmsKey        string
-	flagMVMSkipOSAdapt   bool
-	flagMVMGeneralize    bool
-	flagMVMLicenseType   string
-	flagMVMBootConv      string
+	flagMVMLocation     string
+	flagMVMFormat       string
+	flagMVMFilter       string
+	flagMVMAsync        bool
+	flagMVMTargetProj   string
+	flagMVMDescription  string
+	flagMVMUpdateMask   string
+	flagMVMConfigFile   string
+	flagMVMSourceFile   string
+	flagMVMImageName    string
+	flagMVMImportTP     string
+	flagMVMFamily       string
+	flagMVMLabels       []string
+	flagMVMAddLicenses  []string
+	flagMVMSingleRegion bool
+	flagMVMKmsKey       string
+	flagMVMSkipOSAdapt  bool
+	flagMVMGeneralize   bool
+	flagMVMLicenseType  string
+	flagMVMBootConv     string
 )
 
 func mvmService(ctx context.Context) (*vmmigration.Service, error) {

@@ -20,10 +20,10 @@ func TestProjectResourceName(t *testing.T) {
 
 func TestProjectParent(t *testing.T) {
 	cases := []struct {
-		name           string
-		folder, org    string
-		want           string
-		wantErrSubstr  string
+		name          string
+		folder, org   string
+		want          string
+		wantErrSubstr string
 	}{
 		{name: "neither", want: ""},
 		{name: "folder only, bare id", folder: "123", want: "folders/123"},

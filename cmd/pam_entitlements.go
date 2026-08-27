@@ -30,16 +30,16 @@ var pamEntitlementsCmd = &cobra.Command{
 }
 
 var (
-	flagPAMFolder            string
-	flagPAMOrganization      string
-	flagPAMLocation          string
-	flagPAMEntitlementFile   string
-	flagPAMDestination       string
-	flagPAMCallerAccessType  string
-	flagPAMFormat            string
-	flagPAMFilter            string
-	flagPAMOrderBy           string
-	flagPAMPageSize          int64
+	flagPAMFolder           string
+	flagPAMOrganization     string
+	flagPAMLocation         string
+	flagPAMEntitlementFile  string
+	flagPAMDestination      string
+	flagPAMCallerAccessType string
+	flagPAMFormat           string
+	flagPAMFilter           string
+	flagPAMOrderBy          string
+	flagPAMPageSize         int64
 )
 
 var (

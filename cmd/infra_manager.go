@@ -17,20 +17,20 @@ import (
 var infraManagerCmd = &cobra.Command{Use: "infra-manager", Short: "Manage Infrastructure Manager"}
 
 var (
-	flagIMLocation    string
-	flagIMFormat      string
-	flagIMFilter      string
-	flagIMConfigFile  string
-	flagIMUpdateMask  string
-	flagIMRequestID   string
-	flagIMAsync       bool
-	flagIMDeployment  string
-	flagIMRevision    string
-	flagIMPreview     string
-	flagIMLockID      int64
+	flagIMLocation     string
+	flagIMFormat       string
+	flagIMFilter       string
+	flagIMConfigFile   string
+	flagIMUpdateMask   string
+	flagIMRequestID    string
+	flagIMAsync        bool
+	flagIMDeployment   string
+	flagIMRevision     string
+	flagIMPreview      string
+	flagIMLockID       int64
 	flagIMDeletePolicy string
 	flagIMForceDelete  bool
-	flagIMDraftID     string
+	flagIMDraftID      string
 	flagIMExportBucket string
 	flagIMExportPath   string
 )

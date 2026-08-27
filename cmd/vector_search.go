@@ -62,12 +62,12 @@ var (
 		Args: cobra.ExactArgs(1), RunE: runVSCollUpdate,
 	}
 	vsCollImportCmd = &cobra.Command{
-		Use: "import-data-objects COLLECTION",
+		Use:   "import-data-objects COLLECTION",
 		Short: "Bulk-import data objects into a collection",
 		Args:  cobra.ExactArgs(1), RunE: runVSCollImportData,
 	}
 	vsCollExportCmd = &cobra.Command{
-		Use: "export-data-objects COLLECTION",
+		Use:   "export-data-objects COLLECTION",
 		Short: "Bulk-export data objects from a collection",
 		Args:  cobra.ExactArgs(1), RunE: runVSCollExportData,
 	}

@@ -51,34 +51,34 @@ var instancesCreateCmd = &cobra.Command{
 }
 
 var (
-	flagMachineType    string
-	flagNetwork        string
-	flagSubnet         string
-	flagImageFamily    string
-	flagImageProject   string
-	flagBootDiskSize   string
-	flagBootDiskType   string
-	flagTags           []string
-	flagMetadata       map[string]string
-	flagMetadataFromFile map[string]string
-	flagServiceAccountEmail string
-	flagScopes           []string
-	flagNoAddress            bool
-	flagPreemptible          bool
-	flagProvisioningModel    string
-	flagCreateLabels         map[string]string
+	flagMachineType           string
+	flagNetwork               string
+	flagSubnet                string
+	flagImageFamily           string
+	flagImageProject          string
+	flagBootDiskSize          string
+	flagBootDiskType          string
+	flagTags                  []string
+	flagMetadata              map[string]string
+	flagMetadataFromFile      map[string]string
+	flagServiceAccountEmail   string
+	flagScopes                []string
+	flagNoAddress             bool
+	flagPreemptible           bool
+	flagProvisioningModel     string
+	flagCreateLabels          map[string]string
 	flagCreateDeletionProtect bool
-	flagCreateAsync          bool
-	flagCreateDisk           string
-	flagCreateNewDisk        string
-	flagPrivateNetworkIP     string
-	flagCreateAddress        string
-	flagAccelerator          string
-	flagShieldedSecureBoot   bool
-	flagShieldedVTPM         bool
-	flagShieldedIntegrity    bool
-	flagCanIPForward         bool
-	flagMinCPUPlatform       string
+	flagCreateAsync           bool
+	flagCreateDisk            string
+	flagCreateNewDisk         string
+	flagPrivateNetworkIP      string
+	flagCreateAddress         string
+	flagAccelerator           string
+	flagShieldedSecureBoot    bool
+	flagShieldedVTPM          bool
+	flagShieldedIntegrity     bool
+	flagCanIPForward          bool
+	flagMinCPUPlatform        string
 )
 
 // --- instances delete ---

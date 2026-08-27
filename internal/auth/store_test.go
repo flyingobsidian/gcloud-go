@@ -16,13 +16,13 @@ func TestStoreAndLoadJSON(t *testing.T) {
 
 	// Create a fake service account JSON file.
 	cred := map[string]any{
-		"type":            "service_account",
-		"project_id":      "test-project",
-		"private_key_id":  "key123",
-		"private_key":     "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----\n",
-		"client_email":    "test@test-project.iam.gserviceaccount.com",
-		"client_id":       "12345",
-		"token_uri":       "https://oauth2.googleapis.com/token",
+		"type":           "service_account",
+		"project_id":     "test-project",
+		"private_key_id": "key123",
+		"private_key":    "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----\n",
+		"client_email":   "test@test-project.iam.gserviceaccount.com",
+		"client_id":      "12345",
+		"token_uri":      "https://oauth2.googleapis.com/token",
 	}
 	data, err := json.Marshal(cred)
 	if err != nil {
@@ -238,8 +238,8 @@ func TestCredAccountID(t *testing.T) {
 		{"service_account", map[string]any{"client_email": "sa@proj.iam.gserviceaccount.com"}, "sa@proj.iam.gserviceaccount.com"},
 		{"authorized_user with account", map[string]any{"account": "user@gmail.com"}, "user@gmail.com"},
 		{"external_account with impersonation", map[string]any{
-			"type":                                "external_account",
-			"service_account_impersonation_url":   "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/gitlab-ci@my-project.iam.gserviceaccount.com:generateAccessToken",
+			"type":                              "external_account",
+			"service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/gitlab-ci@my-project.iam.gserviceaccount.com:generateAccessToken",
 		}, "gitlab-ci@my-project.iam.gserviceaccount.com"},
 		{"external_account without impersonation", map[string]any{
 			"type":     "external_account",

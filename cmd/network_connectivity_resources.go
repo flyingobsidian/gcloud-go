@@ -244,8 +244,10 @@ func registerNCMulticloudDataTransferConfigs(root *cobra.Command) {
 			}
 			return c.Do()
 		},
-		nameCol:         func(r *networkconnectivity.MulticloudDataTransferConfig) string { return ncBasename(r.Name) },
-		secondaryCol:    func(r *networkconnectivity.MulticloudDataTransferConfig) string { return fmt.Sprintf("%d", r.DestinationsCount) },
+		nameCol: func(r *networkconnectivity.MulticloudDataTransferConfig) string { return ncBasename(r.Name) },
+		secondaryCol: func(r *networkconnectivity.MulticloudDataTransferConfig) string {
+			return fmt.Sprintf("%d", r.DestinationsCount)
+		},
 		secondaryHeader: "DESTINATIONS",
 	}
 	crud.build(root, "multicloud-data-transfer-configs", "Manage multicloud data transfer configs", addNCLocationFlag, true)

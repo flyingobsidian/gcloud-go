@@ -109,7 +109,6 @@ var schedulerJobsDeleteCmd = &cobra.Command{
 	RunE:  runSchedulerJobsDelete,
 }
 
-
 // --- scheduler jobs update (#200) ---
 
 var schedulerJobsUpdateCmd = &cobra.Command{

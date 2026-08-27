@@ -64,17 +64,17 @@ var orgRemoveIamBindingCmd = &cobra.Command{
 }
 
 var (
-	flagOrgListFilter    string
-	flagOrgListPageSize  int64
-	flagOrgListLimit     int64
-	flagOrgListFormat    string
-	flagOrgListURI       bool
-	flagOrgIamMember     string
-	flagOrgIamRole       string
-	flagOrgIamCondExpr   string
-	flagOrgIamCondTitle  string
-	flagOrgIamCondDesc   string
-	flagOrgIamAllCond    bool
+	flagOrgListFilter   string
+	flagOrgListPageSize int64
+	flagOrgListLimit    int64
+	flagOrgListFormat   string
+	flagOrgListURI      bool
+	flagOrgIamMember    string
+	flagOrgIamRole      string
+	flagOrgIamCondExpr  string
+	flagOrgIamCondTitle string
+	flagOrgIamCondDesc  string
+	flagOrgIamAllCond   bool
 )
 
 func init() {

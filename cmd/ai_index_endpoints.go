@@ -46,9 +46,9 @@ var (
 		Args: cobra.NoArgs, RunE: runAIIEList,
 	}
 	aiIEMutateDeployedIndexCmd = &cobra.Command{
-		Use: "mutate-deployed-index INDEX_ENDPOINT",
+		Use:   "mutate-deployed-index INDEX_ENDPOINT",
 		Short: "Update a deployed index on an index endpoint",
-		Args: cobra.ExactArgs(1), RunE: runAIIEMutateDeployedIndex,
+		Args:  cobra.ExactArgs(1), RunE: runAIIEMutateDeployedIndex,
 	}
 	aiIEUndeployIndexCmd = &cobra.Command{
 		Use: "undeploy-index INDEX_ENDPOINT", Short: "Undeploy an index from an index endpoint",

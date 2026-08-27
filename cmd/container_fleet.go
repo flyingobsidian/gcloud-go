@@ -23,11 +23,11 @@ var containerFleetFeaturesCmd = &cobra.Command{Use: "features", Short: "Manage f
 var containerFleetMembershipsCmd = &cobra.Command{Use: "memberships", Short: "Manage fleet memberships"}
 
 var (
-	flagCfLocation    string
-	flagCfFormat      string
-	flagCfConfigFile  string
-	flagCfUpdateMask  string
-	flagCfPageSize    int64
+	flagCfLocation   string
+	flagCfFormat     string
+	flagCfConfigFile string
+	flagCfUpdateMask string
+	flagCfPageSize   int64
 )
 
 var (

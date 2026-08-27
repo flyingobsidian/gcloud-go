@@ -75,9 +75,9 @@ func TestTransferEndpointParsing(t *testing.T) {
 
 func TestTransferIamMemberFor(t *testing.T) {
 	cases := []struct {
-		email  string
-		isSA   bool
-		want   string
+		email string
+		isSA  bool
+		want  string
 	}{
 		{"alice@example.com", false, "user:alice@example.com"},
 		{"sa@my-project.iam.gserviceaccount.com", false, "serviceAccount:sa@my-project.iam.gserviceaccount.com"},

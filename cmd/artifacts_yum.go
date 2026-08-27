@@ -206,4 +206,3 @@ func waitForArtifactRegistryOperation(ctx context.Context, svc *artifactregistry
 	}
 	return op, nil
 }
-

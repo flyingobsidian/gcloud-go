@@ -53,11 +53,11 @@ func TestUptimeName(t *testing.T) {
 
 func TestMonitoredResourceType(t *testing.T) {
 	for in, want := range map[string]string{
-		"":                        "uptime_url",
-		"uptime-url":              "uptime_url",
-		"gce-instance":            "gce_instance",
-		"aws-ec2-instance":        "aws_ec2_instance",
-		"cloud-run-revision":      "cloud_run_revision",
+		"":                         "uptime_url",
+		"uptime-url":               "uptime_url",
+		"gce-instance":             "gce_instance",
+		"aws-ec2-instance":         "aws_ec2_instance",
+		"cloud-run-revision":       "cloud_run_revision",
 		"servicedirectory-service": "servicedirectory_service",
 	} {
 		if got := monitoredResourceType(in); got != want {

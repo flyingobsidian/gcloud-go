@@ -143,18 +143,18 @@ func init() {
 
 	// gcloud-python dataplex subgroups not yet implemented (#541).
 	for name, short := range map[string]string{
-		"aspect-types":     "Manage aspect types",
-		"assets":           "Manage Dataplex assets",
-		"context":          "Manage Dataplex context resources",
+		"aspect-types":      "Manage aspect types",
+		"assets":            "Manage Dataplex assets",
+		"context":           "Manage Dataplex context resources",
 		"encryption-config": "Manage Dataplex encryption config",
-		"entries":          "Manage Dataplex entries",
-		"entry-groups":     "Manage entry groups",
-		"entry-types":      "Manage entry types",
-		"glossaries":       "Manage Dataplex glossaries",
-		"lakes":            "Manage Dataplex lakes",
-		"metadata-jobs":    "Manage metadata jobs",
-		"tasks":            "Manage Dataplex tasks",
-		"zones":            "Manage Dataplex zones",
+		"entries":           "Manage Dataplex entries",
+		"entry-groups":      "Manage entry groups",
+		"entry-types":       "Manage entry types",
+		"glossaries":        "Manage Dataplex glossaries",
+		"lakes":             "Manage Dataplex lakes",
+		"metadata-jobs":     "Manage metadata jobs",
+		"tasks":             "Manage Dataplex tasks",
+		"zones":             "Manage Dataplex zones",
 	} {
 		registerStubGroup(dataplexCmd, name, short, "list", "describe")
 	}

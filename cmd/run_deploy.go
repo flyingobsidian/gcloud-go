@@ -16,27 +16,27 @@ import (
 // Python `gcloud run deploy` for the managed platform.
 
 var (
-	flagRunDeployRegion       string
-	flagRunDeployImage        string
-	flagRunDeployFormat       string
-	flagRunDeployAllowUnauth  bool
+	flagRunDeployRegion        string
+	flagRunDeployImage         string
+	flagRunDeployFormat        string
+	flagRunDeployAllowUnauth   bool
 	flagRunDeployNoAllowUnauth bool
-	flagRunDeployServiceAcct  string
-	flagRunDeployMemory       string
-	flagRunDeployCPU          string
-	flagRunDeployMaxInstances int64
-	flagRunDeployMinInstances int64
-	flagRunDeployConcurrency  int64
-	flagRunDeployTimeout      string
-	flagRunDeployPort         int64
-	flagRunDeployEnvVars      map[string]string
-	flagRunDeploySetEnvVars   map[string]string
-	flagRunDeployCommand      []string
-	flagRunDeployArgs         []string
-	flagRunDeployVpcConnector string
-	flagRunDeployIngress      string
-	flagRunDeployLabels       map[string]string
-	flagRunDeployPlatform     string
+	flagRunDeployServiceAcct   string
+	flagRunDeployMemory        string
+	flagRunDeployCPU           string
+	flagRunDeployMaxInstances  int64
+	flagRunDeployMinInstances  int64
+	flagRunDeployConcurrency   int64
+	flagRunDeployTimeout       string
+	flagRunDeployPort          int64
+	flagRunDeployEnvVars       map[string]string
+	flagRunDeploySetEnvVars    map[string]string
+	flagRunDeployCommand       []string
+	flagRunDeployArgs          []string
+	flagRunDeployVpcConnector  string
+	flagRunDeployIngress       string
+	flagRunDeployLabels        map[string]string
+	flagRunDeployPlatform      string
 )
 
 var runDeployCmd = &cobra.Command{

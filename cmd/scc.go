@@ -1030,9 +1030,9 @@ func runSccBQExportList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		var (
-			page  []*securitycenter.GoogleCloudSecuritycenterV1BigQueryExport
-			next  string
-			cerr  error
+			page []*securitycenter.GoogleCloudSecuritycenterV1BigQueryExport
+			next string
+			cerr error
 		)
 		switch scope {
 		case "organizations":

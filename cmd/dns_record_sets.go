@@ -529,4 +529,3 @@ func runDNSRRTxnAbort(cmd *cobra.Command, args []string) error {
 	fmt.Println("Aborted transaction.")
 	return nil
 }
-

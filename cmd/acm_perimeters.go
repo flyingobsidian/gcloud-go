@@ -269,10 +269,10 @@ func runACMPMDryDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing service perimeter: %w", err)
 	}
 	view := struct {
-		Name                  string                                    `json:"name"`
+		Name                  string                                       `json:"name"`
 		Status                *accesscontextmanager.ServicePerimeterConfig `json:"status,omitempty"`
 		Spec                  *accesscontextmanager.ServicePerimeterConfig `json:"spec,omitempty"`
-		UseExplicitDryRunSpec bool                                      `json:"useExplicitDryRunSpec"`
+		UseExplicitDryRunSpec bool                                         `json:"useExplicitDryRunSpec"`
 	}{
 		Name:                  got.Name,
 		Status:                got.Status,

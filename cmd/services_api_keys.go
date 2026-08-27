@@ -72,20 +72,20 @@ var apiKeyUndeleteCmd = &cobra.Command{
 }
 
 var (
-	flagAPIKeyDisplayName     string
-	flagAPIKeyAnnotations     map[string]string
-	flagAPIKeyAllowedIPs      []string
-	flagAPIKeyAllowedReferrers []string
-	flagAPIKeyAllowedBundleIDs []string
+	flagAPIKeyDisplayName            string
+	flagAPIKeyAnnotations            map[string]string
+	flagAPIKeyAllowedIPs             []string
+	flagAPIKeyAllowedReferrers       []string
+	flagAPIKeyAllowedBundleIDs       []string
 	flagAPIKeyAllowedAndroidPackages []string
-	flagAPIKeyAllowedAndroidSHAs []string
-	flagAPIKeyAPITargets      []string
-	flagAPIKeyClearRestrictions bool
-	flagAPIKeyServiceAccount  string
-	flagAPIKeyListShowDeleted bool
-	flagAPIKeyListFormat      string
-	flagAPIKeyListPageSize    int64
-	flagAPIKeyListLimit       int64
+	flagAPIKeyAllowedAndroidSHAs     []string
+	flagAPIKeyAPITargets             []string
+	flagAPIKeyClearRestrictions      bool
+	flagAPIKeyServiceAccount         string
+	flagAPIKeyListShowDeleted        bool
+	flagAPIKeyListFormat             string
+	flagAPIKeyListPageSize           int64
+	flagAPIKeyListLimit              int64
 )
 
 func init() {

@@ -273,15 +273,15 @@ var (
 )
 
 var (
-	flagRedisClusterRegion         string
-	flagRedisClusterConfigFile     string
-	flagRedisClusterUpdateMask     string
-	flagRedisClusterFormat         string
-	flagRedisClusterAsync          bool
-	flagRedisClusterBackupID       string
-	flagRedisClusterBackupTTL      string
-	flagRedisClusterMaintTime      string
-	flagRedisClusterMaintType      string
+	flagRedisClusterRegion        string
+	flagRedisClusterConfigFile    string
+	flagRedisClusterUpdateMask    string
+	flagRedisClusterFormat        string
+	flagRedisClusterAsync         bool
+	flagRedisClusterBackupID      string
+	flagRedisClusterBackupTTL     string
+	flagRedisClusterMaintTime     string
+	flagRedisClusterMaintType     string
 	flagRedisClusterTokenAuthUser string
 )
 
@@ -578,10 +578,10 @@ var (
 )
 
 var (
-	flagRedisBCRegion    string
+	flagRedisBCRegion     string
 	flagRedisBCCollection string
-	flagRedisBCFormat    string
-	flagRedisBackupsGcs  string
+	flagRedisBCFormat     string
+	flagRedisBackupsGcs   string
 	flagRedisBackupsAsync bool
 )
 

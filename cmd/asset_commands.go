@@ -89,11 +89,11 @@ var (
 	flagAssetQueryPageToken string
 
 	// export
-	flagAssetExportGCS         string
-	flagAssetExportGCSPrefix   string
-	flagAssetExportBQDataset   string
-	flagAssetExportBQTable     string
-	flagAssetExportBQForce     bool
+	flagAssetExportGCS       string
+	flagAssetExportGCSPrefix string
+	flagAssetExportBQDataset string
+	flagAssetExportBQTable   string
+	flagAssetExportBQForce   bool
 
 	// get-effective-iam-policy
 	flagAssetEffectiveNames []string
@@ -491,4 +491,3 @@ func runAssetSearchAllIamPolicies(cmd *cobra.Command, args []string) error {
 	}
 	return nil
 }
-

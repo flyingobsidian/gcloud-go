@@ -176,8 +176,8 @@ func registerNSClientTlsPolicies(root *cobra.Command) {
 		patchFn: func(ctx context.Context, svc *networksecurity.Service, name string, body *networksecurity.ClientTlsPolicy, mask, requestID string) (*networksecurity.Operation, error) {
 			return svc.Projects.Locations.ClientTlsPolicies.Patch(name, body).UpdateMask(mask).Context(ctx).Do()
 		},
-		nameCol: func(p *networksecurity.ClientTlsPolicy) string { return nsBasename(p.Name) },
-		secondaryCol: func(p *networksecurity.ClientTlsPolicy) string { return p.Sni },
+		nameCol:         func(p *networksecurity.ClientTlsPolicy) string { return nsBasename(p.Name) },
+		secondaryCol:    func(p *networksecurity.ClientTlsPolicy) string { return p.Sni },
 		secondaryHeader: "SNI",
 	}
 	crud.build(root, "client-tls-policies", "Manage client TLS policies", addNSLocationFlag)

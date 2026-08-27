@@ -23,32 +23,32 @@ var appCmd = &cobra.Command{Use: "app", Short: "Manage App Engine"}
 
 // Shared flags for the app subcommands.
 var (
-	flagAppFormat               string
-	flagAppFilter               string
-	flagAppLimit                int64
-	flagAppService              string
-	flagAppVersion              string
-	flagAppLevel                string
-	flagAppLogs                 string
-	flagAppPending              bool
-	flagAppHideNoTraffic        bool
-	flagAppEnvironment          string
-	flagAppCertificateID        string
-	flagAppNoCertificateID      bool
-	flagAppCertificateMgmt      string
-	flagAppSourceRange          string
-	flagAppAction               string
-	flagAppDescription          string
-	flagAppDomainDisplayName    string
-	flagAppDisplayName          string
-	flagAppCertificateFile      string
-	flagAppPrivateKeyFile       string
-	flagAppSplits               map[string]string
-	flagAppSplitBy              string
-	flagAppMigrate              bool
-	flagAppLaunchBrowser        bool
-	flagAppAsync                bool
-	flagAppMatchingAddress      string
+	flagAppFormat            string
+	flagAppFilter            string
+	flagAppLimit             int64
+	flagAppService           string
+	flagAppVersion           string
+	flagAppLevel             string
+	flagAppLogs              string
+	flagAppPending           bool
+	flagAppHideNoTraffic     bool
+	flagAppEnvironment       string
+	flagAppCertificateID     string
+	flagAppNoCertificateID   bool
+	flagAppCertificateMgmt   string
+	flagAppSourceRange       string
+	flagAppAction            string
+	flagAppDescription       string
+	flagAppDomainDisplayName string
+	flagAppDisplayName       string
+	flagAppCertificateFile   string
+	flagAppPrivateKeyFile    string
+	flagAppSplits            map[string]string
+	flagAppSplitBy           string
+	flagAppMigrate           bool
+	flagAppLaunchBrowser     bool
+	flagAppAsync             bool
+	flagAppMatchingAddress   string
 )
 
 // appResolveApp returns the App Engine application id (the project) and validates a project

@@ -20,17 +20,17 @@ var (
 )
 
 var (
-	firebaseTestIosModelsCmd = &cobra.Command{Use: "models", Short: "Manage supported iOS device models"}
+	firebaseTestIosModelsCmd     = &cobra.Command{Use: "models", Short: "Manage supported iOS device models"}
 	firebaseTestIosModelsListCmd = &cobra.Command{
 		Use: "list", Short: "List supported iOS device models",
 		Args: cobra.NoArgs, RunE: runFtiModelsList,
 	}
-	firebaseTestIosVersionsCmd = &cobra.Command{Use: "versions", Short: "Manage supported iOS versions"}
+	firebaseTestIosVersionsCmd     = &cobra.Command{Use: "versions", Short: "Manage supported iOS versions"}
 	firebaseTestIosVersionsListCmd = &cobra.Command{
 		Use: "list", Short: "List supported iOS versions",
 		Args: cobra.NoArgs, RunE: runFtiVersionsList,
 	}
-	firebaseTestIosLocalesCmd = &cobra.Command{Use: "locales", Short: "Manage supported iOS locales"}
+	firebaseTestIosLocalesCmd     = &cobra.Command{Use: "locales", Short: "Manage supported iOS locales"}
 	firebaseTestIosLocalesListCmd = &cobra.Command{
 		Use: "list", Short: "List supported iOS locales",
 		Args: cobra.NoArgs, RunE: runFtiLocalesList,

@@ -81,16 +81,16 @@ var (
 	// query-metadata
 	flagMSQuery string
 	// export
-	flagMSDestGCS string
+	flagMSDestGCS  string
 	flagMSExportDB string
-	flagMSDBType  string
+	flagMSDBType   string
 	// import
-	flagMSImportGCS string
-	flagMSImportDesc string
+	flagMSImportGCS    string
+	flagMSImportDesc   string
 	flagMSImportDBType string
 	// restore
-	flagMSBackupName    string
-	flagMSRestoreType   string
+	flagMSBackupName  string
+	flagMSRestoreType string
 	flagMSRestoreServ string
 )
 
