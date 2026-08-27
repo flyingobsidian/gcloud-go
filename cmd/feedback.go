@@ -36,4 +36,3 @@ func runFeedback(cmd *cobra.Command, args []string) error {
 	openBrowser(feedbackURL)
 	return nil
 }
-

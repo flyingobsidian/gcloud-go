@@ -104,35 +104,35 @@ var wipProvDeleteCmd = &cobra.Command{
 }
 
 var (
-	flagWIPProvPool          string
-	flagWIPProvType          string
-	flagWIPProvAttrMapping   map[string]string
-	flagWIPProvIssuerURI     string
-	flagWIPProvDisplayName   string
-	flagWIPProvListURI       bool
+	flagWIPProvPool        string
+	flagWIPProvType        string
+	flagWIPProvAttrMapping map[string]string
+	flagWIPProvIssuerURI   string
+	flagWIPProvDisplayName string
+	flagWIPProvListURI     bool
 )
 
 var (
-	flagOutputFile                    string
-	flagServiceAccount                string
-	flagCredentialSourceFile           string
-	flagCredentialSourceURL            string
-	flagCredentialSourceHeaders        map[string]string
-	flagCredentialSourceType           string
-	flagCredentialSourceFieldName      string
-	flagSubjectTokenType              string
-	flagExecutableCommand             string
-	flagExecutableTimeoutMillis       int
-	flagExecutableOutputFile          string
-	flagServiceAccountTokenLifetime   int
-	flagAws                           bool
-	flagAzure                         bool
-	flagAppIDURI                      string
-	flagCredCertPath                  string
-	flagCredCertKeyPath               string
-	flagCredCertTrustChainPath        string
-	flagCredCertConfigOutput          string
-	flagEnableIMDSv2                  bool
+	flagOutputFile                  string
+	flagServiceAccount              string
+	flagCredentialSourceFile        string
+	flagCredentialSourceURL         string
+	flagCredentialSourceHeaders     map[string]string
+	flagCredentialSourceType        string
+	flagCredentialSourceFieldName   string
+	flagSubjectTokenType            string
+	flagExecutableCommand           string
+	flagExecutableTimeoutMillis     int
+	flagExecutableOutputFile        string
+	flagServiceAccountTokenLifetime int
+	flagAws                         bool
+	flagAzure                       bool
+	flagAppIDURI                    string
+	flagCredCertPath                string
+	flagCredCertKeyPath             string
+	flagCredCertTrustChainPath      string
+	flagCredCertConfigOutput        string
+	flagEnableIMDSv2                bool
 )
 
 func init() {
@@ -347,7 +347,7 @@ func buildCredentialSource() (map[string]any, error) {
 				"Metadata": "True",
 			},
 			"format": map[string]any{
-				"type":                    "json",
+				"type":                     "json",
 				"subject_token_field_name": "access_token",
 			},
 		}
@@ -359,7 +359,7 @@ func buildCredentialSource() (map[string]any, error) {
 	case flagCredCertPath != "":
 		src := map[string]any{
 			"certificate": map[string]any{
-				"certificate":    flagCredCertPath,
+				"certificate": flagCredCertPath,
 			},
 		}
 		cert := src["certificate"].(map[string]any)

@@ -29,10 +29,10 @@ var (
 )
 
 var (
-	flagComposerStEnvironment  string
-	flagComposerStSource       string
-	flagComposerStDestination  string
-	flagComposerStSubdir       string
+	flagComposerStEnvironment string
+	flagComposerStSource      string
+	flagComposerStDestination string
+	flagComposerStSubdir      string
 )
 
 type composerStorageOp struct {

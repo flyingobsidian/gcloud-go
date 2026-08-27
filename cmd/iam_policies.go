@@ -40,11 +40,11 @@ var (
 )
 
 var (
-	flagIAMPolAttach   string
-	flagIAMPolKind     string
-	flagIAMPolFile     string
-	flagIAMPolFmt      string
-	flagIAMPolAsync    bool
+	flagIAMPolAttach string
+	flagIAMPolKind   string
+	flagIAMPolFile   string
+	flagIAMPolFmt    string
+	flagIAMPolAsync  bool
 )
 
 func init() {

@@ -18,7 +18,7 @@ var (
 )
 
 var iamListGrantableRolesCmd = &cobra.Command{
-	Use: "list-grantable-roles RESOURCE",
+	Use:   "list-grantable-roles RESOURCE",
 	Short: "List IAM roles grantable on a resource",
 	Long:  "Lists IAM roles grantable on the given full resource name (e.g. //cloudresourcemanager.googleapis.com/projects/PROJECT).",
 	Args:  cobra.ExactArgs(1),
@@ -26,7 +26,7 @@ var iamListGrantableRolesCmd = &cobra.Command{
 }
 
 var iamListTestablePermissionsCmd = &cobra.Command{
-	Use: "list-testable-permissions RESOURCE",
+	Use:   "list-testable-permissions RESOURCE",
 	Short: "List permissions testable on a resource",
 	Long:  "Lists permissions testable on the given full resource name (e.g. //cloudresourcemanager.googleapis.com/projects/PROJECT).",
 	Args:  cobra.ExactArgs(1),

@@ -52,12 +52,12 @@ var (
 		Args: cobra.NoArgs, RunE: runDeployTgtList,
 	}
 	deployTgtRedeployCmd = &cobra.Command{
-		Use: "redeploy TARGET",
+		Use:   "redeploy TARGET",
 		Short: "Redeploy the most recent release for a target by creating a new rollout",
 		Args:  cobra.ExactArgs(1), RunE: runDeployTgtRedeploy,
 	}
 	deployTgtRollbackCmd = &cobra.Command{
-		Use: "rollback TARGET",
+		Use:   "rollback TARGET",
 		Short: "Roll a target back to a previous release",
 		Args:  cobra.ExactArgs(1), RunE: runDeployTgtRollback,
 	}
@@ -232,7 +232,7 @@ func runDeployTgtRollback(cmd *cobra.Command, args []string) error {
 	if flagDeployTgtDescription != "" || flagDeployTgtStartPhase != "" {
 		req.RollbackConfig = &clouddeploy.RollbackTargetConfig{
 			Rollout: &clouddeploy.Rollout{
-				Description:     flagDeployTgtDescription,
+				Description: flagDeployTgtDescription,
 			},
 			StartingPhaseId: flagDeployTgtStartPhase,
 		}

@@ -44,10 +44,10 @@ func TestParseFormat(t *testing.T) {
 		{in: "text(a.b,c)", wantName: "text", wantFields: []string{"a.b", "c"}},
 		{in: "config(a)", wantName: "config", wantFields: []string{"a"}},
 		{in: "get(a)", wantName: "get", wantFields: []string{"a"}},
-		{in: "csv", wantErr: true},          // columnar formats require fields
-		{in: "table(", wantErr: true},       // missing close paren
-		{in: "table()", wantErr: true},      // empty field list
-		{in: "bogus", wantErr: true},                             // bare unknown format
+		{in: "csv", wantErr: true},                                     // columnar formats require fields
+		{in: "table(", wantErr: true},                                  // missing close paren
+		{in: "table()", wantErr: true},                                 // empty field list
+		{in: "bogus", wantErr: true},                                   // bare unknown format
 		{in: "bogus(a)", wantName: "bogus", wantFields: []string{"a"}}, // parens variant is caught downstream by emitFormattedTo
 	}
 	for _, c := range cases {

@@ -79,9 +79,9 @@ var (
 		Args: cobra.ExactArgs(2), RunE: runDPClusterSetIam,
 	}
 	dpClusterGKECreateCmd = &cobra.Command{
-		Use: "create CLUSTER",
+		Use:   "create CLUSTER",
 		Short: "Create a GKE-based Dataproc cluster (--config-file must set virtualClusterConfig)",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterCreate,
+		Args:  cobra.ExactArgs(1), RunE: runDPClusterCreate,
 	}
 )
 

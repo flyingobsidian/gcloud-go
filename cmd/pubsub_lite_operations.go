@@ -26,8 +26,8 @@ var (
 )
 
 var (
-	flagPSLOpDone         bool
-	flagPSLOpDoneSet      bool
+	flagPSLOpDone    bool
+	flagPSLOpDoneSet bool
 )
 
 var (

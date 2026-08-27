@@ -45,9 +45,9 @@ var (
 	// findings flags
 	flagSccFindingSource         string
 	flagSccFindingMuteState      string
-	flagSccFindingState          string
-	flagSccFindingStartTime      string
 	flagSccFindingBulkMuteFilter string
+	flagSccFindingBulkMuteState  string
+	flagSccFindingDataset        string
 	flagSccFindingGroupBy        string
 	flagSccFindingCompareDur     string
 	flagSccFindingReadTime       string
@@ -282,6 +282,12 @@ var (
 
 // --- findings ---
 
+// sccLocationFlagHelp documents --location on every findings command that
+// routes between the two API versions.
+const sccLocationFlagHelp = "Location of the resource. Passing --location routes to the SCC V2 API via REST, " +
+	"including --location=global; omitting it uses the SCC V1 API (deprecated server-side). " +
+	"Organizations without data residency controls must use \"global\"."
+
 var sccFindingsCmd = &cobra.Command{Use: "findings", Short: "Manage findings"}
 
 var (
@@ -292,6 +298,10 @@ var (
 	sccFindingsCreateCmd = &cobra.Command{
 		Use: "create FINDING_ID", Short: "Create a finding from a --config-file",
 		Args: cobra.ExactArgs(1), RunE: runSccFindingsCreate,
+	}
+	sccFindingsExportBQCmd = &cobra.Command{
+		Use: "export-to-bigquery [PARENT]", Short: "Export findings to a BigQuery dataset",
+		Args: cobra.MaximumNArgs(1), RunE: runSccFindingsExportBQ,
 	}
 	sccFindingsGroupCmd = &cobra.Command{
 		Use: "group [PARENT]", Short: "Group findings by fields",
@@ -309,16 +319,12 @@ var (
 		Use: "set-mute FINDING", Short: "Set the mute state of a finding",
 		Args: cobra.ExactArgs(1), RunE: runSccFindingsSetMute,
 	}
-	sccFindingsSetStateCmd = &cobra.Command{
-		Use: "set-state FINDING", Short: "Set the state of a finding",
-		Args: cobra.ExactArgs(1), RunE: runSccFindingsSetState,
-	}
 	sccFindingsUpdateCmd = &cobra.Command{
 		Use: "update FINDING", Short: "Update a finding from a --config-file",
 		Args: cobra.ExactArgs(1), RunE: runSccFindingsUpdate,
 	}
 	sccFindingsUpdateMarksCmd = &cobra.Command{
-		Use: "update-security-marks FINDING", Short: "Update security marks on a finding",
+		Use: "update-marks FINDING", Short: "Update security marks on a finding",
 		Args: cobra.ExactArgs(1), RunE: runSccFindingsUpdateMarks,
 	}
 )
@@ -501,15 +507,15 @@ func init() {
 	sccCmd.AddCommand(sccCustomModulesCmd)
 
 	// --- findings flags ---
-	findAll := []*cobra.Command{sccFindingsBulkMuteCmd, sccFindingsCreateCmd, sccFindingsGroupCmd,
-		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd, sccFindingsSetStateCmd,
+	findAll := []*cobra.Command{sccFindingsBulkMuteCmd, sccFindingsCreateCmd, sccFindingsExportBQCmd,
+		sccFindingsGroupCmd, sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
 		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd}
 	sccAddScopeFlags(findAll...)
-	sccAddFormatFlag(sccFindingsCreateCmd, sccFindingsGroupCmd, sccFindingsListCmd,
-		sccFindingsListMarksCmd, sccFindingsSetMuteCmd, sccFindingsSetStateCmd,
+	sccAddFormatFlag(sccFindingsCreateCmd, sccFindingsExportBQCmd, sccFindingsGroupCmd,
+		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
 		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd)
-	for _, c := range []*cobra.Command{sccFindingsCreateCmd, sccFindingsGroupCmd,
-		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd, sccFindingsSetStateCmd,
+	for _, c := range []*cobra.Command{sccFindingsCreateCmd, sccFindingsExportBQCmd,
+		sccFindingsGroupCmd, sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
 		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd} {
 		c.Flags().StringVar(&flagSccFindingSource, "source", "-",
 			"Source id (or fully-qualified sources/{id}). Defaults to \"-\" (all sources)")
@@ -517,17 +523,27 @@ func init() {
 	sccFindingsBulkMuteCmd.Flags().StringVar(&flagSccFindingBulkMuteFilter, "filter", "",
 		"Filter expression identifying findings to mute (required)")
 	_ = sccFindingsBulkMuteCmd.MarkFlagRequired("filter")
+	sccFindingsBulkMuteCmd.Flags().StringVar(&flagSccFindingBulkMuteState, "mute-state", "muted",
+		"Desired mute state of the findings (muted|undefined)")
+	sccFindingsBulkMuteCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
+		sccLocationFlagHelp)
 	sccFindingsCreateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the Finding body (required)")
 	_ = sccFindingsCreateCmd.MarkFlagRequired("config-file")
+	sccFindingsExportBQCmd.Flags().StringVar(&flagSccFindingDataset, "dataset", "",
+		"BigQuery dataset to export findings to, as projects/{project}/datasets/{dataset} (required)")
+	_ = sccFindingsExportBQCmd.MarkFlagRequired("dataset")
+	sccFindingsExportBQCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
+		sccLocationFlagHelp)
 	sccFindingsListCmd.Flags().StringVar(&flagSccFilter, "filter", "", "Server-side list filter")
 	sccFindingsListCmd.Flags().StringVar(&flagSccOrderBy, "order-by", "", "Server-side ordering expression")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingFieldMask, "field-mask", "", "Response field mask")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingCompareDur, "compare-duration", "", "Compare-duration for state-change results")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
-	sccFindingsListCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0, "Page size for list requests")
+	sccFindingsListCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0,
+		"Results per page. Unset lets the server choose: SCC findings.list defaults to 10, maximum 1000.")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
-		"Location of the resource. Default \"global\" routes to the SCC V1 API (deprecated server-side); any other value routes to the SCC V2 API via REST.")
+		sccLocationFlagHelp)
 	sccFindingsGroupCmd.Flags().StringVar(&flagSccFindingGroupBy, "group-by", "",
 		"Comma-separated list of fields to group by (required)")
 	_ = sccFindingsGroupCmd.MarkFlagRequired("group-by")
@@ -538,11 +554,6 @@ func init() {
 	sccFindingsSetMuteCmd.Flags().StringVar(&flagSccFindingMuteState, "mute", "",
 		"Mute state (MUTE_UNSPECIFIED|MUTED|UNMUTED|UNDEFINED) (required)")
 	_ = sccFindingsSetMuteCmd.MarkFlagRequired("mute")
-	sccFindingsSetStateCmd.Flags().StringVar(&flagSccFindingState, "state", "",
-		"Finding state (STATE_UNSPECIFIED|ACTIVE|INACTIVE) (required)")
-	_ = sccFindingsSetStateCmd.MarkFlagRequired("state")
-	sccFindingsSetStateCmd.Flags().StringVar(&flagSccFindingStartTime, "start-time", "",
-		"Time at which the updated state takes effect (RFC3339)")
 	sccFindingsUpdateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the Finding body (required)")
 	_ = sccFindingsUpdateCmd.MarkFlagRequired("config-file")
@@ -633,7 +644,7 @@ func init() {
 
 // sccClient returns an initialised securitycenter service.
 func sccClient(ctx context.Context) (*securitycenter.Service, error) {
-	return gcp.SecurityCenterService(ctx, flagAccount)
+	return gcp.SecurityCenterService(ctx, flagAccount, httpDebugWriter())
 }
 
 // splitScope returns ("organizations"|"folders"|"projects", "{id}") from a
@@ -1030,9 +1041,9 @@ func runSccBQExportList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		var (
-			page  []*securitycenter.GoogleCloudSecuritycenterV1BigQueryExport
-			next  string
-			cerr  error
+			page []*securitycenter.GoogleCloudSecuritycenterV1BigQueryExport
+			next string
+			cerr error
 		)
 		switch scope {
 		case "organizations":
@@ -1737,7 +1748,18 @@ func runSccFindingsBulkMute(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	req := &securitycenter.BulkMuteFindingsRequest{Filter: flagSccFindingBulkMuteFilter}
+	// Same V1/V2 routing as findings list: an explicit --location selects V2.
+	if sccLocationSpecified(cmd) {
+		return sccV2BulkMuteFindings(parent)
+	}
+	muteState, err := sccMuteStateEnum(flagSccFindingBulkMuteState)
+	if err != nil {
+		return err
+	}
+	req := &securitycenter.BulkMuteFindingsRequest{
+		Filter:    flagSccFindingBulkMuteFilter,
+		MuteState: muteState,
+	}
 	ctx := context.Background()
 	svc, err := sccClient(ctx)
 	if err != nil {
@@ -1785,6 +1807,21 @@ func runSccFindingsCreate(cmd *cobra.Command, args []string) error {
 	return emitFormatted(got, flagSccFormat)
 }
 
+// runSccFindingsExportBQ exports findings to BigQuery. gcloud-python pins this
+// command to the V2 API regardless of --location (surface/scc/findings/
+// export_to_bigquery.py sets version = "v2"), so there is no V1 branch here.
+func runSccFindingsExportBQ(cmd *cobra.Command, args []string) error {
+	pos := ""
+	if len(args) == 1 {
+		pos = args[0]
+	}
+	parent, err := sccResolveParentFromArg(pos)
+	if err != nil {
+		return err
+	}
+	return sccV2ExportFindings(parent)
+}
+
 func runSccFindingsGroup(cmd *cobra.Command, args []string) error {
 	pos := ""
 	if len(args) == 1 {
@@ -1823,6 +1860,17 @@ func runSccFindingsGroup(cmd *cobra.Command, args []string) error {
 	return emitFormatted(resp, flagSccFormat)
 }
 
+// sccLocationSpecified reports whether the caller passed --location, which is
+// what selects the SCC V2 API. cobra always supplies the command; a nil one
+// means no command line was parsed, so no location was given.
+func sccLocationSpecified(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	f := cmd.Flags().Lookup("location")
+	return f != nil && f.Changed
+}
+
 func runSccFindingsList(cmd *cobra.Command, args []string) error {
 	pos := ""
 	if len(args) == 1 {
@@ -1832,13 +1880,19 @@ func runSccFindingsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// --location routes to the SCC V2 API. gcloud-python does the same:
-	// default location "global" -> V1; any other value -> V2. The V1
-	// findings API is deprecated (returns INVALID_ARGUMENT server-side)
-	// so most users need V2. Since google.golang.org/api@v0.289.0 doesn't
-	// ship a generated securitycenter/v2 client, V2 is implemented via
+	// --location routes to the SCC V2 API. gcloud-python routes on whether
+	// --location was *specified*, not on the value it was given: any explicit
+	// location selects V2, "global" included (IsLocationSpecified /
+	// GetVersionFromArguments in command_lib/scc/util.py). Routing on the
+	// value instead made --location=global unreachable on V2, which is the
+	// only location an organization without data residency controls may use:
+	// regional endpoints there fail with DRZ_LOCATION_MISMATCH.
+	//
+	// The V1 findings API is deprecated (returns INVALID_ARGUMENT
+	// server-side), so most users need V2. Since google.golang.org/api@v0.289.0
+	// doesn't ship a generated securitycenter/v2 client, V2 is implemented via
 	// direct REST calls (see sccV2ListFindings).
-	if flagSccFindingLocation != "" && flagSccFindingLocation != "global" {
+	if sccLocationSpecified(cmd) {
 		return sccV2ListFindings(parent)
 	}
 	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
@@ -2031,38 +2085,6 @@ func runSccFindingsSetMute(cmd *cobra.Command, args []string) error {
 	}
 	if err != nil {
 		return fmt.Errorf("setting mute: %w", err)
-	}
-	return emitFormatted(got, flagSccFormat)
-}
-
-func runSccFindingsSetState(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
-	if err != nil {
-		return err
-	}
-	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
-	name := sccQualifyChild(sourceParent, "findings", args[0])
-	req := &securitycenter.SetFindingStateRequest{
-		State:     flagSccFindingState,
-		StartTime: flagSccFindingStartTime,
-	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
-	if err != nil {
-		return err
-	}
-	scope, _ := splitScope(parent)
-	var got *securitycenter.Finding
-	switch scope {
-	case "organizations":
-		got, err = svc.Organizations.Sources.Findings.SetState(name, req).Context(ctx).Do()
-	case "folders":
-		got, err = svc.Folders.Sources.Findings.SetState(name, req).Context(ctx).Do()
-	case "projects":
-		got, err = svc.Projects.Sources.Findings.SetState(name, req).Context(ctx).Do()
-	}
-	if err != nil {
-		return fmt.Errorf("setting finding state: %w", err)
 	}
 	return emitFormatted(got, flagSccFormat)
 }

@@ -24,8 +24,8 @@ var initCmd = &cobra.Command{
 }
 
 var (
-	flagInitNoBrowser      bool
-	flagInitConsoleOnly    bool
+	flagInitNoBrowser       bool
+	flagInitConsoleOnly     bool
 	flagInitSkipDiagnostics bool
 )
 

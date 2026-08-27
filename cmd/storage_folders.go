@@ -16,11 +16,11 @@ import (
 var storageFoldersCmd = &cobra.Command{Use: "folders", Short: "Manage hierarchical-namespace folders"}
 
 var (
-	flagStFolBucket string
-	flagStFolFormat string
-	flagStFolPrefix string
+	flagStFolBucket   string
+	flagStFolFormat   string
+	flagStFolPrefix   string
 	flagStFolPageSize int64
-	flagStFolDest string
+	flagStFolDest     string
 )
 
 var (

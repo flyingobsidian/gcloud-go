@@ -34,7 +34,7 @@ Examples:
 }
 
 var (
-	flagAddLabels       map[string]string
+	flagAddLabels        map[string]string
 	flagRemoveLabelsKeys string
 	flagRemoveLabelsAll  bool
 )

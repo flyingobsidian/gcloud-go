@@ -71,11 +71,11 @@ func TestEmuBigtableEnvInitOutput(t *testing.T) {
 
 func TestShellQuote(t *testing.T) {
 	cases := map[string]string{
-		"plain":           "plain",
-		"":                "''",
-		"has space":       "'has space'",
-		"has'quote":       `'has'\''quote'`,
-		"127.0.0.1:8086":  "127.0.0.1:8086",
+		"plain":          "plain",
+		"":               "''",
+		"has space":      "'has space'",
+		"has'quote":      `'has'\''quote'`,
+		"127.0.0.1:8086": "127.0.0.1:8086",
 	}
 	for in, want := range cases {
 		if got := shellQuote(in); got != want {

@@ -34,16 +34,16 @@ var privatecaSubordinatesCmd = &cobra.Command{
 }
 
 var (
-	flagPCACAPool          string
-	flagPCACALocation      string
-	flagPCACAConfigFile    string
-	flagPCACAUpdateMask    string
-	flagPCACAAsync         bool
-	flagPCACAIgnoreActive  bool
-	flagPCACAPemCert       string
-	flagPCACAOutputFile    string
-	flagPCACASkipGrace     bool
-	flagPCACAIgnoreDeps    bool
+	flagPCACAPool         string
+	flagPCACALocation     string
+	flagPCACAConfigFile   string
+	flagPCACAUpdateMask   string
+	flagPCACAAsync        bool
+	flagPCACAIgnoreActive bool
+	flagPCACAPemCert      string
+	flagPCACAOutputFile   string
+	flagPCACASkipGrace    bool
+	flagPCACAIgnoreDeps   bool
 )
 
 func init() {

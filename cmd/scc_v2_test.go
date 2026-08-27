@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"golang.org/x/oauth2"
 )
 
@@ -27,6 +28,26 @@ func TestSccV2ParentPath(t *testing.T) {
 			t.Errorf("sccV2ParentPath(%q,%q,%q) = %q, want %q", tc.parent, tc.source, tc.location, got, tc.want)
 		}
 	}
+}
+
+// withSccLocation sets --location on cmd the way parsing a command line
+// would, so that the V1/V2 routing sees it as specified. Each command
+// registers its own --location flag, so the routing only sees the one on the
+// command being run. The flag is restored when the test ends.
+func withSccLocation(t *testing.T, cmd *cobra.Command, location string) {
+	t.Helper()
+	f := cmd.Flags().Lookup("location")
+	if f == nil {
+		t.Fatalf("--location flag is not registered on %q", cmd.Name())
+	}
+	prev, prevChanged := f.Value.String(), f.Changed
+	if err := cmd.Flags().Set("location", location); err != nil {
+		t.Fatalf("setting --location=%s: %v", location, err)
+	}
+	t.Cleanup(func() {
+		_ = f.Value.Set(prev)
+		f.Changed = prevChanged
+	})
 }
 
 // TestSccFindingsListV2 spins up an httptest.Server acting as SCC V2 and
@@ -86,12 +107,12 @@ func TestSccFindingsListV2(t *testing.T) {
 	}()
 	flagSccOrg = "1"
 	flagSccFindingSource = "-"
-	flagSccFindingLocation = "eu"
+	withSccLocation(t, sccFindingsListCmd, "eu")
 	flagSccFilter = "state=\"ACTIVE\""
 	flagSccFormat = ""
 
 	out := captureStdout(t, func() {
-		if err := runSccFindingsList(nil, nil); err != nil {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})
@@ -112,6 +133,333 @@ func TestSccFindingsListV2(t *testing.T) {
 	for _, want := range []string{"NAME", "STATE", "CATEGORY", "f-abc", "OPEN_FIREWALL", "f-def"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q; got:\n%s", want, out)
+		}
+	}
+}
+
+// TestSccFindingsListRoutesGlobalToV2 covers the case an organization without
+// data residency controls needs: --location=global must reach the V2 API at
+// locations/global, not fall back to V1. Regional endpoints are rejected there
+// with DRZ_LOCATION_MISMATCH, so global is the only location such an
+// organization can use.
+func TestSccFindingsListRoutesGlobalToV2(t *testing.T) {
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"listFindingsResults": []any{}})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveSrc, saveFmt := flagSccOrg, flagSccFindingSource, flagSccFormat
+	defer func() { flagSccOrg, flagSccFindingSource, flagSccFormat = saveOrg, saveSrc, saveFmt }()
+	flagSccOrg = "1057127509270"
+	flagSccFindingSource = "-"
+	flagSccFormat = ""
+	withSccLocation(t, sccFindingsListCmd, "global")
+
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsList: %v", err)
+		}
+	})
+
+	want := "/organizations/1057127509270/sources/-/locations/global/findings"
+	if gotPath != want {
+		t.Errorf("request path = %q, want %q", gotPath, want)
+	}
+}
+
+// TestSccFindingsListPageSize checks that --page-size reaches the query
+// string. Without it the SCC API applies its own default of 10 results per
+// page (max 1000), so a listing of any size makes far more calls than it
+// needs to.
+func TestSccFindingsListPageSize(t *testing.T) {
+	var gotPageSize []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPageSize = append(gotPageSize, r.URL.Query().Get("pageSize"))
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"listFindingsResults": []any{}})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveSrc, saveSize, saveFmt := flagSccOrg, flagSccFindingSource, flagSccPageSize, flagSccFormat
+	defer func() {
+		flagSccOrg, flagSccFindingSource, flagSccPageSize, flagSccFormat =
+			saveOrg, saveSrc, saveSize, saveFmt
+	}()
+	flagSccOrg = "1"
+	flagSccFindingSource = "-"
+	flagSccFormat = ""
+	withSccLocation(t, sccFindingsListCmd, "global")
+
+	// With the flag set, the value is forwarded verbatim.
+	flagSccPageSize = 1000
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsList: %v", err)
+		}
+	})
+	if len(gotPageSize) != 1 || gotPageSize[0] != "1000" {
+		t.Errorf("pageSize sent = %v, want [1000]", gotPageSize)
+	}
+
+	// Left unset, no pageSize is sent and the server default applies.
+	gotPageSize = nil
+	flagSccPageSize = 0
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsList: %v", err)
+		}
+	})
+	if len(gotPageSize) != 1 || gotPageSize[0] != "" {
+		t.Errorf("pageSize sent = %v, want no value", gotPageSize)
+	}
+}
+
+// TestSccLocationSpecified pins the routing rule itself: an explicit
+// --location selects V2 whatever its value, and omitting it stays on V1.
+func TestSccLocationSpecified(t *testing.T) {
+	if sccLocationSpecified(sccFindingsListCmd) {
+		t.Error("expected --location to start unspecified")
+	}
+	for _, location := range []string{"global", "eu", "us"} {
+		withSccLocation(t, sccFindingsListCmd, location)
+		if !sccLocationSpecified(sccFindingsListCmd) {
+			t.Errorf("--location=%s should route to V2", location)
+		}
+	}
+}
+
+// TestSccBulkMuteV2 checks the V2 bulk-mute request: a POST to
+// findings:bulkMute under the regionalized scope, carrying the filter and the
+// mute state, with the LRO echoed back through --format.
+func TestSccBulkMuteV2(t *testing.T) {
+	var gotPath, gotMethod string
+	var gotBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotMethod = r.URL.Path, r.Method
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name": "organizations/1057127509270/operations/bulk-mute-op",
+			"done": false,
+		})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveFilter, saveState, saveFmt := flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat
+	defer func() {
+		flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat =
+			saveOrg, saveFilter, saveState, saveFmt
+	}()
+	flagSccOrg = "1057127509270"
+	flagSccFindingBulkMuteFilter = `category="XSS_SCRIPTING"`
+	flagSccFindingBulkMuteState = "muted"
+	flagSccFormat = "json"
+	withSccLocation(t, sccFindingsBulkMuteCmd, "global")
+
+	out := captureStdout(t, func() {
+		if err := runSccFindingsBulkMute(sccFindingsBulkMuteCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsBulkMute: %v", err)
+		}
+	})
+
+	if gotMethod != http.MethodPost {
+		t.Errorf("method = %s, want POST", gotMethod)
+	}
+	wantPath := "/organizations/1057127509270/locations/global/findings:bulkMute"
+	if gotPath != wantPath {
+		t.Errorf("request path = %q, want %q", gotPath, wantPath)
+	}
+	if got := gotBody["filter"]; got != `category="XSS_SCRIPTING"` {
+		t.Errorf("filter = %v, want the category filter", got)
+	}
+	if got := gotBody["muteState"]; got != "MUTED" {
+		t.Errorf("muteState = %v, want MUTED", got)
+	}
+	if !strings.Contains(out, "bulk-mute-op") {
+		t.Errorf("expected the operation name in the output, got:\n%s", out)
+	}
+}
+
+// TestSccBulkMuteV2Undefined checks --mute-state=undefined, which unmutes.
+func TestSccBulkMuteV2Undefined(t *testing.T) {
+	var gotBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"done": true})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveFilter, saveState, saveFmt := flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat
+	defer func() {
+		flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat =
+			saveOrg, saveFilter, saveState, saveFmt
+	}()
+	flagSccOrg = "1"
+	flagSccFindingBulkMuteFilter = "state=\"ACTIVE\""
+	flagSccFindingBulkMuteState = "undefined"
+	flagSccFormat = "json"
+	withSccLocation(t, sccFindingsBulkMuteCmd, "eu")
+
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsBulkMute(sccFindingsBulkMuteCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsBulkMute: %v", err)
+		}
+	})
+
+	if got := gotBody["muteState"]; got != "UNDEFINED" {
+		t.Errorf("muteState = %v, want UNDEFINED", got)
+	}
+}
+
+// TestSccExportToBigQueryV2 checks the export request shape. gcloud-python
+// pins this command to V2, so it must reach the REST path without --location.
+func TestSccExportToBigQueryV2(t *testing.T) {
+	var gotPath, gotMethod string
+	var gotBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotMethod = r.URL.Path, r.Method
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"done": true})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveSrc, saveDataset, saveFmt := flagSccOrg, flagSccFindingSource, flagSccFindingDataset, flagSccFormat
+	defer func() {
+		flagSccOrg, flagSccFindingSource, flagSccFindingDataset, flagSccFormat =
+			saveOrg, saveSrc, saveDataset, saveFmt
+	}()
+	flagSccOrg = "123"
+	flagSccFindingSource = "456"
+	flagSccFindingDataset = "projects/my-project/datasets/findings_export"
+	flagSccFormat = "json"
+
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsExportBQ(sccFindingsExportBQCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsExportBQ: %v", err)
+		}
+	})
+
+	if gotMethod != http.MethodPost {
+		t.Errorf("method = %s, want POST", gotMethod)
+	}
+	want := "/organizations/123/sources/456/locations/global/findings:export"
+	if gotPath != want {
+		t.Errorf("request path = %q, want %q", gotPath, want)
+	}
+	dest, _ := gotBody["bigQueryDestination"].(map[string]any)
+	if dest == nil || dest["dataset"] != "projects/my-project/datasets/findings_export" {
+		t.Errorf("bigQueryDestination = %v, want the dataset", gotBody["bigQueryDestination"])
+	}
+}
+
+// TestSccExportToBigQueryRejectsBadDataset mirrors ValidateDataset upstream.
+func TestSccExportToBigQueryRejectsBadDataset(t *testing.T) {
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveDataset := flagSccOrg, flagSccFindingDataset
+	defer func() { flagSccOrg, flagSccFindingDataset = saveOrg, saveDataset }()
+	flagSccOrg = "123"
+
+	for _, dataset := range []string{"", "dataset_id", "projects/p/datasets/bad-name", "projects//datasets/d"} {
+		flagSccFindingDataset = dataset
+		err := runSccFindingsExportBQ(sccFindingsExportBQCmd, nil)
+		if err == nil || !strings.Contains(err.Error(), "--dataset must match") {
+			t.Errorf("--dataset=%q: expected a validation error, got %v", dataset, err)
+		}
+	}
+}
+
+func TestSccMuteStateEnum(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"muted", "MUTED", false},
+		{"MUTED", "MUTED", false},
+		{"", "MUTED", false},
+		{"undefined", "UNDEFINED", false},
+		{"Undefined", "UNDEFINED", false},
+		{"unmuted", "", true},
+		{"nonsense", "", true},
+	}
+	for _, tc := range cases {
+		got, err := sccMuteStateEnum(tc.in)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("sccMuteStateEnum(%q) = %q, want an error", tc.in, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("sccMuteStateEnum(%q): %v", tc.in, err)
+		}
+		if got != tc.want {
+			t.Errorf("sccMuteStateEnum(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestSccV2ScopePath(t *testing.T) {
+	cases := []struct{ parent, location, want string }{
+		{"organizations/1", "global", "organizations/1/locations/global"},
+		{"folders/2", "eu", "folders/2/locations/eu"},
+		{"projects/p", "locations/us", "projects/p/locations/us"},
+	}
+	for _, tc := range cases {
+		if got := sccV2ScopePath(tc.parent, tc.location); got != tc.want {
+			t.Errorf("sccV2ScopePath(%q,%q) = %q, want %q", tc.parent, tc.location, got, tc.want)
 		}
 	}
 }

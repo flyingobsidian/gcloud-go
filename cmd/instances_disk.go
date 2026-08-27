@@ -45,9 +45,9 @@ var instancesSetDiskAutoDeleteCmd = &cobra.Command{
 }
 
 var (
-	flagAutoDeleteDisk   string
-	flagAutoDelete       bool
-	flagNoAutoDelete     bool
+	flagAutoDeleteDisk string
+	flagAutoDelete     bool
+	flagNoAutoDelete   bool
 )
 
 func init() {

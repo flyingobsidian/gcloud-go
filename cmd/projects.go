@@ -108,25 +108,25 @@ var projectRemoveIamBindingCmd = &cobra.Command{
 }
 
 var (
-	flagProjectCreateName    string
-	flagProjectCreateFolder  string
-	flagProjectCreateOrg     string
-	flagProjectCreateLabels  map[string]string
-	flagProjectUpdateName    string
-	flagProjectListFolder    string
-	flagProjectListOrg       string
-	flagProjectListFilter    string
-	flagProjectListPageSize  int64
-	flagProjectListLimit     int64
-	flagProjectListFormat    string
-	flagProjectListURI       bool
-	flagProjectListShowDel   bool
-	flagProjectIamMember     string
-	flagProjectIamRole       string
-	flagProjectIamCondExpr   string
-	flagProjectIamCondTitle  string
-	flagProjectIamCondDesc   string
-	flagProjectIamAllCond    bool
+	flagProjectCreateName   string
+	flagProjectCreateFolder string
+	flagProjectCreateOrg    string
+	flagProjectCreateLabels map[string]string
+	flagProjectUpdateName   string
+	flagProjectListFolder   string
+	flagProjectListOrg      string
+	flagProjectListFilter   string
+	flagProjectListPageSize int64
+	flagProjectListLimit    int64
+	flagProjectListFormat   string
+	flagProjectListURI      bool
+	flagProjectListShowDel  bool
+	flagProjectIamMember    string
+	flagProjectIamRole      string
+	flagProjectIamCondExpr  string
+	flagProjectIamCondTitle string
+	flagProjectIamCondDesc  string
+	flagProjectIamAllCond   bool
 )
 
 func init() {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -35,6 +36,90 @@ func sccV2ParentPath(parent, source, location string) string {
 	return fmt.Sprintf("%s/sources/%s/locations/%s", parent, source, location)
 }
 
+// sccV2ScopePath builds the V2-style parent used by collection-level methods
+// that are not scoped to a source:
+//
+//	organizations/{org}/locations/{location}
+//	folders/{folder}/locations/{location}
+//	projects/{project}/locations/{location}
+//
+// This mirrors ValidateLocationAndGetRegionalizedParent in gcloud-python.
+func sccV2ScopePath(parent, location string) string {
+	if strings.HasPrefix(location, "locations/") {
+		return parent + "/" + location
+	}
+	return parent + "/locations/" + location
+}
+
+// sccMuteStateEnum maps the --mute-state choice onto the enum both API
+// versions expect. gcloud-python accepts "muted" and "undefined" only (see
+// ConvertMuteStateInput), case-insensitively via base.ChoiceArgument.
+func sccMuteStateEnum(muteState string) (string, error) {
+	switch strings.ToLower(muteState) {
+	case "", "muted":
+		return "MUTED", nil
+	case "undefined":
+		return "UNDEFINED", nil
+	default:
+		return "", fmt.Errorf("--mute-state must be one of [muted, undefined], got %q", muteState)
+	}
+}
+
+// sccV2BulkMuteFindings performs
+// `POST /v2/{parent}/findings:bulkMute`, which mutes every finding matching
+// the filter server-side and returns a long-running operation. It is the only
+// bulk write in the findings surface: there is no bulk state change.
+func sccV2BulkMuteFindings(parent string) error {
+	if restUserProject() == "" {
+		return errNoBillingProject("the SCC V2 API")
+	}
+	muteState, err := sccMuteStateEnum(flagSccFindingBulkMuteState)
+	if err != nil {
+		return err
+	}
+	scopePath := sccV2ScopePath(parent, flagSccFindingLocation)
+	body := map[string]any{
+		"filter":    flagSccFindingBulkMuteFilter,
+		"muteState": muteState,
+	}
+
+	ctx := context.Background()
+	var op map[string]any
+	if err := sccV2Rest.do(ctx, http.MethodPost, "/"+scopePath+"/findings:bulkMute", nil, body, &op); err != nil {
+		return fmt.Errorf("bulk muting findings (V2): %w", err)
+	}
+	return emitFormatted(op, flagSccFormat)
+}
+
+// sccDatasetPattern is the shape gcloud-python validates --dataset against
+// (ValidateDataset in command_lib/scc/findings/util.py).
+var sccDatasetPattern = regexp.MustCompile(`^projects/[a-zA-Z0-9-]+/datasets/[a-zA-Z0-9_]+$`)
+
+// sccV2ExportFindings performs `POST /v2/{parent}/findings:export`, exporting
+// the findings under a source to a BigQuery dataset. Unlike the other findings
+// commands this one has no V1 equivalent: gcloud-python pins it to V2.
+func sccV2ExportFindings(parent string) error {
+	if restUserProject() == "" {
+		return errNoBillingProject("the SCC V2 API")
+	}
+	if !sccDatasetPattern.MatchString(flagSccFindingDataset) {
+		return fmt.Errorf(
+			"--dataset must match projects/[a-zA-Z0-9-]+/datasets/[a-zA-Z0-9_]+, got %q",
+			flagSccFindingDataset)
+	}
+	parentPath := sccV2ParentPath(parent, flagSccFindingSource, flagSccFindingLocation)
+	body := map[string]any{
+		"bigQueryDestination": map[string]any{"dataset": flagSccFindingDataset},
+	}
+
+	ctx := context.Background()
+	var resp map[string]any
+	if err := sccV2Rest.do(ctx, http.MethodPost, "/"+parentPath+"/findings:export", nil, body, &resp); err != nil {
+		return fmt.Errorf("exporting findings to BigQuery: %w", err)
+	}
+	return emitFormatted(resp, flagSccFormat)
+}
+
 // sccV2ListFindings performs `GET /v2/{parent}/findings` and prints the
 // results using the same table/format branches as the V1 path.
 func sccV2ListFindings(parent string) error {
@@ -45,11 +130,7 @@ func sccV2ListFindings(parent string) error {
 	// shared restClient. Goes through restUserProject so tests can inject
 	// a synthetic project without touching global config or ADC.
 	if restUserProject() == "" {
-		return fmt.Errorf(
-			"a quota (billing) project is required for the SCC V2 API but none was found. " +
-				"Set one via --billing-project=PROJECT_ID, " +
-				"`gcloud config set billing/quota_project PROJECT_ID`, or " +
-				"`gcloud auth application-default set-quota-project PROJECT_ID`")
+		return errNoBillingProject("the SCC V2 API")
 	}
 	parentPath := sccV2ParentPath(parent, flagSccFindingSource, flagSccFindingLocation)
 
@@ -102,7 +183,3 @@ func sccV2ListFindings(parent string) error {
 func sccV2RestClientForTest(endpoint string) {
 	sccV2Rest = newRESTClient(endpoint)
 }
-
-// dummy import guard: net/http is imported so tests in the same file that
-// intercept requests can reference it without pulling it in themselves.
-var _ = http.MethodGet

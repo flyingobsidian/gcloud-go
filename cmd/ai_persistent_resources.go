@@ -15,11 +15,11 @@ import (
 var aiPRCmd = &cobra.Command{Use: "persistent-resources", Short: "Manage Vertex AI persistent resources"}
 
 var (
-	flagAIPRRegion       string
-	flagAIPRFormat       string
-	flagAIPRConfigFile   string
-	flagAIPRPRId         string
-	flagAIPRPageSize     int64
+	flagAIPRRegion     string
+	flagAIPRFormat     string
+	flagAIPRConfigFile string
+	flagAIPRPRId       string
+	flagAIPRPageSize   int64
 )
 
 var (

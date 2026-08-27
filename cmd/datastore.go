@@ -120,9 +120,9 @@ type dsIndexFile struct {
 }
 
 type dsIndexSpec struct {
-	Kind       string             `json:"kind,omitempty" yaml:"kind,omitempty"`
-	Ancestor   string             `json:"ancestor,omitempty" yaml:"ancestor,omitempty"`
-	Properties []dsIndexPropSpec  `json:"properties,omitempty" yaml:"properties,omitempty"`
+	Kind       string            `json:"kind,omitempty" yaml:"kind,omitempty"`
+	Ancestor   string            `json:"ancestor,omitempty" yaml:"ancestor,omitempty"`
+	Properties []dsIndexPropSpec `json:"properties,omitempty" yaml:"properties,omitempty"`
 }
 
 type dsIndexPropSpec struct {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
+	"github.com/flyingobsidian/gcloud-go/internal/httplog"
 	"golang.org/x/oauth2"
 )
 
@@ -72,11 +73,28 @@ func SetRestUserProjectForTest(project string) (restore func()) {
 }
 
 func (c *restClient) do(ctx context.Context, method, path string, query url.Values, body any, out any) error {
+	// Resolve the billing / quota project up front (--billing-project,
+	// billing/quota_project config, or ADC quota_project_id) and refuse to
+	// make the call without one. Google's APIs charge quota against this
+	// project and reject ADC user credentials when it is missing (#1740);
+	// failing here names the setting to change, where the server-side
+	// PERMISSION_DENIED does not.
+	qp := restUserProject()
+	if qp == "" {
+		return errNoBillingProject(endpointHost(c.endpoint))
+	}
 	ts, err := restTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return fmt.Errorf("obtaining credentials: %w", err)
 	}
 	client := oauth2.NewClient(ctx, ts)
+	// Log below the oauth2 transport rather than above it, so the printed
+	// request shows the Authorization header as actually sent.
+	if out := httpDebugWriter(); out != nil {
+		if t, ok := client.Transport.(*oauth2.Transport); ok {
+			t.Base = httplog.NewTransport(t.Base, out)
+		}
+	}
 	u := c.endpoint + path
 	if len(query) > 0 {
 		u = u + "?" + query.Encode()
@@ -96,15 +114,10 @@ func (c *restClient) do(ctx context.Context, method, path string, query url.Valu
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	// Send the caller's billing / quota project when one is resolvable
-	// (--billing-project, billing/quota_project config, or ADC
-	// quota_project_id). Google's APIs charge quota against this project
-	// and refuse ADC user creds without a value (#1740). Passing an
-	// x-goog-user-project header mirrors what the official client
-	// libraries do when a quota project is configured.
-	if qp := restUserProject(); qp != "" {
-		req.Header.Set("X-Goog-User-Project", qp)
-	}
+	// Passing an x-goog-user-project header mirrors what the official client
+	// libraries do when a quota project is configured. The value is known to
+	// be non-empty: do() refuses the call above when it is not.
+	req.Header.Set("X-Goog-User-Project", qp)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP %s %s: %w", method, u, err)
@@ -130,10 +143,37 @@ func (c *restClient) do(ctx context.Context, method, path string, query url.Valu
 	return nil
 }
 
+// logPageProgress reports how far a paginated listing has got, once per page,
+// when debug logging is on.
+//
+// Google's JSON APIs put the result count in the response body, not in a
+// response header: there is no X-Total-Count or equivalent to read. Listings
+// that report a grand total do it with the AIP-158 `totalSize` field, which is
+// itself optional -- SCC findings.list returns it, many other collections do
+// not -- so the total is only printed when the server actually sent one.
+func logPageProgress(sliceField string, page, pageCount, running int, totalSize any, more bool) {
+	out := httpDebugWriter()
+	if out == nil {
+		return
+	}
+	total := ""
+	// encoding/json decodes every JSON number into a float64.
+	if n, ok := totalSize.(float64); ok {
+		total = fmt.Sprintf(" of %d", int64(n))
+	}
+	remaining := "last page"
+	if more {
+		remaining = "more pages follow"
+	}
+	fmt.Fprintln(out, httplog.Note("page %d: %d %s, %d%s so far (%s)",
+		page, pageCount, sliceField, running, total, remaining))
+}
+
 // paginate lists a REST collection into a flat slice of resources.
 func (c *restClient) paginate(ctx context.Context, path string, base url.Values, sliceField string, pageSize int64) ([]map[string]any, error) {
 	var all []map[string]any
 	pageToken := ""
+	page := 0
 	for {
 		q := url.Values{}
 		for k, v := range base {
@@ -149,14 +189,18 @@ func (c *restClient) paginate(ctx context.Context, path string, base url.Values,
 		if err := c.do(ctx, http.MethodGet, path, q, nil, &raw); err != nil {
 			return nil, err
 		}
+		page++
+		pageCount := 0
 		if arr, ok := raw[sliceField].([]any); ok {
 			for _, e := range arr {
 				if m, ok := e.(map[string]any); ok {
 					all = append(all, m)
 				}
 			}
+			pageCount = len(arr)
 		}
 		tok, _ := raw["nextPageToken"].(string)
+		logPageProgress(sliceField, page, pageCount, len(all), raw["totalSize"], tok != "")
 		if tok == "" {
 			break
 		}

@@ -83,9 +83,9 @@ func runEmuDatastoreEnvInit(cmd *cobra.Command, args []string) error {
 	host := flagEmuDatastoreHostPort
 	project := resolveProjectOr("")
 	vars := map[string]string{
-		"DATASTORE_EMULATOR_HOST":       host,
-		"DATASTORE_EMULATOR_HOST_PATH":  host + "/datastore",
-		"DATASTORE_HOST":                "http://" + host,
+		"DATASTORE_EMULATOR_HOST":      host,
+		"DATASTORE_EMULATOR_HOST_PATH": host + "/datastore",
+		"DATASTORE_HOST":               "http://" + host,
 	}
 	if project != "" {
 		vars["DATASTORE_PROJECT_ID"] = project

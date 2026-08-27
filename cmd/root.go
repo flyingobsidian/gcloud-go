@@ -13,22 +13,22 @@ import (
 var Version = "dev"
 
 var (
-	flagProject               string
-	flagZone                  string
-	flagAccount               string
-	flagQuiet                 bool
-	flagAccessTokenFile       string
-	flagBillingProject        string
-	flagConfiguration         string
-	flagFlagsFile             string
-	flagFilter                string
-	flagFlatten               []string
-	flagFormat                string
-	flagImpersonateSA         string
-	flagLogHTTP               bool
-	flagTraceToken            string
-	flagUserOutputEnabled     bool
-	flagVerbosity             string
+	flagProject           string
+	flagZone              string
+	flagAccount           string
+	flagQuiet             bool
+	flagAccessTokenFile   string
+	flagBillingProject    string
+	flagConfiguration     string
+	flagFlagsFile         string
+	flagFilter            string
+	flagFlatten           []string
+	flagFormat            string
+	flagImpersonateSA     string
+	flagLogHTTP           bool
+	flagTraceToken        string
+	flagUserOutputEnabled bool
+	flagVerbosity         string
 )
 
 // IsInteractive returns true when stdin is a terminal (used for interactive prompts).

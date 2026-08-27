@@ -68,7 +68,6 @@ var redisInstancesDeleteCmd = &cobra.Command{
 	RunE:  runRedisInstancesDelete,
 }
 
-
 // --- redis instances update (#193) ---
 
 var redisInstancesUpdateCmd = &cobra.Command{

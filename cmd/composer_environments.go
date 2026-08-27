@@ -78,19 +78,19 @@ var (
 		Args: cobra.ExactArgs(1), RunE: runComposerEnvListWorkloads,
 	}
 	composerEnvListUpgradesCmd = &cobra.Command{
-		Use: "list-upgrades ENVIRONMENT",
+		Use:   "list-upgrades ENVIRONMENT",
 		Short: "List the image versions this environment can upgrade to",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvListUpgrades,
+		Args:  cobra.ExactArgs(1), RunE: runComposerEnvListUpgrades,
 	}
 	composerEnvListPackagesCmd = &cobra.Command{
-		Use: "list-packages ENVIRONMENT",
+		Use:   "list-packages ENVIRONMENT",
 		Short: "List Python packages installed in the Airflow worker",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvListPackages,
+		Args:  cobra.ExactArgs(1), RunE: runComposerEnvListPackages,
 	}
 	composerEnvRunCmd = &cobra.Command{
-		Use: "run ENVIRONMENT SUBCOMMAND [-- ARG ...]",
+		Use:   "run ENVIRONMENT SUBCOMMAND [-- ARG ...]",
 		Short: "Run an Airflow CLI subcommand in the environment (via composer's ExecuteAirflowCommand API)",
-		Args: cobra.MinimumNArgs(2), RunE: runComposerEnvRun,
+		Args:  cobra.MinimumNArgs(2), RunE: runComposerEnvRun,
 	}
 )
 

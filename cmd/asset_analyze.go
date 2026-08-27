@@ -71,10 +71,10 @@ var (
 	flagAssetAnalyzeAccessTime       string
 
 	// longrunning output
-	flagAssetAnalyzeGCSUri     string
-	flagAssetAnalyzeBQDataset  string
-	flagAssetAnalyzeBQTable    string
-	flagAssetAnalyzeBQPartKey  string
+	flagAssetAnalyzeGCSUri      string
+	flagAssetAnalyzeBQDataset   string
+	flagAssetAnalyzeBQTable     string
+	flagAssetAnalyzeBQPartKey   string
 	flagAssetAnalyzeBQWriteDisp string
 
 	// analyze-move

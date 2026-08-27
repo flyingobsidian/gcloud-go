@@ -62,7 +62,7 @@ var managedUpdateCmd = &cobra.Command{
 }
 
 var (
-	flagManagedUpdateRegion string
+	flagManagedUpdateRegion   string
 	flagManagedUpdateTemplate string
 )
 
@@ -76,8 +76,8 @@ var managedSetTemplateCmd = &cobra.Command{
 }
 
 var (
-	flagManagedSetTemplateRegion   string
-	flagManagedSetTemplateName     string
+	flagManagedSetTemplateRegion string
+	flagManagedSetTemplateName   string
 )
 
 // --- managed recreate-instances ---

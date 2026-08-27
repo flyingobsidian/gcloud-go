@@ -3,127 +3,131 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
-	apikeys "google.golang.org/api/apikeys/v2"
-	artifactregistry "google.golang.org/api/artifactregistry/v1"
-	assuredworkloads "google.golang.org/api/assuredworkloads/v1"
-	billingbudgets "google.golang.org/api/billingbudgets/v1"
-	cloudasset "google.golang.org/api/cloudasset/v1"
-	cloudbilling "google.golang.org/api/cloudbilling/v1"
-	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v3"
-	cloudiam "google.golang.org/api/iam/v1"
-	iamcredentials "google.golang.org/api/iamcredentials/v1"
-	cloudlocationfinder "google.golang.org/api/cloudlocationfinder/v1"
-	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
-	dataflow "google.golang.org/api/dataflow/v1b3"
-	datamigration "google.golang.org/api/datamigration/v1"
-	dataplex "google.golang.org/api/dataplex/v1"
-	datastore "google.golang.org/api/datastore/v1"
-	parametermanager "google.golang.org/api/parametermanager/v1"
-	eventarc "google.golang.org/api/eventarc/v1"
-	firestore "google.golang.org/api/firestore/v1"
-	aiplatform "google.golang.org/api/aiplatform/v1"
-	aiplatformbeta "google.golang.org/api/aiplatform/v1beta1"
-	cloudkms "google.golang.org/api/cloudkms/v1"
-	kmsinventory "google.golang.org/api/kmsinventory/v1"
-	iap "google.golang.org/api/iap/v1"
-	networkservices "google.golang.org/api/networkservices/v1"
-	networkservicesbeta "google.golang.org/api/networkservices/v1beta1"
-	developerconnect "google.golang.org/api/developerconnect/v1"
-	workstations "google.golang.org/api/workstations/v1"
-	sourcerepo "google.golang.org/api/sourcerepo/v1"
-	baremetalsolution "google.golang.org/api/baremetalsolution/v2"
-	healthcare "google.golang.org/api/healthcare/v1"
-	vmwareengine "google.golang.org/api/vmwareengine/v1"
-	apigee "google.golang.org/api/apigee/v1"
-	storagebatchoperations "google.golang.org/api/storagebatchoperations/v1"
-	oracledatabase "google.golang.org/api/oracledatabase/v1"
-	container "google.golang.org/api/container/v1"
-	gkehub "google.golang.org/api/gkehub/v1"
-	gkeonprem "google.golang.org/api/gkeonprem/v1"
-	binaryauthorization "google.golang.org/api/binaryauthorization/v1"
-	testing "google.golang.org/api/testing/v1"
-	notebooks "google.golang.org/api/notebooks/v2"
-	notebooksv1 "google.golang.org/api/notebooks/v1"
-	transcoder "google.golang.org/api/transcoder/v1"
-	managedkafka "google.golang.org/api/managedkafka/v1"
-	datastream "google.golang.org/api/datastream/v1"
-	deploymentmanager "google.golang.org/api/deploymentmanager/v2"
-	deploymentmanagerbeta "google.golang.org/api/deploymentmanager/v2beta"
-	domains "google.golang.org/api/domains/v1"
-	filestore "google.golang.org/api/file/v1"
-	monitoringv1 "google.golang.org/api/monitoring/v1"
-	networkmanagement "google.golang.org/api/networkmanagement/v1"
-	workflowexecutions "google.golang.org/api/workflowexecutions/v1"
-	securesourcemanager "google.golang.org/api/securesourcemanager/v1"
-	spanner "google.golang.org/api/spanner/v1"
-	certificatemanager "google.golang.org/api/certificatemanager/v1"
-	apphub "google.golang.org/api/apphub/v1"
-	apigateway "google.golang.org/api/apigateway/v1"
-	alloydb "google.golang.org/api/alloydb/v1"
-	cloudtasks "google.golang.org/api/cloudtasks/v2"
-	memcache "google.golang.org/api/memcache/v1"
-	recommender "google.golang.org/api/recommender/v1"
-	servicedirectory "google.golang.org/api/servicedirectory/v1"
-	looker "google.golang.org/api/looker/v1"
-	managedidentities "google.golang.org/api/managedidentities/v1"
-	batchapi "google.golang.org/api/batch/v1"
-	datalineage "google.golang.org/api/datalineage/v1"
-	observability "google.golang.org/api/observability/v1"
-	beyondcorp "google.golang.org/api/beyondcorp/v1"
-	cloudbuild "google.golang.org/api/cloudbuild/v1"
-	cloudbuild2 "google.golang.org/api/cloudbuild/v2"
-	cloudfunctionsv1 "google.golang.org/api/cloudfunctions/v1"
-	cloudfunctionsv2 "google.golang.org/api/cloudfunctions/v2"
-	logging "google.golang.org/api/logging/v2"
-	pubsub "google.golang.org/api/pubsub/v1"
-	iamv2 "google.golang.org/api/iam/v2"
+	"github.com/flyingobsidian/gcloud-go/internal/httplog"
+	"golang.org/x/oauth2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
 	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
 	agentregistry "google.golang.org/api/agentregistry/v1alpha"
+	aiplatform "google.golang.org/api/aiplatform/v1"
+	aiplatformbeta "google.golang.org/api/aiplatform/v1beta1"
+	alloydb "google.golang.org/api/alloydb/v1"
+	apigateway "google.golang.org/api/apigateway/v1"
+	apigee "google.golang.org/api/apigee/v1"
 	apihub "google.golang.org/api/apihub/v1"
+	apikeys "google.golang.org/api/apikeys/v2"
 	appengine "google.golang.org/api/appengine/v1"
-	ids "google.golang.org/api/ids/v1"
+	apphub "google.golang.org/api/apphub/v1"
+	artifactregistry "google.golang.org/api/artifactregistry/v1"
+	assuredworkloads "google.golang.org/api/assuredworkloads/v1"
+	baremetalsolution "google.golang.org/api/baremetalsolution/v2"
+	batchapi "google.golang.org/api/batch/v1"
+	beyondcorp "google.golang.org/api/beyondcorp/v1"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
+	billingbudgets "google.golang.org/api/billingbudgets/v1"
+	binaryauthorization "google.golang.org/api/binaryauthorization/v1"
+	certificatemanager "google.golang.org/api/certificatemanager/v1"
+	cloudasset "google.golang.org/api/cloudasset/v1"
+	cloudbilling "google.golang.org/api/cloudbilling/v1"
+	cloudbuild "google.golang.org/api/cloudbuild/v1"
+	cloudbuild2 "google.golang.org/api/cloudbuild/v2"
 	clouddeploy "google.golang.org/api/clouddeploy/v1"
-	composer "google.golang.org/api/composer/v1"
-	datacatalog "google.golang.org/api/datacatalog/v1"
-	dataproc "google.golang.org/api/dataproc/v1"
-	dns "google.golang.org/api/dns/v1"
-	netapp "google.golang.org/api/netapp/v1"
-	recaptchaenterprise "google.golang.org/api/recaptchaenterprise/v1"
+	cloudfunctionsv1 "google.golang.org/api/cloudfunctions/v1"
+	cloudfunctionsv2 "google.golang.org/api/cloudfunctions/v2"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
+	cloudkms "google.golang.org/api/cloudkms/v1"
+	cloudlocationfinder "google.golang.org/api/cloudlocationfinder/v1"
+	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v3"
+	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
+	cloudtasks "google.golang.org/api/cloudtasks/v2"
+	composer "google.golang.org/api/composer/v1"
 	config1 "google.golang.org/api/config/v1"
-	publicca "google.golang.org/api/publicca/v1"
+	container "google.golang.org/api/container/v1"
+	datacatalog "google.golang.org/api/datacatalog/v1"
+	dataflow "google.golang.org/api/dataflow/v1b3"
+	datalineage "google.golang.org/api/datalineage/v1"
+	datamigration "google.golang.org/api/datamigration/v1"
+	dataplex "google.golang.org/api/dataplex/v1"
+	dataproc "google.golang.org/api/dataproc/v1"
+	datastore "google.golang.org/api/datastore/v1"
+	datastream "google.golang.org/api/datastream/v1"
+	deploymentmanager "google.golang.org/api/deploymentmanager/v2"
+	deploymentmanagerbeta "google.golang.org/api/deploymentmanager/v2beta"
+	developerconnect "google.golang.org/api/developerconnect/v1"
+	dns "google.golang.org/api/dns/v1"
+	domains "google.golang.org/api/domains/v1"
+	eventarc "google.golang.org/api/eventarc/v1"
+	filestore "google.golang.org/api/file/v1"
+	firestore "google.golang.org/api/firestore/v1"
+	gkehub "google.golang.org/api/gkehub/v1"
+	gkeonprem "google.golang.org/api/gkeonprem/v1"
+	healthcare "google.golang.org/api/healthcare/v1"
+	cloudiam "google.golang.org/api/iam/v1"
+	iamv2 "google.golang.org/api/iam/v2"
+	iamcredentials "google.golang.org/api/iamcredentials/v1"
+	iap "google.golang.org/api/iap/v1"
+	ids "google.golang.org/api/ids/v1"
+	kmsinventory "google.golang.org/api/kmsinventory/v1"
+	logging "google.golang.org/api/logging/v2"
+	looker "google.golang.org/api/looker/v1"
+	managedidentities "google.golang.org/api/managedidentities/v1"
+	managedkafka "google.golang.org/api/managedkafka/v1"
+	memcache "google.golang.org/api/memcache/v1"
 	metastore "google.golang.org/api/metastore/v1"
 	ml "google.golang.org/api/ml/v1"
-	privateca "google.golang.org/api/privateca/v1"
+	monitoringv1 "google.golang.org/api/monitoring/v1"
+	monitoring "google.golang.org/api/monitoring/v3"
+	netapp "google.golang.org/api/netapp/v1"
+	networkconnectivity "google.golang.org/api/networkconnectivity/v1"
+	networkmanagement "google.golang.org/api/networkmanagement/v1"
+	networksecurity "google.golang.org/api/networksecurity/v1"
+	networksecuritybeta "google.golang.org/api/networksecurity/v1beta1"
+	networkservices "google.golang.org/api/networkservices/v1"
+	networkservicesbeta "google.golang.org/api/networkservices/v1beta1"
+	notebooksv1 "google.golang.org/api/notebooks/v1"
+	notebooks "google.golang.org/api/notebooks/v2"
+	observability "google.golang.org/api/observability/v1"
+	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
+	"google.golang.org/api/option"
+	oracledatabase "google.golang.org/api/oracledatabase/v1"
+	orgpolicy "google.golang.org/api/orgpolicy/v2"
+	oslogin "google.golang.org/api/oslogin/v1"
+	parametermanager "google.golang.org/api/parametermanager/v1"
 	policyanalyzer "google.golang.org/api/policyanalyzer/v1"
 	policysimulator "google.golang.org/api/policysimulator/v1"
 	policytroubleshooter "google.golang.org/api/policytroubleshooter/v1"
-	monitoring "google.golang.org/api/monitoring/v3"
-	networkconnectivity "google.golang.org/api/networkconnectivity/v1"
-	networksecurity "google.golang.org/api/networksecurity/v1"
-	networksecuritybeta "google.golang.org/api/networksecurity/v1beta1"
-	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
-	securitycenter "google.golang.org/api/securitycenter/v1"
-	securityposture "google.golang.org/api/securityposture/v1"
-	"golang.org/x/oauth2"
-	"google.golang.org/api/option"
-	orgpolicy "google.golang.org/api/orgpolicy/v2"
-	oslogin "google.golang.org/api/oslogin/v1"
+	privateca "google.golang.org/api/privateca/v1"
+	publicca "google.golang.org/api/publicca/v1"
+	pubsub "google.golang.org/api/pubsub/v1"
 	pubsublite "google.golang.org/api/pubsublite/v1"
+	recaptchaenterprise "google.golang.org/api/recaptchaenterprise/v1"
+	recommender "google.golang.org/api/recommender/v1"
 	redis "google.golang.org/api/redis/v1"
 	runv1 "google.golang.org/api/run/v1"
 	runv2 "google.golang.org/api/run/v2"
+	securesourcemanager "google.golang.org/api/securesourcemanager/v1"
+	securitycenter "google.golang.org/api/securitycenter/v1"
+	securityposture "google.golang.org/api/securityposture/v1"
+	servicedirectory "google.golang.org/api/servicedirectory/v1"
+	servicemanagement "google.golang.org/api/servicemanagement/v1"
 	servicenetworking "google.golang.org/api/servicenetworking/v1"
 	serviceusage "google.golang.org/api/serviceusage/v1"
-	servicemanagement "google.golang.org/api/servicemanagement/v1"
+	sourcerepo "google.golang.org/api/sourcerepo/v1"
+	spanner "google.golang.org/api/spanner/v1"
 	sqladmin "google.golang.org/api/sqladmin/v1"
 	storage "google.golang.org/api/storage/v1"
+	storagebatchoperations "google.golang.org/api/storagebatchoperations/v1"
 	storagetransfer "google.golang.org/api/storagetransfer/v1"
+	testing "google.golang.org/api/testing/v1"
+	transcoder "google.golang.org/api/transcoder/v1"
+	htransport "google.golang.org/api/transport/http"
 	vmmigration "google.golang.org/api/vmmigration/v1"
+	vmwareengine "google.golang.org/api/vmwareengine/v1"
+	workflowexecutions "google.golang.org/api/workflowexecutions/v1"
+	workstations "google.golang.org/api/workstations/v1"
 )
 
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
@@ -803,12 +807,47 @@ func NetworkSecurityBetaService(ctx context.Context, account string) (*networkse
 	return networksecuritybeta.NewService(ctx, option.WithTokenSource(ts))
 }
 
-func SecurityCenterService(ctx context.Context, account string) (*securitycenter.Service, error) {
+// SecurityCenterService returns a Security Command Center V1 client. When
+// debugOut is non-nil each outgoing request is written to it as a curl
+// command (see internal/httplog) before being sent.
+func SecurityCenterService(ctx context.Context, account string, debugOut io.Writer) (*securitycenter.Service, error) {
 	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
 	if err != nil {
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
-	return securitycenter.NewService(ctx, option.WithTokenSource(ts))
+	opts, err := withRequestLogging(ctx, debugOut, option.WithTokenSource(ts))
+	if err != nil {
+		return nil, err
+	}
+	return securitycenter.NewService(ctx, opts...)
+}
+
+// withRequestLogging returns client options equivalent to opts, but with
+// every outgoing request written to out as a curl command. It builds the
+// transport the generated client would have built anyway, on top of a logging
+// base, so what gets printed is the request as sent -- including the
+// Authorization and X-Goog-User-Project headers added by the auth transport.
+//
+// A nil out returns opts unchanged, so callers can wrap unconditionally.
+func withRequestLogging(ctx context.Context, out io.Writer, opts ...option.ClientOption) ([]option.ClientOption, error) {
+	if out == nil {
+		return opts, nil
+	}
+	client, err := loggingHTTPClient(ctx, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return []option.ClientOption{option.WithHTTPClient(client)}, nil
+}
+
+// loggingHTTPClient builds the HTTP client that opts describe, with the
+// logging transport spliced in underneath the auth transport.
+func loggingHTTPClient(ctx context.Context, out io.Writer, opts ...option.ClientOption) (*http.Client, error) {
+	trans, err := htransport.NewTransport(ctx, httplog.NewTransport(http.DefaultTransport, out), opts...)
+	if err != nil {
+		return nil, fmt.Errorf("building debug transport: %w", err)
+	}
+	return &http.Client{Transport: trans}, nil
 }
 
 func SecurityPostureService(ctx context.Context, account string) (*securityposture.Service, error) {

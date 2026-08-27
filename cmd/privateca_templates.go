@@ -59,13 +59,13 @@ var (
 )
 
 var (
-	flagPCATplLocation      string
-	flagPCATplConfigFile    string
-	flagPCATplUpdateMask    string
-	flagPCATplAsync         bool
-	flagPCATplReplicateLoc  string
-	flagPCATplIamMember     string
-	flagPCATplIamRole       string
+	flagPCATplLocation     string
+	flagPCATplConfigFile   string
+	flagPCATplUpdateMask   string
+	flagPCATplAsync        bool
+	flagPCATplReplicateLoc string
+	flagPCATplIamMember    string
+	flagPCATplIamRole      string
 )
 
 func init() {

@@ -41,7 +41,10 @@ var auditManagerOperationsCmd = &cobra.Command{
 }
 
 func init() {
-	auditManagerStubs := []struct{ parent *cobra.Command; name string }{
+	auditManagerStubs := []struct {
+		parent *cobra.Command
+		name   string
+	}{
 		{auditManagerReportsCmd, "list"},
 		{auditManagerReportsCmd, "get"},
 		{auditManagerScopesCmd, "create"},

@@ -14,9 +14,9 @@ import (
 var policyTroubleshootCmd = &cobra.Command{Use: "policy-troubleshoot", Short: "Policy troubleshoot"}
 
 var (
-	flagPtIamPrincipal string
+	flagPtIamPrincipal  string
 	flagPtIamPermission string
-	flagPtIamFormat    string
+	flagPtIamFormat     string
 )
 
 var policyTroubleshootIamCmd = &cobra.Command{

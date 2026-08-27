@@ -51,18 +51,18 @@ var assetFeedUpdateCmd = &cobra.Command{
 }
 
 var (
-	flagAssetFeedProject         string
-	flagAssetFeedFolder          string
-	flagAssetFeedOrg             string
-	flagAssetFeedAssetNames      []string
-	flagAssetFeedAssetTypes      []string
-	flagAssetFeedContentType     string
-	flagAssetFeedPubsubTopic     string
-	flagAssetFeedConditionExpr   string
-	flagAssetFeedConditionTitle  string
-	flagAssetFeedConditionDesc   string
-	flagAssetFeedRelationships   []string
-	flagAssetFeedListFormat      string
+	flagAssetFeedProject        string
+	flagAssetFeedFolder         string
+	flagAssetFeedOrg            string
+	flagAssetFeedAssetNames     []string
+	flagAssetFeedAssetTypes     []string
+	flagAssetFeedContentType    string
+	flagAssetFeedPubsubTopic    string
+	flagAssetFeedConditionExpr  string
+	flagAssetFeedConditionTitle string
+	flagAssetFeedConditionDesc  string
+	flagAssetFeedRelationships  []string
+	flagAssetFeedListFormat     string
 )
 
 func init() {

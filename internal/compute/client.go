@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	ComputeScope    = "https://www.googleapis.com/auth/compute"
-	ComputeROScope  = "https://www.googleapis.com/auth/compute.readonly"
+	ComputeScope       = "https://www.googleapis.com/auth/compute"
+	ComputeROScope     = "https://www.googleapis.com/auth/compute.readonly"
 	CloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
 )
 

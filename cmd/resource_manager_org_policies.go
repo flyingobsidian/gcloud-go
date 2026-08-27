@@ -60,10 +60,10 @@ var orgPolicyDisableEnforceCmd = &cobra.Command{
 }
 
 var (
-	flagOrgPolicyProject     string
-	flagOrgPolicyFolder      string
-	flagOrgPolicyOrg         string
-	flagOrgPolicyEffective   bool
+	flagOrgPolicyProject      string
+	flagOrgPolicyFolder       string
+	flagOrgPolicyOrg          string
+	flagOrgPolicyEffective    bool
 	flagOrgPolicyListPageSize int64
 	flagOrgPolicyListLimit    int64
 )

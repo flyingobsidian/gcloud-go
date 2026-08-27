@@ -145,9 +145,9 @@ var (
 		Args: cobra.ExactArgs(1), RunE: runPSSubSeek,
 	}
 	psSubModifyAckCmd = &cobra.Command{
-		Use: "modify-message-ack-deadline SUBSCRIPTION ACK_ID [ACK_ID ...]",
+		Use:   "modify-message-ack-deadline SUBSCRIPTION ACK_ID [ACK_ID ...]",
 		Short: "Modify the ack deadline for outstanding messages",
-		Args: cobra.MinimumNArgs(2), RunE: runPSSubModifyAck,
+		Args:  cobra.MinimumNArgs(2), RunE: runPSSubModifyAck,
 	}
 	psSubModifyPushCmd = &cobra.Command{
 		Use: "modify-push-config SUBSCRIPTION", Short: "Modify the push configuration for a subscription",

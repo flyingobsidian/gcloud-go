@@ -20,17 +20,17 @@ var functionsCmd = &cobra.Command{Use: "functions", Short: "Manage Cloud Functio
 
 // Shared flags for the IAM-policy, event-types, logs, regions, runtimes subcommands.
 var (
-	flagFuncRegion        string
-	flagFuncFormat        string
-	flagFuncMember        string
-	flagFuncRole          string
-	flagFuncPolicyFile    string
-	flagFuncLimit         int64
-	flagFuncMinLogLevel   string
-	flagFuncExecutionID   string
-	flagFuncStartTime     string
-	flagFuncEndTime       string
-	flagFuncGen2          bool
+	flagFuncRegion      string
+	flagFuncFormat      string
+	flagFuncMember      string
+	flagFuncRole        string
+	flagFuncPolicyFile  string
+	flagFuncLimit       int64
+	flagFuncMinLogLevel string
+	flagFuncExecutionID string
+	flagFuncStartTime   string
+	flagFuncEndTime     string
+	flagFuncGen2        bool
 )
 
 // --- top-level IAM commands ---
@@ -57,25 +57,25 @@ var (
 // --- subgroups ---
 
 var (
-	funcEventTypesCmd = &cobra.Command{Use: "event-types", Short: "List trigger event types for Cloud Functions"}
+	funcEventTypesCmd     = &cobra.Command{Use: "event-types", Short: "List trigger event types for Cloud Functions"}
 	funcEventTypesListCmd = &cobra.Command{
 		Use: "list", Short: "List event types available to Cloud Functions",
 		Args: cobra.NoArgs, RunE: runFuncEventTypesList,
 	}
 
-	funcLogsCmd = &cobra.Command{Use: "logs", Short: "Manage Cloud Functions logs"}
+	funcLogsCmd     = &cobra.Command{Use: "logs", Short: "Manage Cloud Functions logs"}
 	funcLogsReadCmd = &cobra.Command{
 		Use: "read [NAME]", Short: "Read log entries produced by Cloud Functions",
 		Args: cobra.MaximumNArgs(1), RunE: runFuncLogsRead,
 	}
 
-	funcRegionsCmd = &cobra.Command{Use: "regions", Short: "List regions available to Cloud Functions"}
+	funcRegionsCmd     = &cobra.Command{Use: "regions", Short: "List regions available to Cloud Functions"}
 	funcRegionsListCmd = &cobra.Command{
 		Use: "list", Short: "List regions available to Cloud Functions",
 		Args: cobra.NoArgs, RunE: runFuncRegionsList,
 	}
 
-	funcRuntimesCmd = &cobra.Command{Use: "runtimes", Short: "List runtimes available to Cloud Functions"}
+	funcRuntimesCmd     = &cobra.Command{Use: "runtimes", Short: "List runtimes available to Cloud Functions"}
 	funcRuntimesListCmd = &cobra.Command{
 		Use: "list", Short: "List runtimes available to Cloud Functions",
 		Args: cobra.NoArgs, RunE: runFuncRuntimesList,
@@ -365,11 +365,11 @@ func removeBindingV2(p *cloudfunctions.Policy, role, member string) {
 // --- event-types (#861) ---
 
 type funcTriggerEventRow struct {
-	Provider        string `json:"provider"`
-	EventType       string `json:"event_type"`
-	Default         string `json:"event_type_default,omitempty"`
-	ResourceType    string `json:"resource_type,omitempty"`
-	ResourceOption  string `json:"resource_optional,omitempty"`
+	Provider       string `json:"provider"`
+	EventType      string `json:"event_type"`
+	Default        string `json:"event_type_default,omitempty"`
+	ResourceType   string `json:"resource_type,omitempty"`
+	ResourceOption string `json:"resource_optional,omitempty"`
 }
 
 var gen1TriggerEvents = []funcTriggerEventRow{

@@ -42,9 +42,9 @@ var evProvListCmd = &cobra.Command{
 }
 
 var (
-	flagEvLocFormat     string
-	flagEvLocListLimit  int64
-	flagEvLocListPage   int64
+	flagEvLocFormat    string
+	flagEvLocListLimit int64
+	flagEvLocListPage  int64
 
 	flagEvProvLocation   string
 	flagEvProvFormat     string

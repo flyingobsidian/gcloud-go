@@ -16,19 +16,19 @@ import (
 var identityCmd = &cobra.Command{Use: "identity", Short: "Manage Cloud Identity"}
 
 var (
-	flagIDGroupEmail        string
-	flagIDMemberEmail       string
-	flagIDGroupNamespace    string
-	flagIDMemberNamespace   string
-	flagIDRoles             string
-	flagIDAddRoles          string
-	flagIDRemoveRoles       string
-	flagIDMemberType        string
-	flagIDView              string
-	flagIDQuery             string
-	flagIDPageSize          int64
-	flagIDFormat            string
-	flagIDDeliverySetting   string
+	flagIDGroupEmail      string
+	flagIDMemberEmail     string
+	flagIDGroupNamespace  string
+	flagIDMemberNamespace string
+	flagIDRoles           string
+	flagIDAddRoles        string
+	flagIDRemoveRoles     string
+	flagIDMemberType      string
+	flagIDView            string
+	flagIDQuery           string
+	flagIDPageSize        int64
+	flagIDFormat          string
+	flagIDDeliverySetting string
 )
 
 func idResolveGroupName(ctx context.Context, svc *cloudidentity.Service, emailOrName, namespace string) (string, error) {

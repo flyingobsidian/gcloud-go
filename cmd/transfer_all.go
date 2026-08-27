@@ -811,8 +811,8 @@ func runXferJobUpdate(cmd *cobra.Command, args []string) error {
 		mask = append(mask, "description")
 	}
 	req := &storagetransfer.UpdateTransferJobRequest{
-		ProjectId:      project,
-		TransferJob:    job,
+		ProjectId:                  project,
+		TransferJob:                job,
 		UpdateTransferJobFieldMask: strings.Join(dedupe(mask), ","),
 	}
 	got, err := svc.TransferJobs.Patch(xferJobName(args[0]), req).Context(ctx).Do()

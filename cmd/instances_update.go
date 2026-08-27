@@ -18,9 +18,9 @@ var instancesUpdateCmd = &cobra.Command{
 }
 
 var (
-	flagUpdateLabels      map[string]string
-	flagUpdateRemoveLabels string
-	flagDeletionProtection bool
+	flagUpdateLabels         map[string]string
+	flagUpdateRemoveLabels   string
+	flagDeletionProtection   bool
 	flagNoDeletionProtection bool
 )
 

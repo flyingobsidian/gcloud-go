@@ -15,14 +15,14 @@ import (
 var accessApprovalCmd = &cobra.Command{Use: "access-approval", Short: "Manage Access Approval"}
 
 var (
-	flagAAFolder       string
-	flagAAOrganization string
-	flagAAConfigFile   string
-	flagAAUpdateMask   string
-	flagAAFormat       string
-	flagAAApproveExp   string
+	flagAAFolder        string
+	flagAAOrganization  string
+	flagAAConfigFile    string
+	flagAAUpdateMask    string
+	flagAAFormat        string
+	flagAAApproveExp    string
 	flagAADismissReason string
-	flagAAFilter       string
+	flagAAFilter        string
 )
 
 // --- requests ---

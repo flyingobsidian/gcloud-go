@@ -40,9 +40,9 @@ var instancesGetSerialPortOutputCmd = &cobra.Command{
 }
 
 var (
-	flagSerialPort   int64
-	flagSerialStart  int64
-	flagResetAsync   bool
+	flagSerialPort  int64
+	flagSerialStart int64
+	flagResetAsync  bool
 )
 
 func init() {
