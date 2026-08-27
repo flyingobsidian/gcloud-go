@@ -633,7 +633,7 @@ func init() {
 
 // sccClient returns an initialised securitycenter service.
 func sccClient(ctx context.Context) (*securitycenter.Service, error) {
-	return gcp.SecurityCenterService(ctx, flagAccount)
+	return gcp.SecurityCenterService(ctx, flagAccount, httpDebugWriter())
 }
 
 // splitScope returns ("organizations"|"folders"|"projects", "{id}") from a

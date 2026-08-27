@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
+	"github.com/flyingobsidian/gcloud-go/internal/httplog"
 	"golang.org/x/oauth2"
 )
 
@@ -77,6 +78,13 @@ func (c *restClient) do(ctx context.Context, method, path string, query url.Valu
 		return fmt.Errorf("obtaining credentials: %w", err)
 	}
 	client := oauth2.NewClient(ctx, ts)
+	// Log below the oauth2 transport rather than above it, so the printed
+	// request shows the Authorization header as actually sent.
+	if out := httpDebugWriter(); out != nil {
+		if t, ok := client.Transport.(*oauth2.Transport); ok {
+			t.Base = httplog.NewTransport(t.Base, out)
+		}
+	}
 	u := c.endpoint + path
 	if len(query) > 0 {
 		u = u + "?" + query.Encode()

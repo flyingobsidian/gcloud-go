@@ -103,7 +103,7 @@ func sortedHeaderNames(h http.Header) []string {
 }
 
 // shellQuote wraps s in single quotes, ending and reopening the quoting
-// around any single quote it contains ('\'' is the usual POSIX idiom).
+// around any single quote it contains, which is the usual POSIX idiom.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

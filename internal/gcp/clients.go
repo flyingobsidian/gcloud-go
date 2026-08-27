@@ -3,8 +3,11 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
+	"github.com/flyingobsidian/gcloud-go/internal/httplog"
 	apikeys "google.golang.org/api/apikeys/v2"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 	assuredworkloads "google.golang.org/api/assuredworkloads/v1"
@@ -111,6 +114,7 @@ import (
 	securityposture "google.golang.org/api/securityposture/v1"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/option"
+	htransport "google.golang.org/api/transport/http"
 	orgpolicy "google.golang.org/api/orgpolicy/v2"
 	oslogin "google.golang.org/api/oslogin/v1"
 	pubsublite "google.golang.org/api/pubsublite/v1"
@@ -803,12 +807,47 @@ func NetworkSecurityBetaService(ctx context.Context, account string) (*networkse
 	return networksecuritybeta.NewService(ctx, option.WithTokenSource(ts))
 }
 
-func SecurityCenterService(ctx context.Context, account string) (*securitycenter.Service, error) {
+// SecurityCenterService returns a Security Command Center V1 client. When
+// debugOut is non-nil each outgoing request is written to it as a curl
+// command (see internal/httplog) before being sent.
+func SecurityCenterService(ctx context.Context, account string, debugOut io.Writer) (*securitycenter.Service, error) {
 	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
 	if err != nil {
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
-	return securitycenter.NewService(ctx, option.WithTokenSource(ts))
+	opts, err := withRequestLogging(ctx, debugOut, option.WithTokenSource(ts))
+	if err != nil {
+		return nil, err
+	}
+	return securitycenter.NewService(ctx, opts...)
+}
+
+// withRequestLogging returns client options equivalent to opts, but with
+// every outgoing request written to out as a curl command. It builds the
+// transport the generated client would have built anyway, on top of a logging
+// base, so what gets printed is the request as sent -- including the
+// Authorization and X-Goog-User-Project headers added by the auth transport.
+//
+// A nil out returns opts unchanged, so callers can wrap unconditionally.
+func withRequestLogging(ctx context.Context, out io.Writer, opts ...option.ClientOption) ([]option.ClientOption, error) {
+	if out == nil {
+		return opts, nil
+	}
+	client, err := loggingHTTPClient(ctx, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return []option.ClientOption{option.WithHTTPClient(client)}, nil
+}
+
+// loggingHTTPClient builds the HTTP client that opts describe, with the
+// logging transport spliced in underneath the auth transport.
+func loggingHTTPClient(ctx context.Context, out io.Writer, opts ...option.ClientOption) (*http.Client, error) {
+	trans, err := htransport.NewTransport(ctx, httplog.NewTransport(http.DefaultTransport, out), opts...)
+	if err != nil {
+		return nil, fmt.Errorf("building debug transport: %w", err)
+	}
+	return &http.Client{Transport: trans}, nil
 }
 
 func SecurityPostureService(ctx context.Context, account string) (*securityposture.Service, error) {
