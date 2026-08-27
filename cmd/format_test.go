@@ -247,3 +247,54 @@ func TestEmitFormattedUnknown(t *testing.T) {
 		t.Fatal("expected error for unknown format")
 	}
 }
+
+// TestEmitFlattened covers the `flattened` format added for #1742.
+func TestEmitFlattened(t *testing.T) {
+	got := runFormat(t, fixtureProject(), "flattened")
+	// Deterministic key order (sorted). Compare exact bytes.
+	want := "createTime:     2026-07-11T11:40:24.977Z\n" +
+		"lifecycleState: ACTIVE\n" +
+		"name:           MY_PROJECT\n" +
+		"projectId:      MY_PROJECT\n" +
+		"projectNumber:  123456789012\n"
+	if got != want {
+		t.Errorf("flattened output mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestEmitFlattenedWithFields exercises the parenthesised form
+// `flattened(field1,field2)` -- restricts output to those subtrees.
+func TestEmitFlattenedWithFields(t *testing.T) {
+	got := runFormat(t, fixtureProject(), "flattened(projectId,name)")
+	want := "projectId: MY_PROJECT\n" +
+		"name:      MY_PROJECT\n"
+	if got != want {
+		t.Errorf("flattened(fields) output mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestEmitFlattenedNested asserts that nested objects and arrays produce
+// dotted-path leaves (metadata.items[0].key etc.).
+func TestEmitFlattenedNested(t *testing.T) {
+	// Fake Project with a common-metadata style shape.
+	obj := map[string]any{
+		"name": "p",
+		"metadata": map[string]any{
+			"items": []any{
+				map[string]any{"key": "K1", "value": "V1"},
+				map[string]any{"key": "K2", "value": "V2"},
+			},
+		},
+	}
+	got := runFormat(t, obj, "flattened")
+	// Keys sort alphabetically at each level: metadata < name; within
+	// each item, key < value.
+	want := "metadata.items[0].key:   K1\n" +
+		"metadata.items[0].value: V1\n" +
+		"metadata.items[1].key:   K2\n" +
+		"metadata.items[1].value: V2\n" +
+		"name:                    p\n"
+	if got != want {
+		t.Errorf("nested flattened mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}

@@ -213,7 +213,13 @@ func runProjectInfoDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing project: %w", err)
 	}
 
-	return formatOutput(proj, "")
+	// #1742: honour the global --format flag. gcloud-python defaults describe
+	// commands to yaml; use that when no format is specified.
+	format := flagFormat
+	if format == "" {
+		format = "yaml"
+	}
+	return emitFormatted(proj, format)
 }
 
 func runProjectInfoAddMetadata(cmd *cobra.Command, args []string) error {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -50,6 +51,8 @@ func emitFormattedTo(w io.Writer, v any, format string) error {
 		return emitConfig(w, rows, fields)
 	case "get":
 		return emitGet(w, rows, fields)
+	case "flattened":
+		return emitFlattened(w, rows, fields)
 	default:
 		return fmt.Errorf("unknown format %q", format)
 	}
@@ -67,6 +70,11 @@ func parseFormat(format string) (string, []string, error) {
 	if open < 0 {
 		switch format {
 		case "yaml", "json":
+			return format, nil, nil
+		case "flattened":
+			// `flattened` may be used without a field list -- it prints
+			// every leaf of the record. Return empty fields to signal
+			// "all fields" to emitFlattened.
 			return format, nil, nil
 		case "csv", "table", "text", "value", "config", "get":
 			return "", nil, fmt.Errorf("format %q requires a field list, e.g. %s(field1,field2)", format, format)
@@ -282,6 +290,114 @@ func emitGet(w io.Writer, rows []map[string]any, fields []string) error {
 		}
 	}
 	return nil
+}
+
+// flattenedEntry is a single path/value pair produced by flattenLeaves.
+type flattenedEntry struct{ key, val string }
+
+// emitFlattened writes v as gcloud's "flattened" format: one dotted-path
+// KEY: VALUE line per leaf. When fields is empty, every leaf is emitted;
+// when fields is provided, the output is restricted to those subtrees.
+func emitFlattened(w io.Writer, rows []map[string]any, fields []string) error {
+	for r, row := range rows {
+		if r > 0 {
+			// Records after the first are separated by ---, matching
+			// gcloud-python's flattened multi-record output.
+			if _, err := fmt.Fprintln(w, "---"); err != nil {
+				return err
+			}
+		}
+		var entries []flattenedEntry
+		if len(fields) == 0 {
+			entries = flattenLeaves("", row)
+		} else {
+			for _, f := range fields {
+				val, ok := lookupPath(row, f)
+				if !ok {
+					continue
+				}
+				entries = append(entries, flattenLeaves(f, val)...)
+			}
+		}
+		width := 0
+		for _, e := range entries {
+			if len(e.key) > width {
+				width = len(e.key)
+			}
+		}
+		for _, e := range entries {
+			pad := strings.Repeat(" ", width-len(e.key))
+			if _, err := fmt.Fprintf(w, "%s:%s %s\n", e.key, pad, e.val); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// flattenLeaves walks v and returns dotted-path leaf entries, using prefix
+// as the accumulated path.
+func flattenLeaves(prefix string, v any) []flattenedEntry {
+	switch t := v.(type) {
+	case map[string]any:
+		// Deterministic key order so callers see a stable table.
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var out []flattenedEntry
+		for _, k := range keys {
+			p := k
+			if prefix != "" {
+				p = prefix + "." + k
+			}
+			out = append(out, flattenLeaves(p, t[k])...)
+		}
+		return out
+	case []any:
+		var out []flattenedEntry
+		for i, e := range t {
+			p := fmt.Sprintf("%s[%d]", prefix, i)
+			out = append(out, flattenLeaves(p, e)...)
+		}
+		return out
+	default:
+		return []flattenedEntry{{key: prefix, val: stringifyLeaf(v)}}
+	}
+}
+
+func stringifyLeaf(v any) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+// lookupPath walks m via a dotted path and returns the value at that
+// location (or nil, false). Bracket indexing e.g. "items[0]" is honoured.
+func lookupPath(m map[string]any, path string) (any, bool) {
+	var cur any = m
+	for _, part := range strings.Split(path, ".") {
+		key, index, hasIndex := parseIndex(part)
+		mp, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		val, ok := mp[key]
+		if !ok {
+			return nil, false
+		}
+		if hasIndex {
+			arr, ok := val.([]any)
+			if !ok || index < 0 || index >= len(arr) {
+				return nil, false
+			}
+			val = arr[index]
+		}
+		cur = val
+	}
+	return cur, true
 }
 
 // fieldValue looks up a dotted field path (e.g. "networkInterfaces[0].networkIP")
