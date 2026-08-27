@@ -73,6 +73,16 @@ func SetRestUserProjectForTest(project string) (restore func()) {
 }
 
 func (c *restClient) do(ctx context.Context, method, path string, query url.Values, body any, out any) error {
+	// Resolve the billing / quota project up front (--billing-project,
+	// billing/quota_project config, or ADC quota_project_id) and refuse to
+	// make the call without one. Google's APIs charge quota against this
+	// project and reject ADC user credentials when it is missing (#1740);
+	// failing here names the setting to change, where the server-side
+	// PERMISSION_DENIED does not.
+	qp := restUserProject()
+	if qp == "" {
+		return errNoBillingProject(endpointHost(c.endpoint))
+	}
 	ts, err := restTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return fmt.Errorf("obtaining credentials: %w", err)
@@ -104,15 +114,10 @@ func (c *restClient) do(ctx context.Context, method, path string, query url.Valu
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	// Send the caller's billing / quota project when one is resolvable
-	// (--billing-project, billing/quota_project config, or ADC
-	// quota_project_id). Google's APIs charge quota against this project
-	// and refuse ADC user creds without a value (#1740). Passing an
-	// x-goog-user-project header mirrors what the official client
-	// libraries do when a quota project is configured.
-	if qp := restUserProject(); qp != "" {
-		req.Header.Set("X-Goog-User-Project", qp)
-	}
+	// Passing an x-goog-user-project header mirrors what the official client
+	// libraries do when a quota project is configured. The value is known to
+	// be non-empty: do() refuses the call above when it is not.
+	req.Header.Set("X-Goog-User-Project", qp)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP %s %s: %w", method, u, err)

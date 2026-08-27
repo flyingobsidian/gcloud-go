@@ -45,11 +45,7 @@ func sccV2ListFindings(parent string) error {
 	// shared restClient. Goes through restUserProject so tests can inject
 	// a synthetic project without touching global config or ADC.
 	if restUserProject() == "" {
-		return fmt.Errorf(
-			"a quota (billing) project is required for the SCC V2 API but none was found. " +
-				"Set one via --billing-project=PROJECT_ID, " +
-				"`gcloud config set billing/quota_project PROJECT_ID`, or " +
-				"`gcloud auth application-default set-quota-project PROJECT_ID`")
+		return errNoBillingProject("the SCC V2 API")
 	}
 	parentPath := sccV2ParentPath(parent, flagSccFindingSource, flagSccFindingLocation)
 
