@@ -46,6 +46,7 @@ var (
 	flagSccFindingSource         string
 	flagSccFindingMuteState      string
 	flagSccFindingBulkMuteFilter string
+	flagSccFindingBulkMuteState  string
 	flagSccFindingGroupBy        string
 	flagSccFindingCompareDur     string
 	flagSccFindingReadTime       string
@@ -280,6 +281,12 @@ var (
 
 // --- findings ---
 
+// sccLocationFlagHelp documents --location on every findings command that
+// routes between the two API versions.
+const sccLocationFlagHelp = "Location of the resource. Passing --location routes to the SCC V2 API via REST, " +
+	"including --location=global; omitting it uses the SCC V1 API (deprecated server-side). " +
+	"Organizations without data residency controls must use \"global\"."
+
 var sccFindingsCmd = &cobra.Command{Use: "findings", Short: "Manage findings"}
 
 var (
@@ -511,6 +518,10 @@ func init() {
 	sccFindingsBulkMuteCmd.Flags().StringVar(&flagSccFindingBulkMuteFilter, "filter", "",
 		"Filter expression identifying findings to mute (required)")
 	_ = sccFindingsBulkMuteCmd.MarkFlagRequired("filter")
+	sccFindingsBulkMuteCmd.Flags().StringVar(&flagSccFindingBulkMuteState, "mute-state", "muted",
+		"Desired mute state of the findings (muted|undefined)")
+	sccFindingsBulkMuteCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
+		sccLocationFlagHelp)
 	sccFindingsCreateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the Finding body (required)")
 	_ = sccFindingsCreateCmd.MarkFlagRequired("config-file")
@@ -521,7 +532,7 @@ func init() {
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
 	sccFindingsListCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0, "Page size for list requests")
 	sccFindingsListCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
-		"Location of the resource. Passing --location routes to the SCC V2 API via REST, including --location=global; omitting it uses the SCC V1 API (deprecated server-side). Organizations without data residency controls must use \"global\".")
+		sccLocationFlagHelp)
 	sccFindingsGroupCmd.Flags().StringVar(&flagSccFindingGroupBy, "group-by", "",
 		"Comma-separated list of fields to group by (required)")
 	_ = sccFindingsGroupCmd.MarkFlagRequired("group-by")
@@ -1726,7 +1737,18 @@ func runSccFindingsBulkMute(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	req := &securitycenter.BulkMuteFindingsRequest{Filter: flagSccFindingBulkMuteFilter}
+	// Same V1/V2 routing as findings list: an explicit --location selects V2.
+	if sccLocationSpecified(cmd) {
+		return sccV2BulkMuteFindings(parent)
+	}
+	muteState, err := sccMuteStateEnum(flagSccFindingBulkMuteState)
+	if err != nil {
+		return err
+	}
+	req := &securitycenter.BulkMuteFindingsRequest{
+		Filter:    flagSccFindingBulkMuteFilter,
+		MuteState: muteState,
+	}
 	ctx := context.Background()
 	svc, err := sccClient(ctx)
 	if err != nil {

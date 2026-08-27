@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"golang.org/x/oauth2"
 )
 
@@ -29,17 +30,18 @@ func TestSccV2ParentPath(t *testing.T) {
 	}
 }
 
-// withSccLocation sets --location the way parsing a command line would, so
-// that the V1/V2 routing in runSccFindingsList sees it as specified. The flag
-// is restored when the test ends.
-func withSccLocation(t *testing.T, location string) {
+// withSccLocation sets --location on cmd the way parsing a command line
+// would, so that the V1/V2 routing sees it as specified. Each command
+// registers its own --location flag, so the routing only sees the one on the
+// command being run. The flag is restored when the test ends.
+func withSccLocation(t *testing.T, cmd *cobra.Command, location string) {
 	t.Helper()
-	f := sccFindingsListCmd.Flags().Lookup("location")
+	f := cmd.Flags().Lookup("location")
 	if f == nil {
-		t.Fatal("--location flag is not registered on scc findings list")
+		t.Fatalf("--location flag is not registered on %q", cmd.Name())
 	}
 	prev, prevChanged := f.Value.String(), f.Changed
-	if err := sccFindingsListCmd.Flags().Set("location", location); err != nil {
+	if err := cmd.Flags().Set("location", location); err != nil {
 		t.Fatalf("setting --location=%s: %v", location, err)
 	}
 	t.Cleanup(func() {
@@ -105,7 +107,7 @@ func TestSccFindingsListV2(t *testing.T) {
 	}()
 	flagSccOrg = "1"
 	flagSccFindingSource = "-"
-	withSccLocation(t, "eu")
+	withSccLocation(t, sccFindingsListCmd, "eu")
 	flagSccFilter = "state=\"ACTIVE\""
 	flagSccFormat = ""
 
@@ -163,7 +165,7 @@ func TestSccFindingsListRoutesGlobalToV2(t *testing.T) {
 	flagSccOrg = "1057127509270"
 	flagSccFindingSource = "-"
 	flagSccFormat = ""
-	withSccLocation(t, "global")
+	withSccLocation(t, sccFindingsListCmd, "global")
 
 	_ = captureStdout(t, func() {
 		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
@@ -184,9 +186,155 @@ func TestSccLocationSpecified(t *testing.T) {
 		t.Error("expected --location to start unspecified")
 	}
 	for _, location := range []string{"global", "eu", "us"} {
-		withSccLocation(t, location)
+		withSccLocation(t, sccFindingsListCmd, location)
 		if !sccLocationSpecified(sccFindingsListCmd) {
 			t.Errorf("--location=%s should route to V2", location)
+		}
+	}
+}
+
+// TestSccBulkMuteV2 checks the V2 bulk-mute request: a POST to
+// findings:bulkMute under the regionalized scope, carrying the filter and the
+// mute state, with the LRO echoed back through --format.
+func TestSccBulkMuteV2(t *testing.T) {
+	var gotPath, gotMethod string
+	var gotBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotMethod = r.URL.Path, r.Method
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name": "organizations/1057127509270/operations/bulk-mute-op",
+			"done": false,
+		})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveFilter, saveState, saveFmt := flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat
+	defer func() {
+		flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat =
+			saveOrg, saveFilter, saveState, saveFmt
+	}()
+	flagSccOrg = "1057127509270"
+	flagSccFindingBulkMuteFilter = `category="XSS_SCRIPTING"`
+	flagSccFindingBulkMuteState = "muted"
+	flagSccFormat = "json"
+	withSccLocation(t, sccFindingsBulkMuteCmd, "global")
+
+	out := captureStdout(t, func() {
+		if err := runSccFindingsBulkMute(sccFindingsBulkMuteCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsBulkMute: %v", err)
+		}
+	})
+
+	if gotMethod != http.MethodPost {
+		t.Errorf("method = %s, want POST", gotMethod)
+	}
+	wantPath := "/organizations/1057127509270/locations/global/findings:bulkMute"
+	if gotPath != wantPath {
+		t.Errorf("request path = %q, want %q", gotPath, wantPath)
+	}
+	if got := gotBody["filter"]; got != `category="XSS_SCRIPTING"` {
+		t.Errorf("filter = %v, want the category filter", got)
+	}
+	if got := gotBody["muteState"]; got != "MUTED" {
+		t.Errorf("muteState = %v, want MUTED", got)
+	}
+	if !strings.Contains(out, "bulk-mute-op") {
+		t.Errorf("expected the operation name in the output, got:\n%s", out)
+	}
+}
+
+// TestSccBulkMuteV2Undefined checks --mute-state=undefined, which unmutes.
+func TestSccBulkMuteV2Undefined(t *testing.T) {
+	var gotBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"done": true})
+	}))
+	defer server.Close()
+
+	orig := sccV2Rest
+	defer func() { sccV2Rest = orig }()
+	sccV2RestClientForTest(server.URL)
+
+	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
+	defer restore()
+	restoreQP := SetRestUserProjectForTest("qp-123")
+	defer restoreQP()
+
+	saveOrg, saveFilter, saveState, saveFmt := flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat
+	defer func() {
+		flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat =
+			saveOrg, saveFilter, saveState, saveFmt
+	}()
+	flagSccOrg = "1"
+	flagSccFindingBulkMuteFilter = "state=\"ACTIVE\""
+	flagSccFindingBulkMuteState = "undefined"
+	flagSccFormat = "json"
+	withSccLocation(t, sccFindingsBulkMuteCmd, "eu")
+
+	_ = captureStdout(t, func() {
+		if err := runSccFindingsBulkMute(sccFindingsBulkMuteCmd, nil); err != nil {
+			t.Fatalf("runSccFindingsBulkMute: %v", err)
+		}
+	})
+
+	if got := gotBody["muteState"]; got != "UNDEFINED" {
+		t.Errorf("muteState = %v, want UNDEFINED", got)
+	}
+}
+
+func TestSccMuteStateEnum(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"muted", "MUTED", false},
+		{"MUTED", "MUTED", false},
+		{"", "MUTED", false},
+		{"undefined", "UNDEFINED", false},
+		{"Undefined", "UNDEFINED", false},
+		{"unmuted", "", true},
+		{"nonsense", "", true},
+	}
+	for _, tc := range cases {
+		got, err := sccMuteStateEnum(tc.in)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("sccMuteStateEnum(%q) = %q, want an error", tc.in, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("sccMuteStateEnum(%q): %v", tc.in, err)
+		}
+		if got != tc.want {
+			t.Errorf("sccMuteStateEnum(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestSccV2ScopePath(t *testing.T) {
+	cases := []struct{ parent, location, want string }{
+		{"organizations/1", "global", "organizations/1/locations/global"},
+		{"folders/2", "eu", "folders/2/locations/eu"},
+		{"projects/p", "locations/us", "projects/p/locations/us"},
+	}
+	for _, tc := range cases {
+		if got := sccV2ScopePath(tc.parent, tc.location); got != tc.want {
+			t.Errorf("sccV2ScopePath(%q,%q) = %q, want %q", tc.parent, tc.location, got, tc.want)
 		}
 	}
 }

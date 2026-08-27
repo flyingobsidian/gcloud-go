@@ -66,7 +66,7 @@ func TestSccFindingsListV2LogsCurl(t *testing.T) {
 	}()
 	flagSccOrg = "1"
 	flagSccFindingSource = "-"
-	withSccLocation(t, "eu")
+	withSccLocation(t, sccFindingsListCmd, "eu")
 	flagSccFilter = "state=\"ACTIVE\""
 	flagSccFormat = ""
 
@@ -118,7 +118,7 @@ func TestSccFindingsListV2QuietByDefault(t *testing.T) {
 	saveOrg := flagSccOrg
 	defer func() { flagSccOrg = saveOrg }()
 	flagSccOrg = "1"
-	withSccLocation(t, "eu")
+	withSccLocation(t, sccFindingsListCmd, "eu")
 
 	_ = captureStdout(t, func() {
 		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
