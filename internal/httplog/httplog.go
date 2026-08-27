@@ -42,10 +42,45 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	if t.Out != nil {
-		fmt.Fprintln(t.Out, Curl(req))
+	if t.Out == nil {
+		return base.RoundTrip(req)
 	}
-	return base.RoundTrip(req)
+	fmt.Fprintln(t.Out, Curl(req))
+	resp, err := base.RoundTrip(req)
+	if err != nil {
+		fmt.Fprintf(t.Out, "%s%s\n", commentPrefix, err)
+		return resp, err
+	}
+	fmt.Fprint(t.Out, ResponseHeaders(resp))
+	return resp, nil
+}
+
+// commentPrefix starts every line that is not itself a runnable command, so a
+// whole block of debug output can be pasted into a shell unchanged.
+const commentPrefix = "# "
+
+// ResponseHeaders renders the status line and every response header, one
+// commented line each and newline terminated. Google's APIs report result
+// counts in the response body (`totalSize`), not in a header, so this is where
+// you confirm that no header carries a count rather than where you read one.
+func ResponseHeaders(resp *http.Response) string {
+	if resp == nil {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s< %s %s\n", commentPrefix, resp.Proto, resp.Status)
+	for _, name := range sortedHeaderNames(resp.Header) {
+		for _, value := range resp.Header[name] {
+			fmt.Fprintf(&b, "%s< %s: %s\n", commentPrefix, name, value)
+		}
+	}
+	return b.String()
+}
+
+// Note renders a free-form progress line for the debug stream, commented so it
+// stays paste-safe alongside the curl commands.
+func Note(format string, args ...any) string {
+	return commentPrefix + fmt.Sprintf(format, args...)
 }
 
 // Curl renders req as a single-line curl command. The request is not

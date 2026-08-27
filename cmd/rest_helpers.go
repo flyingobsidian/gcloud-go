@@ -143,10 +143,37 @@ func (c *restClient) do(ctx context.Context, method, path string, query url.Valu
 	return nil
 }
 
+// logPageProgress reports how far a paginated listing has got, once per page,
+// when debug logging is on.
+//
+// Google's JSON APIs put the result count in the response body, not in a
+// response header: there is no X-Total-Count or equivalent to read. Listings
+// that report a grand total do it with the AIP-158 `totalSize` field, which is
+// itself optional -- SCC findings.list returns it, many other collections do
+// not -- so the total is only printed when the server actually sent one.
+func logPageProgress(sliceField string, page, pageCount, running int, totalSize any, more bool) {
+	out := httpDebugWriter()
+	if out == nil {
+		return
+	}
+	total := ""
+	// encoding/json decodes every JSON number into a float64.
+	if n, ok := totalSize.(float64); ok {
+		total = fmt.Sprintf(" of %d", int64(n))
+	}
+	remaining := "last page"
+	if more {
+		remaining = "more pages follow"
+	}
+	fmt.Fprintln(out, httplog.Note("page %d: %d %s, %d%s so far (%s)",
+		page, pageCount, sliceField, running, total, remaining))
+}
+
 // paginate lists a REST collection into a flat slice of resources.
 func (c *restClient) paginate(ctx context.Context, path string, base url.Values, sliceField string, pageSize int64) ([]map[string]any, error) {
 	var all []map[string]any
 	pageToken := ""
+	page := 0
 	for {
 		q := url.Values{}
 		for k, v := range base {
@@ -162,14 +189,18 @@ func (c *restClient) paginate(ctx context.Context, path string, base url.Values,
 		if err := c.do(ctx, http.MethodGet, path, q, nil, &raw); err != nil {
 			return nil, err
 		}
+		page++
+		pageCount := 0
 		if arr, ok := raw[sliceField].([]any); ok {
 			for _, e := range arr {
 				if m, ok := e.(map[string]any); ok {
 					all = append(all, m)
 				}
 			}
+			pageCount = len(arr)
 		}
 		tok, _ := raw["nextPageToken"].(string)
+		logPageProgress(sliceField, page, pageCount, len(all), raw["totalSize"], tok != "")
 		if tok == "" {
 			break
 		}

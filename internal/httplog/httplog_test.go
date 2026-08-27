@@ -3,6 +3,7 @@ package httplog
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -75,6 +76,53 @@ func TestTransportLogsAndForwards(t *testing.T) {
 	}
 	if !strings.HasSuffix(logged, "\n") {
 		t.Error("log line is not newline terminated")
+	}
+}
+
+func TestTransportLogsResponseHeaders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		w.Header().Set("X-Debug-Marker", "present")
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	var out bytes.Buffer
+	client := &http.Client{Transport: NewTransport(nil, &out)}
+	resp, err := client.Get(srv.URL + "/v2/findings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	logged := out.String()
+	for _, want := range []string{
+		"# < HTTP/1.1 200 OK",
+		"# < Content-Type: application/json; charset=UTF-8",
+		"# < X-Debug-Marker: present",
+	} {
+		if !strings.Contains(logged, want) {
+			t.Errorf("log missing %q; got:\n%s", want, logged)
+		}
+	}
+	// Every non-curl line must be commented so the block stays paste-safe.
+	for _, line := range strings.Split(strings.TrimSpace(logged), "\n") {
+		if !strings.HasPrefix(line, "curl ") && !strings.HasPrefix(line, "# ") {
+			t.Errorf("line is neither a command nor a comment: %q", line)
+		}
+	}
+
+	// The body must still be readable by the caller.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil || string(body) != "{}" {
+		t.Errorf("response body = %q, %v; want {} and no error", body, err)
+	}
+}
+
+func TestNoteIsCommented(t *testing.T) {
+	got := Note("page %d: %d results", 2, 500)
+	if got != "# page 2: 500 results" {
+		t.Errorf("Note() = %q", got)
 	}
 }
 
