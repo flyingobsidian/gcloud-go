@@ -110,6 +110,19 @@ func TestLoadConnectionProfileFile(t *testing.T) {
 	})
 }
 
+func TestDMCPFetchStaticIPsFlags(t *testing.T) {
+	// gcloud-python 581.0.0 added --fetch-reserved-public-ips to
+	// `connection-profiles fetch-static-ips`; make sure the flag is
+	// registered on that command so cobra will parse it (and that a
+	// sibling --page-size is also reachable, since the runner already
+	// honours flagDMCPListPageSize).
+	for _, want := range []string{"fetch-reserved-public-ips", "page-size", "region"} {
+		if dmCPFetchStaticIPsCmd.Flags().Lookup(want) == nil {
+			t.Errorf("fetch-static-ips missing --%s", want)
+		}
+	}
+}
+
 func TestDMConnectionProfilesCommandTree(t *testing.T) {
 	want := []string{"create", "delete", "describe", "fetch-static-ips", "list", "test", "update"}
 	got := map[string]bool{}
