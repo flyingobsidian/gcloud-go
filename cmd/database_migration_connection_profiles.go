@@ -79,16 +79,17 @@ var dmCPFetchStaticIPsCmd = &cobra.Command{
 }
 
 var (
-	flagDMCPRegion       string
-	flagDMCPFormat       string
-	flagDMCPListPageSize int64
-	flagDMCPListLimit    int64
-	flagDMCPListFilter   string
-	flagDMCPListURI      bool
-	flagDMCPConfigFile   string
-	flagDMCPUpdateMask   string
-	flagDMCPSkipValidate bool
-	flagDMCPAsync        bool
+	flagDMCPRegion              string
+	flagDMCPFormat              string
+	flagDMCPListPageSize        int64
+	flagDMCPListLimit           int64
+	flagDMCPListFilter          string
+	flagDMCPListURI             bool
+	flagDMCPConfigFile          string
+	flagDMCPUpdateMask          string
+	flagDMCPSkipValidate        bool
+	flagDMCPAsync               bool
+	flagDMCPFetchReservedPublic bool
 )
 
 func init() {
@@ -133,6 +134,13 @@ func init() {
 
 	dmCPTestCmd.Flags().BoolVar(&flagDMCPAsync, "async", false,
 		"Return the long-running operation immediately without waiting for completion")
+
+	// gcloud-python 581.0.0 added --fetch-reserved-public-ips to
+	// `connection-profiles fetch-static-ips`; maps to the FetchStaticIps
+	// request's fetchReservedPublicIps query parameter.
+	dmCPFetchStaticIPsCmd.Flags().BoolVar(&flagDMCPFetchReservedPublic, "fetch-reserved-public-ips", false,
+		"Fetch reserved public IPs allocated for private connections in addition to the service's static outbound IPs")
+	dmCPFetchStaticIPsCmd.Flags().Int64Var(&flagDMCPListPageSize, "page-size", 0, "Page size for API pagination")
 
 	dmConnProfilesCmd.AddCommand(
 		dmCPCreateCmd,
@@ -519,6 +527,9 @@ func runDMCPFetchStaticIPs(cmd *cobra.Command, args []string) error {
 	call := svc.Projects.Locations.FetchStaticIps(parent).Context(ctx)
 	if flagDMCPListPageSize > 0 {
 		call = call.PageSize(flagDMCPListPageSize)
+	}
+	if flagDMCPFetchReservedPublic {
+		call = call.FetchReservedPublicIps(true)
 	}
 	resp, err := call.Do()
 	if err != nil {
