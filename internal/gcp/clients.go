@@ -11,6 +11,7 @@ import (
 	"golang.org/x/oauth2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
 	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
+	agentidentity "google.golang.org/api/agentidentity/v1"
 	agentregistry "google.golang.org/api/agentregistry/v1alpha"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 	aiplatformbeta "google.golang.org/api/aiplatform/v1beta1"
@@ -798,6 +799,15 @@ func AgentRegistryService(ctx context.Context, account string) (*agentregistry.A
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return agentregistry.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// AgentIdentityService returns an agentidentity v1 client.
+func AgentIdentityService(ctx context.Context, account string) (*agentidentity.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return agentidentity.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func CloudIdentityService(ctx context.Context, account string) (*cloudidentity.Service, error) {
