@@ -73,6 +73,28 @@ func TestWithRequestLoggingDisabled(t *testing.T) {
 	}
 }
 
+// TestAIPlatformEndpointForRegion checks the mREP routing added in
+// gcloud-python 579.0.0: the "us" jurisdiction lives on
+// aiplatform.us.rep.googleapis.com, while ordinary GCP regions keep the
+// locational <region>-aiplatform.googleapis.com host, and an empty region
+// yields no override.
+func TestAIPlatformEndpointForRegion(t *testing.T) {
+	cases := []struct {
+		region string
+		want   string
+	}{
+		{"", ""},
+		{"us-central1", "https://us-central1-aiplatform.googleapis.com/"},
+		{"europe-west4", "https://europe-west4-aiplatform.googleapis.com/"},
+		{"us", "https://aiplatform.us.rep.googleapis.com/"},
+	}
+	for _, tc := range cases {
+		if got := aiplatformEndpointForRegion(tc.region); got != tc.want {
+			t.Errorf("aiplatformEndpointForRegion(%q) = %q, want %q", tc.region, got, tc.want)
+		}
+	}
+}
+
 // TestWithRequestLoggingReplacesOptions checks that enabling logging hands the
 // generated client a single prebuilt HTTP client instead of the auth options,
 // which google.golang.org/api rejects in combination.

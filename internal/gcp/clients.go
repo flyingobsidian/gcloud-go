@@ -718,8 +718,8 @@ func AIPlatformService(ctx context.Context, account, region string) (*aiplatform
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	opts := []option.ClientOption{option.WithTokenSource(ts)}
-	if region != "" {
-		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-aiplatform.googleapis.com/", region)))
+	if endpoint := aiplatformEndpointForRegion(region); endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
 	}
 	return aiplatform.NewService(ctx, opts...)
 }
@@ -733,10 +733,35 @@ func AIPlatformBetaService(ctx context.Context, account, region string) (*aiplat
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	opts := []option.ClientOption{option.WithTokenSource(ts)}
-	if region != "" {
-		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-aiplatform.googleapis.com/", region)))
+	if endpoint := aiplatformEndpointForRegion(region); endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
 	}
 	return aiplatformbeta.NewService(ctx, opts...)
+}
+
+// aiplatformEndpointForRegion returns the aiplatform endpoint override for a
+// given region. A GCP region (e.g. "us-central1") is served on the locational
+// host <region>-aiplatform.googleapis.com. Multi-regional (mREP) jurisdictions
+// -- currently just "us" -- are served on the dedicated REP host
+// aiplatform.<jurisdiction>.rep.googleapis.com. An empty region returns "".
+//
+// See gcloud-python 579.0.0 release note "Route gcloud ai requests for the us
+// multi-region to the Vertex AI multi-regional (REP) endpoint."
+func aiplatformEndpointForRegion(region string) string {
+	if region == "" {
+		return ""
+	}
+	if isAIPlatformMREPJurisdiction(region) {
+		return fmt.Sprintf("https://aiplatform.%s.rep.googleapis.com/", region)
+	}
+	return fmt.Sprintf("https://%s-aiplatform.googleapis.com/", region)
+}
+
+// isAIPlatformMREPJurisdiction reports whether the given region is a
+// multi-regional (mREP) jurisdiction served on a dedicated REP host. This
+// mirrors constants.MREP_JURISDICTIONS in gcloud-python.
+func isAIPlatformMREPJurisdiction(region string) bool {
+	return region == "us"
 }
 
 // MLService returns a client for the legacy Cloud ML Engine API
