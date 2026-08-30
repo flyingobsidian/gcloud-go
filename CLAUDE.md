@@ -4,7 +4,7 @@ Read the [readme](/README.md) for an overview of the repo.
 
 Develop new features and bug fixes in a separate branch.
 
-See [`patterns.md`](/patterns.md) for a list of Golang patterns to follow and anti-patterns to avoid.
+See [`patterns-golang.md`](/patterns-golang.md) for a list of Golang patterns to follow and anti-patterns to avoid.
 
 ## git branches
 
@@ -31,4 +31,4 @@ Keep commit messages to one line only. No paragraphs. No emoji. No bullet point 
 
 ## git push
 
-Before running `git push`, run tests. See [Makefile](/Makefile) for details.
+Before running `git push`, run lint and unit tests. See [Makefile](/Makefile) for details.
