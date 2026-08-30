@@ -60,7 +60,94 @@ var (
 	flagADBFormat     string
 	flagADBAsync      bool
 	flagADBCluster    string
+
+	// #1751 (571.0.0 / 570.0.0): --labels / --update-labels / --remove-labels /
+	// --clear-labels on `alloydb instances (create|create-secondary|update)`.
+	flagADBLabels        map[string]string
+	flagADBUpdateLabels  map[string]string
+	flagADBRemoveLabels  []string
+	flagADBClearLabels   bool
+
+	// #1751 (578.0.0): --backupdr-backup / --backupdr-data-source on
+	// `alloydb clusters restore` (BackupDR restore flags promoted to GA).
+	flagADBBackupDRBackup     string
+	flagADBBackupDRDataSource string
 )
+
+// adbApplyCreateLabels merges the --labels flag onto an Instance body loaded
+// from --config-file. Flag values take precedence for overlapping keys.
+func adbApplyCreateLabels(inst *alloydb.Instance) {
+	if len(flagADBLabels) == 0 {
+		return
+	}
+	if inst.Labels == nil {
+		inst.Labels = make(map[string]string, len(flagADBLabels))
+	}
+	for k, v := range flagADBLabels {
+		inst.Labels[k] = v
+	}
+}
+
+// adbApplyUpdateLabels applies --update-labels / --remove-labels /
+// --clear-labels onto an Instance body and returns the field-mask entry that
+// callers should include ("labels") if any label mutation happened.
+func adbApplyUpdateLabels(inst *alloydb.Instance) (labelsMaskEntry string) {
+	if !flagADBClearLabels && len(flagADBUpdateLabels) == 0 && len(flagADBRemoveLabels) == 0 {
+		return ""
+	}
+	if flagADBClearLabels {
+		inst.Labels = map[string]string{}
+	}
+	if inst.Labels == nil {
+		inst.Labels = map[string]string{}
+	}
+	// --update-labels first, then --remove-labels so that removal wins on
+	// conflicting keys (matches gcloud-python's label helper).
+	for k, v := range flagADBUpdateLabels {
+		inst.Labels[k] = v
+	}
+	for _, k := range flagADBRemoveLabels {
+		delete(inst.Labels, k)
+	}
+	if len(inst.Labels) == 0 {
+		inst.ForceSendFields = append(inst.ForceSendFields, "Labels")
+	}
+	return "labels"
+}
+
+// adbAddInstanceLabelFlags binds the create/create-secondary label flag.
+func adbAddInstanceLabelFlags(c *cobra.Command) {
+	c.Flags().StringToStringVar(&flagADBLabels, "labels", nil,
+		"Labels to assign to the instance, as KEY=VALUE pairs (repeatable)")
+}
+
+// adbAddInstanceUpdateLabelFlags binds the update label-mutation flags.
+func adbAddInstanceUpdateLabelFlags(c *cobra.Command) {
+	c.Flags().StringToStringVar(&flagADBUpdateLabels, "update-labels", nil,
+		"Labels to add or overwrite on the instance, as KEY=VALUE pairs (repeatable)")
+	c.Flags().StringSliceVar(&flagADBRemoveLabels, "remove-labels", nil,
+		"Comma-separated list of label keys to remove from the instance")
+	c.Flags().BoolVar(&flagADBClearLabels, "clear-labels", false,
+		"Clear all labels on the instance before applying --update-labels")
+}
+
+// adbApplyClusterRestoreBackupDR wires --backupdr-backup / --backupdr-data-source
+// onto a RestoreClusterRequest. The two flags are mutually exclusive: --backupdr-backup
+// populates BackupdrBackupSource (restore-from-backup) and --backupdr-data-source
+// populates BackupdrPitrSource (point-in-time recovery). Values loaded from
+// --config-file are preserved when the corresponding flag is empty.
+func adbApplyClusterRestoreBackupDR(req *alloydb.RestoreClusterRequest) error {
+	if flagADBBackupDRBackup != "" && flagADBBackupDRDataSource != "" {
+		return fmt.Errorf("--backupdr-backup and --backupdr-data-source are mutually exclusive")
+	}
+	if flagADBBackupDRBackup != "" {
+		req.BackupdrBackupSource = &alloydb.BackupDrBackupSource{Backup: flagADBBackupDRBackup}
+	}
+	if flagADBBackupDRDataSource != "" {
+		req.BackupdrPitrSource = &alloydb.BackupDrPitrSource{DataSource: flagADBBackupDRDataSource}
+	}
+	return nil
+}
 
 // --- backups ---
 
@@ -298,9 +385,21 @@ func init() {
 		adbClusterExportCmd, adbClusterImportCmd,
 	} {
 		c.Flags().StringVar(&flagADBConfigFile, "config-file", "",
-			"Path to a JSON/YAML file with the request body (required)")
-		_ = c.MarkFlagRequired("config-file")
+			"Path to a JSON/YAML file with the request body")
+		if c != adbClusterRestoreCmd {
+			_ = c.MarkFlagRequired("config-file")
+		}
 	}
+	// `restore` also accepts BackupDR sources via scalar flags (added GA in
+	// gcloud-python 578.0.0), so --config-file is optional if either BackupDR
+	// flag is present. runADBClusterRestore enforces that at least one source
+	// is supplied.
+	adbClusterRestoreCmd.Flags().StringVar(&flagADBBackupDRBackup, "backupdr-backup", "",
+		"Full resource name of a BackupDR backup to restore from "+
+			"(projects/.../backupVaults/.../dataSources/.../backups/...)")
+	adbClusterRestoreCmd.Flags().StringVar(&flagADBBackupDRDataSource, "backupdr-data-source", "",
+		"Full resource name of a BackupDR data source to point-in-time recover from "+
+			"(projects/.../backupVaults/.../dataSources/...)")
 	adbClusterUpdateCmd.Flags().StringVar(&flagADBUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 	for _, c := range []*cobra.Command{
@@ -473,11 +572,19 @@ func runADBClusterRestore(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	req := &alloydb.RestoreClusterRequest{ClusterId: args[0]}
-	if err := loadYAMLOrJSONInto(flagADBConfigFile, req); err != nil {
-		return err
+	if flagADBConfigFile != "" {
+		if err := loadYAMLOrJSONInto(flagADBConfigFile, req); err != nil {
+			return err
+		}
 	}
 	if req.ClusterId == "" {
 		req.ClusterId = args[0]
+	}
+	if err := adbApplyClusterRestoreBackupDR(req); err != nil {
+		return err
+	}
+	if req.BackupSource == nil && req.BackupdrBackupSource == nil && req.BackupdrPitrSource == nil && req.ContinuousBackupSource == nil {
+		return fmt.Errorf("no restore source: supply --config-file (with backupSource / continuousBackupSource) or --backupdr-backup / --backupdr-data-source")
 	}
 	ctx := context.Background()
 	svc, err := gcp.AlloyDBService(ctx, flagAccount)
@@ -661,6 +768,13 @@ func init() {
 	}
 	adbInstUpdateCmd.Flags().StringVar(&flagADBUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
+
+	// Label flags: --labels for create/create-secondary; --update-labels /
+	// --remove-labels / --clear-labels for update (added in gcloud-python
+	// 570.0.0/571.0.0 across the beta and GA tracks).
+	adbAddInstanceLabelFlags(adbInstCreateCmd)
+	adbAddInstanceLabelFlags(adbInstCreateSecondaryCmd)
+	adbAddInstanceUpdateLabelFlags(adbInstUpdateCmd)
 	for _, c := range []*cobra.Command{
 		adbInstCreateCmd, adbInstCreateSecondaryCmd, adbInstDeleteCmd, adbInstUpdateCmd,
 		adbInstRestartCmd, adbInstFailoverCmd, adbInstInjectFaultCmd,
@@ -692,6 +806,7 @@ func runADBInstCreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagADBConfigFile, inst); err != nil {
 		return err
 	}
+	adbApplyCreateLabels(inst)
 	ctx := context.Background()
 	svc, err := gcp.AlloyDBService(ctx, flagAccount)
 	if err != nil {
@@ -714,6 +829,7 @@ func runADBInstCreateSecondary(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagADBConfigFile, inst); err != nil {
 		return err
 	}
+	adbApplyCreateLabels(inst)
 	ctx := context.Background()
 	svc, err := gcp.AlloyDBService(ctx, flagAccount)
 	if err != nil {
@@ -794,9 +910,23 @@ func runADBInstUpdate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagADBConfigFile, inst); err != nil {
 		return err
 	}
+	labelsMaskEntry := adbApplyUpdateLabels(inst)
 	mask := flagADBUpdateMask
 	if mask == "" {
-		mask = joinMask(nonEmptyJSONFields(inst))
+		fields := nonEmptyJSONFields(inst)
+		if labelsMaskEntry != "" {
+			seen := false
+			for _, f := range fields {
+				if f == labelsMaskEntry {
+					seen = true
+					break
+				}
+			}
+			if !seen {
+				fields = append(fields, labelsMaskEntry)
+			}
+		}
+		mask = joinMask(fields)
 	}
 	ctx := context.Background()
 	svc, err := gcp.AlloyDBService(ctx, flagAccount)
