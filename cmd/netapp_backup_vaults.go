@@ -55,6 +55,7 @@ var (
 	flagNetAppBackupUpdateMask string
 	flagNetAppBackupFilter     string
 	flagNetAppBackupPageSize   int64
+	flagNetAppBackupOntapSrc   string
 )
 
 var (
@@ -118,6 +119,9 @@ func init() {
 		"Comma-separated list of fields to update (defaults to every populated field)")
 	netappBackupListCmd.Flags().StringVar(&flagNetAppBackupFilter, "filter", "", "Server-side filter expression")
 	netappBackupListCmd.Flags().Int64Var(&flagNetAppBackupPageSize, "page-size", 0, "Maximum number of results per page")
+	netappBackupCreateCmd.Flags().StringVar(&flagNetAppBackupOntapSrc, "ontap-source", "",
+		"ONTAP source for the backup, as a comma-separated key=value list. "+
+			"Keys: storage-pool (required), volume-uuid (required), snapshot-uuid (optional).")
 
 	netappBackupsCmd.AddCommand(bkAll...)
 	netappBVCmd.AddCommand(netappBackupsCmd)
@@ -288,6 +292,13 @@ func runNetAppBackupCreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagNetAppBackupConfigFile, body); err != nil {
 		return err
 	}
+	if flagNetAppBackupOntapSrc != "" {
+		os, perr := parseNetAppOntapSource(flagNetAppBackupOntapSrc)
+		if perr != nil {
+			return perr
+		}
+		body.OntapSource = os
+	}
 	ctx := context.Background()
 	svc, err := gcp.NetAppService(ctx, flagAccount)
 	if err != nil {
@@ -299,6 +310,19 @@ func runNetAppBackupCreate(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Create request issued for backup [%s] (operation: %s).\n", args[0], op.Name)
 	return emitFormatted(op, flagNetAppBVFormat)
+}
+
+func parseNetAppOntapSource(spec string) (*netapp.OntapSource, error) {
+	kv := parseKeyValueSpec(spec)
+	os := &netapp.OntapSource{
+		StoragePool:  kv["storage-pool"],
+		VolumeUuid:   kv["volume-uuid"],
+		SnapshotUuid: kv["snapshot-uuid"],
+	}
+	if os.StoragePool == "" || os.VolumeUuid == "" {
+		return nil, fmt.Errorf("--ontap-source requires storage-pool and volume-uuid keys")
+	}
+	return os, nil
 }
 
 func runNetAppBackupDelete(cmd *cobra.Command, args []string) error {

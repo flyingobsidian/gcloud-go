@@ -49,6 +49,14 @@ var (
 		Use: "revert VOLUME", Short: "Revert a volume to a snapshot",
 		Args: cobra.ExactArgs(1), RunE: runNetAppVolRevert,
 	}
+	netappVolStartSplitCmd = &cobra.Command{
+		Use: "start-split VOLUME", Short: "Start splitting a clone volume from its source volume",
+		Args: cobra.ExactArgs(1), RunE: runNetAppVolStartSplit,
+	}
+	netappVolGetSplitStatusCmd = &cobra.Command{
+		Use: "get-split-status VOLUME", Short: "Retrieve the split status of a clone volume",
+		Args: cobra.ExactArgs(1), RunE: runNetAppVolGetSplitStatus,
+	}
 )
 
 // --- replications subgroup ---
@@ -142,6 +150,7 @@ func init() {
 	volAll := []*cobra.Command{
 		netappVolCreateCmd, netappVolDeleteCmd, netappVolDescribeCmd,
 		netappVolListCmd, netappVolUpdateCmd, netappVolRevertCmd,
+		netappVolStartSplitCmd, netappVolGetSplitStatusCmd,
 	}
 	for _, c := range volAll {
 		c.Flags().StringVar(&flagNetAppVolLocation, "location", "", "Location for the volume (required)")
@@ -359,6 +368,41 @@ func runNetAppVolUpdate(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Update request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
 	return emitFormatted(op, flagNetAppVolFormat)
+}
+
+func runNetAppVolStartSplit(cmd *cobra.Command, args []string) error {
+	name, err := netappVolName(args[0])
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.NetAppService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	op, err := svc.Projects.Locations.Volumes.StartSplit(name, &netapp.StartSplitRequest{}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("starting volume split: %w", err)
+	}
+	fmt.Printf("Start-split request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormatted(op, flagNetAppVolFormat)
+}
+
+func runNetAppVolGetSplitStatus(cmd *cobra.Command, args []string) error {
+	name, err := netappVolName(args[0])
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.NetAppService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	got, err := svc.Projects.Locations.Volumes.GetSplitStatus(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("getting split status: %w", err)
+	}
+	return emitFormatted(got, flagNetAppVolFormat)
 }
 
 func runNetAppVolRevert(cmd *cobra.Command, args []string) error {
