@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -33,7 +34,23 @@ var (
 	flagArtRepoIamCondExpr  string
 	flagArtRepoIamCondTitle string
 	flagArtRepoIamCondDesc  string
+
+	// --mode passthrough, mirroring gcloud-python's CLI vocabulary.
+	// NONE / STANDARD-REPOSITORY / VIRTUAL-REPOSITORY / REMOTE-REPOSITORY /
+	// CONNECTOR-REPOSITORY (the last one is REMOTE_REPOSITORY on the wire).
+	flagArtRepoMode string
 )
+
+// artRepoModeChoices maps the user-facing --mode value to the wire enum value.
+// CONNECTOR-REPOSITORY is remote-mode on the wire but presented as a separate
+// choice (gcloud-python 577.0.0).
+var artRepoModeChoices = map[string]string{
+	"NONE":                 "MODE_UNSPECIFIED",
+	"STANDARD-REPOSITORY":  "STANDARD_REPOSITORY",
+	"VIRTUAL-REPOSITORY":   "VIRTUAL_REPOSITORY",
+	"REMOTE-REPOSITORY":    "REMOTE_REPOSITORY",
+	"CONNECTOR-REPOSITORY": "REMOTE_REPOSITORY",
+}
 
 var artifactsRepositoriesCreateCmd = &cobra.Command{
 	Use:   "create REPOSITORY",
@@ -135,6 +152,10 @@ func init() {
 	}
 	artifactsRepositoriesCreateCmd.Flags().StringVar(&flagArtRepoConfigFile, "config-file", "", "YAML/JSON body for the Repository (required)")
 	artifactsRepositoriesCreateCmd.Flags().BoolVar(&flagArtRepoAsync, "async", false, "Return without waiting for operation")
+	artifactsRepositoriesCreateCmd.Flags().StringVar(&flagArtRepoMode, "mode", "",
+		"Repository mode override: NONE, STANDARD-REPOSITORY, VIRTUAL-REPOSITORY, "+
+			"REMOTE-REPOSITORY, or CONNECTOR-REPOSITORY (fetches from upstream without caching). "+
+			"When set, overrides mode in --config-file.")
 	_ = artifactsRepositoriesCreateCmd.MarkFlagRequired("config-file")
 
 	artifactsRepositoriesDeleteCmd.Flags().BoolVar(&flagArtRepoAsync, "async", false, "Return without waiting for operation")
@@ -165,6 +186,53 @@ func artRepoName(project, location, raw string) string {
 	return artFullName(artLocationParent(project, location)+"/repositories", raw)
 }
 
+// artRepoParseName splits a fully-qualified repository name into its
+// (project, location, id) parts. It tolerates leading/trailing whitespace and
+// returns false when the shape does not match.
+func artRepoParseName(name string) (project, location, id string, ok bool) {
+	parts := strings.Split(strings.TrimSpace(name), "/")
+	if len(parts) != 6 || parts[0] != "projects" || parts[2] != "locations" || parts[4] != "repositories" {
+		return "", "", "", false
+	}
+	return parts[1], parts[3], parts[5], true
+}
+
+// artRepoApplyRegistryURI mirrors gcloud-python's
+// AddRegistryBaseToRepositoryInfo hook (gcloud-python 575.0.0): if the server
+// didn't populate RegistryUri, synthesize it from the repo name + format and
+// print "Registry URL: ..." to stderr for the user.
+func artRepoApplyRegistryURI(r *artifactregistry.Repository) {
+	if r == nil || r.Name == "" || r.RegistryUri != "" {
+		return
+	}
+	project, location, id, ok := artRepoParseName(r.Name)
+	if !ok {
+		return
+	}
+	// Colon-separated legacy project IDs are shown as "project/id" in URLs.
+	project = strings.ReplaceAll(project, ":", "/")
+	r.RegistryUri = fmt.Sprintf("%s-%s.pkg.dev/%s/%s",
+		location, strings.ToLower(r.Format), project, id)
+	fmt.Fprintf(os.Stderr, "Registry URL: %s\n", r.RegistryUri)
+}
+
+// artRepoApplyMode overrides body.Mode using the --mode flag, translating the
+// user-facing choice to the wire enum value. CONNECTOR-REPOSITORY is
+// REMOTE_REPOSITORY on the wire.
+func artRepoApplyMode(body *artifactregistry.Repository, flag string) error {
+	if flag == "" {
+		return nil
+	}
+	up := strings.ToUpper(flag)
+	wire, ok := artRepoModeChoices[up]
+	if !ok {
+		return fmt.Errorf("invalid --mode %q: expected one of NONE, STANDARD-REPOSITORY, "+
+			"VIRTUAL-REPOSITORY, REMOTE-REPOSITORY, CONNECTOR-REPOSITORY", flag)
+	}
+	body.Mode = wire
+	return nil
+}
+
 func runArtifactsRepositoriesCreate(cmd *cobra.Command, args []string) error {
 	project, err := resolveProject()
 	if err != nil {
@@ -177,6 +245,9 @@ func runArtifactsRepositoriesCreate(cmd *cobra.Command, args []string) error {
 	}
 	body := &artifactregistry.Repository{}
 	if err := loadYAMLOrJSONInto(flagArtRepoConfigFile, body); err != nil {
+		return err
+	}
+	if err := artRepoApplyMode(body, flagArtRepoMode); err != nil {
 		return err
 	}
 	parent := artLocationParent(project, flagArtRepoLocation)
@@ -193,6 +264,13 @@ func runArtifactsRepositoriesCreate(cmd *cobra.Command, args []string) error {
 	final, err := waitForArtifactRegistryOperation(ctx, svc, op)
 	if err != nil {
 		return err
+	}
+	// Best-effort: fetch the freshly-created repo so we can print the Registry
+	// URL, matching gcloud-python's post-create hook.
+	name := artRepoName(project, flagArtRepoLocation, args[0])
+	if repo, err := svc.Projects.Locations.Repositories.Get(name).Context(ctx).Do(); err == nil {
+		artRepoApplyRegistryURI(repo)
+		return emitFormatted(repo, flagArtRepoFormat)
 	}
 	return emitFormatted(final, flagArtRepoFormat)
 }
@@ -238,6 +316,7 @@ func runArtifactsRepositoriesDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing repository: %w", err)
 	}
+	artRepoApplyRegistryURI(r)
 	return emitFormatted(r, flagArtRepoFormat)
 }
 
