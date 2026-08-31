@@ -61,14 +61,18 @@ func bcFinishOp(ctx context.Context, svc *beyondcorp.Service, op *beyondcorp.Goo
 }
 
 var (
-	flagBCLocation   string
-	flagBCConfigFile string
-	flagBCUpdateMask string
-	flagBCFormat     string
-	flagBCAsync      bool
-	flagBCGateway    string
-	flagBCIamMember  string
-	flagBCIamRole    string
+	flagBCLocation      string
+	flagBCConfigFile    string
+	flagBCUpdateMask    string
+	flagBCFormat        string
+	flagBCAsync         bool
+	flagBCGateway       string
+	flagBCIamMember     string
+	flagBCIamRole       string
+	flagBCIamCondExpr   string
+	flagBCIamCondTitle  string
+	flagBCIamCondDesc   string
+	flagBCIamAllConds   bool
 )
 
 // --- operations ---
@@ -154,6 +158,14 @@ var (
 		Use: "update APPLICATION", Short: "Update an application from a --config-file",
 		Args: cobra.ExactArgs(1), RunE: runBCSGAppUpdate,
 	}
+	bcSGAppAddIamCmd = &cobra.Command{
+		Use: "add-iam-policy-binding APPLICATION", Short: "Add an IAM binding to an application",
+		Args: cobra.ExactArgs(1), RunE: runBCSGAppAddIam,
+	}
+	bcSGAppRemoveIamCmd = &cobra.Command{
+		Use: "remove-iam-policy-binding APPLICATION", Short: "Remove an IAM binding from an application",
+		Args: cobra.ExactArgs(1), RunE: runBCSGAppRemoveIam,
+	}
 )
 
 func init() {
@@ -188,13 +200,19 @@ func init() {
 	for _, c := range []*cobra.Command{bcSGAddIamCmd, bcSGRemoveIamCmd} {
 		c.Flags().StringVar(&flagBCIamMember, "member", "", "IAM member (required)")
 		c.Flags().StringVar(&flagBCIamRole, "role", "", "IAM role (required)")
+		c.Flags().StringVar(&flagBCIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding (e.g. request.time < timestamp('2026-01-01T00:00:00Z'))")
+		c.Flags().StringVar(&flagBCIamCondTitle, "condition-title", "", "Title for a conditional binding (e.g. expires_2026)")
+		c.Flags().StringVar(&flagBCIamCondDesc, "condition-description", "", "Description for a conditional binding")
 		_ = c.MarkFlagRequired("member")
 		_ = c.MarkFlagRequired("role")
 	}
+	bcSGRemoveIamCmd.Flags().BoolVar(&flagBCIamAllConds, "all", false,
+		"Remove matching bindings across all conditions, not just the given one")
 	bcSecurityGatewaysCmd.AddCommand(sgAll...)
 
 	// nested applications
-	appAll := []*cobra.Command{bcSGAppCreateCmd, bcSGAppDeleteCmd, bcSGAppDescribeCmd, bcSGAppListCmd, bcSGAppUpdateCmd}
+	appAll := []*cobra.Command{bcSGAppCreateCmd, bcSGAppDeleteCmd, bcSGAppDescribeCmd, bcSGAppListCmd,
+		bcSGAppUpdateCmd, bcSGAppAddIamCmd, bcSGAppRemoveIamCmd}
 	for _, c := range appAll {
 		c.Flags().StringVar(&flagBCLocation, "location", "global", "Location containing the gateway")
 		c.Flags().StringVar(&flagBCGateway, "security-gateway", "", "Security gateway containing the application (required)")
@@ -213,6 +231,17 @@ func init() {
 	for _, c := range []*cobra.Command{bcSGAppDescribeCmd, bcSGAppListCmd} {
 		c.Flags().StringVar(&flagBCFormat, "format", "", "Output format")
 	}
+	for _, c := range []*cobra.Command{bcSGAppAddIamCmd, bcSGAppRemoveIamCmd} {
+		c.Flags().StringVar(&flagBCIamMember, "member", "", "IAM member (required)")
+		c.Flags().StringVar(&flagBCIamRole, "role", "", "IAM role (required)")
+		c.Flags().StringVar(&flagBCIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding (e.g. request.time < timestamp('2026-01-01T00:00:00Z'))")
+		c.Flags().StringVar(&flagBCIamCondTitle, "condition-title", "", "Title for a conditional binding (e.g. expires_2026)")
+		c.Flags().StringVar(&flagBCIamCondDesc, "condition-description", "", "Description for a conditional binding")
+		_ = c.MarkFlagRequired("member")
+		_ = c.MarkFlagRequired("role")
+	}
+	bcSGAppRemoveIamCmd.Flags().BoolVar(&flagBCIamAllConds, "all", false,
+		"Remove matching bindings across all conditions, not just the given one")
 	bcSGApplicationsCmd.AddCommand(appAll...)
 	bcSecurityGatewaysCmd.AddCommand(bcSGApplicationsCmd)
 
@@ -389,7 +418,8 @@ func runBCSGGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	policy, err := svc.Projects.Locations.SecurityGateways.GetIamPolicy(bcSGName(args[0], project, flagBCLocation)).Context(ctx).Do()
+	policy, err := svc.Projects.Locations.SecurityGateways.GetIamPolicy(bcSGName(args[0], project, flagBCLocation)).
+		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
@@ -417,41 +447,83 @@ func runBCSGSetIam(cmd *cobra.Command, args []string) error {
 	return emitFormatted(got, "")
 }
 
-func runBCSGAddIam(cmd *cobra.Command, args []string) error {
-	return bcSGModifyIam(args[0], func(p *beyondcorp.GoogleIamV1Policy) {
-		for _, b := range p.Bindings {
-			if b.Role == flagBCIamRole {
-				for _, m := range b.Members {
-					if m == flagBCIamMember {
-						return
-					}
-				}
-				b.Members = append(b.Members, flagBCIamMember)
+// bcIamBuildCondition returns a GoogleTypeExpr from the --condition-* flags, or
+// nil if no condition flags were set.
+func bcIamBuildCondition() *beyondcorp.GoogleTypeExpr {
+	if flagBCIamCondExpr == "" && flagBCIamCondTitle == "" && flagBCIamCondDesc == "" {
+		return nil
+	}
+	return &beyondcorp.GoogleTypeExpr{
+		Expression:  flagBCIamCondExpr,
+		Title:       flagBCIamCondTitle,
+		Description: flagBCIamCondDesc,
+	}
+}
+
+// bcIamCondsEqual reports whether two conditions describe the same binding.
+func bcIamCondsEqual(a, b *beyondcorp.GoogleTypeExpr) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Expression == b.Expression && a.Title == b.Title && a.Description == b.Description
+}
+
+// bcIamAddBinding adds member to the binding matching role+condition, creating
+// the binding if none exists.
+func bcIamAddBinding(pol *beyondcorp.GoogleIamV1Policy, role, member string, cond *beyondcorp.GoogleTypeExpr) {
+	for _, b := range pol.Bindings {
+		if b.Role != role || !bcIamCondsEqual(b.Condition, cond) {
+			continue
+		}
+		for _, m := range b.Members {
+			if m == member {
 				return
 			}
 		}
-		p.Bindings = append(p.Bindings, &beyondcorp.GoogleIamV1Binding{Role: flagBCIamRole, Members: []string{flagBCIamMember}})
+		b.Members = append(b.Members, member)
+		return
+	}
+	pol.Bindings = append(pol.Bindings, &beyondcorp.GoogleIamV1Binding{
+		Role: role, Members: []string{member}, Condition: cond,
 	})
 }
 
-func runBCSGRemoveIam(cmd *cobra.Command, args []string) error {
-	return bcSGModifyIam(args[0], func(p *beyondcorp.GoogleIamV1Policy) {
-		for _, b := range p.Bindings {
-			if b.Role != flagBCIamRole {
+// bcIamRemoveBinding removes member from bindings matching role. If allConds is
+// true, matches every binding for the role; otherwise only the binding whose
+// condition matches. Returns true if the policy changed.
+func bcIamRemoveBinding(pol *beyondcorp.GoogleIamV1Policy, role, member string, cond *beyondcorp.GoogleTypeExpr, allConds bool) bool {
+	changed := false
+	kept := pol.Bindings[:0]
+	for _, b := range pol.Bindings {
+		if b.Role != role || (!allConds && !bcIamCondsEqual(b.Condition, cond)) {
+			kept = append(kept, b)
+			continue
+		}
+		newMembers := b.Members[:0]
+		for _, m := range b.Members {
+			if m == member {
 				continue
 			}
-			out := b.Members[:0]
-			for _, m := range b.Members {
-				if m != flagBCIamMember {
-					out = append(out, m)
-				}
-			}
-			b.Members = out
+			newMembers = append(newMembers, m)
 		}
-	})
+		if len(newMembers) != len(b.Members) {
+			changed = true
+		}
+		b.Members = newMembers
+		if len(b.Members) > 0 {
+			kept = append(kept, b)
+		} else {
+			changed = true
+		}
+	}
+	pol.Bindings = kept
+	return changed
 }
 
-func bcSGModifyIam(name string, mutate func(*beyondcorp.GoogleIamV1Policy)) error {
+func runBCSGAddIam(cmd *cobra.Command, args []string) error {
 	project, err := resolveProject()
 	if err != nil {
 		return err
@@ -461,13 +533,46 @@ func bcSGModifyIam(name string, mutate func(*beyondcorp.GoogleIamV1Policy)) erro
 	if err != nil {
 		return err
 	}
-	resource := bcSGName(name, project, flagBCLocation)
-	policy, err := svc.Projects.Locations.SecurityGateways.GetIamPolicy(resource).Context(ctx).Do()
+	resource := bcSGName(args[0], project, flagBCLocation)
+	policy, err := svc.Projects.Locations.SecurityGateways.GetIamPolicy(resource).
+		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	mutate(policy)
-	got, err := svc.Projects.Locations.SecurityGateways.SetIamPolicy(resource, &beyondcorp.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
+	cond := bcIamBuildCondition()
+	bcIamAddBinding(policy, flagBCIamRole, flagBCIamMember, cond)
+	if cond != nil && policy.Version < 3 {
+		policy.Version = 3
+	}
+	got, err := svc.Projects.Locations.SecurityGateways.SetIamPolicy(resource,
+		&beyondcorp.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("setting IAM policy: %w", err)
+	}
+	return emitFormatted(got, "")
+}
+
+func runBCSGRemoveIam(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.BeyondCorpService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	resource := bcSGName(args[0], project, flagBCLocation)
+	policy, err := svc.Projects.Locations.SecurityGateways.GetIamPolicy(resource).
+		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("getting IAM policy: %w", err)
+	}
+	if !bcIamRemoveBinding(policy, flagBCIamRole, flagBCIamMember, bcIamBuildCondition(), flagBCIamAllConds) {
+		return fmt.Errorf("no matching binding to remove")
+	}
+	got, err := svc.Projects.Locations.SecurityGateways.SetIamPolicy(resource,
+		&beyondcorp.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
@@ -588,4 +693,60 @@ func runBCSGAppUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("updating application: %w", err)
 	}
 	return bcFinishOp(ctx, svc, op, "Update application", args[0], flagBCAsync)
+}
+
+func runBCSGAppAddIam(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.BeyondCorpService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	resource := bcSGAppName(args[0], project, flagBCLocation, flagBCGateway)
+	policy, err := svc.Projects.Locations.SecurityGateways.Applications.GetIamPolicy(resource).
+		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("getting IAM policy: %w", err)
+	}
+	cond := bcIamBuildCondition()
+	bcIamAddBinding(policy, flagBCIamRole, flagBCIamMember, cond)
+	if cond != nil && policy.Version < 3 {
+		policy.Version = 3
+	}
+	got, err := svc.Projects.Locations.SecurityGateways.Applications.SetIamPolicy(resource,
+		&beyondcorp.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("setting IAM policy: %w", err)
+	}
+	return emitFormatted(got, "")
+}
+
+func runBCSGAppRemoveIam(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.BeyondCorpService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	resource := bcSGAppName(args[0], project, flagBCLocation, flagBCGateway)
+	policy, err := svc.Projects.Locations.SecurityGateways.Applications.GetIamPolicy(resource).
+		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("getting IAM policy: %w", err)
+	}
+	if !bcIamRemoveBinding(policy, flagBCIamRole, flagBCIamMember, bcIamBuildCondition(), flagBCIamAllConds) {
+		return fmt.Errorf("no matching binding to remove")
+	}
+	got, err := svc.Projects.Locations.SecurityGateways.Applications.SetIamPolicy(resource,
+		&beyondcorp.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("setting IAM policy: %w", err)
+	}
+	return emitFormatted(got, "")
 }
