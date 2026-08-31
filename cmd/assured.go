@@ -105,7 +105,12 @@ func init() {
 	scopeFlags(assuredWorkloadUpdateCmd)
 
 	assuredWorkloadCreateCmd.Flags().StringVar(&flagAssuredDisplay, "display-name", "", "Display name for the workload (required)")
-	assuredWorkloadCreateCmd.Flags().StringVar(&flagAssuredComplianceRegime, "compliance-regime", "", "Compliance regime (e.g. FEDRAMP_HIGH) (required)")
+	assuredWorkloadCreateCmd.Flags().StringVar(&flagAssuredComplianceRegime, "compliance-regime", "",
+		"Compliance regime for the workload (required). Common values include "+
+			"FEDRAMP_HIGH, FEDRAMP_MODERATE, IL2/IL4/IL5, CJIS, HIPAA, HITRUST, ITAR, "+
+			"EU/CA/JP/KSA/CH_REGIONS_AND_SUPPORT, ASSURED_WORKLOADS_FOR_PARTNERS, and "+
+			"SWITZERLAND_DATA_BOUNDARY_WITH_ACCESS_JUSTIFICATIONS. The full set is "+
+			"validated server-side by the AssuredWorkloads API.")
 	assuredWorkloadCreateCmd.Flags().StringVar(&flagAssuredBillingAccount, "billing-account", "", "Billing account (e.g. billingAccounts/012345-...) (required)")
 	assuredWorkloadCreateCmd.MarkFlagRequired("display-name")
 	assuredWorkloadCreateCmd.MarkFlagRequired("compliance-regime")
