@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -30,6 +31,10 @@ var (
 	flagSpInstIamCondT    string
 	flagSpInstIamCondD    string
 	flagSpInstIamAllCond  bool
+	flagSpInstLabels      map[string]string
+	flagSpInstUpdateLabels map[string]string
+	flagSpInstRemoveLabels []string
+	flagSpInstClearLabels  bool
 )
 
 var (
@@ -94,12 +99,20 @@ func init() {
 	spannerInstCreateCmd.Flags().Int64Var(&flagSpInstNodes, "nodes", 0, "Number of nodes")
 	spannerInstCreateCmd.Flags().Int64Var(&flagSpInstPU, "processing-units", 0, "Processing units")
 	spannerInstCreateCmd.Flags().StringVar(&flagSpInstDisplayName, "display-name", "", "Display name")
+	spannerInstCreateCmd.Flags().StringToStringVar(&flagSpInstLabels, "labels", nil,
+		"Instance labels as KEY=VALUE pairs")
 
 	spannerInstUpdateCmd.Flags().StringVar(&flagSpInstConfigFile, "config-file", "", "YAML/JSON file with the Instance body")
 	spannerInstUpdateCmd.Flags().StringVar(&flagSpInstUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 	spannerInstUpdateCmd.Flags().Int64Var(&flagSpInstNodes, "nodes", 0, "Number of nodes")
 	spannerInstUpdateCmd.Flags().Int64Var(&flagSpInstPU, "processing-units", 0, "Processing units")
 	spannerInstUpdateCmd.Flags().StringVar(&flagSpInstDisplayName, "display-name", "", "Display name")
+	spannerInstUpdateCmd.Flags().StringToStringVar(&flagSpInstUpdateLabels, "update-labels", nil,
+		"Set or update instance labels as KEY=VALUE pairs")
+	spannerInstUpdateCmd.Flags().StringSliceVar(&flagSpInstRemoveLabels, "remove-labels", nil,
+		"Comma-separated list of label keys to remove")
+	spannerInstUpdateCmd.Flags().BoolVar(&flagSpInstClearLabels, "clear-labels", false,
+		"Remove all labels from the instance (mutually exclusive with --update-labels/--remove-labels)")
 
 	spannerInstMoveCmd.Flags().StringVar(&flagSpInstTargetCfg, "target-config", "", "Target instance configuration (required)")
 	_ = spannerInstMoveCmd.MarkFlagRequired("target-config")
@@ -154,6 +167,14 @@ func runSpInstCreate(cmd *cobra.Command, args []string) error {
 		}
 	}
 	inst = spannerInstBuild(inst)
+	if len(flagSpInstLabels) > 0 {
+		if inst.Labels == nil {
+			inst.Labels = map[string]string{}
+		}
+		for k, v := range flagSpInstLabels {
+			inst.Labels[k] = v
+		}
+	}
 	body := &spanner.CreateInstanceRequest{Instance: inst, InstanceId: args[0]}
 	ctx := context.Background()
 	svc, err := gcp.SpannerService(ctx, flagAccount)
@@ -243,6 +264,9 @@ func runSpInstUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if flagSpInstClearLabels && (len(flagSpInstUpdateLabels) > 0 || len(flagSpInstRemoveLabels) > 0) {
+		return fmt.Errorf("--clear-labels is mutually exclusive with --update-labels/--remove-labels")
+	}
 	inst := &spanner.Instance{}
 	if flagSpInstConfigFile != "" {
 		if err := loadYAMLOrJSONInto(flagSpInstConfigFile, inst); err != nil {
@@ -251,21 +275,69 @@ func runSpInstUpdate(cmd *cobra.Command, args []string) error {
 	}
 	inst = spannerInstBuild(inst)
 	inst.Name = name
-	mask := flagSpInstUpdateMask
-	if mask == "" {
-		mask = joinMask(nonEmptyJSONFields(inst))
-	}
-	body := &spanner.UpdateInstanceRequest{Instance: inst, FieldMask: mask}
+
+	labelsChanged := false
 	ctx := context.Background()
 	svc, err := gcp.SpannerService(ctx, flagAccount)
 	if err != nil {
 		return err
 	}
+	if flagSpInstClearLabels {
+		inst.Labels = map[string]string{}
+		inst.ForceSendFields = append(inst.ForceSendFields, "Labels")
+		labelsChanged = true
+	} else if len(flagSpInstUpdateLabels) > 0 || len(flagSpInstRemoveLabels) > 0 {
+		existing, gerr := svc.Projects.Instances.Get(name).Context(ctx).Do()
+		if gerr != nil {
+			return fmt.Errorf("fetching existing instance for label edit: %w", gerr)
+		}
+		labels := map[string]string{}
+		for k, v := range existing.Labels {
+			labels[k] = v
+		}
+		for k, v := range flagSpInstUpdateLabels {
+			labels[k] = v
+		}
+		for _, k := range flagSpInstRemoveLabels {
+			delete(labels, k)
+		}
+		inst.Labels = labels
+		if len(labels) == 0 {
+			inst.ForceSendFields = append(inst.ForceSendFields, "Labels")
+		}
+		labelsChanged = true
+	}
+
+	mask := flagSpInstUpdateMask
+	if mask == "" {
+		mask = joinMask(nonEmptyJSONFields(inst))
+		if labelsChanged && !maskHasField(mask, "labels") {
+			if mask == "" {
+				mask = "labels"
+			} else {
+				mask += ",labels"
+			}
+		}
+	}
+	body := &spanner.UpdateInstanceRequest{Instance: inst, FieldMask: mask}
 	op, err := svc.Projects.Instances.Patch(name, body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating instance: %w", err)
 	}
 	return emitFormatted(op, flagSpInstFormat)
+}
+
+// maskHasField reports whether comma-separated `mask` already contains `field`.
+func maskHasField(mask, field string) bool {
+	if mask == "" {
+		return false
+	}
+	for _, part := range strings.Split(mask, ",") {
+		if strings.TrimSpace(part) == field {
+			return true
+		}
+	}
+	return false
 }
 
 func runSpInstMove(cmd *cobra.Command, args []string) error {
