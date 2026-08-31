@@ -188,6 +188,8 @@ var (
 	flagArtImgListFormat      string
 	flagArtImgListIncludeTags bool
 	flagArtImgListURI         bool
+	flagArtImgListLimit       int64
+	flagArtImgListPageSize    int64
 )
 
 var artifactsDockerImagesDescribeCmd = &cobra.Command{
@@ -224,6 +226,11 @@ func init() {
 	artifactsDockerImagesListCmd.Flags().StringVar(&flagArtImgListFormat, "format", "", "Output format (e.g. json)")
 	artifactsDockerImagesListCmd.Flags().BoolVar(&flagArtImgListIncludeTags, "include-tags", false, "Include image tags")
 	artifactsDockerImagesListCmd.Flags().BoolVar(&flagArtImgListURI, "uri", false, "Print resource names")
+	artifactsDockerImagesListCmd.Flags().Int64Var(&flagArtImgListLimit, "limit", 0,
+		"Maximum number of images to list. Bounding the fetch avoids the slow full-repo scan"+
+			" when a repository holds a large number of image versions (0 = no limit).")
+	artifactsDockerImagesListCmd.Flags().Int64Var(&flagArtImgListPageSize, "page-size", 0,
+		"Page size for API pagination (0 = server default)")
 	artifactsDockerImagesDescribeCmd.Flags().StringVar(&flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
 
 	artifactsDockerImagesCmd.AddCommand(artifactsScanCmd)
@@ -379,6 +386,9 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Repositories.DockerImages.List(strings.TrimSuffix(parent, "/packages/-")).Context(ctx)
+		if flagArtImgListPageSize > 0 {
+			call = call.PageSize(flagArtImgListPageSize)
+		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
@@ -387,6 +397,10 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing docker images: %w", err)
 		}
 		allImages = append(allImages, resp.DockerImages...)
+		if flagArtImgListLimit > 0 && int64(len(allImages)) >= flagArtImgListLimit {
+			allImages = allImages[:flagArtImgListLimit]
+			break
+		}
 		if resp.NextPageToken == "" {
 			break
 		}
