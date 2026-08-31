@@ -68,6 +68,8 @@ var (
 	flagSQLCertPath      string
 	flagSQLPvKPath       string
 	flagSQLCACertPath    string
+
+	flagSQLStorageAutoIncreaseLimit int64
 )
 
 // sqlWaitOp polls a Cloud SQL operation until Status == "DONE".
@@ -884,6 +886,13 @@ func runSQLInstanceCreate(cmd *cobra.Command, args []string) error {
 	if flagSQLPassword != "" {
 		inst.RootPassword = flagSQLPassword
 	}
+	if cmd.Flags().Changed("storage-auto-increase-limit") {
+		if inst.Settings == nil {
+			inst.Settings = &sqladmin.Settings{}
+		}
+		inst.Settings.StorageAutoResizeLimit = flagSQLStorageAutoIncreaseLimit
+		inst.Settings.ForceSendFields = append(inst.Settings.ForceSendFields, "StorageAutoResizeLimit")
+	}
 	op, err := svc.Instances.Insert(project, inst).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating instance: %w", err)
@@ -967,14 +976,23 @@ func runSQLInstancePatch(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if flagSQLConfigFile == "" {
-		return fmt.Errorf("--config-file is required")
-	}
 	inst := &sqladmin.DatabaseInstance{}
-	if err := loadYAMLOrJSONInto(flagSQLConfigFile, inst); err != nil {
-		return err
+	if flagSQLConfigFile != "" {
+		if err := loadYAMLOrJSONInto(flagSQLConfigFile, inst); err != nil {
+			return err
+		}
 	}
 	inst.Name = args[0]
+	if cmd.Flags().Changed("storage-auto-increase-limit") {
+		if inst.Settings == nil {
+			inst.Settings = &sqladmin.Settings{}
+		}
+		inst.Settings.StorageAutoResizeLimit = flagSQLStorageAutoIncreaseLimit
+		inst.Settings.ForceSendFields = append(inst.Settings.ForceSendFields, "StorageAutoResizeLimit")
+	}
+	if flagSQLConfigFile == "" && !cmd.Flags().Changed("storage-auto-increase-limit") {
+		return fmt.Errorf("--config-file or a supported patch flag (e.g. --storage-auto-increase-limit) is required")
+	}
 	op, err := svc.Instances.Patch(project, args[0], inst).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("patching instance: %w", err)
@@ -1982,6 +2000,11 @@ func registerSQL() {
 	sqlInstanceCreateCmd.Flags().StringVar(&flagSQLTier, "tier", "", "Machine tier, e.g. db-custom-2-4096")
 	sqlInstanceCreateCmd.Flags().StringVar(&flagSQLZone, "zone", "", "Zone preference for the instance")
 	sqlInstanceCreateCmd.Flags().StringVar(&flagSQLPassword, "root-password", "", "Root password for the instance")
+	for _, c := range []*cobra.Command{sqlInstanceCreateCmd, sqlInstancePatchCmd} {
+		c.Flags().Int64Var(&flagSQLStorageAutoIncreaseLimit, "storage-auto-increase-limit", 0,
+			"Maximum size (in GB) to which storage capacity can be automatically increased. "+
+				"Zero means no limit; requires storage auto-increase to be enabled on the instance.")
+	}
 	sqlInstanceListCmd.Flags().StringVar(&flagSQLFilter, "filter", "", "Server-side filter expression")
 	sqlInstanceFailoverCmd.Flags().Int64Var(&flagSQLSettingsVer, "settings-version", 0, "Current settings version of this instance")
 	sqlInstanceRestoreBackupCmd.Flags().StringVar(&flagSQLBackup, "backup-id", "", "Backup run ID to restore from (required)")
