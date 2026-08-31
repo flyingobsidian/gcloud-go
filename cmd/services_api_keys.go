@@ -81,6 +81,7 @@ var (
 	flagAPIKeyAllowedAndroidSHAs     []string
 	flagAPIKeyAPITargets             []string
 	flagAPIKeyClearRestrictions      bool
+	flagAPIKeyAppendRestrictions     bool
 	flagAPIKeyServiceAccount         string
 	flagAPIKeyListShowDeleted        bool
 	flagAPIKeyListFormat             string
@@ -103,6 +104,9 @@ func init() {
 	restrictionFlags(apiKeyCreateCmd)
 	restrictionFlags(apiKeyUpdateCmd)
 	apiKeyUpdateCmd.Flags().BoolVar(&flagAPIKeyClearRestrictions, "clear-restrictions", false, "Clear all restrictions on the key")
+	apiKeyUpdateCmd.Flags().BoolVar(&flagAPIKeyAppendRestrictions, "append", false,
+		"Merge new --allowed-application and --api-target restrictions with the "+
+			"key's existing restrictions instead of replacing them")
 
 	apiKeyListCmd.Flags().BoolVar(&flagAPIKeyListShowDeleted, "show-deleted", false, "Include deleted keys in results")
 	apiKeyListCmd.Flags().StringVar(&flagAPIKeyListFormat, "format", "", "Output format (json, yaml, or table)")
@@ -186,6 +190,78 @@ func buildAPIKeyRestrictions() *apikeys.V2Restrictions {
 		return nil
 	}
 	return r
+}
+
+// mergeAPIKeyRestrictions merges new-application and API-target lists from `add`
+// into `base`. Non-list restriction fields (IPs, referrers, iOS bundle IDs) are
+// overwritten when present on `add`, matching the reference Python behavior for
+// `--append` on `gcloud services api-keys update` (which only merges the
+// android-application and api-target lists).
+func mergeAPIKeyRestrictions(base, add *apikeys.V2Restrictions) *apikeys.V2Restrictions {
+	if base == nil {
+		return add
+	}
+	merged := *base
+	if add == nil {
+		return &merged
+	}
+	if add.ServerKeyRestrictions != nil {
+		merged.ServerKeyRestrictions = add.ServerKeyRestrictions
+	}
+	if add.BrowserKeyRestrictions != nil {
+		merged.BrowserKeyRestrictions = add.BrowserKeyRestrictions
+	}
+	if add.IosKeyRestrictions != nil {
+		merged.IosKeyRestrictions = add.IosKeyRestrictions
+	}
+	if add.AndroidKeyRestrictions != nil {
+		if merged.AndroidKeyRestrictions == nil {
+			merged.AndroidKeyRestrictions = &apikeys.V2AndroidKeyRestrictions{}
+		}
+		seen := map[string]bool{}
+		for _, a := range merged.AndroidKeyRestrictions.AllowedApplications {
+			seen[a.PackageName+"|"+a.Sha1Fingerprint] = true
+		}
+		for _, a := range add.AndroidKeyRestrictions.AllowedApplications {
+			key := a.PackageName + "|" + a.Sha1Fingerprint
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			merged.AndroidKeyRestrictions.AllowedApplications = append(
+				merged.AndroidKeyRestrictions.AllowedApplications, a)
+		}
+	}
+	if len(add.ApiTargets) > 0 {
+		byService := map[string]*apikeys.V2ApiTarget{}
+		var order []string
+		for _, t := range merged.ApiTargets {
+			byService[t.Service] = t
+			order = append(order, t.Service)
+		}
+		for _, t := range add.ApiTargets {
+			if existing, ok := byService[t.Service]; ok {
+				seen := map[string]bool{}
+				for _, m := range existing.Methods {
+					seen[m] = true
+				}
+				for _, m := range t.Methods {
+					if !seen[m] {
+						existing.Methods = append(existing.Methods, m)
+						seen[m] = true
+					}
+				}
+				continue
+			}
+			byService[t.Service] = t
+			order = append(order, t.Service)
+		}
+		merged.ApiTargets = merged.ApiTargets[:0]
+		for _, s := range order {
+			merged.ApiTargets = append(merged.ApiTargets, byService[s])
+		}
+	}
+	return &merged
 }
 
 func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
@@ -349,10 +425,20 @@ func runAPIKeyUpdate(cmd *cobra.Command, args []string) error {
 		key.ServiceAccountEmail = flagAPIKeyServiceAccount
 		masks = append(masks, "service_account_email")
 	}
+	if flagAPIKeyClearRestrictions && flagAPIKeyAppendRestrictions {
+		return fmt.Errorf("--clear-restrictions and --append are mutually exclusive")
+	}
 	if flagAPIKeyClearRestrictions {
 		key.Restrictions = &apikeys.V2Restrictions{}
 		masks = append(masks, "restrictions")
 	} else if r := buildAPIKeyRestrictions(); r != nil {
+		if flagAPIKeyAppendRestrictions {
+			existing, gerr := svc.Projects.Locations.Keys.Get(name).Context(ctx).Do()
+			if gerr != nil {
+				return fmt.Errorf("fetching existing key for --append: %w", gerr)
+			}
+			r = mergeAPIKeyRestrictions(existing.Restrictions, r)
+		}
 		key.Restrictions = r
 		masks = append(masks, "restrictions")
 	}
