@@ -970,6 +970,10 @@ func runStorageRsync(cmd *cobra.Command, args []string) error {
 		if _, exists := dstFiles[relPath]; exists {
 			continue
 		}
+		if !rsyncSafeRelPath(relPath) {
+			fmt.Fprintf(os.Stderr, "Skipping %q: path escapes destination directory\n", relPath)
+			continue
+		}
 		srcPath := joinPath(src, relPath)
 		dstPath := joinPath(dst, relPath)
 		if flagRsyncDryRun {
@@ -1021,6 +1025,30 @@ func runStorageRsync(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// rsyncSafeRelPath reports whether a relative path derived from the source
+// listing stays within the destination directory when joined. Reject absolute
+// paths and any component that resolves to `..`, matching gcloud-python's
+// 580.0.0 behaviour of skipping files that escape the destination.
+func rsyncSafeRelPath(rel string) bool {
+	if rel == "" {
+		return false
+	}
+	if strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, `\`) {
+		return false
+	}
+	// Reject rooted paths on Windows too (e.g. `C:\foo`).
+	if len(rel) >= 2 && rel[1] == ':' {
+		return false
+	}
+	normalized := strings.ReplaceAll(rel, `\`, "/")
+	for _, part := range strings.Split(normalized, "/") {
+		if part == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 func listFiles(ctx context.Context, svc *storage.Service, path string, recursive bool) (map[string]bool, error) {
