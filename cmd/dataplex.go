@@ -86,8 +86,10 @@ var dataplexDatascansCreateCmd = &cobra.Command{
 }
 
 var (
-	flagDataplexDataSource string
-	flagDataplexScanType   string
+	flagDataplexDataSource       string
+	flagDataplexScanType         string
+	flagDataplexCatalogPublish   bool
+	flagDataplexProfileMode      string
 )
 
 // --- datascans delete ---
@@ -127,7 +129,12 @@ func init() {
 	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
 	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexDataSource, "data-source", "", "Data source entity (required)")
 	dataplexDatascansCreateCmd.MarkFlagRequired("data-source")
-	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexScanType, "type", "data-quality", "Scan type (data-quality or data-profile)")
+	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexScanType, "type", "data-quality",
+		"Scan type (data-quality, data-profile, or data-documentation)")
+	dataplexDatascansCreateCmd.Flags().BoolVar(&flagDataplexCatalogPublish, "enable-catalog-publishing", false,
+		"For data-documentation and data-profile scans, publish the latest scan results to Dataplex Catalog.")
+	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexProfileMode, "mode", "",
+		"For data-profile scans, the execution mode (STANDARD or LIGHTWEIGHT).")
 	dataplexDatascansDeleteCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
 	// --quiet is provided by the global persistent flag
 
@@ -141,11 +148,12 @@ func init() {
 	dataplexDatascansCmd.AddCommand(dataplexDatascansJobsCmd)
 	dataplexCmd.AddCommand(dataplexDatascansCmd)
 
+	registerDataplexContext(dataplexCmd)
+
 	// gcloud-python dataplex subgroups not yet implemented (#541).
 	for name, short := range map[string]string{
 		"aspect-types":      "Manage aspect types",
 		"assets":            "Manage Dataplex assets",
-		"context":           "Manage Dataplex context resources",
 		"encryption-config": "Manage Dataplex encryption config",
 		"entries":           "Manage Dataplex entries",
 		"entry-groups":      "Manage entry groups",
@@ -160,6 +168,72 @@ func init() {
 	}
 
 	rootCmd.AddCommand(dataplexCmd)
+}
+
+// --- dataplex context lookup ---
+
+var (
+	flagDataplexCtxResources    []string
+	flagDataplexCtxAllSchema    bool
+	flagDataplexCtxFormat       string
+	flagDataplexCtxOptionsJSON  string
+)
+
+func registerDataplexContext(parent *cobra.Command) {
+	ctxCmd := &cobra.Command{Use: "context", Short: "Manage Dataplex context resources"}
+	lookupCmd := &cobra.Command{
+		Use:   "lookup",
+		Short: "Look up context metadata for the given Dataplex entries",
+		Args:  cobra.NoArgs,
+		RunE:  runDataplexContextLookup,
+	}
+	lookupCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the Dataplex resources")
+	lookupCmd.Flags().StringSliceVar(&flagDataplexCtxResources, "resources", nil,
+		"Comma-separated list of entry names to look up context for (required)")
+	_ = lookupCmd.MarkFlagRequired("resources")
+	lookupCmd.Flags().StringVar(&flagDataplexCtxFormat, "context-format", "yaml",
+		"Output format of the returned context (yaml, json, or xml)")
+	lookupCmd.Flags().BoolVar(&flagDataplexCtxAllSchema, "all-schema-fields", false,
+		"If set, include all schema fields in the returned context regardless of context_budget.")
+	lookupCmd.Flags().StringVar(&flagDataplexCtxOptionsJSON, "options", "",
+		"Additional lookup options as a JSON object (merged with well-known option flags).")
+	ctxCmd.AddCommand(lookupCmd)
+	parent.AddCommand(ctxCmd)
+}
+
+func runDataplexContextLookup(cmd *cobra.Command, args []string) error {
+	project, location, err := resolveDataplexLocation()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.DataplexService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	options := map[string]string{}
+	if flagDataplexCtxOptionsJSON != "" {
+		if err := json.Unmarshal([]byte(flagDataplexCtxOptionsJSON), &options); err != nil {
+			return fmt.Errorf("--options must be a JSON object of string keys and values: %w", err)
+		}
+	}
+	if flagDataplexCtxFormat != "" {
+		options["format"] = flagDataplexCtxFormat
+	}
+	if flagDataplexCtxAllSchema {
+		options["all_schema_fields"] = "true"
+	}
+	req := &dataplex.GoogleCloudDataplexV1LookupContextRequest{
+		Resources: flagDataplexCtxResources,
+		Options:   options,
+	}
+	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
+	resp, err := svc.Projects.Locations.LookupContext(parent, req).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("looking up context: %w", err)
+	}
+	fmt.Println(resp.Context)
+	return nil
 }
 
 func resolveDataplexLocation() (string, string, error) {
@@ -393,9 +467,22 @@ func runDataplexDatascansCreate(cmd *cobra.Command, args []string) error {
 	case "data-quality":
 		scan.DataQualitySpec = &dataplex.GoogleCloudDataplexV1DataQualitySpec{}
 	case "data-profile":
-		scan.DataProfileSpec = &dataplex.GoogleCloudDataplexV1DataProfileSpec{}
+		spec := &dataplex.GoogleCloudDataplexV1DataProfileSpec{}
+		if flagDataplexCatalogPublish {
+			spec.CatalogPublishingEnabled = true
+		}
+		if flagDataplexProfileMode != "" {
+			spec.Mode = strings.ToUpper(flagDataplexProfileMode)
+		}
+		scan.DataProfileSpec = spec
+	case "data-documentation":
+		spec := &dataplex.GoogleCloudDataplexV1DataDocumentationSpec{}
+		if flagDataplexCatalogPublish {
+			spec.CatalogPublishingEnabled = true
+		}
+		scan.DataDocumentationSpec = spec
 	default:
-		return fmt.Errorf("unsupported scan type: %s (use data-quality or data-profile)", flagDataplexScanType)
+		return fmt.Errorf("unsupported scan type: %s (use data-quality, data-profile, or data-documentation)", flagDataplexScanType)
 	}
 
 	op, err := svc.Projects.Locations.DataScans.Create(parent, scan).DataScanId(args[0]).Context(ctx).Do()
