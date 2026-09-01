@@ -198,6 +198,10 @@ func init() {
 	registerStubGroup(iamCmd, "principal-access-boundary-policies",
 		"Manage Principal Access Boundary policies",
 		"create", "delete", "describe", "list", "update")
+	// access-policies surface added upstream in 579.0.0 (#1807).
+	registerStubGroup(iamCmd, "access-policies",
+		"Manage IAM access policies",
+		"create", "delete", "describe", "list", "update", "search-policy-bindings")
 
 	rootCmd.AddCommand(iamCmd)
 }
