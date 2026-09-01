@@ -58,6 +58,20 @@ var dataflowJobsRunCmd = &cobra.Command{
 	RunE:  runDataflowJobsRun,
 }
 
+var dataflowJobsPauseCmd = &cobra.Command{
+	Use:   "pause JOB_ID [JOB_ID...]",
+	Short: "Pause running Dataflow jobs",
+	Args:  cobra.MinimumNArgs(1),
+	RunE:  runDataflowJobsPause,
+}
+
+var dataflowJobsResumeCmd = &cobra.Command{
+	Use:   "resume JOB_ID [JOB_ID...]",
+	Short: "Resume paused Dataflow jobs",
+	Args:  cobra.MinimumNArgs(1),
+	RunE:  runDataflowJobsResume,
+}
+
 var (
 	flagDataflowRegion        string
 	flagDataflowListFormat    string
@@ -78,6 +92,7 @@ var (
 	flagDFRunMachineType      string
 	flagDFRunServiceAccount   string
 	flagDFRunJobName          string
+	flagDFRunTurnkeyAlerts    bool
 )
 
 func init() {
@@ -109,12 +124,19 @@ func init() {
 	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunMachineType, "worker-machine-type", "", "Worker machine type")
 	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunServiceAccount, "service-account-email", "", "Service account email")
 	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunJobName, "job-name", "", "Job name")
+	dataflowJobsRunCmd.Flags().BoolVar(&flagDFRunTurnkeyAlerts, "enable-turnkey-alerts", false,
+		"Enable turnkey alerts for the launched job")
+
+	dataflowJobsPauseCmd.Flags().StringVar(&flagDataflowRegion, "region", "", "Region of the job")
+	dataflowJobsResumeCmd.Flags().StringVar(&flagDataflowRegion, "region", "", "Region of the job")
 
 	dataflowJobsCmd.AddCommand(dataflowJobsListCmd)
 	dataflowJobsCmd.AddCommand(dataflowJobsDescribeCmd)
 	dataflowJobsCmd.AddCommand(dataflowJobsCancelCmd)
 	dataflowJobsCmd.AddCommand(dataflowJobsDrainCmd)
 	dataflowJobsCmd.AddCommand(dataflowJobsRunCmd)
+	dataflowJobsCmd.AddCommand(dataflowJobsPauseCmd)
+	dataflowJobsCmd.AddCommand(dataflowJobsResumeCmd)
 	dataflowCmd.AddCommand(dataflowJobsCmd)
 
 	registerDataflowExtras(dataflowCmd)
@@ -311,6 +333,10 @@ func runDataflowJobsRun(cmd *cobra.Command, args []string) error {
 		env.TempLocation = flagDFRunStagingLocation
 	}
 
+	if flagDFRunTurnkeyAlerts {
+		env.AdditionalExperiments = appendExperiment(env.AdditionalExperiments, turnkeyAlertsExperiment)
+	}
+
 	req := &dataflow.CreateJobFromTemplateRequest{
 		GcsPath:     flagDFRunGCSLocation,
 		Environment: env,
@@ -328,6 +354,52 @@ func runDataflowJobsRun(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Launched job [%s] (ID: %s).\n", job.Name, job.Id)
+	return nil
+}
+
+// turnkeyAlertsExperiment is the pipeline experiment string that flips turnkey
+// alerts on server-side. Kept as a constant so the pause/resume + flex-template
+// call sites can share it. When google.golang.org/api eventually exposes a
+// dedicated `enableTurnkeyAlerts` field, swap both call sites over.
+const turnkeyAlertsExperiment = "enable_turnkey_alerts"
+
+// appendExperiment appends exp to experiments only if not already present.
+func appendExperiment(experiments []string, exp string) []string {
+	for _, e := range experiments {
+		if e == exp {
+			return experiments
+		}
+	}
+	return append(experiments, exp)
+}
+
+func runDataflowJobsPause(cmd *cobra.Command, args []string) error {
+	return updateDataflowRequestedState(args, "JOB_STATE_PAUSED", "Paused")
+}
+
+func runDataflowJobsResume(cmd *cobra.Command, args []string) error {
+	return updateDataflowRequestedState(args, "JOB_STATE_RUNNING", "Resumed")
+}
+
+func updateDataflowRequestedState(jobIDs []string, state, action string) error {
+	project, region, err := resolveDataflowRegion()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.DataflowService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	for _, jobID := range jobIDs {
+		_, err = svc.Projects.Locations.Jobs.Update(project, region, jobID, &dataflow.Job{
+			RequestedState: state,
+		}).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("%s dataflow job %s: %w", strings.ToLower(action), jobID, err)
+		}
+		fmt.Printf("%s job [%s].\n", action, jobID)
+	}
 	return nil
 }
 

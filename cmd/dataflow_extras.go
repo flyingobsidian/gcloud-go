@@ -42,6 +42,7 @@ var (
 	flagDFFTTransformName    map[string]string
 	flagDFFTUpdate           bool
 	flagDFFTFlexRSGoal       string
+	flagDFFTTurnkeyAlerts    bool
 
 	// flex-template build flags
 	flagDFFTBuildTemplateFileGCS string
@@ -103,6 +104,7 @@ func registerDataflowExtras(parent *cobra.Command) {
 	ftRun.Flags().StringToStringVar(&flagDFFTTransformName, "transform-name-mappings", nil, "Streaming update transform name mappings")
 	ftRun.Flags().BoolVar(&flagDFFTUpdate, "update", false, "Update an existing streaming job")
 	ftRun.Flags().StringVar(&flagDFFTFlexRSGoal, "flexrs-goal", "", "FlexRS goal (COST_OPTIMIZED, SPEED_OPTIMIZED)")
+	ftRun.Flags().BoolVar(&flagDFFTTurnkeyAlerts, "enable-turnkey-alerts", false, "Enable turnkey alerts for the launched job")
 
 	ftBuild := &cobra.Command{
 		Use:   "build TEMPLATE_FILE_GCS_PATH",
@@ -237,6 +239,9 @@ func runDFFTLaunch(cmd *cobra.Command, args []string) error {
 	}
 	if len(flagDFFTExperiments) > 0 {
 		env.AdditionalExperiments = flagDFFTExperiments
+	}
+	if flagDFFTTurnkeyAlerts {
+		env.AdditionalExperiments = appendExperiment(env.AdditionalExperiments, turnkeyAlertsExperiment)
 	}
 	if len(flagDFFTPipelineOptions) > 0 {
 		env.AdditionalPipelineOptions = flagDFFTPipelineOptions
