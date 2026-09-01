@@ -5,6 +5,15 @@ not translate to gcloud-go changes, or is served by an existing gcloud-go
 feature. Recording them here keeps the "Sync ..." tracking issues actionable
 by making it clear when a checkbox needs no code change.
 
+## Kpt 575.0.0–579.0.0 (#1808)
+
+- **kpt binary bump to v1.0.0-beta.64** (575.0.0) and **v1.0.0-beta.67**
+  (579.0.0) — the `kpt` binary is bundled separately by the Python
+  Google Cloud CLI's component installer; gcloud-go does not bundle kpt, so
+  these upstream version bumps do not apply. Users who need `kpt` install it
+  from the [kpt release channel](https://github.com/kptdev/kpt/releases)
+  directly.
+
 ## Google Cloud CLI 569.0.0–580.0.0 (#1806)
 
 - **Bundled Python / Windows / macOS Virtualenv version bumps** — gcloud-go is
