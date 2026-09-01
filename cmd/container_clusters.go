@@ -46,12 +46,16 @@ var (
 		Use: "update CLUSTER", Short: "Update a GKE cluster (loads UpdateClusterRequest.update from --config-file)",
 		Args: cobra.ExactArgs(1), RunE: runCtnClUpdate,
 	}
+	containerClCompleteCpUpgradeCmd = &cobra.Command{
+		Use: "complete-control-plane-upgrade CLUSTER", Short: "Complete a rollbackable (two-step) control plane upgrade",
+		Args: cobra.ExactArgs(1), RunE: runCtnClCompleteCpUpgrade,
+	}
 )
 
 func init() {
 	all := []*cobra.Command{
 		containerClCreateCmd, containerClDeleteCmd, containerClDescribeCmd,
-		containerClListCmd, containerClUpdateCmd,
+		containerClListCmd, containerClUpdateCmd, containerClCompleteCpUpgradeCmd,
 	}
 	for _, c := range all {
 		c.Flags().StringVar(&flagCtnClLocation, "location", "", "Cluster location (region or zone) (required)")
@@ -183,5 +187,23 @@ func runCtnClUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("updating cluster: %w", err)
 	}
 	fmt.Printf("Update cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormatted(op, flagCtnClFormat)
+}
+
+func runCtnClCompleteCpUpgrade(cmd *cobra.Command, args []string) error {
+	name, err := ctnClusterName(args[0])
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.ContainerService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	op, err := svc.Projects.Locations.Clusters.CompleteControlPlaneUpgrade(name, &container.CompleteControlPlaneUpgradeRequest{}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("completing control plane upgrade: %w", err)
+	}
+	fmt.Printf("Complete control plane upgrade for cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
 	return emitFormatted(op, flagCtnClFormat)
 }
