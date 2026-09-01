@@ -20,6 +20,7 @@ var (
 	flagBTTblFormat      string
 	flagBTTblConfigFile  string
 	flagBTTblUpdateMask  string
+	flagBTTblIgnoreWarn  bool
 	flagBTTblFilter      string
 	flagBTTblPageSize    int64
 	flagBTTblView        string
@@ -97,6 +98,8 @@ func init() {
 	}
 	bigtableTablesUpdateCmd.Flags().StringVar(&flagBTTblUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
+	bigtableTablesUpdateCmd.Flags().BoolVar(&flagBTTblIgnoreWarn, "ignore-warnings", false,
+		"If true, ignore safety checks when updating the table.")
 	bigtableTablesListCmd.Flags().StringVar(&flagBTTblFilter, "filter", "", "Client-side filter")
 	bigtableTablesListCmd.Flags().Int64Var(&flagBTTblPageSize, "page-size", 0, "Maximum number of results per page")
 	bigtableTablesListCmd.Flags().StringVar(&flagBTTblView, "view", "", "Table view: NAME_ONLY | SCHEMA_VIEW | REPLICATION_VIEW | ENCRYPTION_VIEW | FULL")
@@ -313,6 +316,9 @@ func runBTTblUpdate(cmd *cobra.Command, args []string) error {
 	call := svc.Projects.Instances.Tables.Patch(name, body).Context(ctx)
 	if mask != "" {
 		call = call.UpdateMask(mask)
+	}
+	if flagBTTblIgnoreWarn {
+		call = call.IgnoreWarnings(true)
 	}
 	op, err := call.Do()
 	if err != nil {

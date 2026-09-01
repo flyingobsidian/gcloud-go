@@ -18,6 +18,7 @@ var (
 	flagBTMVFormat     string
 	flagBTMVConfigFile string
 	flagBTMVUpdateMask string
+	flagBTMVIgnoreWarn bool
 	flagBTMVPageSize   int64
 )
 
@@ -58,6 +59,8 @@ func init() {
 	}
 	bigtableMVUpdateCmd.Flags().StringVar(&flagBTMVUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
+	bigtableMVCreateCmd.Flags().BoolVar(&flagBTMVIgnoreWarn, "ignore-warnings", false,
+		"If true, ignore safety checks when creating the materialized view.")
 	bigtableMVListCmd.Flags().Int64Var(&flagBTMVPageSize, "page-size", 0, "Maximum results per page")
 
 	bigtableMVCmd.AddCommand(all...)
@@ -90,7 +93,11 @@ func runBTMVCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Instances.MaterializedViews.Create(parent, body).MaterializedViewId(args[0]).Context(ctx).Do()
+	call := svc.Projects.Instances.MaterializedViews.Create(parent, body).MaterializedViewId(args[0]).Context(ctx)
+	if flagBTMVIgnoreWarn {
+		call = call.IgnoreWarnings(true)
+	}
+	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("creating materialized view: %w", err)
 	}
