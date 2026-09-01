@@ -73,3 +73,17 @@ func TestBigtableLogicalViewsSubcommands(t *testing.T) {
 	}
 	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
 }
+
+// #1770: --ignore-warnings on `bigtable tables update` and
+// `bigtable materialized-views create`; --tags on `bigtable instances create`.
+func TestBigtable_1770_SyncFlags(t *testing.T) {
+	if bigtableTablesUpdateCmd.Flags().Lookup("ignore-warnings") == nil {
+		t.Error("bigtable tables update: --ignore-warnings flag missing")
+	}
+	if bigtableMVCreateCmd.Flags().Lookup("ignore-warnings") == nil {
+		t.Error("bigtable materialized-views create: --ignore-warnings flag missing")
+	}
+	if bigtableInstCreateCmd.Flags().Lookup("tags") == nil {
+		t.Error("bigtable instances create: --tags flag missing")
+	}
+}

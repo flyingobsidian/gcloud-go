@@ -17,6 +17,7 @@ var bigtableInstancesCmd = &cobra.Command{Use: "instances", Short: "Manage Bigta
 var (
 	flagBtInstFormat     string
 	flagBtInstConfigFile string
+	flagBtInstTags       map[string]string
 	flagBtInstIamMember  string
 	flagBtInstIamRole    string
 	flagBtInstIamCondE   string
@@ -78,6 +79,9 @@ func init() {
 			"Path to a YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
+	bigtableInstCreateCmd.Flags().StringToStringVar(&flagBtInstTags, "tags", nil,
+		"Comma-separated list of KEY=VALUE resource-manager tags to bind to the instance on creation "+
+			"(e.g. --tags=123/environment=production,123/costCenter=marketing).")
 
 	for _, c := range []*cobra.Command{bigtableInstAddIamCmd, bigtableInstRemoveIamCmd} {
 		c.Flags().StringVar(&flagBtInstIamMember, "member", "", "IAM member (required)")
@@ -117,6 +121,17 @@ func runBtInstCreate(cmd *cobra.Command, args []string) error {
 	}
 	if req.InstanceId == "" {
 		req.InstanceId = args[0]
+	}
+	if len(flagBtInstTags) > 0 {
+		if req.Instance == nil {
+			req.Instance = &bigtableadmin.Instance{}
+		}
+		if req.Instance.Tags == nil {
+			req.Instance.Tags = make(map[string]string, len(flagBtInstTags))
+		}
+		for k, v := range flagBtInstTags {
+			req.Instance.Tags[k] = v
+		}
 	}
 	ctx := context.Background()
 	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
