@@ -87,6 +87,13 @@ var (
 		Short: "List Python packages installed in the Airflow worker",
 		Args:  cobra.ExactArgs(1), RunE: runComposerEnvListPackages,
 	}
+	// composerEnvRunCmd forwards the caller's subcommand to Composer's
+	// ExecuteAirflowCommand API without client-side allowlisting. That means
+	// Airflow CLI support tracked by gcloud-python's SUBCOMMAND_ALLOWLIST
+	// (backfill on Airflow 3, `config lint` on Airflow >=2.11, and any commands
+	// enabled for the Airflow 3.2/3.3.x tracks introduced in gcloud-python
+	// 578.0.0–582.0.0) is naturally available here as soon as the server
+	// exposes it — no additional gating needed on our side.
 	composerEnvRunCmd = &cobra.Command{
 		Use:   "run ENVIRONMENT SUBCOMMAND [-- ARG ...]",
 		Short: "Run an Airflow CLI subcommand in the environment (via composer's ExecuteAirflowCommand API)",
