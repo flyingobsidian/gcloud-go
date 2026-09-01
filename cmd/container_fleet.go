@@ -145,6 +145,27 @@ func init() {
 	)
 	containerFleetCmd.AddCommand(containerFleetFleetsCmd, containerFleetFeaturesCmd, containerFleetMembershipsCmd)
 	containerHubCmd.AddCommand(containerFleetFleetsCmd, containerFleetFeaturesCmd, containerFleetMembershipsCmd)
+
+	// config-management surface added upstream through 580.0.0 (#1805). Register
+	// the subcommands as stubs so `gcloud container fleet|hub config-management`
+	// is discoverable; a follow-up will wire them up to the GKE Hub API.
+	for _, parent := range []*cobra.Command{containerFleetCmd, containerHubCmd} {
+		registerStubGroup(parent, "config-management",
+			"Manage Config Management fleet feature",
+			"apply", "delete", "describe", "disable", "enable",
+			"fetch-for-apply", "status", "unmanage", "update", "upgrade", "version")
+	}
+
+	// rollouts and rolloutsequences promoted to GA in 575.0.0 (#1805). Register
+	// as stub groups until the underlying GKE Hub rollout API is wired up.
+	registerStubGroup(containerFleetCmd, "rollouts",
+		"Manage GKE Hub fleet rollouts",
+		"cancel", "create", "delete", "describe", "force-complete-stage",
+		"list", "pause", "resume")
+	registerStubGroup(containerFleetCmd, "rolloutsequences",
+		"Manage GKE Hub fleet rollout sequences",
+		"create", "delete", "describe", "list", "update", "upgrade")
+
 	containerCmd.AddCommand(containerFleetCmd, containerHubCmd)
 }
 
