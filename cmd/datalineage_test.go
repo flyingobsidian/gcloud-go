@@ -30,3 +30,19 @@ func TestDatalineageProcessesSubcommands(t *testing.T) {
 	}
 	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
 }
+
+func TestDatalineageRunsSubcommands(t *testing.T) {
+	g := datalineageSubgroup("runs")
+	if g == nil {
+		t.Fatal("datalineage runs missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
+}
+
+func TestDatalineageLineageEventsSubcommands(t *testing.T) {
+	g := datalineageSubgroup("lineage-events")
+	if g == nil {
+		t.Fatal("datalineage lineage-events missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list"})
+}
