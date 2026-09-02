@@ -133,6 +133,9 @@ var (
 	flagCredCertTrustChainPath      string
 	flagCredCertConfigOutput        string
 	flagEnableIMDSv2                bool
+	flagCredStsLocation             string
+	flagCredUniverseDomain          string
+	flagCredEnableMtls              bool
 )
 
 func init() {
@@ -156,6 +159,9 @@ func init() {
 	createCredConfigCmd.Flags().StringVar(&flagCredCertTrustChainPath, "credential-cert-trust-chain-path", "", "X.509 trust chain path")
 	createCredConfigCmd.Flags().StringVar(&flagCredCertConfigOutput, "credential-cert-configuration-output-file", "", "X.509 cert config output file")
 	createCredConfigCmd.Flags().BoolVar(&flagEnableIMDSv2, "enable-imdsv2", false, "Enforce AWS IMDSv2")
+	createCredConfigCmd.Flags().StringVar(&flagCredStsLocation, "sts-location", "", "STS endpoint region (empty or 'global' for global endpoint)")
+	createCredConfigCmd.Flags().StringVar(&flagCredUniverseDomain, "universe-domain", "", "Override universe domain (defaults to googleapis.com)")
+	createCredConfigCmd.Flags().BoolVar(&flagCredEnableMtls, "enable-mtls", false, "Use mTLS for STS endpoints")
 	createCredConfigCmd.MarkFlagRequired("output-file")
 
 	// Workload identity pools CRUD
@@ -209,11 +215,26 @@ func init() {
 func runCreateCredConfig(cmd *cobra.Command, args []string) error {
 	audience := args[0]
 
+	// A certificate path implies mTLS (matches gcloud-python create_credential_config).
+	enableMtls := flagCredEnableMtls
+	if flagCredCertPath != "" {
+		enableMtls = true
+	}
+	universe := flagCredUniverseDomain
+	if universe == "" {
+		universe = "googleapis.com"
+	}
+	stsBase, err := stsBaseURL(universe, flagCredStsLocation, enableMtls)
+	if err != nil {
+		return err
+	}
+
 	cfg := map[string]any{
+		"universe_domain":    universe,
 		"type":               "external_account",
 		"audience":           audience,
 		"subject_token_type": resolveSubjectTokenType(),
-		"token_url":          "https://sts.googleapis.com/v1/token",
+		"token_url":          stsBase + "/v1/token",
 	}
 
 	// Build credential_source based on provided flags.
@@ -225,7 +246,8 @@ func runCreateCredConfig(cmd *cobra.Command, args []string) error {
 
 	if flagServiceAccount != "" {
 		cfg["service_account_impersonation_url"] = fmt.Sprintf(
-			"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateAccessToken",
+			"%s/v1/projects/-/serviceAccounts/%s:generateAccessToken",
+			iamCredentialsBaseURL(universe, enableMtls),
 			flagServiceAccount,
 		)
 		if flagServiceAccountTokenLifetime > 0 {
@@ -233,6 +255,8 @@ func runCreateCredConfig(cmd *cobra.Command, args []string) error {
 				"token_lifetime_seconds": flagServiceAccountTokenLifetime,
 			}
 		}
+	} else {
+		cfg["token_info_url"] = stsBase + "/v1/introspect"
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
