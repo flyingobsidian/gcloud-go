@@ -207,6 +207,32 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Cloud Backup DR 570.0.0–580.0.0 (#1769)
+
+All four items add flags to `gcloud backup-dr backup-plans` and
+`gcloud backup-dr backups restore` commands. gcloud-go's entire
+`backup-dr` surface (all twelve sub-groups, including `backup-plans`,
+`backups`, `management-servers`, etc.) is registered as `"not yet
+implemented"` stubs in `cmd/backup_dr.go` (tracked under #303), so there
+is no create-request/patch-request builder or restore surface for these
+flags to hang off of yet:
+
+- **580.0.0** — `boot-disk-only` and `disk-exclusion-labels` selective-disk
+  backup properties under `--compute-instance-properties` in
+  `backup-dr backup-plans create` / `update`.
+- **580.0.0** — `--source-instance-boot-disk` and
+  `--source-instance-disk-device-name` on `backup-dr backups restore disk`
+  for individual disk restore from a compute instance backup.
+- **578.0.0** — `--log-retention-days` across `backup-dr backup-plans
+  create` / `update` for PITR log retention configuration.
+- **570.0.0** — `--use-project-service-account` on
+  `backup-dr backups restore compute` and
+  `backup-dr backups restore disk`.
+
+These four items should land alongside the eventual real implementation
+of the `backup-dr` surface (#303); adding CLI flags to stubs that return
+`"not yet implemented"` would only mislead callers.
+
 ## Cloud Auth 579.0.0–581.0.0 (#1768)
 
 All three items add or enable Enterprise Certificate Proxy (ECP) HTTP
