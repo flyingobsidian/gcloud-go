@@ -207,6 +207,28 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Access Context Manager 572.0.0–575.0.0 (#1766)
+
+Both cloud-bindings items are already reachable through gcloud-go's
+`--config-file` body and do not require new flags:
+
+- **`--service-account` and `--service-account-project-number` exposed for
+  `gcloud access-context-manager cloud-bindings` in the GA track**
+  (575.0.0) — gcloud-python promoted two ALPHA-only argparse flags that map
+  onto `GcpUserAccessBinding.principal.serviceAccount` and
+  `GcpUserAccessBinding.principal.serviceAccountProjectNumber`. gcloud-go's
+  `cloud-bindings create` and `update` commands (see `cmd/acm_cloud_bindings.go`)
+  do not maintain separate alpha/beta/GA tracks and take the full
+  `GcpUserAccessBinding` body via `--config-file`, so both fields are already
+  settable today by populating `principal.serviceAccount` /
+  `principal.serviceAccountProjectNumber` in the YAML or JSON payload.
+- **`--group-key` on `gcloud access-context-manager cloud-bindings create`
+  made optional in GA** (572.0.0) — Python dropped its argparse `required:
+  true` marker so the GA track matches the alpha behaviour. gcloud-go never
+  exposed `--group-key` as a flag; `groupKey` is one of the many
+  `GcpUserAccessBinding` fields loaded from `--config-file`, so the field
+  has always been optional in gcloud-go and no CLI change is required.
+
 ## BigLake 570.0.0–578.0.0 (#1761)
 
 - **Track promotions (alpha→beta, beta→GA)** across 570.0.0–576.0.0 for
