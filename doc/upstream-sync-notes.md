@@ -83,3 +83,34 @@ by making it clear when a checkbox needs no code change.
   builds the `container.NodePool` body from `--config-file`, so users can
   already set `config.reservationAffinity.consumeReservationType:
   ANY_RESERVATION_THEN_FAIL` today. No CLI change needed.
+
+## BigLake 570.0.0–578.0.0 (#1761)
+
+- **Track promotions (alpha→beta, beta→GA)** across 570.0.0–576.0.0 for
+  `gcloud biglake hive catalogs/databases/tables`,
+  `gcloud biglake delta-sharing <catalogs|shares|schemas|tables>`,
+  `gcloud biglake data-product-sharing publish`,
+  `gcloud biglake iceberg catalogs`, and the
+  `--unity-service-principal-application-id` / federated unity catalog
+  flags of `gcloud biglake iceberg catalogs`. gcloud-go does not maintain
+  separate alpha/beta/GA tracks, so track-promotion release notes do not
+  translate to code changes.
+- **New flags/values on `gcloud biglake iceberg catalogs create/update`**
+  across 570.0.0–576.0.0 (`--primary-location` promoted to GA, the
+  `lakehouse` option on `--catalog=type`, and the federated unity catalog
+  flags) — gcloud-go's `biglake iceberg catalogs create` and `update`
+  accept the catalog body via `--config-file`, so setting
+  `catalog-type: lakehouse`, `primary-location`, and the federated unity
+  fields (including `unity-service-principal-application-id`) in the YAML
+  or JSON payload is supported today.
+- **`X-Iceberg-Access-Delegation: vended-credentials` header fix on
+  `gcloud biglake iceberg tables`** (578.0.0),
+  **`gcloud biglake hive tables create/update`** (575.0.0/576.0.0),
+  **`gcloud biglake delta-sharing …`**, and
+  **`gcloud biglake data-product-sharing publish`** — gcloud-go has not
+  ported the `biglake iceberg tables`, `biglake iceberg namespaces`,
+  `biglake hive`, `biglake delta-sharing`, or
+  `biglake data-product-sharing` subgroups yet, so these upstream changes
+  land automatically when those subgroups are added. The only BigLake
+  surface gcloud-go currently exposes is `biglake iceberg catalogs`, which
+  is unaffected by the header bug.
