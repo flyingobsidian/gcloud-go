@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -44,6 +45,10 @@ var (
 	flagPCACAOutputFile   string
 	flagPCACASkipGrace    bool
 	flagPCACAIgnoreDeps   bool
+	// --- first-party activation on `subordinates activate` (580.0.0). ---
+	flagPCACAIssuerPool     string
+	flagPCACAIssuerLocation string
+	flagPCACAIssuerCA       string
 )
 
 func init() {
@@ -94,6 +99,16 @@ func pcaCASubcommands(caType string) []*cobra.Command {
 		activate.Flags().StringVar(&flagPCACAPemCert, "pem-ca-certificate", "",
 			"PEM-encoded signed CA certificate (required)")
 		_ = activate.MarkFlagRequired("pem-ca-certificate")
+		// First-party activation shortcut (gcloud-python 580.0.0): supply the
+		// issuing CA by resource id instead of assembling `SubordinateConfig`
+		// in a --config-file. --issuer-ca is enough on its own — location and
+		// pool default to the subordinate's own --location/--pool.
+		activate.Flags().StringVar(&flagPCACAIssuerCA, "issuer-ca", "",
+			"Issuing CA id (or full resource name) for first-party activation")
+		activate.Flags().StringVar(&flagPCACAIssuerPool, "issuer-pool", "",
+			"CA pool containing --issuer-ca (defaults to --pool)")
+		activate.Flags().StringVar(&flagPCACAIssuerLocation, "issuer-location", "",
+			"Location containing --issuer-pool (defaults to --location)")
 		getCsr := &cobra.Command{
 			Use: "get-csr CA", Short: "Print the PEM-encoded CSR for a subordinate CA",
 			Args: cobra.ExactArgs(1), RunE: pcaCARunGetCsr,
@@ -323,6 +338,15 @@ func pcaCARunActivate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	req := &privateca.ActivateCertificateAuthorityRequest{PemCaCertificate: flagPCACAPemCert}
+	if flagPCACAIssuerCA != "" {
+		issuer, err := pcaResolveIssuerCA(project)
+		if err != nil {
+			return err
+		}
+		req.SubordinateConfig = &privateca.SubordinateConfig{CertificateAuthority: issuer}
+	} else if flagPCACAIssuerPool != "" || flagPCACAIssuerLocation != "" {
+		return fmt.Errorf("--issuer-pool/--issuer-location require --issuer-ca")
+	}
 	ctx := context.Background()
 	svc, err := gcp.PrivateCAService(ctx, flagAccount)
 	if err != nil {
@@ -333,6 +357,33 @@ func pcaCARunActivate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("activating certificate authority: %w", err)
 	}
 	return pcaFinishOp(ctx, svc, op, "Activate CA", args[0], flagPCACAAsync)
+}
+
+// pcaResolveIssuerCA turns --issuer-ca (plus --issuer-pool/--issuer-location
+// or the current --pool/--location) into the fully qualified
+// projects/…/certificateAuthorities/… resource name that
+// `SubordinateConfig.CertificateAuthority` expects. A user may already pass a
+// fully qualified name, in which case it is returned as-is.
+func pcaResolveIssuerCA(project string) (string, error) {
+	if flagPCACAIssuerCA == "" {
+		return "", nil
+	}
+	// Full resource name → passthrough.
+	if strings.HasPrefix(flagPCACAIssuerCA, "projects/") {
+		return flagPCACAIssuerCA, nil
+	}
+	loc := flagPCACAIssuerLocation
+	if loc == "" {
+		loc = flagPCACALocation
+	}
+	pool := flagPCACAIssuerPool
+	if pool == "" {
+		pool = flagPCACAPool
+	}
+	if loc == "" || pool == "" {
+		return "", fmt.Errorf("--issuer-ca requires --issuer-location and --issuer-pool (or the surrounding --location/--pool)")
+	}
+	return pcaCAName(flagPCACAIssuerCA, project, loc, pool), nil
 }
 
 func pcaCARunGetCsr(cmd *cobra.Command, args []string) error {
