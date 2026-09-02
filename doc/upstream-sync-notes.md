@@ -207,6 +207,65 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Cloud Dataproc 569.0.0–579.0.0 (#1775)
+
+gcloud-go's `dataproc clusters create/update`, `dataproc workflow-templates
+set-managed-cluster`, and `dataproc batches submit` all take the full
+`Cluster` / `ManagedCluster` / `Batch` body via `--config-file`
+(`--source` for workflow templates — see `cmd/dataproc_clusters.go`,
+`cmd/dataproc_workflow_templates.go`, `cmd/dataproc_batches.go`), so any
+proto field exposed by `google.golang.org/api/dataproc/v1` is already
+settable through the YAML/JSON payload. The five payload-reachable
+items therefore don't need new CLI flags:
+
+- **579.0.0** — GA promotion of `--master-instance-selection`,
+  `--master-instance-flexibility-policy-file`, `--worker-instance-selection`,
+  `--worker-instance-flexibility-policy-file`,
+  `--secondary-worker-instance-selection`, and
+  `--secondary-worker-instance-flexibility-policy-file` on `dataproc
+  clusters create` and `dataproc workflow-templates set-managed-cluster`.
+  All six populate `InstanceGroupConfig.instanceFlexibilityPolicy`
+  (`instanceSelectionList` / `provisioningModelMix`) on the master,
+  worker, or secondary-worker `InstanceGroupConfig` in the Cluster body.
+  gcloud-go does not maintain separate alpha/beta/GA tracks and accepts
+  the field directly from the payload today.
+- **575.0.0** — `--master-machine-types` on `dataproc clusters create`.
+  Populates `masterConfig.instanceFlexibilityPolicy.instanceSelectionList`
+  entries (`{machineType, rank}`) — same field set as the flexibility
+  policy above; reachable via `--config-file`.
+- **571.0.0** — `--confidential-compute-type` on `dataproc clusters
+  create`. Populates
+  `gceClusterConfig.confidentialInstanceConfig.confidentialInstanceType`
+  (`SEV` / `SEV_SNP` / `TDX`) which is exposed by the Go client's
+  `ConfidentialInstanceConfig` struct.
+- **571.0.0** — `--confidential-compute` deprecation on `dataproc
+  clusters create`. gcloud-go never surfaced its own
+  `--confidential-compute` flag; both the deprecated
+  `enableConfidentialCompute` bool and the replacement
+  `confidentialInstanceType` enum are set on the same
+  `ConfidentialInstanceConfig` message and reached through `--config-file`.
+  The deprecation is a Python-argparse warning with no Go analogue.
+- **569.0.0** — `--resource-manager-tag` on `dataproc batches submit`.
+  Populates `environmentConfig.executionConfig.resourceManagerTags` on
+  the Batch body, which is already exposed by the Go client's
+  `ExecutionConfig` struct.
+
+The remaining two items don't map onto existing gcloud-go surfaces:
+
+- **576.0.0** — GA promotion of `dataproc batches submit pyspark-notebook`.
+  gcloud-go's `batches submit` takes the full `Batch` body via
+  `--config-file`, and the Go client already exposes
+  `Batch.pysparkNotebookBatch` (`*PySparkNotebookBatch`), so callers can
+  submit a PySpark-notebook batch today by setting `pysparkNotebookBatch`
+  in the YAML/JSON payload. gcloud-python's dedicated
+  `submit pyspark-notebook` subcommand is a Python argparse convenience
+  that maps a small set of positional/flag arguments to the same field;
+  the GA promotion has no track distinction to mirror.
+- **569.0.0** — `--resource-manager-tag` on `dataproc sessions create`.
+  gcloud-go does not implement the `dataproc sessions` subgroup;
+  `resourceManagerTags` on `Session.environmentConfig.executionConfig`
+  should land as part of adding the sessions group.
+
 ## Cloud Backup DR 570.0.0–580.0.0 (#1769)
 
 All four items add flags to `gcloud backup-dr backup-plans` and
