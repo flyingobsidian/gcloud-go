@@ -91,14 +91,15 @@ var (
 )
 
 var (
-	flagMKLocation     string
-	flagMKConfigFile   string
-	flagMKUpdateMask   string
-	flagMKFormat       string
-	flagMKAsync        bool
-	flagMKCluster      string
-	flagMKConnectClust string
-	flagMKAclOp        string
+	flagMKLocation       string
+	flagMKConfigFile     string
+	flagMKUpdateMask     string
+	flagMKFormat         string
+	flagMKAsync          bool
+	flagMKCluster        string
+	flagMKConnectClust   string
+	flagMKAclOp          string
+	flagMKBrokerDiskGiB  string
 )
 
 func init() {
@@ -109,8 +110,11 @@ func init() {
 	}
 	for _, c := range []*cobra.Command{mkClusterCreateCmd, mkClusterUpdateCmd} {
 		c.Flags().StringVar(&flagMKConfigFile, "config-file", "",
-			"Path to a JSON/YAML file with the Cluster message body (required)")
-		_ = c.MarkFlagRequired("config-file")
+			"Path to a JSON/YAML file with the Cluster message body (required unless --broker-disk-size-gib is set)")
+		// GA in 582.0.0; the 576.0.0 helper accepts byte-unit suffixes (Ki/Mi/Gi/Ti and their
+		// SI variants) and normalises them to GiB.
+		c.Flags().StringVar(&flagMKBrokerDiskGiB, "broker-disk-size-gib", "",
+			"Disk size for each broker in GiB (accepts byte-unit suffixes such as 100Gi or 2Ti)")
 	}
 	mkClusterUpdateCmd.Flags().StringVar(&flagMKUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
@@ -129,8 +133,14 @@ func runMKClusterCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if flagMKConfigFile == "" {
+		return fmt.Errorf("--config-file is required")
+	}
 	cluster := &managedkafka.Cluster{}
 	if err := loadYAMLOrJSONInto(flagMKConfigFile, cluster); err != nil {
+		return err
+	}
+	if err := applyBrokerDiskFlag(cluster); err != nil {
 		return err
 	}
 	ctx := context.Background()
@@ -209,13 +219,27 @@ func runMKClusterUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if flagMKConfigFile == "" && flagMKBrokerDiskGiB == "" {
+		return fmt.Errorf("either --config-file or --broker-disk-size-gib is required")
+	}
 	cluster := &managedkafka.Cluster{}
-	if err := loadYAMLOrJSONInto(flagMKConfigFile, cluster); err != nil {
+	if flagMKConfigFile != "" {
+		if err := loadYAMLOrJSONInto(flagMKConfigFile, cluster); err != nil {
+			return err
+		}
+	}
+	if err := applyBrokerDiskFlag(cluster); err != nil {
 		return err
 	}
 	mask := flagMKUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(cluster))
+		if flagMKBrokerDiskGiB != "" && !strings.Contains(mask, "brokerCapacityConfig") {
+			if mask != "" {
+				mask += ","
+			}
+			mask += "brokerCapacityConfig.diskSizeGib"
+		}
 	}
 	ctx := context.Background()
 	svc, err := gcp.ManagedKafkaService(ctx, flagAccount)
