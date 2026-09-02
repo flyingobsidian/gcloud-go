@@ -283,6 +283,7 @@ var (
 	flagRedisClusterMaintTime     string
 	flagRedisClusterMaintType     string
 	flagRedisClusterTokenAuthUser string
+	flagRedisClusterZDCZones      []string
 )
 
 func init() {
@@ -329,6 +330,10 @@ func init() {
 		"IAM identity of the token-auth user (required)")
 	_ = redisClusterAddTokenAuthCmd.MarkFlagRequired("user")
 
+	// --zone-distribution-config-zones added in gcloud-python 574.0.0.
+	redisClusterCreateCmd.Flags().StringSliceVar(&flagRedisClusterZDCZones, "zone-distribution-config-zones", nil,
+		"Zones for a MULTI_ZONE cluster (comma-separated); overrides zoneDistributionConfig.zones from --config-file")
+
 	redisClustersCmd.AddCommand(all...)
 	registerRedisBackupCollections(redisClustersCmd)
 	registerRedisClusterBackups(redisClustersCmd)
@@ -350,6 +355,12 @@ func runRedisClusterCreate(cmd *cobra.Command, args []string) error {
 	c := &redis.Cluster{}
 	if err := loadYAMLOrJSONInto(flagRedisClusterConfigFile, c); err != nil {
 		return err
+	}
+	if len(flagRedisClusterZDCZones) > 0 {
+		if c.ZoneDistributionConfig == nil {
+			c.ZoneDistributionConfig = &redis.ZoneDistributionConfig{}
+		}
+		c.ZoneDistributionConfig.Zones = append([]string(nil), flagRedisClusterZDCZones...)
 	}
 	ctx := context.Background()
 	svc, err := gcp.RedisService(ctx, flagAccount)
