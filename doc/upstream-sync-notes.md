@@ -172,6 +172,41 @@ code:
   (569.0.0) — gcloud-go does not bundle `anthoscli`; installing it is out
   of scope for the Go binary.
 
+## Certificate Authority Service 569.0.0–580.0.0 (#1764)
+
+The two flag-add items are now implemented:
+
+- `--issuer-pool` / `--issuer-location` / `--issuer-ca` on
+  `gcloud privateca subordinates activate` populate
+  `ActivateCertificateAuthorityRequest.subordinateConfig.certificateAuthority`
+  for first-party activation (gcloud-python 580.0.0). `--issuer-ca` accepts
+  either a short id (in which case `--issuer-pool`/`--issuer-location`, or
+  the surrounding `--pool`/`--location`, provide the missing components)
+  or a fully qualified resource name.
+- `--requested-not-before-time` on `gcloud privateca certificates create`
+  sets `Certificate.requestedNotBeforeTime` (gcloud-python 569.0.0). The
+  server rejects it unless the issuing CA pool's `issuancePolicy` has
+  `allowRequesterSpecifiedNotBeforeTime: true`.
+
+The remaining bullets don't need code changes:
+
+- **Suggestion to use `subordinates activate` when `subordinates create`
+  with issuer flags fails with `ALREADY_EXISTS`** (580.0.0) — Python's
+  `subordinates create` builds a `SubordinateConfig` from `--issuer-…`
+  argparse flags before hitting the API, then rewrites its error message
+  when the CA already exists. gcloud-go's `subordinates create` takes the
+  full `CertificateAuthority` body via `--config-file` and does not
+  synthesise a `SubordinateConfig` from flags, so the tailored suggestion
+  has no equivalent context to attach to. Users already see the raw
+  `ALREADY_EXISTS` error from the API and can rerun as
+  `gcloud privateca subordinates activate CA --issuer-ca=...` directly.
+- **`allowRequesterSpecifiedNotBeforeTime` support on the CA pool's
+  issuance policy** (569.0.0) — set on the `CaPool` resource itself.
+  `gcloud privateca pools create/update` in gcloud-go accept the full
+  `CaPool` body via `--config-file`, so setting
+  `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
+  payload is supported today.
+
 ## BigLake 570.0.0–578.0.0 (#1761)
 
 - **Track promotions (alpha→beta, beta→GA)** across 570.0.0–576.0.0 for
