@@ -117,6 +117,61 @@ If a native Go implementation of the `bq` CLI is prioritised for
 gcloud-go, this issue can be re-scoped or split into follow-up feature
 requests. Nothing to port for the migration-workflows surface we do have.
 
+## Breaking Changes 569.0.0–582.0.0 (#1763)
+
+The one code-affecting item — the `--auto-commit` default flip on
+`gcloud database-migration conversion-workspaces` `convert|seed|import-rules`
+(578.0.0) — is now implemented: those three commands default `--auto-commit`
+to `true` and accept `--no-auto-commit` to opt out (the historical false
+default). `apply` intentionally keeps the opt-in default.
+
+The other breaking-change items in #1763 do not translate to gcloud-go
+code:
+
+- **Legacy Cloud SQL Proxy V1 (`cloud_sql_proxy`) removal, mandatory Cloud
+  SQL Auth Proxy V2** (582.0.0) — gcloud-go's `sql connect psql/mysql/sqlserver`
+  path shells out to the DB client using the instance's public IP directly
+  (see `cmd/sql_all.go`); no `cloud_sql_proxy` or `cloud-sql-proxy` binary
+  is bundled or invoked, so the V1 removal has no effect.
+- **`gcloud api-registry mcp servers|tools list`,
+  `gcloud api-registry mcp enable|disable`,
+  `gcloud beta services mcp policies get|get-effective|test-enabled`,
+  `gcloud beta services mcp enable|disable|list` removals** (579.0.0–582.0.0)
+  — gcloud-go never implemented the `api-registry` command or any `services
+  mcp` subgroup, so the removals do not need to be mirrored. The Agent
+  Registry successor at
+  `gcloud alpha agent-registry mcp-servers` is exposed in gcloud-go as
+  `agent-registry` (see `cmd/agent_registry.go`).
+- **`google-cloud-sdk` Snap deprecation on 2026-09-29 in favour of
+  `google-cloud-cli`** (580.0.0) — gcloud-go is a single native Go binary
+  distributed via `go install` and release tarballs; there is no Snap or
+  APT package to migrate.
+- **`PRESERVED_STATE` column dropped from
+  `gcloud compute instance-groups managed list-instances` beta output**
+  (579.0.0) — gcloud-go's `formatManagedInstances` default table renders
+  NAME/ZONE/STATUS/ACTION/HEALTH and never emitted PRESERVED_STATE, so
+  no output change is required.
+- **`run_bq_command` tool on the Cloud CLI remote MCP server** (578.0.0)
+  — the remote MCP server is a Python-only surface that gcloud-go does
+  not implement; tracked under the general MCP-server note in the Google
+  Cloud CLI section.
+- **`gcloud storage rsync` default gzip decompression + `--do-not-decompress`
+  opt-out** (576.0.0) — gcloud-go's `storage rsync` copies bytes verbatim
+  (`storageDownloadFile` performs an unmodified media download and
+  `storageUploadFile` writes bytes as-is); no automatic gzip decompression
+  path exists, so the default flip and the new opt-out have no matching
+  behaviour to preserve. If content-encoding-aware rsync is prioritised
+  it should land alongside a matching decompression option in `storage cp`.
+- **`gcloud container attached clusters get-credentials` deprecation in
+  favour of `gcloud container fleet memberships get-credentials`**
+  (573.0.0) — the `container attached get-credentials` subcommand in
+  gcloud-go is a stub that reports "not yet implemented"; the deprecation
+  notice on the not-yet-implemented Python command has nothing to mirror.
+  `container fleet memberships` is also a stub today, tracked separately.
+- **`anthoscli` component no longer preinstalled in Debian/RPM packages**
+  (569.0.0) — gcloud-go does not bundle `anthoscli`; installing it is out
+  of scope for the Go binary.
+
 ## BigLake 570.0.0–578.0.0 (#1761)
 
 - **Track promotions (alpha→beta, beta→GA)** across 570.0.0–576.0.0 for

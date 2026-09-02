@@ -97,6 +97,65 @@ func TestNonEmptyJSONFieldsOnMigrationJob(t *testing.T) {
 	}
 }
 
+func TestDMCWAutoCommitDefaults(t *testing.T) {
+	g := dmSubgroup("conversion-workspaces")
+	if g == nil {
+		t.Fatal("database-migration conversion-workspaces missing")
+	}
+	// apply keeps the historical opt-in default (false).
+	apply := findSub(g, "apply")
+	if apply == nil {
+		t.Fatal("apply missing")
+	}
+	ac := apply.Flags().Lookup("auto-commit")
+	if ac == nil {
+		t.Fatal("apply missing --auto-commit")
+	}
+	if ac.DefValue != "false" {
+		t.Errorf("apply --auto-commit default = %q, want false", ac.DefValue)
+	}
+	if apply.Flags().Lookup("no-auto-commit") != nil {
+		t.Error("apply should not expose --no-auto-commit")
+	}
+	// convert / seed / import-rules default to true and expose --no-auto-commit.
+	for _, name := range []string{"convert", "seed", "import-rules"} {
+		sub := findSub(g, name)
+		if sub == nil {
+			t.Fatalf("%s subcommand missing", name)
+		}
+		ac := sub.Flags().Lookup("auto-commit")
+		if ac == nil {
+			t.Errorf("%s missing --auto-commit", name)
+			continue
+		}
+		if ac.DefValue != "true" {
+			t.Errorf("%s --auto-commit default = %q, want true", name, ac.DefValue)
+		}
+		if sub.Flags().Lookup("no-auto-commit") == nil {
+			t.Errorf("%s missing --no-auto-commit", name)
+		}
+	}
+}
+
+func TestDMCWAutoCommitHelper(t *testing.T) {
+	// --no-auto-commit wins even if --auto-commit is set.
+	flagDMCWAutoCommit = true
+	flagDMCWNoAutoCommit = true
+	if dmCWAutoCommit() {
+		t.Error("dmCWAutoCommit should return false when --no-auto-commit is set")
+	}
+	flagDMCWAutoCommit = true
+	flagDMCWNoAutoCommit = false
+	if !dmCWAutoCommit() {
+		t.Error("dmCWAutoCommit should return true when only --auto-commit is set")
+	}
+	flagDMCWAutoCommit = false
+	flagDMCWNoAutoCommit = false
+	if dmCWAutoCommit() {
+		t.Error("dmCWAutoCommit should return false when neither flag is set")
+	}
+}
+
 func findSub(c *cobra.Command, name string) *cobra.Command {
 	for _, sc := range c.Commands() {
 		if sc.Name() == name {

@@ -110,7 +110,9 @@ var (
 	flagDMCWListFilter        string
 	flagDMCWListURI           bool
 	flagDMCWAsync             bool
+	flagDMCWApplyAutoCommit   bool
 	flagDMCWAutoCommit        bool
+	flagDMCWNoAutoCommit      bool
 	flagDMCWDryRun            bool
 	flagDMCWFilter            string
 	flagDMCWDestConnProfile   string
@@ -159,8 +161,19 @@ func init() {
 
 	// apply / convert / seed common options.
 	for _, c := range []*cobra.Command{dmCWApplyCmd, dmCWConvertCmd, dmCWSeedCmd} {
-		c.Flags().BoolVar(&flagDMCWAutoCommit, "auto-commit", false, "Commit the workspace automatically after the operation")
 		c.Flags().StringVar(&flagDMCWFilter, "filter", "", "AIP-160 style filter for entities to include")
+	}
+	// apply keeps the historical opt-in default (false); a separate variable
+	// prevents the convert/seed/import-rules default flip from leaking into it.
+	dmCWApplyCmd.Flags().BoolVar(&flagDMCWApplyAutoCommit, "auto-commit", false,
+		"Commit the workspace automatically after the operation")
+	// convert / seed / import-rules default --auto-commit to true (matching
+	// gcloud-python 578.0.0). Users can pass --no-auto-commit to opt out.
+	for _, c := range []*cobra.Command{dmCWConvertCmd, dmCWSeedCmd, dmCWImportRulesCmd} {
+		c.Flags().BoolVar(&flagDMCWAutoCommit, "auto-commit", true,
+			"Commit the workspace automatically after the operation")
+		c.Flags().BoolVar(&flagDMCWNoAutoCommit, "no-auto-commit", false,
+			"Disable automatic commit (overrides --auto-commit)")
 	}
 	dmCWApplyCmd.Flags().BoolVar(&flagDMCWDryRun, "dry-run", false,
 		"Validate the apply without changing the destination database")
@@ -191,8 +204,8 @@ func init() {
 		"Path(s) to rules files (repeat to import multiple files)")
 	dmCWImportRulesCmd.Flags().StringVar(&flagDMCWRulesFormat, "rules-format", "IMPORT_RULES_FILE_FORMAT_HARBOUR_BRIDGE_SESSION_FILE",
 		"Format of the rules content file")
-	dmCWImportRulesCmd.Flags().BoolVar(&flagDMCWAutoCommit, "auto-commit", false,
-		"Commit the workspace automatically after import")
+	// --auto-commit / --no-auto-commit for import-rules are registered above
+	// alongside convert/seed.
 	_ = dmCWImportRulesCmd.MarkFlagRequired("file")
 
 	dmCWDescribeCmd.Flags().StringVar(&flagDMCWFormat, "format", "", "Output format")
@@ -239,6 +252,17 @@ func dmCWMRResourceName(name, project, region, workspace string) string {
 	}
 	parent := dmCWResourceName(workspace, project, region)
 	return fmt.Sprintf("%s/mappingRules/%s", parent, name)
+}
+
+// dmCWAutoCommit returns the effective auto-commit setting for convert, seed,
+// and import-rules. --no-auto-commit wins over --auto-commit so scripts can
+// opt back into the historical false default even though gcloud-python 578.0.0
+// flipped the on-by-default behaviour.
+func dmCWAutoCommit() bool {
+	if flagDMCWNoAutoCommit {
+		return false
+	}
+	return flagDMCWAutoCommit
 }
 
 func runDMCWCreate(cmd *cobra.Command, args []string) error {
@@ -388,7 +412,7 @@ func runDMCWApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	req := &datamigration.ApplyConversionWorkspaceRequest{
-		AutoCommit:        flagDMCWAutoCommit,
+		AutoCommit:        flagDMCWApplyAutoCommit,
 		ConnectionProfile: flagDMCWConnProfile,
 		DryRun:            flagDMCWDryRun,
 		Filter:            flagDMCWFilter,
@@ -429,7 +453,7 @@ func runDMCWConvert(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	req := &datamigration.ConvertConversionWorkspaceRequest{
-		AutoCommit:      flagDMCWAutoCommit,
+		AutoCommit:      dmCWAutoCommit(),
 		ConvertFullPath: flagDMCWConvertFullPath,
 		Filter:          flagDMCWFilter,
 	}
@@ -470,7 +494,7 @@ func runDMCWSeed(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	req := &datamigration.SeedConversionWorkspaceRequest{
-		AutoCommit:                   flagDMCWAutoCommit,
+		AutoCommit:                   dmCWAutoCommit(),
 		SourceConnectionProfile:      flagDMCWSourceConnProfile,
 		DestinationConnectionProfile: flagDMCWDestConnProfile,
 	}
@@ -553,7 +577,7 @@ func runDMCWImportRules(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	req := &datamigration.ImportMappingRulesRequest{
-		AutoCommit:  flagDMCWAutoCommit,
+		AutoCommit:  dmCWAutoCommit(),
 		RulesFormat: flagDMCWRulesFormat,
 		RulesFiles:  rules,
 	}
