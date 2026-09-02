@@ -84,6 +84,39 @@ by making it clear when a checkbox needs no code change.
   already set `config.reservationAffinity.consumeReservationType:
   ANY_RESERVATION_THEN_FAIL` today. No CLI change needed.
 
+## BigQuery `bq` CLI 570.0.0–581.0.0 (#1762)
+
+The 25 upstream release-notes items in #1762 all target the standalone
+`bq` binary that ships in `platform/bq/` inside the Python Google Cloud
+CLI (a separate Python CLI written on top of the BigQuery REST API and
+distributed via the `bq` component). gcloud-go's own `bq` command is a
+distinct surface that only wraps the BigQuery Migration API
+(`bq migration-workflows …`), so none of these items translate to
+gcloud-go code:
+
+- Reservation-assignment additions (`bq ls|show --reservation_assignment`
+  `precedence`/`condition` fields, the `AUTOMATIC_MATERIALIZED_VIEW_REFRESH`
+  job type, `principal` field, `NoneType` handling fix, short-ID parsing
+  fix, custom assignment name, `--alpha=reservation_groups` removal) —
+  all on the Python `bq mk|show|ls|rm --reservation_group|
+  --reservation_assignment` surface which gcloud-go does not implement.
+- `bq rm --connection -f/--force`, `--s3_service_directory_service` on
+  AWS connections — Python `bq --connection` surface only.
+- `--nouse_google_auth` config-reading fix, `--oauth_access_token`
+  `bq init` gating, `--gcloud_config_cache`, `--label` on `bq cp|extract|load`,
+  fractional-second `bq show` fix, `stderr`/`stdout` routing fix, container
+  concurrency in `bq show --routine`, table/dataset identifiers of the form
+  `project.catalog.namespace.table` / `catalog.namespace`, row-access-policy
+  `bq show|rm` support, `absl` version bump — all internal to the Python
+  `bq` CLI.
+- User-agent tweaks (predefined labels, execution-environment info, agent
+  information, command format), and updated help text for global flags —
+  Python `bq` CLI packaging only.
+
+If a native Go implementation of the `bq` CLI is prioritised for
+gcloud-go, this issue can be re-scoped or split into follow-up feature
+requests. Nothing to port for the migration-workflows surface we do have.
+
 ## BigLake 570.0.0–578.0.0 (#1761)
 
 - **Track promotions (alpha→beta, beta→GA)** across 570.0.0–576.0.0 for
