@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -17,12 +18,15 @@ var kmsSTHsmCmd = &cobra.Command{
 }
 
 var (
-	flagKmsHsmLocation   string
-	flagKmsHsmFormat     string
-	flagKmsHsmFilter     string
-	flagKmsHsmPageSize   int64
-	flagKmsHsmConfigFile string
-	flagKmsHsmInstance   string
+	flagKmsHsmLocation           string
+	flagKmsHsmFormat             string
+	flagKmsHsmFilter             string
+	flagKmsHsmPageSize           int64
+	flagKmsHsmConfigFile         string
+	flagKmsHsmInstance           string
+	flagKmsHsmOperationType      string
+	flagKmsHsmCryptoKeyVersion   string
+	flagKmsHsmTwoFactorPublicKey string
 )
 
 var kmsHsmCreateCmd = &cobra.Command{
@@ -184,8 +188,11 @@ func init() {
 		_ = c.MarkFlagRequired("location")
 		_ = c.MarkFlagRequired("hsm-instance")
 	}
-	kmsHsmProposalCreateCmd.Flags().StringVar(&flagKmsHsmConfigFile, "config-file", "", "YAML/JSON body for the SingleTenantHsmInstanceProposal (required)")
-	_ = kmsHsmProposalCreateCmd.MarkFlagRequired("config-file")
+	kmsHsmProposalCreateCmd.Flags().StringVar(&flagKmsHsmConfigFile, "config-file", "", "YAML/JSON body for the SingleTenantHsmInstanceProposal (optional if --operation-type is set)")
+	kmsHsmProposalCreateCmd.Flags().StringVar(&flagKmsHsmOperationType, "operation-type", "", "Proposal operation type: upgrade_key_trust (or provide via --config-file)")
+	// Flags added for --operation-type=upgrade_key_trust in gcloud-python 576.0.0.
+	kmsHsmProposalCreateCmd.Flags().StringVar(&flagKmsHsmCryptoKeyVersion, "crypto-key-version-name", "", "CryptoKeyVersion to upgrade for --operation-type=upgrade_key_trust")
+	kmsHsmProposalCreateCmd.Flags().StringVar(&flagKmsHsmTwoFactorPublicKey, "two-factor-public-key-pem", "", "PEM-encoded 2FA public key for --operation-type=upgrade_key_trust")
 
 	kmsHsmProposalListCmd.Flags().StringVar(&flagKmsHsmFilter, "filter", "", "Filter expression")
 	kmsHsmProposalListCmd.Flags().Int64Var(&flagKmsHsmPageSize, "page-size", 0, "Page size")
@@ -209,8 +216,21 @@ func runKmsHsmProposalCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	body := &cloudkms.SingleTenantHsmInstanceProposal{}
-	if err := loadYAMLOrJSONInto(flagKmsHsmConfigFile, body); err != nil {
-		return err
+	if flagKmsHsmConfigFile != "" {
+		if err := loadYAMLOrJSONInto(flagKmsHsmConfigFile, body); err != nil {
+			return err
+		}
+	}
+	if strings.EqualFold(flagKmsHsmOperationType, "upgrade_key_trust") {
+		if flagKmsHsmCryptoKeyVersion == "" || flagKmsHsmTwoFactorPublicKey == "" {
+			return fmt.Errorf("--operation-type=upgrade_key_trust requires --crypto-key-version-name and --two-factor-public-key-pem")
+		}
+		body.UpgradeKeyTrust = &cloudkms.UpgradeKeyTrust{
+			Name:                  flagKmsHsmCryptoKeyVersion,
+			TwoFactorPublicKeyPem: flagKmsHsmTwoFactorPublicKey,
+		}
+	} else if flagKmsHsmConfigFile == "" {
+		return fmt.Errorf("either --config-file or --operation-type must be supplied")
 	}
 	parent := kmsHsmInstanceName(project, flagKmsHsmLocation, flagKmsHsmInstance)
 	out, err := svc.Projects.Locations.SingleTenantHsmInstances.Proposals.Create(parent, body).
