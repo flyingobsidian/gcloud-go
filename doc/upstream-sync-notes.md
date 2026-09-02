@@ -207,6 +207,18 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Cloud Alerting 570.0.0 (#1767)
+
+- **Fixing List Alerts `gcloud` CLI example commands** (570.0.0) — the
+  upstream fix is entirely inside the Python argparse `examples` block of
+  `surface/monitoring/policies/list.yaml`, refining the `--sort-by` and
+  `--filter` snippets shown in `gcloud monitoring policies list --help`.
+  gcloud-go's `monitoring policies list` command (see `cmd/monitoring.go`)
+  provides its own short help text and does not carry the Python
+  example strings, so there is nothing to sync into the Go binary. Users
+  who want the refreshed example commands can consult the upstream
+  [alerting policies filter/sort reference](https://cloud.google.com/monitoring/api/v3/sorting-and-filtering#alertpolicy).
+
 ## Access Context Manager 572.0.0–575.0.0 (#1766)
 
 Both cloud-bindings items are already reachable through gcloud-go's
