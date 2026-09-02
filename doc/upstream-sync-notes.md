@@ -207,6 +207,27 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Cloud Auth 579.0.0–581.0.0 (#1768)
+
+All three items add or enable Enterprise Certificate Proxy (ECP) HTTP
+Proxy support in the Python auth stack. gcloud-go does not implement ECP
+(the `auth enterprise-certificate-config` group is a stub — see
+`registerStubGroup(authCmd, "enterprise-certificate-config", ...)` in
+`cmd/auth.go`), and the Go binary uses the standard `crypto/tls` stack
+plus `HTTP_PROXY`/`HTTPS_PROXY` environment variables for its transport,
+so none of these translate to gcloud-go code today:
+
+- **581.0.0** — ECP HTTP Proxy enabled by default for context-aware mTLS
+  requests. gcloud-go has no ECP HTTP proxy toggle to flip.
+- **579.0.0** — ECP HTTP Proxy support enabled for external users
+  (disabled by default). Same reason: no ECP support to gate.
+- **579.0.0** — `--ecp-http-proxy` flag on
+  `gcloud auth enterprise-certificate-config create` to specify a custom
+  ECP HTTP proxy binary path. `enterprise-certificate-config create` is a
+  stub in gcloud-go, so the flag has no create-request builder to wire
+  into. When ECP is implemented in gcloud-go, `--ecp-http-proxy` should be
+  added alongside the rest of the create-request surface.
+
 ## Cloud Alerting 570.0.0 (#1767)
 
 - **Fixing List Alerts `gcloud` CLI example commands** (570.0.0) — the
