@@ -20,6 +20,7 @@ var (
 	flagMemstoreInstConfigFile string
 	flagMemstoreInstUpdateMask string
 	flagMemstoreInstPageSize   int64
+	flagMemstoreInstZDCZones   []string
 )
 
 var (
@@ -94,6 +95,9 @@ func init() {
 	memstoreInstUpdateCmd.Flags().StringVar(&flagMemstoreInstUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 	memstoreInstListCmd.Flags().Int64Var(&flagMemstoreInstPageSize, "page-size", 0, "Maximum results per page")
+	// --zone-distribution-config-zones added in gcloud-python 574.0.0.
+	memstoreInstCreateCmd.Flags().StringSliceVar(&flagMemstoreInstZDCZones, "zone-distribution-config-zones", nil,
+		"Zones for a MULTI_ZONE cluster (comma-separated); overrides zoneDistributionConfig.zones from --config-file")
 
 	memstoreInstCmd.AddCommand(all...)
 	memorystoreCmd.AddCommand(memstoreInstCmd)
@@ -140,6 +144,7 @@ func runMemstoreInstCreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagMemstoreInstConfigFile, &body); err != nil {
 		return err
 	}
+	applyZoneDistributionZonesToMap(body, flagMemstoreInstZDCZones)
 	q := url.Values{}
 	q.Set("instanceId", args[0])
 	ctx := context.Background()
@@ -149,6 +154,25 @@ func runMemstoreInstCreate(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Create request issued for instance [%s].\n", args[0])
 	return emitFormatted(op, flagMemstoreInstFormat)
+}
+
+// applyZoneDistributionZonesToMap sets body.zoneDistributionConfig.zones from
+// the CLI slice, preserving any mode/zone already present. Added in
+// gcloud-python 574.0.0.
+func applyZoneDistributionZonesToMap(body map[string]any, zones []string) {
+	if len(zones) == 0 {
+		return
+	}
+	zdc, _ := body["zoneDistributionConfig"].(map[string]any)
+	if zdc == nil {
+		zdc = map[string]any{}
+	}
+	converted := make([]any, len(zones))
+	for i, z := range zones {
+		converted[i] = z
+	}
+	zdc["zones"] = converted
+	body["zoneDistributionConfig"] = zdc
 }
 
 func runMemstoreInstDelete(cmd *cobra.Command, args []string) error {
