@@ -62,7 +62,27 @@ var (
 	flagCMUpdateMask string
 	flagCMFormat     string
 	flagCMAsync      bool
+	// Resource-manager tag bindings to attach on create (gcloud-python 580.0.0
+	// `--tags` flag). Bindings win over any `tags` field in --config-file so
+	// the flag has predictable precedence.
+	flagCMTags map[string]string
 )
+
+// cmMergeTags overlays --tags entries onto an existing resource-manager tag
+// map. Values from the flag win on key collision so `--tags` behaves as an
+// explicit override of anything preloaded from --config-file.
+func cmMergeTags(existing map[string]string) map[string]string {
+	if len(flagCMTags) == 0 {
+		return existing
+	}
+	if existing == nil {
+		existing = make(map[string]string, len(flagCMTags))
+	}
+	for k, v := range flagCMTags {
+		existing[k] = v
+	}
+	return existing
+}
 
 // --- certificates ---
 
@@ -111,6 +131,12 @@ func registerCMCrud(create, del, describe, list, update *cobra.Command, msg stri
 	for _, c := range []*cobra.Command{create, del, update} {
 		c.Flags().BoolVar(&flagCMAsync, "async", false, "Return the long-running operation without waiting")
 	}
+	// --tags accepts comma-separated KEY=VALUE resource-manager tag bindings,
+	// e.g. `--tags=123/environment=prod,123/costCenter=marketing`. Only exposed
+	// on create — updating a resource's tag bindings goes through the Resource
+	// Manager API, not Certificate Manager's Patch.
+	create.Flags().StringToStringVar(&flagCMTags, "tags", nil,
+		"KEY=VALUE resource-manager tags to bind to the "+msg+" on creation")
 	describe.Flags().StringVar(&flagCMFormat, "format", "", "Output format")
 	list.Flags().StringVar(&flagCMFormat, "format", "", "Output format")
 }
@@ -128,6 +154,7 @@ func runCMCertCreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagCMConfigFile, cert); err != nil {
 		return err
 	}
+	cert.Tags = cmMergeTags(cert.Tags)
 	ctx := context.Background()
 	svc, err := gcp.CertificateManagerService(ctx, flagAccount)
 	if err != nil {
@@ -271,6 +298,7 @@ func runCMDACreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagCMConfigFile, da); err != nil {
 		return err
 	}
+	da.Tags = cmMergeTags(da.Tags)
 	ctx := context.Background()
 	svc, err := gcp.CertificateManagerService(ctx, flagAccount)
 	if err != nil {
@@ -414,6 +442,7 @@ func runCMICCreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagCMConfigFile, ic); err != nil {
 		return err
 	}
+	ic.Tags = cmMergeTags(ic.Tags)
 	ctx := context.Background()
 	svc, err := gcp.CertificateManagerService(ctx, flagAccount)
 	if err != nil {
@@ -558,6 +587,7 @@ func runCMMapCreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagCMConfigFile, m); err != nil {
 		return err
 	}
+	m.Tags = cmMergeTags(m.Tags)
 	ctx := context.Background()
 	svc, err := gcp.CertificateManagerService(ctx, flagAccount)
 	if err != nil {
@@ -867,6 +897,7 @@ func runCMTCCreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagCMConfigFile, tc); err != nil {
 		return err
 	}
+	tc.Tags = cmMergeTags(tc.Tags)
 	ctx := context.Background()
 	svc, err := gcp.CertificateManagerService(ctx, flagAccount)
 	if err != nil {
