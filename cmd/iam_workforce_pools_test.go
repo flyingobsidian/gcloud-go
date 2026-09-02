@@ -9,7 +9,7 @@ func TestIamWorkforcePoolsSubcommands(t *testing.T) {
 	}
 	assertSubcommands(t, g, []string{
 		"create", "delete", "describe", "list", "update", "undelete",
-		"providers",
+		"providers", "create-cred-config", "create-login-config",
 	})
 	providers := findSub(g, "providers")
 	if providers == nil {
