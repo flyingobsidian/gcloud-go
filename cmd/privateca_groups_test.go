@@ -63,6 +63,92 @@ func TestPrivatecaSubordinatesSubcommands(t *testing.T) {
 	assertSubcommands(t, g, []string{"activate", "create", "delete", "describe", "disable", "enable", "get-csr", "list", "undelete", "update"})
 }
 
+func TestPrivatecaSubordinateActivateFirstPartyFlags(t *testing.T) {
+	g := privatecaSubgroup("subordinates")
+	if g == nil {
+		t.Fatal("privateca subordinates missing")
+	}
+	activate := findSub(g, "activate")
+	if activate == nil {
+		t.Fatal("subordinates activate missing")
+	}
+	for _, name := range []string{"issuer-ca", "issuer-pool", "issuer-location"} {
+		if activate.Flags().Lookup(name) == nil {
+			t.Errorf("subordinates activate missing --%s", name)
+		}
+	}
+}
+
+func TestPCAResolveIssuerCA(t *testing.T) {
+	saved := struct {
+		ca, pool, loc, sPool, sLoc string
+	}{
+		ca:    flagPCACAIssuerCA,
+		pool:  flagPCACAIssuerPool,
+		loc:   flagPCACAIssuerLocation,
+		sPool: flagPCACAPool,
+		sLoc:  flagPCACALocation,
+	}
+	t.Cleanup(func() {
+		flagPCACAIssuerCA = saved.ca
+		flagPCACAIssuerPool = saved.pool
+		flagPCACAIssuerLocation = saved.loc
+		flagPCACAPool = saved.sPool
+		flagPCACALocation = saved.sLoc
+	})
+
+	// Full name → passthrough.
+	flagPCACAIssuerCA = "projects/p/locations/us/caPools/pool/certificateAuthorities/ca"
+	got, err := pcaResolveIssuerCA("ignored")
+	if err != nil || got != flagPCACAIssuerCA {
+		t.Fatalf("passthrough: got=%q err=%v", got, err)
+	}
+
+	// Short id inherits --location/--pool when issuer-* omitted.
+	flagPCACAIssuerCA = "ca1"
+	flagPCACAIssuerPool = ""
+	flagPCACAIssuerLocation = ""
+	flagPCACAPool = "pool"
+	flagPCACALocation = "us"
+	got, err = pcaResolveIssuerCA("proj")
+	want := "projects/proj/locations/us/caPools/pool/certificateAuthorities/ca1"
+	if err != nil || got != want {
+		t.Fatalf("inherit: got=%q err=%v (want %q)", got, err, want)
+	}
+
+	// Explicit --issuer-pool/--issuer-location override.
+	flagPCACAIssuerPool = "otherPool"
+	flagPCACAIssuerLocation = "eu"
+	got, _ = pcaResolveIssuerCA("proj")
+	want = "projects/proj/locations/eu/caPools/otherPool/certificateAuthorities/ca1"
+	if got != want {
+		t.Errorf("override: got=%q want=%q", got, want)
+	}
+
+	// Missing pool/location → error.
+	flagPCACAIssuerPool = ""
+	flagPCACAIssuerLocation = ""
+	flagPCACAPool = ""
+	flagPCACALocation = ""
+	if _, err := pcaResolveIssuerCA("proj"); err == nil {
+		t.Error("expected error when both --issuer-pool/--issuer-location and --pool/--location are unset")
+	}
+}
+
+func TestPrivatecaCertificatesCreateHasNotBeforeFlag(t *testing.T) {
+	g := privatecaSubgroup("certificates")
+	if g == nil {
+		t.Fatal("privateca certificates missing")
+	}
+	create := findSub(g, "create")
+	if create == nil {
+		t.Fatal("certificates create missing")
+	}
+	if create.Flags().Lookup("requested-not-before-time") == nil {
+		t.Error("certificates create missing --requested-not-before-time")
+	}
+}
+
 func TestPrivatecaTemplatesSubcommands(t *testing.T) {
 	g := privatecaSubgroup("templates")
 	if g == nil {

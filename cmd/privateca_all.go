@@ -525,6 +525,10 @@ var (
 	flagPCACertUpdateMask   string
 	flagPCACertRevokeReason string
 	flagPCACertOutputFile   string
+	// Certificate.RequestedNotBeforeTime (gcloud-python 569.0.0). Only valid
+	// when the issuing CA pool's issuancePolicy has
+	// `allowRequesterSpecifiedNotBeforeTime: true`.
+	flagPCACertNotBefore string
 )
 
 func init() {
@@ -542,6 +546,10 @@ func init() {
 	}
 	pcaCertUpdateCmd.Flags().StringVar(&flagPCACertUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
+	pcaCertCreateCmd.Flags().StringVar(&flagPCACertNotBefore, "requested-not-before-time", "",
+		"RFC 3339 timestamp for Certificate.requestedNotBeforeTime; requires "+
+			"the issuing CA pool's issuancePolicy to set "+
+			"allowRequesterSpecifiedNotBeforeTime=true")
 	pcaCertRevokeCmd.Flags().StringVar(&flagPCACertRevokeReason, "reason", "REVOCATION_REASON_UNSPECIFIED",
 		"Reason for revocation (see the ReasonForRevocation enum)")
 	pcaCertExportCmd.Flags().StringVar(&flagPCACertOutputFile, "output-file", "",
@@ -564,6 +572,11 @@ func runPCACertCreate(cmd *cobra.Command, args []string) error {
 	cert := &privateca.Certificate{}
 	if err := loadYAMLOrJSONInto(flagPCACertConfigFile, cert); err != nil {
 		return err
+	}
+	// --requested-not-before-time wins over any value from --config-file so
+	// the flag has a predictable effect regardless of the body content.
+	if flagPCACertNotBefore != "" {
+		cert.RequestedNotBeforeTime = flagPCACertNotBefore
 	}
 	ctx := context.Background()
 	svc, err := gcp.PrivateCAService(ctx, flagAccount)
