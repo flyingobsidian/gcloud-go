@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	iap "google.golang.org/api/iap/v1"
@@ -19,16 +20,52 @@ var iapCmd = &cobra.Command{Use: "iap", Short: "Manage Identity-Aware Proxy reso
 // iapTcpCmd is the parent for `gcloud iap tcp` and hosts dest-groups.
 var iapTcpCmd = &cobra.Command{Use: "tcp", Short: "IAP TCP forwarding"}
 
+// IapIamResourceTypes lists the IAM resource types accepted by
+// `gcloud iap web` IAM commands. `agent-registry` was promoted to GA in
+// gcloud-python 576.0.0 (#1781), so it is included here regardless of track.
+var IapIamResourceTypes = []string{
+	"app-engine",
+	"backend-services",
+	"forwarding-rule",
+	"cloud-run",
+	"agent-registry",
+}
+
 func init() {
 	iapCmd.AddCommand(iapTcpCmd)
 	// `iap web` remains a stub surface pending full IAM integration for the
-	// web application-level policy management commands.
+	// web application-level policy management commands. Each stub still
+	// accepts the same flag set as gcloud-python so scripts written against
+	// the GA `--resource-type=agent-registry` option parse cleanly.
 	web := &cobra.Command{Use: "web", Short: "Manage IAP web policies"}
-	for _, n := range []string{"enable", "disable", "get-iam-policy", "set-iam-policy", "add-iam-policy-binding", "remove-iam-policy-binding"} {
-		registerStubCommand(web, n, "Not yet implemented")
+	iamStubNames := []string{"get-iam-policy", "set-iam-policy", "add-iam-policy-binding", "remove-iam-policy-binding"}
+	for _, n := range iamStubNames {
+		c := registerStubCommand(web, n, "Not yet implemented")
+		addIapWebIamStubFlags(c)
+	}
+	for _, n := range []string{"enable", "disable"} {
+		c := registerStubCommand(web, n, "Not yet implemented")
+		addIapWebEnableStubFlags(c)
 	}
 	iapCmd.AddCommand(web)
 	rootCmd.AddCommand(iapCmd)
+}
+
+func addIapWebIamStubFlags(c *cobra.Command) {
+	c.Flags().String("resource-type", "", "Resource type of the IAP resource. One of: "+strings.Join(IapIamResourceTypes, ", "))
+	c.Flags().String("service", "", "Service name")
+	c.Flags().String("region", "", "Region name")
+	c.Flags().String("version", "", "Service version (app-engine only)")
+	// Agent-registry-specific selectors (GA since 576.0.0).
+	c.Flags().String("agent", "", "Agent ID for the agent-registry resource type")
+	c.Flags().String("mcp-server", "", "MCP server ID for the agent-registry resource type")
+	c.Flags().String("endpoint", "", "Endpoint ID for the agent-registry resource type")
+}
+
+func addIapWebEnableStubFlags(c *cobra.Command) {
+	c.Flags().String("resource-type", "", "Resource type of the IAP resource")
+	c.Flags().String("service", "", "Service name")
+	c.Flags().String("region", "", "Region name")
 }
 
 func iapIamMemberFlags(c *cobra.Command, member, role, condExpr, condTitle, condDesc *string) {
