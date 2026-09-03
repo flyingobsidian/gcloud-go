@@ -207,6 +207,20 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Service Extensions 572.0.0 (#1821)
+
+- **572.0.0** — Updated import and export schemas for
+  `gcloud service-extensions authz-extensions`. The Python update was
+  on argparse-level YAML schemas driving `authz-extensions import` /
+  `export` (extra optional keys plus a stricter enum validator).
+  gcloud-go's `authz-extensions import` (see
+  `cmd/service_extensions_authz_extensions.go`) unmarshals the file
+  straight into `google.golang.org/api/networkservices/v1.AuthzExtension`,
+  so any field on the Go client's `AuthzExtension` struct is settable
+  through the payload today — no per-schema validator to keep in sync.
+  Users on stale YAML with removed keys will see the API reject them,
+  matching the new upstream behaviour without a gcloud-go code change.
+
 ## Recaptcha 573.0.0–577.0.0 (#1818)
 
 The 577.0.0 `--universal` flag is implemented (see
