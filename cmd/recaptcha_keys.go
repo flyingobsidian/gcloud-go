@@ -24,6 +24,7 @@ var (
 	flagRcpKeyAndroid        bool
 	flagRcpKeyIOS            bool
 	flagRcpKeyExpress        bool
+	flagRcpKeyUniversal      bool
 	flagRcpKeyAllowAllDoms   bool
 	flagRcpKeyDomains        []string
 	flagRcpKeyAllowAllBundle bool
@@ -102,6 +103,7 @@ func init() {
 		c.Flags().BoolVar(&flagRcpKeyAndroid, "android", false, "Configure the key for Android apps")
 		c.Flags().BoolVar(&flagRcpKeyIOS, "ios", false, "Configure the key for iOS apps")
 		c.Flags().BoolVar(&flagRcpKeyExpress, "express", false, "Configure the key for Express assessments")
+		c.Flags().BoolVar(&flagRcpKeyUniversal, "universal", false, "Configure the key for Universal integration")
 		c.Flags().BoolVar(&flagRcpKeyAllowAllDoms, "allow-all-domains", false,
 			"Skip domain enforcement (web)")
 		c.Flags().StringSliceVar(&flagRcpKeyDomains, "domains", nil,
@@ -230,8 +232,12 @@ func rcpKeyBodyFromFlags() (*recaptcha.GoogleCloudRecaptchaenterpriseV1Key, erro
 		platforms++
 		key.ExpressSettings = &recaptcha.GoogleCloudRecaptchaenterpriseV1ExpressKeySettings{}
 	}
+	if flagRcpKeyUniversal {
+		platforms++
+		key.UniversalSettings = &recaptcha.GoogleCloudRecaptchaenterpriseV1UniversalKeySettings{}
+	}
 	if platforms > 1 {
-		return nil, fmt.Errorf("only one of --web, --android, --ios, --express may be set")
+		return nil, fmt.Errorf("only one of --web, --android, --ios, --express, --universal may be set")
 	}
 	return key, nil
 }
