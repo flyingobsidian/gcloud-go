@@ -207,6 +207,30 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Looker 576.0.0 (#1810)
+
+Both 576.0.0 items are already reachable in gcloud-go without new flags
+or output changes:
+
+- **576.0.0** — `--release-channel` and
+  `--accelerated-security-patch-enabled` GA promotion on
+  `gcloud looker instances create` and `update`. In gcloud-go those
+  commands take the full `looker.Instance` body via `--config-file` (see
+  `cmd/looker.go`), and `google.golang.org/api/looker/v1` already
+  exposes `Instance.releaseChannel` and
+  `Instance.acceleratedSecurityPatchEnabled`, so both fields are
+  settable today by populating them in the YAML/JSON payload.
+  gcloud-go does not maintain separate alpha/beta/GA tracks, so the
+  promotion has no track surface to sync.
+- **576.0.0** — `RELEASE_CHANNEL` and `ACCELERATED_SECURITY_PATCH_ENABLED`
+  columns added to `gcloud looker instances describe` output in GA.
+  gcloud-python's describe uses a per-track projection that hides some
+  fields on GA; gcloud-go's `runLKInstDescribe` (`cmd/looker.go`) calls
+  `emitFormatted(got, flagLKFormat)` on the full `Instance` object, so
+  users already see `releaseChannel` and
+  `acceleratedSecurityPatchEnabled` (and every other resource field) in
+  the default YAML output today.
+
 ## Cloud Functions 579.0.0 (#1779)
 
 Both 579.0.0 items land in `gcloud functions deploy` / `gcloud functions
