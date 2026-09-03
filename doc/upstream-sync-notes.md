@@ -207,6 +207,44 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Cloud Datastream 571.0.0–574.0.0 (#1776)
+
+The `--sql-where-clause` flag on `gcloud datastream objects start-backfill`
+(571.0.0) is implemented — it populates
+`StartBackfillJobRequest.eventFilter.sqlWhereClause` on the outgoing
+request; see `cmd/datastream_all.go`. The remaining three items don't
+need CLI changes:
+
+- **574.0.0** — Regional Endpoints (REP) support for all Datastream
+  commands. gcloud-python routed its HTTP client through
+  `<region>-datastream.googleapis.com` transparently for regional
+  operations. gcloud-go relies on Google's global
+  `datastream.googleapis.com` endpoint (fronted at the load-balancer
+  layer for regional routing); the Go client library
+  (`google.golang.org/api/datastream/v1`) does not require or benefit
+  from per-region endpoint overrides for correctness. If future latency
+  work calls for regional endpoints, `DatastreamService` in
+  `internal/gcp/clients.go` can grow the same
+  `option.WithEndpoint("https://<region>-datastream.googleapis.com/")`
+  routing already used by `dataproc` and `aiplatform`.
+- **573.0.0** — Dataverse, Salesforce Marketing Cloud, and ServiceNow
+  connection-profile types on `datastream connection-profiles create`
+  and `update`. gcloud-go's `connection-profiles create`/`update`
+  commands take the full `ConnectionProfile` body via `--config-file`
+  (see `cmd/datastream_all.go`), and
+  `google.golang.org/api/datastream/v1` already exposes
+  `ConnectionProfile.dataverseProfile`,
+  `ConnectionProfile.salesforceMarketingCloudProfile`, and
+  `ConnectionProfile.serviceNowProfile`, so all three source types are
+  settable through the YAML/JSON payload today.
+- **573.0.0** — Same three source types on `datastream streams create`
+  and `update`. `Stream.sourceConfig.sourceConnectionProfile` references
+  the connection-profile resource, and the corresponding source-specific
+  fields on `SourceConfig` (`dataverseSourceConfig`,
+  `salesforceMarketingCloudSourceConfig`, `serviceNowSourceConfig`) are
+  exposed by the Go client; both `streams create` and `update` take the
+  full `Stream` body via `--config-file`.
+
 ## Cloud Dataproc 569.0.0–579.0.0 (#1775)
 
 gcloud-go's `dataproc clusters create/update`, `dataproc workflow-templates

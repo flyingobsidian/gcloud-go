@@ -894,6 +894,7 @@ var (
 	flagDSObjLocation   string
 	flagDSObjStream     string
 	flagDSObjConfigFile string
+	flagDSObjSQLWhere   string
 )
 
 func init() {
@@ -907,6 +908,8 @@ func init() {
 	dsObjLookupCmd.Flags().StringVar(&flagDSObjConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the LookupStreamObjectRequest body (required)")
 	_ = dsObjLookupCmd.MarkFlagRequired("config-file")
+	dsObjStartBackfillCmd.Flags().StringVar(&flagDSObjSQLWhere, "sql-where-clause", "",
+		"Optional SQL WHERE clause (without the WHERE keyword) that limits the backfill to matching rows; only supported for SQL sources")
 	dsObjDescribeCmd.Flags().StringVar(&flagDSFormat, "format", "", "Output format")
 	dsObjListCmd.Flags().StringVar(&flagDSFormat, "format", "", "Output format")
 
@@ -994,7 +997,11 @@ func runDSObjStartBackfill(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Streams.Objects.StartBackfillJob(dsObjName(args[0], project, flagDSObjLocation, flagDSObjStream), &datastream.StartBackfillJobRequest{}).Context(ctx).Do()
+	req := &datastream.StartBackfillJobRequest{}
+	if flagDSObjSQLWhere != "" {
+		req.EventFilter = &datastream.EventFilter{SqlWhereClause: flagDSObjSQLWhere}
+	}
+	got, err := svc.Projects.Locations.Streams.Objects.StartBackfillJob(dsObjName(args[0], project, flagDSObjLocation, flagDSObjStream), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("starting backfill: %w", err)
 	}
