@@ -70,3 +70,31 @@ func TestDatastreamStreamsSubcommands(t *testing.T) {
 	}
 	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
 }
+
+func TestDatastreamStartBackfillHasSQLWhereClause(t *testing.T) {
+	g := datastreamSubgroup("objects")
+	if g == nil {
+		t.Fatal("datastream objects missing")
+	}
+	var startBackfill *cobra.Command
+	for _, c := range g.Commands() {
+		if c.Name() == "start-backfill" {
+			startBackfill = c
+			break
+		}
+	}
+	if startBackfill == nil {
+		t.Fatal("datastream objects start-backfill missing")
+	}
+	if flag := startBackfill.Flags().Lookup("sql-where-clause"); flag == nil {
+		t.Error("start-backfill missing --sql-where-clause flag")
+	}
+	// stop-backfill has no such flag upstream; make sure we did not leak it.
+	for _, c := range g.Commands() {
+		if c.Name() == "stop-backfill" {
+			if flag := c.Flags().Lookup("sql-where-clause"); flag != nil {
+				t.Error("stop-backfill should not expose --sql-where-clause")
+			}
+		}
+	}
+}
