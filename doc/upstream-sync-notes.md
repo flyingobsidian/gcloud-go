@@ -207,6 +207,24 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Recaptcha 573.0.0–577.0.0 (#1818)
+
+The 577.0.0 `--universal` flag is implemented (see
+`cmd/recaptcha_keys.go`: sets `Key.universalSettings` on
+`recaptcha keys create` and `update`, and joins the existing
+`--web`/`--android`/`--ios`/`--express` mutually-exclusive platform
+group). The 573.0.0 bug fix has no gcloud-go equivalent:
+
+- **573.0.0** — Fix for `gcloud recaptcha keys create` ignoring
+  `--testing-score` when creating Android or iOS keys. gcloud-go's
+  `rcpKeyBodyFromFlags` (in `cmd/recaptcha_keys.go`) sets
+  `Key.testingOptions.testingScore` from `--testing-score` on the
+  outgoing body before it selects a platform, so the value is applied
+  regardless of whether `--android`, `--ios`, or `--web` is set. The
+  Python regression path — a per-platform argparse branch that
+  silently dropped the flag on the mobile subgroups — does not exist
+  in gcloud-go.
+
 ## Orchestration Pipelines 582.0.0 (#1817)
 
 - **582.0.0** — New `gcloud beta orchestration-pipelines` command group.
