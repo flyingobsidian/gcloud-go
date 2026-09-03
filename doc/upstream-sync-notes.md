@@ -207,6 +207,44 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Network Management 570.0.0–578.0.0 (#1813)
+
+Two of the six items map onto fields the current
+`connectivity-tests create` already accepts via `--config-from-file`, and
+the other four are new subgroups gcloud-go has not implemented yet:
+
+- **578.0.0** — `--source-dms-private-connection` on
+  `network-management connectivity-tests`. Populates
+  `Endpoint.dmsPrivateConnection` (a string field on the connectivity
+  test's source/destination endpoint, exposed by
+  `google.golang.org/api/networkmanagement/v1`). gcloud-go's
+  `connectivity-tests create` (see `cmd/network_management.go`) takes
+  the full `ConnectivityTest` body via `--config-from-file`, so the
+  field is settable through the YAML/JSON payload today; adding a
+  dedicated convenience flag is optional.
+- **575.0.0** — `--source-cloud-run-job` on
+  `network-management connectivity-tests`. Populates
+  `Endpoint.cloudRunJob`; reachable via `--config-from-file` for the
+  same reason.
+- **570.0.0** — `network-management network-monitoring-providers
+  monitoring-points` subgroup (agents that send probes). gcloud-go's
+  `network-monitoring-providers` (see
+  `cmd/network_management_network_monitoring_providers.go`) is served
+  by a raw REST client (`netmgmtMonRest`) against the v1beta1 surface;
+  it wires the provider-level commands (`create`, `delete`, `describe`,
+  `generate-monitoring-point-config`, `generate-provider-access-token`,
+  `list`) but not the nested `monitoring-points` sub-resource. Adding
+  the subgroup is a distinct piece of work.
+- **570.0.0** — Same story for the `network-paths` subgroup
+  (hop-by-hop route and active delivery quality between a monitoring
+  point and a destination).
+- **570.0.0** — Same story for the `web-paths` subgroup (monitored web
+  applications or URLs).
+- **570.0.0** — `network-management network-monitoring-providers`
+  top-level command group. Already implemented in gcloud-go at
+  `cmd/network_management_network_monitoring_providers.go` (tracked
+  under #954); only the three nested subgroups above remain.
+
 ## Network Connectivity 570.0.0–580.0.0 (#1812)
 
 gcloud-go's `network-connectivity hubs` and `spokes` commands (see
