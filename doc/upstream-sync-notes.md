@@ -207,6 +207,85 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Network Security 570.0.0–580.0.0 (#1814)
+
+Most of the 21 items are Python track promotions (alpha→beta or
+beta→GA) or Python-only "project scoping" argparse changes on
+subgroups that gcloud-go already exposes as project-scoped CRUD
+without alpha/beta/GA distinctions. gcloud-go's `authz-policies`,
+`firewall-endpoints`, `security-profiles`,
+`security-profile-groups`, `secure-access-connect`, and `operations`
+subgroups are all wired to real APIs in `cmd/network_security*.go`
+and take the full resource body via `--config-file` on create/update:
+
+- **580.0.0** — `mcp` / `policyProfile` GA in `authz-policies import`
+  and `export`; **580.0.0** — `loadBalancingScheme` made optional in
+  the same commands; **577.0.0** — `networkRules` / `snis` support in
+  `authz-policies import`. gcloud-go's `authz-policies` (see
+  `cmd/network_security_policies.go`) takes the full `AuthzPolicy`
+  body via `--config-file` on create/update. The Go client exposes
+  `AuthzPolicy.policyProfile`, `AuthzPolicy.networkRules`, and
+  `AuthzPolicyTarget.loadBalancingScheme` today, so the fields are
+  settable through the YAML/JSON payload. `import`/`export` in Python
+  are read-modify-write helpers on top of the same PATCH/GET calls
+  gcloud-go's `describe` → edit → `update --config-file` flow already
+  supports.
+- **576.0.0** and **573.0.0** — Track promotions of
+  `security-profiles wildfire-analysis` (project scope, BETA
+  promotion). gcloud-go's `security-profiles` (see
+  `cmd/network_security_profiles.go`) is a single project-scoped CRUD
+  group with no wildfire-analysis-specific subgroup; the underlying
+  `SecurityProfile.customIntercept`/`customMirroring`/`threatPrevention`/
+  `wildfireAnalysis` message fields are reachable via `--config-file`.
+- **574.0.0** (×2) — `ull-mirroring-engines` and
+  `ull-mirroring-collectors` beta / GA promotions. Both subgroups are
+  new API surfaces
+  (`ProjectsLocationsUllMirroringEnginesService`,
+  `ProjectsLocationsUllMirroringCollectorsService` on
+  `networksecurity/v1`) that gcloud-go has not implemented yet.
+  Adding them is standalone work.
+- **573.0.0** — `network-security operations` command group
+  (`describe`, `wait`, `list`, `cancel`). Already implemented at
+  `cmd/network_security.go` (issue 833); `wait` is not exposed
+  because gcloud-go's create/update wait on the LRO by default
+  (`--async` opts out), but `describe`/`list`/`cancel` are wired via
+  the same builder.
+- **573.0.0** — Wildfire subgroups / flags on `firewall-endpoints`.
+  `firewall-endpoints` (see `cmd/network_security_firewall.go`) is a
+  project- and organization-scoped CRUD group taking the full
+  `FirewallEndpoint` body via `--config-file`; wildfire-related
+  fields on the body are reachable through the payload. The
+  `wildfire-verdict-change-requests` sub-resource
+  (`ProjectsLocationsFirewallEndpointAssociationsWildfireVerdictChangeRequestsService`
+  on the Go client) is a new subgroup and belongs to the same
+  follow-up as the `ull-mirroring-*` groups above.
+- **572.0.0** — `firewall-endpoints` project-scoping GA. Already
+  project-scoped in gcloud-go via `addNSOrgFlags`; the org flag is
+  optional.
+- **571.0.0** (×6) — Project-scoping GA promotions for
+  `security-profiles` (delete/describe/export/import/list),
+  `security-profiles custom-intercept`,
+  `security-profiles custom-mirroring`,
+  `security-profiles threat-prevention` (including override
+  helpers), `security-profiles url-filtering`, and
+  `security-profile-groups`. gcloud-go's `security-profiles` and
+  `security-profile-groups` (see `cmd/network_security_profiles.go`)
+  are single project-scoped CRUD groups; per-type subgroups exist in
+  the Python argparse hierarchy but gcloud-go exposes the same field
+  surface through `--config-file` on the parent CRUD. Threat-prevention
+  override helpers (`add-override`, `delete-override`,
+  `list-overrides`, `update-override`) map to fields on the
+  `SecurityProfile.threatPrevention.severityOverrides` /
+  `threatOverrides` arrays; those are set through the payload today.
+- **570.0.0** — `secure-access-connect` GA (attachments, realms).
+  Already implemented in gcloud-go via the v1beta1 REST client (see
+  `cmd/network_security_sac.go`, issue #835).
+- **570.0.0** — Symantec integration / localization flags restricted
+  to ALPHA/BETA. gcloud-go does not maintain per-track argparse
+  gates; the underlying Symantec-integration fields on the
+  security-profile body are always reachable via `--config-file`
+  because they are not track-limited on the API side.
+
 ## Network Management 570.0.0–578.0.0 (#1813)
 
 Two of the six items map onto fields the current
