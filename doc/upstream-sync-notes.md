@@ -207,6 +207,24 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Metastore 580.0.0 (#1811)
+
+Both 580.0.0 items are on `gcloud beta metastore services migrations
+start`, which is a subgroup that does not exist in gcloud-go. The
+`metastore services` group in `cmd/metastore.go` currently wires
+`create`, `delete`, `describe`, `list`, `update`, IAM, alter/move/query,
+export, import, restore, and the nested `backups` subgroup — no
+`migrations` subgroup — so both items land when the migrations subgroup
+is added:
+
+- **580.0.0** — Lakehouse runtime catalog support in
+  `metastore services migrations start`. The `MigrationExecution` /
+  `StartMigrationRequest` proto exposes the target-catalog fields the
+  new flag populates; nothing to add until the migrations subgroup lands.
+- **580.0.0** — Cloud SQL migration arguments deprecated in
+  `metastore services migrations start`. gcloud-go never exposed the
+  Cloud SQL migration flags, so there is no deprecation to mirror.
+
 ## Looker 576.0.0 (#1810)
 
 Both 576.0.0 items are already reachable in gcloud-go without new flags
