@@ -47,6 +47,30 @@ func TestTransferOperationsSubcommands(t *testing.T) {
 	assertSubcommands(t, g, []string{"cancel", "describe", "list", "pause", "resume"})
 }
 
+func TestTransferAgentsInstallS3CompatibleModeDeprecated(t *testing.T) {
+	g := transferSubgroup("agents")
+	if g == nil {
+		t.Fatal("transfer agents missing")
+	}
+	var install *cobra.Command
+	for _, c := range g.Commands() {
+		if c.Name() == "install" {
+			install = c
+			break
+		}
+	}
+	if install == nil {
+		t.Fatal("transfer agents install missing")
+	}
+	flag := install.Flags().Lookup("s3-compatible-mode")
+	if flag == nil {
+		t.Fatal("--s3-compatible-mode missing on transfer agents install")
+	}
+	if flag.Deprecated == "" {
+		t.Error("--s3-compatible-mode should be marked deprecated")
+	}
+}
+
 func TestTransferAuthorizeExists(t *testing.T) {
 	if transferSubgroup("authorize") == nil {
 		t.Fatal("transfer authorize missing")

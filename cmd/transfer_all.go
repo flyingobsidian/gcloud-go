@@ -230,7 +230,9 @@ func init() {
 	xferAgentInstallCmd.Flags().Int64Var(&flagXferMemlockLimit, "memlock-limit", 64000000, "Container memlock ulimit")
 	xferAgentInstallCmd.Flags().StringSliceVar(&flagXferMountDirs, "mount-directories", nil, "Directories to bind-mount into the container")
 	xferAgentInstallCmd.Flags().StringVar(&flagXferProxy, "proxy", "", "HTTPS proxy URL")
-	xferAgentInstallCmd.Flags().BoolVar(&flagXferS3Compatible, "s3-compatible-mode", false, "Enable S3-compatible source mode")
+	xferAgentInstallCmd.Flags().BoolVar(&flagXferS3Compatible, "s3-compatible-mode", false, "Enable S3-compatible source mode (deprecated)")
+	_ = xferAgentInstallCmd.Flags().MarkDeprecated("s3-compatible-mode",
+		"Transfer Service now auto-detects S3-compatible sources; this flag is a no-op.")
 	xferAgentDeleteCmd.Flags().StringVar(&flagXferAgentID, "id", "", "Container ID to stop (either --id or --all is required)")
 	xferAgentDeleteCmd.Flags().BoolVar(&flagXferAgentAll, "all", false, "Stop all local tsop-agent containers")
 	xferAgentDeleteCmd.Flags().BoolVar(&flagXferUninstall, "uninstall", false, "Also remove the container image after stopping")
