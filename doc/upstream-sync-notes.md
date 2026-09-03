@@ -207,6 +207,26 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Cloud Firestore Emulator 577.0.0–579.0.0 (#1778)
+
+gcloud-go's `emulators firestore` group is a stub (see `cmd/emulators.go`:
+`registerStubGroup(emulatorsCmd, "firestore", ..., "start", "env-init")`)
+because gcloud-go does not bundle the Java-based Cloud Firestore emulator
+jar. Both upstream items are therefore not applicable to the current
+gcloud-go binary and should land alongside a future implementation of
+`emulators firestore start`:
+
+- **579.0.0** — `--require-indexes` and `--index-file` flags on
+  `gcloud emulators firestore start`. Both flags are Java-jar-side
+  toggles that only make sense once gcloud-go actually launches the
+  emulator process; they belong with the eventual `emulators firestore`
+  implementation.
+- **577.0.0** — Cloud Firestore emulator v1.22.0 bump (DML support for
+  the Pipelines API, the same `--require-indexes`/`--index-file` flags,
+  and a `<JRE 25` deprecation warning). Bundled-jar version bumps do
+  not translate to gcloud-go, and the JRE-version warning is emitted by
+  the jar at start-up — no CLI code to sync.
+
 ## Cloud Firestore 582.0.0 (#1777)
 
 - **582.0.0** — Search shorthands on
