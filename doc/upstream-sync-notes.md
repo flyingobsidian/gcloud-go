@@ -207,6 +207,27 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Cloud Functions 579.0.0 (#1779)
+
+Both 579.0.0 items land in `gcloud functions deploy` / `gcloud functions
+upgrade`, neither of which is implemented in gcloud-go (`deploy` is
+registered as a `"Not yet implemented"` stub in `cmd/functions.go`, and
+`upgrade` is not present at all, since only the IAM, event-types, logs,
+regions, and runtimes subgroups are wired to real APIs today under
+#860–#864 as part of #342). The two items should land alongside a real
+implementation of `functions deploy` / `functions upgrade`:
+
+- **579.0.0** — `all-traffic` added as an allowed value for
+  `--direct-vpc-egress` on `functions deploy`. In the v2 Cloud Functions
+  API this maps to `serviceConfig.vpcConnectorEgressSettings =
+  "ALL_TRAFFIC"` — a value the Go client
+  (`google.golang.org/api/cloudfunctions/v2`) already accepts on the
+  `ServiceConfig` proto. Nothing to add until `functions deploy` gains a
+  real create/update path.
+- **579.0.0** — `functions upgrade` promoted to GA. gcloud-go has no
+  `functions upgrade` command yet; the promotion is a Python-track
+  change with no analogue in the Go binary.
+
 ## Cloud Firestore Emulator 577.0.0–579.0.0 (#1778)
 
 gcloud-go's `emulators firestore` group is a stub (see `cmd/emulators.go`:
