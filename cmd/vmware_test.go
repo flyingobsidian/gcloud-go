@@ -92,7 +92,29 @@ func TestVmwarePrivateCloudsSubcommands(t *testing.T) {
 	if g == nil {
 		t.Fatal("vmware private-clouds missing")
 	}
-	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "migrate-management-vms", "update"})
+}
+
+func TestVmwarePrivateCloudsMigrateManagementVmsFlags(t *testing.T) {
+	g := vmwareSubgroup("private-clouds")
+	if g == nil {
+		t.Fatal("vmware private-clouds missing")
+	}
+	var mig *cobra.Command
+	for _, c := range g.Commands() {
+		if c.Name() == "migrate-management-vms" {
+			mig = c
+			break
+		}
+	}
+	if mig == nil {
+		t.Fatal("migrate-management-vms missing")
+	}
+	for _, name := range []string{"cluster-id", "location", "request-id", "etag"} {
+		if flag := mig.Flags().Lookup(name); flag == nil {
+			t.Errorf("migrate-management-vms missing --%s", name)
+		}
+	}
 }
 
 func TestVmwarePrivateConnectionsSubcommands(t *testing.T) {

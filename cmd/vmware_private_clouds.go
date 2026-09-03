@@ -19,6 +19,9 @@ var (
 	flagVmwarePcConfigFile string
 	flagVmwarePcUpdateMask string
 	flagVmwarePcPageSize   int64
+	flagVmwarePcClusterID  string
+	flagVmwarePcRequestID  string
+	flagVmwarePcEtag       string
 )
 
 var (
@@ -42,12 +45,17 @@ var (
 		Use: "update PRIVATE_CLOUD", Short: "Update a VMware Engine private cloud",
 		Args: cobra.ExactArgs(1), RunE: runVmwarePcUpdate,
 	}
+	vmwarePcMigrateMgmtVmsCmd = &cobra.Command{
+		Use:   "migrate-management-vms PRIVATE_CLOUD",
+		Short: "Migrate management VMs from the current management cluster to a workload cluster",
+		Args:  cobra.ExactArgs(1), RunE: runVmwarePcMigrateMgmtVms,
+	}
 )
 
 func init() {
 	all := []*cobra.Command{
 		vmwarePcCreateCmd, vmwarePcDeleteCmd, vmwarePcDescribeCmd,
-		vmwarePcListCmd, vmwarePcUpdateCmd,
+		vmwarePcListCmd, vmwarePcUpdateCmd, vmwarePcMigrateMgmtVmsCmd,
 	}
 	for _, c := range all {
 		c.Flags().StringVar(&flagVmwarePcLocation, "location", "", "Location (required)")
@@ -60,6 +68,13 @@ func init() {
 	_ = vmwarePcUpdateCmd.MarkFlagRequired("config-file")
 	vmwarePcUpdateCmd.Flags().StringVar(&flagVmwarePcUpdateMask, "update-mask", "", "Update mask (comma-separated field paths)")
 	vmwarePcListCmd.Flags().Int64Var(&flagVmwarePcPageSize, "page-size", 0, "Maximum results per page")
+	vmwarePcMigrateMgmtVmsCmd.Flags().StringVar(&flagVmwarePcClusterID, "cluster-id", "",
+		"ID of the destination workload cluster (must already exist in the private cloud) (required)")
+	_ = vmwarePcMigrateMgmtVmsCmd.MarkFlagRequired("cluster-id")
+	vmwarePcMigrateMgmtVmsCmd.Flags().StringVar(&flagVmwarePcRequestID, "request-id", "",
+		"Optional idempotency UUID")
+	vmwarePcMigrateMgmtVmsCmd.Flags().StringVar(&flagVmwarePcEtag, "etag", "",
+		"Optional resource etag for optimistic concurrency")
 
 	vmwarePrivateCloudsCmd.AddCommand(all...)
 	vmwareCmd.AddCommand(vmwarePrivateCloudsCmd)
@@ -157,6 +172,29 @@ func runVmwarePcList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 	return emitFormatted(all, flagVmwarePcFormat)
+}
+
+func runVmwarePcMigrateMgmtVms(cmd *cobra.Command, args []string) error {
+	name, err := vmwarePcName(args[0])
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	req := &vmwareengine.MigrateManagementVmsRequest{
+		ClusterId: flagVmwarePcClusterID,
+		RequestId: flagVmwarePcRequestID,
+		Etag:      flagVmwarePcEtag,
+	}
+	op, err := svc.Projects.Locations.PrivateClouds.MigrateManagementVms(name, req).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("migrating management VMs: %w", err)
+	}
+	fmt.Printf("Migrate management VMs on private cloud [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormatted(op, flagVmwarePcFormat)
 }
 
 func runVmwarePcUpdate(cmd *cobra.Command, args []string) error {
