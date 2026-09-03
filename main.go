@@ -11,6 +11,16 @@ import (
 
 func main() {
 	executed, err := cmd.Execute()
+	// If the failure was "API [...] not enabled on project [...]" and the user
+	// confirms the prompt, MaybePromptEnableAPI enables the API and returns
+	// retry=true — re-invoke Execute() so the same command runs against the
+	// now-enabled API. Only one retry pass is allowed; a second "not enabled"
+	// error falls through to the standard failure path.
+	if err != nil {
+		if retry, _ := cmd.MaybePromptEnableAPI(err); retry {
+			executed, err = cmd.Execute()
+		}
+	}
 	if err == nil {
 		return
 	}
