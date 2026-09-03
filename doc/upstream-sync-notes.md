@@ -207,6 +207,40 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Network Services 575.0.0–580.0.0 (#1815)
+
+All four 575.0.0–580.0.0 items are either already covered or Python-only:
+
+- **580.0.0** — `network-services telemetry-policies delete` promoted
+  to BETA. `telemetry-policies` is a v1beta1-only surface that is not
+  exposed by `google.golang.org/api/networkservices/v1` and is not
+  implemented in gcloud-go's `cmd/network_services*.go`. Both the
+  subgroup and its `delete` command should land together when the
+  v1beta1 client (or the eventual GA promotion) reaches gcloud-go.
+- **579.0.0** — `clientTlsPolicy` field deprecation on
+  `network-services endpoint-policies`. gcloud-python emits an
+  argparse-level deprecation warning; the underlying `EndpointPolicy.
+  clientTlsPolicy` field on the Go client is still present, so
+  gcloud-go's `endpoint-policies import` (see
+  `cmd/network_services_endpoint_policies.go`) continues to accept it
+  through the YAML body until the API removes it. No Go-side
+  deprecation notice is required.
+- **579.0.0** — Regional-locations support for the
+  `endpoint-policies` resource name pattern. gcloud-go's
+  `endpoint-policies` already takes `--location` and derives
+  `projects/PROJECT/locations/LOCATION/endpointPolicies/…` from it
+  (`nsResourceName` in `cmd/network_services_endpoint_policies.go`),
+  so users can pass any regional location today; only the Python
+  argparse resource-arg validator required updating.
+- **575.0.0** — `edge-cache services` import schema updates to allow
+  up to 100 `CORSPolicy.allowOrigins` and a `0s` `CDNPolicy.clientTtl`.
+  gcloud-python's `edge-cache services import` had client-side
+  argparse validators; gcloud-go's `edge-cache services import`
+  (see `cmd/edge_cache_services.go`) passes the YAML/JSON payload
+  straight through and lets the API enforce limits, so raising the
+  cap and allowing `0s` requires no CLI change — the requests
+  already succeed on the API side.
+
 ## Network Security 570.0.0–580.0.0 (#1814)
 
 Most of the 21 items are Python track promotions (alpha→beta or
