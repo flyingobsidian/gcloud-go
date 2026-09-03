@@ -28,6 +28,26 @@ func TestWorkbenchInstancesSubcommands(t *testing.T) {
 	})
 }
 
+func TestWorkbenchInstancesUpgradeHasImageFamilyFlag(t *testing.T) {
+	g := workbenchSubgroup("instances")
+	if g == nil {
+		t.Fatal("workbench instances missing")
+	}
+	var upgrade *cobra.Command
+	for _, c := range g.Commands() {
+		if c.Name() == "upgrade" {
+			upgrade = c
+			break
+		}
+	}
+	if upgrade == nil {
+		t.Fatal("workbench instances upgrade missing")
+	}
+	if flag := upgrade.Flags().Lookup("image-family"); flag == nil {
+		t.Error("workbench instances upgrade missing --image-family flag")
+	}
+}
+
 func TestWorkbenchExecutionsSubcommands(t *testing.T) {
 	g := workbenchSubgroup("executions")
 	if g == nil {

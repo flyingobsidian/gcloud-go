@@ -110,6 +110,7 @@ var (
 	flagWBIRevision      string
 	flagWBIIamMember     string
 	flagWBIIamRole       string
+	flagWBIImageFamily   string
 )
 
 func init() {
@@ -159,6 +160,10 @@ func init() {
 		"Fully qualified snapshot resource name to restore from")
 	wbiRestoreCmd.Flags().StringVar(&flagWBIRestoreTime, "snapshot-time", "",
 		"Point-in-time snapshot timestamp (RFC3339)")
+
+	wbiUpgradeCmd.Flags().StringVar(&flagWBIImageFamily, "image-family", "",
+		"Compute Engine image family resource name to upgrade to (e.g. projects/PROJECT/global/images/family/FAMILY); "+
+			"upgrades to the latest image in the specified family. If omitted, upgrades to the latest image in the instance's current family.")
 
 	for _, c := range []*cobra.Command{wbiAddIamCmd, wbiRemoveIamCmd} {
 		c.Flags().StringVar(&flagWBIIamMember, "member", "",
@@ -358,8 +363,9 @@ func runWBIDiagnose(cmd *cobra.Command, args []string) error {
 }
 
 func runWBIUpgrade(cmd *cobra.Command, args []string) error {
+	req := &notebooks.UpgradeInstanceRequest{ImageFamily: flagWBIImageFamily}
 	return wbiInvokeAction(args[0], "Upgrade instance", func(ctx context.Context, svc *notebooks.Service, name string) (*notebooks.Operation, error) {
-		return svc.Projects.Locations.Instances.Upgrade(name, &notebooks.UpgradeInstanceRequest{}).Context(ctx).Do()
+		return svc.Projects.Locations.Instances.Upgrade(name, req).Context(ctx).Do()
 	})
 }
 

@@ -207,6 +207,22 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Workbench 572.0.0 (#1824)
+
+The 572.0.0 `--image-family` flag is implemented (see
+`cmd/workbench_instances.go`: `wbiUpgradeCmd` now populates
+`UpgradeInstanceRequest.imageFamily`; tested in
+`cmd/workbench_groups_test.go`). The accelerator-type enum expansion
+is Python argparse-only:
+
+- **572.0.0** — `NVIDIA_RTX6000` added to `--accelerator-type` choices on
+  `workbench instances create` / `update`. gcloud-go's `instances
+  create` / `update` take the full `notebooks.Instance` body via
+  `--config-file` (there is no per-choice argparse validator to
+  mirror), so any `AcceleratorConfig.type` value the API accepts —
+  including `NVIDIA_RTX6000` — is settable through the YAML/JSON
+  payload today.
+
 ## Vmware Engine 576.0.0–582.0.0 (#1823)
 
 The 582.0.0 `migrate-management-vms` command is implemented (see
