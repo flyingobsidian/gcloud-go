@@ -56,6 +56,7 @@ var (
 	flagSecretLabels      map[string]string
 	flagExpireTime        string
 	flagTTL               string
+	flagSecretType        string
 )
 
 // --- secrets versions list ---
@@ -190,6 +191,8 @@ func init() {
 	secretsCreateCmd.Flags().StringToStringVar(&flagSecretLabels, "labels", nil, "Labels as key=value pairs")
 	secretsCreateCmd.Flags().StringVar(&flagExpireTime, "expire-time", "", "Expiration time (RFC 3339 format)")
 	secretsCreateCmd.Flags().StringVar(&flagTTL, "ttl", "", "Time-to-live duration (e.g. 30d, 24h)")
+	secretsCreateCmd.Flags().StringVar(&flagSecretType, "secret-type", "",
+		"Type of the secret (e.g. cloud-sql-single-user-credentials, other); leave empty for the default UNSPECIFIED type")
 
 	// secrets versions list
 	secretsVersionsListCmd.Flags().StringVar(&flagSecretName, "secret", "", "Secret name (required)")
@@ -413,6 +416,13 @@ func runSecretsCreate(cmd *cobra.Command, args []string) error {
 	}
 	if flagTTL != "" {
 		secret.Ttl = flagTTL
+	}
+	if flagSecretType != "" {
+		secretType, err := secretTypeEnum(flagSecretType)
+		if err != nil {
+			return err
+		}
+		secret.SecretType = secretType
 	}
 
 	parent := secrets.SecretParent(project, flagSecretsLocation)
