@@ -207,6 +207,19 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Orchestration Pipelines 582.0.0 (#1817)
+
+- **582.0.0** — New `gcloud beta orchestration-pipelines` command group.
+  This is a brand-new top-level command surface introduced in
+  gcloud-python; gcloud-go has no `orchestration-pipelines` command
+  (the closest name in the tree is `telco-automation orchestration-cluster`,
+  which is a distinct product). Adding the group is standalone work —
+  it needs its own `cmd/orchestration_pipelines*.go` files plus a
+  `gcp.OrchestrationPipelinesService` constructor once the API is
+  reachable through `google.golang.org/api/orchestrationpipelines/*`
+  (or an equivalent client). Tracked here for follow-up so the
+  checkbox in #1817 doesn't hang for lack of a code change.
+
 ## Oracle Database 581.0.0 (#1816)
 
 The single 581.0.0 bullet groups three Exascale storage flags across
