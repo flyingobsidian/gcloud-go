@@ -207,6 +207,31 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Vmware Engine 576.0.0–582.0.0 (#1823)
+
+The 582.0.0 `migrate-management-vms` command is implemented (see
+`cmd/vmware_private_clouds.go`: `vmwarePcMigrateMgmtVmsCmd` wraps
+`ProjectsLocationsPrivateCloudsService.MigrateManagementVms` with
+`--cluster-id`, `--request-id`, and `--etag`; tests in
+`cmd/vmware_test.go`). The other three items are already reachable via
+gcloud-go's `--config-file` payload on `vmware private-clouds
+create`/`update`:
+
+- **579.0.0** — `--kms-key` on `create`, and `--kms-key` /
+  `--encryption-type` on `update`. Populates
+  `PrivateCloud.encryptionConfig.cryptoKeyName` and
+  `PrivateCloud.encryptionConfig.type` (`CMEK`, `LEGACY_CMEK`, `OTHER`),
+  which are exposed on `EncryptionConfig` by
+  `google.golang.org/api/vmwareengine/v1` and set through the
+  `--config-file` YAML/JSON body today.
+- **576.0.0** — `--preferred-zone` / `--secondary-zone` on `create`
+  updated to require full resource names when creating a stretched
+  private cloud (VPC-SC compliance). gcloud-go does not maintain
+  Python-side argparse short-name coercion; users pass the full
+  resource name in the `PrivateCloud.stretchedClusterConfig`
+  `preferredLocation` / `secondaryLocation` fields via `--config-file`
+  today, so the VPC-SC-compliant behaviour is already what happens.
+
 ## Service Extensions 572.0.0 (#1821)
 
 - **572.0.0** — Updated import and export schemas for
