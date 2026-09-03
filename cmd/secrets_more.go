@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/secrets"
 	"github.com/spf13/cobra"
@@ -63,6 +65,26 @@ var (
 	}
 )
 
+// --- managed rotation ---
+
+var (
+	flagSecretsRotInstanceID string
+	flagSecretsRotUsername   string
+	flagSecretsRotPassword   string
+)
+
+var secretsEnableManagedRotationCmd = &cobra.Command{
+	Use:   "enable-managed-rotation SECRET_ID",
+	Short: "Enable managed rotation for a secret (Cloud SQL Single User credentials)",
+	Args:  cobra.ExactArgs(1), RunE: runSecretsEnableManagedRotation,
+}
+
+var secretsRotateSecretCmd = &cobra.Command{
+	Use:   "rotate-secret SECRET_ID",
+	Short: "Rotate a secret",
+	Args:  cobra.ExactArgs(1), RunE: runSecretsRotateSecret,
+}
+
 // --- locations ---
 
 var secretsLocationsCmd = &cobra.Command{Use: "locations", Short: "Manage Secret Manager locations"}
@@ -113,6 +135,36 @@ func init() {
 	secretsLocListCmd.Flags().StringVar(&flagSecretsLocListFmt, "format", "", "Output format")
 	secretsLocationsCmd.AddCommand(secretsLocDescribeCmd, secretsLocListCmd)
 	secretsCmd.AddCommand(secretsLocationsCmd)
+
+	// managed rotation / rotate-secret
+	for _, c := range []*cobra.Command{secretsEnableManagedRotationCmd, secretsRotateSecretCmd} {
+		c.Flags().StringVar(&flagSecretsLocation, "location", "",
+			"Secret Manager location (for regional secrets)")
+	}
+	secretsEnableManagedRotationCmd.Flags().StringVar(&flagSecretsRotInstanceID, "instance-id", "",
+		"Cloud SQL instance ID (required for Cloud SQL Single User rotation)")
+	secretsEnableManagedRotationCmd.Flags().StringVar(&flagSecretsRotUsername, "username", "",
+		"Cloud SQL username (required for Cloud SQL Single User rotation)")
+	secretsEnableManagedRotationCmd.Flags().StringVar(&flagSecretsRotPassword, "password", "",
+		"Cloud SQL password (optional; the server generates one if omitted)")
+	secretsCmd.AddCommand(secretsEnableManagedRotationCmd, secretsRotateSecretCmd)
+}
+
+// secretTypeEnum maps a kebab-case CLI value to the SecretType enum expected
+// by the Secret Manager API. Empty input leaves the enum unspecified.
+func secretTypeEnum(v string) (string, error) {
+	switch strings.ToLower(strings.ReplaceAll(v, "_", "-")) {
+	case "":
+		return "", nil
+	case "cloud-sql-single-user-credentials":
+		return "CLOUD_SQL_SINGLE_USER_CREDENTIALS", nil
+	case "other":
+		return "OTHER", nil
+	case "unspecified", "secret-type-unspecified":
+		return "SECRET_TYPE_UNSPECIFIED", nil
+	default:
+		return "", fmt.Errorf("--secret-type must be one of cloud-sql-single-user-credentials, other, unspecified (got %q)", v)
+	}
 }
 
 // --- IAM impl ---
@@ -327,4 +379,54 @@ func runSecretsLocList(cmd *cobra.Command, args []string) error {
 		fmt.Printf("%-30s %s\n", l.LocationId, path.Base(l.Name))
 	}
 	return nil
+}
+
+// --- managed rotation impl ---
+
+func runSecretsEnableManagedRotation(cmd *cobra.Command, args []string) error {
+	if flagSecretsRotInstanceID == "" || flagSecretsRotUsername == "" {
+		return fmt.Errorf("--instance-id and --username are required for Cloud SQL Single User managed rotation")
+	}
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := secrets.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	req := &secretmanager.EnableManagedRotationRequest{
+		CloudSqlSingleUserCredentials: &secretmanager.CloudSQLSingleUserCredentials{
+			InstanceId: flagSecretsRotInstanceID,
+			Username:   flagSecretsRotUsername,
+			Password:   flagSecretsRotPassword,
+		},
+	}
+	name := secrets.SecretName(project, args[0], flagSecretsLocation)
+	got, err := svc.Projects.Secrets.EnableManagedRotation(name, req).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("enabling managed rotation: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Enabled managed rotation for secret [%s].\n", args[0])
+	return emitFormatted(got, "")
+}
+
+func runSecretsRotateSecret(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := secrets.NewService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	name := secrets.SecretName(project, args[0], flagSecretsLocation)
+	got, err := svc.Projects.Secrets.RotateSecret(name, &secretmanager.RotateSecretRequest{}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("rotating secret: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Rotated secret [%s].\n", args[0])
+	return emitFormatted(got, "")
 }

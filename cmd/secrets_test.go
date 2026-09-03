@@ -129,6 +129,47 @@ func TestSecretsLocationsSubcommands(t *testing.T) {
 	assertSubcommands(t, g, []string{"describe", "list"})
 }
 
+func TestSecretsHasManagedRotationCommands(t *testing.T) {
+	names := make(map[string]bool)
+	for _, c := range secretsCmd.Commands() {
+		names[c.Name()] = true
+	}
+	for _, want := range []string{"enable-managed-rotation", "rotate-secret"} {
+		if !names[want] {
+			t.Errorf("missing subcommand: secrets %s", want)
+		}
+	}
+}
+
+func TestSecretsCreateHasSecretTypeFlag(t *testing.T) {
+	if flag := secretsCreateCmd.Flags().Lookup("secret-type"); flag == nil {
+		t.Error("secrets create missing --secret-type flag")
+	}
+}
+
+func TestSecretTypeEnum(t *testing.T) {
+	cases := map[string]string{
+		"":                                 "",
+		"cloud-sql-single-user-credentials": "CLOUD_SQL_SINGLE_USER_CREDENTIALS",
+		"CLOUD_SQL_SINGLE_USER_CREDENTIALS": "CLOUD_SQL_SINGLE_USER_CREDENTIALS",
+		"other":                             "OTHER",
+		"unspecified":                       "SECRET_TYPE_UNSPECIFIED",
+	}
+	for in, want := range cases {
+		got, err := secretTypeEnum(in)
+		if err != nil {
+			t.Errorf("secretTypeEnum(%q) unexpected error: %v", in, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("secretTypeEnum(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if _, err := secretTypeEnum("bogus"); err == nil {
+		t.Error("secretTypeEnum(\"bogus\") expected error")
+	}
+}
+
 func TestLastPathSegment(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"projects/110445118606/secrets/test-secret-06448752/versions/1", "1"},
