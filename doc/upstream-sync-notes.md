@@ -207,6 +207,48 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Network Connectivity 570.0.0–580.0.0 (#1812)
+
+gcloud-go's `network-connectivity hubs` and `spokes` commands (see
+`cmd/network_connectivity_hubs.go`) take the full `Hub` / `Spoke` body
+via `--config-file`, and gcloud-go does not maintain separate
+alpha/beta/GA tracks. That covers four of the five items:
+
+- **580.0.0** —
+  `--export-psc-published-services-and-regional-google-apis` and
+  `--export-psc-global-google-apis` on `network-connectivity hubs
+  create` and `update`. Both flags populate boolean fields on the
+  `Hub.exportPsc*` surface (see
+  `google.golang.org/api/networkconnectivity/v1.Hub`), settable via
+  `--config-file` today.
+- **573.0.0** — Updated `--region` help text on
+  `network-connectivity transports create` (`registerNCTransports` in
+  `cmd/network_connectivity_resources.go`) to list supported regions.
+  gcloud-go's `--location` flag description does not enumerate valid
+  values — that list is served by the API and changes over time; the
+  Python help-text expansion is a Python-only refresh and adding a
+  static enumeration in gcloud-go would go stale between releases.
+- **570.0.0** — `network-connectivity spokes gateways` `create` / `update`
+  GA promotion. gcloud-go's `spokes create` / `update` already accept
+  the full `Spoke` body via `--config-file`; `Spoke.gateway`
+  (`*Gateway`) is exposed by the Go client, so gateway spokes are
+  creatable today by populating `gateway: {...}` in the YAML/JSON payload.
+- **570.0.0** — `HYBRID_INSPECTION` preset topology on `hubs create`
+  GA. `Hub.presetTopology` accepts `"HYBRID_INSPECTION"` via
+  `--config-file`; no Go-side enum to update.
+
+The remaining item is a legitimate new subgroup gcloud-go has not
+implemented:
+
+- **572.0.0** — `network-connectivity spokes gateways advertised-routes`
+  subgroup GA (`create`, `delete`, `describe`, `list`). This is a
+  distinct API surface
+  (`ProjectsLocationsSpokesGatewayAdvertisedRoutesService` on the Go
+  client), not a flag on an existing command. Adding the subgroup is a
+  standalone piece of work (its own `registerNCSpokeGatewayAdvertisedRoutes`
+  builder mirroring the existing `ncCRUD` pattern in
+  `cmd/network_connectivity_hubs.go`) — tracked here for follow-up.
+
 ## Metastore 580.0.0 (#1811)
 
 Both 580.0.0 items are on `gcloud beta metastore services migrations
