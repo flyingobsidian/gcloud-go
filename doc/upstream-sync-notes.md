@@ -207,6 +207,23 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Cloud Firestore 582.0.0 (#1777)
+
+- **582.0.0** — Search shorthands on
+  `gcloud beta firestore indexes composite create`. The Python change
+  adds argparse convenience syntax (e.g. `--field=name,search=true`)
+  that maps onto `GoogleFirestoreAdminV1IndexField.searchConfig` (a
+  `GoogleFirestoreAdminV1SearchConfig`) inside the composite index body.
+  gcloud-go's `firestore indexes composite create` command (see
+  `cmd/firestore_fields_indexes.go`) takes the full
+  `GoogleFirestoreAdminV1Index` via `--config-file`, and the Go client
+  already exposes `IndexField.searchConfig` and
+  `IndexField.vectorConfig`, so search-index configuration is settable
+  today by populating `fields[i].searchConfig` in the YAML/JSON payload.
+  gcloud-go also does not maintain a separate `beta` track — the
+  gcloud-python beta-only surface lands under the single command in
+  gcloud-go.
+
 ## Cloud Datastream 571.0.0–574.0.0 (#1776)
 
 The `--sql-where-clause` flag on `gcloud datastream objects start-backfill`
