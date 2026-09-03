@@ -207,6 +207,39 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Oracle Database 581.0.0 (#1816)
+
+The single 581.0.0 bullet groups three Exascale storage flags across
+two commands, neither of which needs a gcloud-go CLI change today:
+
+- **`--total-vm-storage-size-gb` on
+  `oracle-database cloud-exadata-infrastructures configure-exascale`**
+  — gcloud-go's `cloud-exadata-infrastructures` (see
+  `cmd/oracle_database_cloud_exadata_infrastructures.go`) exposes
+  `create`, `delete`, `describe`, and `list`; the
+  `configure-exascale` subcommand is not implemented. `configure-exascale`
+  in gcloud-python corresponds to the
+  `ProjectsLocationsCloudExadataInfrastructuresService.Patch` call
+  with a specific field mask covering the Exascale storage settings;
+  a straightforward `configure-exascale` (or `update`) subcommand
+  could be added later that patches
+  `CloudExadataInfrastructureProperties.totalStorageSizeGb` (and
+  siblings) using `--config-file`.
+- **`--properties-vm-backup-storage-type` /
+  `--properties-vm-file-system-storage-type` on
+  `oracle-database cloud-vm-clusters create`** — gcloud-go's
+  `cloud-vm-clusters create` (see
+  `cmd/oracle_database_cloud_vm_clusters.go`) takes the full
+  `CloudVmCluster` body via `--config-file`, so these settings would
+  live under `properties.*StorageType`. The current version of
+  `google.golang.org/api/oracledatabase/v1` used by gcloud-go does
+  not yet expose the `vmBackupStorageType` /
+  `vmFileSystemStorageType` fields on `CloudVmClusterProperties`
+  (only `LocalBackupEnabled`, `DbNodeStorageSizeGb`, and
+  `StorageManagementType` are present). Once the Go client library
+  catches up, both fields become settable via `--config-file` with no
+  gcloud-go code change.
+
 ## Network Services 575.0.0–580.0.0 (#1815)
 
 All four 575.0.0–580.0.0 items are either already covered or Python-only:
