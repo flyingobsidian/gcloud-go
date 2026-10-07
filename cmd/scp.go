@@ -18,9 +18,9 @@ import (
 )
 
 var scpCmd = &cobra.Command{
-	Use:   "scp [[USER@]INSTANCE:]SRC [[USER@]INSTANCE:]DST",
+	Use:   "scp [[USER@]INSTANCE:]SRC [[[USER@]INSTANCE:]SRC ...] [[USER@]INSTANCE:]DEST",
 	Short: "Copy files to/from a Compute Engine instance via SCP",
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.MinimumNArgs(2),
 	RunE:  runSCP,
 }
 
@@ -74,21 +74,53 @@ func parseSCPTarget(arg string) scpTarget {
 	return scpTarget{User: user, Instance: instance, Path: path, IsRemote: true}
 }
 
+// parseSCPArgs splits SRC... DEST into targets and checks that they form a
+// valid copy, matching gcloud's SCPCommand.Verify with single_remote=True:
+// either local sources to a remote destination, or sources all on the same
+// remote to a local destination.
+func parseSCPArgs(args []string) ([]scpTarget, scpTarget, error) {
+	if len(args) < 2 {
+		return nil, scpTarget{}, fmt.Errorf("at least one source and a destination are required")
+	}
+	srcs := make([]scpTarget, 0, len(args)-1)
+	for _, a := range args[:len(args)-1] {
+		srcs = append(srcs, parseSCPTarget(a))
+	}
+	dst := parseSCPTarget(args[len(args)-1])
+
+	if dst.IsRemote {
+		for _, src := range srcs {
+			if src.IsRemote {
+				return nil, scpTarget{}, fmt.Errorf("all sources must be local files when destination is remote")
+			}
+		}
+		return srcs, dst, nil
+	}
+	for _, src := range srcs {
+		if !src.IsRemote {
+			return nil, scpTarget{}, fmt.Errorf("source(s) must be remote when destination is local")
+		}
+		if src.User != srcs[0].User || src.Instance != srcs[0].Instance {
+			return nil, scpTarget{}, fmt.Errorf("all sources must refer to the same remote when destination is local")
+		}
+	}
+	return srcs, dst, nil
+}
+
 func runSCP(cmd *cobra.Command, args []string) error {
 	if flagSCPTunnelThroughIAP && flagSCPInternalIP {
 		return fmt.Errorf("--tunnel-through-iap and --internal-ip are mutually exclusive")
 	}
-	src := parseSCPTarget(args[0])
-	dst := parseSCPTarget(args[1])
+	srcs, dst, err := parseSCPArgs(args)
+	if err != nil {
+		return err
+	}
 
-	// Determine which target is remote to resolve the instance.
-	var remoteTarget *scpTarget
-	if src.IsRemote {
-		remoteTarget = &src
-	} else if dst.IsRemote {
-		remoteTarget = &dst
-	} else {
-		return fmt.Errorf("at least one argument must be a remote target (INSTANCE:PATH)")
+	// Determine which target is remote to resolve the instance; all remote
+	// targets share the same user and instance.
+	remoteTarget := &dst
+	if !dst.IsRemote {
+		remoteTarget = &srcs[0]
 	}
 
 	project, zone, err := resolveProjectZone()
@@ -270,7 +302,7 @@ func runSCP(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build source and destination SCP arguments.
-	scpArgs = append(scpArgs, formatSCPArg(src, host), formatSCPArg(dst, host))
+	scpArgs = append(scpArgs, scpTargetArgs(srcs, dst, remoteTarget.User, host)...)
 
 	if flagSCPDryRun {
 		fmt.Println(shellJoin("scp", scpArgs))
@@ -287,6 +319,20 @@ func runSCP(cmd *cobra.Command, args []string) error {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	return c.Run()
+}
+
+// scpTargetArgs formats the sources and destination for scp, applying the
+// resolved remote user (which may come from OS Login) to every remote target.
+func scpTargetArgs(srcs []scpTarget, dst scpTarget, remoteUser, host string) []string {
+	targets := append(append([]scpTarget{}, srcs...), dst)
+	out := make([]string, 0, len(targets))
+	for _, t := range targets {
+		if t.IsRemote {
+			t.User = remoteUser
+		}
+		out = append(out, formatSCPArg(t, host))
+	}
+	return out
 }
 
 func formatSCPArg(t scpTarget, host string) string {

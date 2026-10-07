@@ -1,6 +1,9 @@
 package cmd
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestParseSCPTarget(t *testing.T) {
 	tests := []struct {
@@ -68,6 +71,88 @@ func TestFormatSCPArg(t *testing.T) {
 			got := formatSCPArg(tt.target, tt.host)
 			if got != tt.want {
 				t.Errorf("formatSCPArg() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseSCPArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantSrcs int
+		wantErr  bool
+	}{
+		{"single local to remote", []string{"a.txt", "vm:"}, 1, false},
+		{"multiple local to remote", []string{"file1.txt", "file2.txt", "file3.txt", "user@vm:"}, 3, false},
+		{"single remote to local", []string{"vm:a.txt", "."}, 1, false},
+		{"multiple remote to local", []string{"user@vm:a.txt", "user@vm:b.txt", "."}, 2, false},
+		{"remote source with remote destination", []string{"a.txt", "vm:b.txt", "vm:"}, 0, true},
+		{"all local", []string{"a.txt", "b.txt"}, 0, true},
+		{"mixed sources to local", []string{"vm:a.txt", "b.txt", "."}, 0, true},
+		{"different instances to local", []string{"vm1:a.txt", "vm2:b.txt", "."}, 0, true},
+		{"different users to local", []string{"alice@vm:a.txt", "bob@vm:b.txt", "."}, 0, true},
+		{"too few args", []string{"a.txt"}, 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srcs, dst, err := parseSCPArgs(tt.args)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseSCPArgs(%q) succeeded, want error", tt.args)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseSCPArgs(%q): %v", tt.args, err)
+			}
+			if len(srcs) != tt.wantSrcs {
+				t.Errorf("got %d sources, want %d", len(srcs), tt.wantSrcs)
+			}
+			if want := parseSCPTarget(tt.args[len(tt.args)-1]); dst != want {
+				t.Errorf("dst = %+v, want %+v", dst, want)
+			}
+		})
+	}
+}
+
+func TestSCPTargetArgs(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		remoteUser string
+		want       []string
+	}{
+		{
+			"multiple local to remote",
+			[]string{"/path/file1.txt", "/path/file2.txt", "vm:"},
+			"alice",
+			[]string{"/path/file1.txt", "/path/file2.txt", "alice@localhost:"},
+		},
+		{
+			"multiple remote to local, user resolved later",
+			[]string{"vm:a.txt", "vm:b.txt", "."},
+			"alice_example_com",
+			[]string{"alice_example_com@localhost:a.txt", "alice_example_com@localhost:b.txt", "."},
+		},
+		{
+			"no user",
+			[]string{"a.txt", "vm:/tmp/"},
+			"",
+			[]string{"a.txt", "localhost:/tmp/"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srcs, dst, err := parseSCPArgs(tt.args)
+			if err != nil {
+				t.Fatalf("parseSCPArgs(%q): %v", tt.args, err)
+			}
+			got := scpTargetArgs(srcs, dst, tt.remoteUser, "localhost")
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("scpTargetArgs() = %q, want %q", got, tt.want)
 			}
 		})
 	}
