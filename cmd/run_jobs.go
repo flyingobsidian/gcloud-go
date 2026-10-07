@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -27,6 +29,7 @@ var (
 	flagRunJobsPageSize   int64
 	flagRunJobsShowDel    bool
 	flagRunJobsLimit      int64
+	flagRunJobsWait       bool
 
 	flagRunJobsImage        string
 	flagRunJobsCommand      []string
@@ -149,6 +152,8 @@ func init() {
 	runJobsListCmd.Flags().Int64Var(&flagRunJobsPageSize, "page-size", 0, "Maximum results per page")
 	runJobsListCmd.Flags().BoolVar(&flagRunJobsShowDel, "show-deleted", false, "Include deleted jobs")
 	runJobsLogsCmd.Flags().Int64Var(&flagRunJobsLimit, "limit", 100, "Maximum number of log entries to return")
+	runJobsExecuteCmd.Flags().BoolVar(&flagRunJobsWait, "wait", false,
+		"Wait until the execution has completed running before exiting")
 
 	// Deploy flags
 	runJobsDeployCmd.Flags().StringVar(&flagRunJobsImage, "image", "", "Container image (required)")
@@ -276,8 +281,30 @@ func runJobsExecute(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("executing job: %w", err)
 	}
-	fmt.Printf("Execute request issued for job [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagRunJobsFormat)
+	if !flagRunJobsWait {
+		fmt.Printf("Execute request issued for job [%s] (operation: %s).\n", args[0], op.Name)
+		return emitFormatted(op, flagRunJobsFormat)
+	}
+	created, err := runJobsOpExecution(op)
+	if err != nil {
+		return err
+	}
+	get := func(ctx context.Context) (*runv2.GoogleCloudRunV2Execution, error) {
+		return svc.Projects.Locations.Jobs.Executions.Get(created.Name).Context(ctx).Do()
+	}
+	exec, err := runJobsWaitForExecution(ctx, os.Stderr, get, runJobsWaitInterval)
+	if errors.Is(err, errRunExecutionFailed) {
+		return fmt.Errorf("%w.%s", err, runJobsExecDetailsMessage(project, flagRunJobsRegion, exec))
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "Execution [%s] has successfully completed.\n", path.Base(exec.Name))
+	fmt.Fprint(os.Stderr, runJobsExecDetailsMessage(project, flagRunJobsRegion, exec))
+	if flagRunJobsFormat == "" {
+		return nil
+	}
+	return emitFormatted(exec, flagRunJobsFormat)
 }
 
 func runJobsList(cmd *cobra.Command, args []string) error {
