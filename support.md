@@ -54,3 +54,4 @@ Global flags: `--project`, `--zone`, `--account`
 | `gcloud dataplex datascans run DATASCAN_ID` | `--location`, `--datascan` | (complete) |
 | `gcloud dataplex datascans jobs list` | `--location`, `--datascan`, `--format` | (complete) |
 | `gcloud dataplex datascans jobs describe JOB_ID` | `--location`, `--datascan`, `--view` | (complete) |
+| `gcloud workflows run WORKFLOW` | `--location`, `--data`, `--labels`, `--call-log-level`, `--execution-history-level` | `--disable-concurrency-quota-overflow-buffering` |
