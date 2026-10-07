@@ -11,7 +11,7 @@ Global flags: `--project`, `--zone`, `--account`
 | `gcloud info` | `--format`, `--anonymize` | `--show-log`, `--run-diagnostics` |
 | `gcloud iam workload-identity-pools create-cred-config PROVIDER` | `--output-file`, `--service-account`, `--credential-source-file`, `--credential-source-url`, `--credential-source-headers`, `--credential-source-type`, `--credential-source-field-name`, `--subject-token-type`, `--executable-command`, `--executable-timeout-millis`, `--executable-output-file`, `--service-account-token-lifetime-seconds`, `--aws` | `--azure`, `--app-id-uri`, `--enable-imdsv2`, `--credential-cert-*` |
 | `gcloud compute ssh USER@INSTANCE` | `--tunnel-through-iap`, `--internal-ip`, `--ssh-key-file`, `--command`, `--ssh-flag`, `--dry-run`, `--plain`, `--strict-host-key-checking` | `--ssh-key-expiration` |
-| `gcloud compute scp SRC DST` | `--tunnel-through-iap`, `--internal-ip`, `--ssh-key-file`, `--recurse`, `--port`, `--compress`, `--scp-flag` | (complete) |
+| `gcloud compute scp SRC [SRC ...] DEST` | `--tunnel-through-iap`, `--internal-ip`, `--ssh-key-file`, `--recurse`, `--port`, `--compress`, `--scp-flag` | (complete) |
 | `gcloud compute instances start INSTANCE` | `--async` | (complete) |
 | `gcloud compute instances stop INSTANCE` | `--async`, `--discard-local-ssd` | `--no-graceful-shutdown` |
 | `gcloud compute instances describe INSTANCE` | `--format` | `--view` |
