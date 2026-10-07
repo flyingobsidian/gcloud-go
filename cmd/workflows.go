@@ -3,9 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"path"
 	"strings"
 	"time"
 
+	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	workflowexecutions "google.golang.org/api/workflowexecutions/v1"
@@ -31,6 +35,20 @@ var (
 	flagWFOrderBy    string
 	flagWFTimeoutSec int
 )
+
+// wfDefaultLocation is the location gcloud falls back to when neither
+// --location nor the workflows/location property is set.
+const wfDefaultLocation = "us-central1"
+
+// wfRunMaxWait matches gcloud's 24-hour limit on waiting for `workflows run`.
+const wfRunMaxWait = 24 * time.Hour
+
+var workflowsRunCmd = &cobra.Command{
+	Use:   "run WORKFLOW",
+	Short: "Execute a workflow and wait for the execution to complete",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runWFRun,
+}
 
 // --- Executions ---
 
@@ -90,10 +108,14 @@ func init() {
 		c.Flags().StringVar(&flagWFLocation, "location", "", "Location containing the workflow")
 		c.Flags().StringVar(&flagWFWorkflow, "workflow", "", "Workflow name (required unless EXECUTION is a fully-qualified resource)")
 	}
-	workflowsExecutionsCreateCmd.Flags().StringVar(&flagWFData, "data", "", "JSON-encoded arguments for the execution")
-	workflowsExecutionsCreateCmd.Flags().StringToStringVar(&flagWFLabels, "labels", nil, "Labels (key=value)")
-	workflowsExecutionsCreateCmd.Flags().StringVar(&flagWFLogLevel, "call-log-level", "", "Call log level (LOG_ALL_CALLS, LOG_ERRORS_ONLY, LOG_NONE)")
-	workflowsExecutionsCreateCmd.Flags().StringVar(&flagWFHistLevel, "execution-history-level", "", "Execution history level (EXECUTION_HISTORY_BASIC, EXECUTION_HISTORY_DETAILED)")
+	workflowsRunCmd.Flags().StringVar(&flagWFLocation, "location", "",
+		"Location containing the workflow; alternatively set CLOUDSDK_WORKFLOWS_LOCATION (default "+wfDefaultLocation+")")
+	for _, c := range []*cobra.Command{workflowsExecutionsCreateCmd, workflowsRunCmd} {
+		c.Flags().StringVar(&flagWFData, "data", "", "JSON-encoded arguments for the execution")
+		c.Flags().StringToStringVar(&flagWFLabels, "labels", nil, "Labels (key=value)")
+		c.Flags().StringVar(&flagWFLogLevel, "call-log-level", "", "Call log level (LOG_ALL_CALLS, LOG_ERRORS_ONLY, LOG_NONE)")
+		c.Flags().StringVar(&flagWFHistLevel, "execution-history-level", "", "Execution history level (EXECUTION_HISTORY_BASIC, EXECUTION_HISTORY_DETAILED)")
+	}
 	workflowsExecutionsCreateCmd.MarkFlagRequired("workflow")
 
 	workflowsExecutionsListCmd.Flags().StringVar(&flagWFFilter, "filter", "", "Server-side filter expression")
@@ -108,12 +130,12 @@ func init() {
 		workflowsExecutionsCancelCmd, workflowsExecutionsCreateCmd, workflowsExecutionsDeleteCmd,
 		workflowsExecutionsDescribeCmd, workflowsExecutionsListCmd, workflowsExecutionsWaitCmd,
 	)
-	workflowsCmd.AddCommand(workflowsExecutionsCmd)
+	workflowsCmd.AddCommand(workflowsExecutionsCmd, workflowsRunCmd)
 
 	// The workflows resource itself (deploy/execute/etc.) is not covered by this
 	// task; keep those subcommands as documented stubs so users get a clear
 	// "not yet implemented" message rather than a missing-command error.
-	for _, name := range []string{"delete", "deploy", "describe", "execute", "list", "run"} {
+	for _, name := range []string{"delete", "deploy", "describe", "execute", "list"} {
 		registerStubCommand(workflowsCmd, name, "Not yet implemented")
 	}
 	rootCmd.AddCommand(workflowsCmd)
@@ -128,7 +150,64 @@ func wfWorkflowParent(project string) (string, error) {
 	if flagWFWorkflow == "" {
 		return "", fmt.Errorf("--workflow is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s/workflows/%s", project, flagWFLocation, flagWFWorkflow), nil
+	return wfWorkflowPath(project, flagWFLocation, flagWFWorkflow), nil
+}
+
+// wfWorkflowPath qualifies workflow into a full resource path, passing
+// fully-qualified names through unchanged.
+func wfWorkflowPath(project, location, workflow string) string {
+	if strings.HasPrefix(workflow, "projects/") {
+		return workflow
+	}
+	return fmt.Sprintf("projects/%s/locations/%s/workflows/%s", project, location, workflow)
+}
+
+// wfResolveLocation returns the location from --location or
+// CLOUDSDK_WORKFLOWS_LOCATION, falling back to gcloud's default location
+// with the same warning gcloud prints.
+func wfResolveLocation(w io.Writer) string {
+	if loc := config.Resolve(flagWFLocation, "CLOUDSDK_WORKFLOWS_LOCATION", ""); loc != "" {
+		return loc
+	}
+	fmt.Fprintf(w, "WARNING: The default location(%s) was used since the location flag was not specified.\n",
+		wfDefaultLocation)
+	return wfDefaultLocation
+}
+
+// wfNewExecution builds an execution from the --data, --labels,
+// --call-log-level and --execution-history-level flags.
+func wfNewExecution() *workflowexecutions.Execution {
+	return &workflowexecutions.Execution{
+		Argument:              flagWFData,
+		Labels:                flagWFLabels,
+		CallLogLevel:          flagWFLogLevel,
+		ExecutionHistoryLevel: flagWFHistLevel,
+	}
+}
+
+// wfExecutionGetter fetches the current state of the execution being waited on.
+type wfExecutionGetter func(ctx context.Context) (*workflowexecutions.Execution, error)
+
+// wfWaitForExecution polls get until the execution leaves the ACTIVE and
+// QUEUED states. The delay between polls starts at interval and grows by a
+// factor of 1.25 up to maxInterval, as gcloud's waiter does.
+func wfWaitForExecution(ctx context.Context, get wfExecutionGetter,
+	interval, maxInterval time.Duration) (*workflowexecutions.Execution, error) {
+	for {
+		got, err := get(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("polling execution: %w", err)
+		}
+		if got.State != "ACTIVE" && got.State != "QUEUED" {
+			return got, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(interval):
+		}
+		interval = min(interval*5/4, maxInterval)
+	}
 }
 
 // wfExecutionName qualifies EXECUTION into a full resource path. It accepts
@@ -177,18 +256,12 @@ func runWFExecutionsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	exec := &workflowexecutions.Execution{
-		Argument:              flagWFData,
-		Labels:                flagWFLabels,
-		CallLogLevel:          flagWFLogLevel,
-		ExecutionHistoryLevel: flagWFHistLevel,
-	}
 	ctx := context.Background()
 	svc, err := gcp.WorkflowExecutionsService(ctx, flagAccount)
 	if err != nil {
 		return err
 	}
-	created, err := svc.Projects.Locations.Workflows.Executions.Create(parent, exec).Context(ctx).Do()
+	created, err := svc.Projects.Locations.Workflows.Executions.Create(parent, wfNewExecution()).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating execution: %w", err)
 	}
@@ -307,22 +380,43 @@ func runWFExecutionsWait(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Workflow executions transition through ACTIVE/QUEUED into SUCCEEDED,
-	// FAILED, CANCELLED, or UNAVAILABLE. Anything other than the first two
-	// terminates the wait.
-	for {
-		got, err := svc.Projects.Locations.Workflows.Executions.Get(name).Context(ctx).Do()
-		if err != nil {
-			return fmt.Errorf("polling execution: %w", err)
-		}
-		switch got.State {
-		case "SUCCEEDED", "FAILED", "CANCELLED", "UNAVAILABLE":
-			return emitFormatted(got, "")
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(2 * time.Second):
-		}
+	get := func(ctx context.Context) (*workflowexecutions.Execution, error) {
+		return svc.Projects.Locations.Workflows.Executions.Get(name).Context(ctx).Do()
 	}
+	got, err := wfWaitForExecution(ctx, get, 2*time.Second, 2*time.Second)
+	if err != nil {
+		return err
+	}
+	return emitFormatted(got, "")
+}
+
+// runWFRun executes a workflow and waits for the execution to finish,
+// printing the final execution like `gcloud workflows run`.
+func runWFRun(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	parent := wfWorkflowPath(project, wfResolveLocation(os.Stderr), args[0])
+	ctx, cancel := context.WithTimeout(context.Background(), wfRunMaxWait)
+	defer cancel()
+	svc, err := gcp.WorkflowExecutionsService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	created, err := svc.Projects.Locations.Workflows.Executions.Create(parent, wfNewExecution()).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("creating execution: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Waiting for execution [%s] to complete...", path.Base(created.Name))
+	get := func(ctx context.Context) (*workflowexecutions.Execution, error) {
+		return svc.Projects.Locations.Workflows.Executions.Get(created.Name).Context(ctx).Do()
+	}
+	got, err := wfWaitForExecution(ctx, get, time.Second, time.Minute)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "failed.")
+		return fmt.Errorf("waiting for execution %s: %w", created.Name, err)
+	}
+	fmt.Fprintln(os.Stderr, "done.")
+	return emitFormatted(got, "")
 }
