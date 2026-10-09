@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/spf13/cobra"
 	runv1 "google.golang.org/api/run/v1"
 )
 
@@ -106,5 +107,53 @@ func TestRunJobsSortExecutions(t *testing.T) {
 			}
 			t.Fatalf("order = %v, want %v", got, want)
 		}
+	}
+}
+
+func TestRunJobsSortAndLimit(t *testing.T) {
+	mk := func() []*runv1.Execution {
+		return []*runv1.Execution{
+			testV1Exec("a", "2026-10-01T00:00:00Z", "True", "2026-10-01T00:00:01Z"),
+			testV1Exec("c", "2026-10-03T00:00:00Z", "True", "2026-10-03T00:00:01Z"),
+			testV1Exec("b", "2026-10-02T00:00:00Z", "True", "2026-10-02T00:00:01Z"),
+		}
+	}
+	cases := []struct {
+		limit int64
+		want  []string
+	}{
+		{0, []string{"c", "b", "a"}},
+		{2, []string{"c", "b"}},
+		{5, []string{"c", "b", "a"}},
+	}
+	for _, tc := range cases {
+		got := runJobsSortAndLimit(mk(), tc.limit)
+		if len(got) != len(tc.want) {
+			t.Fatalf("limit %d: got %d executions, want %d", tc.limit, len(got), len(tc.want))
+		}
+		for i, e := range got {
+			if e.Metadata.Name != tc.want[i] {
+				t.Errorf("limit %d: [%d] = %q, want %q", tc.limit, i, e.Metadata.Name, tc.want[i])
+			}
+		}
+	}
+}
+
+func TestRunJobsExecListFlags(t *testing.T) {
+	for name, def := range map[string]string{"limit": "0", "page-size": "0", "job": "", "region": "", "format": ""} {
+		f := runJobsExecListCmd.Flags().Lookup(name)
+		if f == nil {
+			t.Errorf("--%s missing", name)
+			continue
+		}
+		if f.DefValue != def {
+			t.Errorf("--%s default = %q, want %q", name, f.DefValue, def)
+		}
+	}
+	if len(runJobsExecListCmd.Flags().Lookup("job").Annotations[cobra.BashCompOneRequiredFlag]) > 0 {
+		t.Error("--job should be optional for list")
+	}
+	if len(runJobsExecDescribeCmd.Flags().Lookup("job").Annotations[cobra.BashCompOneRequiredFlag]) == 0 {
+		t.Error("--job should stay required for describe")
 	}
 }

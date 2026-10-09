@@ -54,7 +54,7 @@ var (
 	// executions subgroup
 	flagRunJobsExecJob      string
 	flagRunJobsExecPageSize int64
-	flagRunJobsExecShowDel  bool
+	flagRunJobsExecLimit    int64
 )
 
 var (
@@ -183,13 +183,18 @@ func init() {
 	}
 	for _, c := range execAll {
 		c.Flags().StringVar(&flagRunJobsRegion, "region", "", "Cloud Run region (required)")
-		c.Flags().StringVar(&flagRunJobsExecJob, "job", "", "Parent Cloud Run job (required)")
 		c.Flags().StringVar(&flagRunJobsFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("region")
+		if c == runJobsExecListCmd {
+			// As in gcloud, list spans every job unless --job is given.
+			c.Flags().StringVar(&flagRunJobsExecJob, "job", "", "Limit matched executions to the given job")
+			continue
+		}
+		c.Flags().StringVar(&flagRunJobsExecJob, "job", "", "Parent Cloud Run job (required)")
 		_ = c.MarkFlagRequired("job")
 	}
-	runJobsExecListCmd.Flags().Int64Var(&flagRunJobsExecPageSize, "page-size", 0, "Maximum results per page")
-	runJobsExecListCmd.Flags().BoolVar(&flagRunJobsExecShowDel, "show-deleted", false, "Include deleted executions")
+	runJobsExecListCmd.Flags().Int64Var(&flagRunJobsExecPageSize, "page-size", 0, "Maximum results per page (default 100)")
+	runJobsExecListCmd.Flags().Int64Var(&flagRunJobsExecLimit, "limit", 0, "Maximum number of executions to return, newest first (0 = no limit)")
 
 	runJobsExecutionsCmd.AddCommand(execAll...)
 	runJobsCmd.AddCommand(jobsAll...)
@@ -636,43 +641,6 @@ func runJobsExecDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing execution: %w", err)
 	}
 	return emitFormatted(got, flagRunJobsFormat)
-}
-
-func runJobsExecList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
-	if err != nil {
-		return err
-	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
-	if err != nil {
-		return err
-	}
-	parent := runJobsName(project, flagRunJobsExecJob)
-	var all []*runv2.GoogleCloudRunV2Execution
-	pageToken := ""
-	for {
-		call := svc.Projects.Locations.Jobs.Executions.List(parent).Context(ctx)
-		if flagRunJobsExecPageSize > 0 {
-			call = call.PageSize(flagRunJobsExecPageSize)
-		}
-		if flagRunJobsExecShowDel {
-			call = call.ShowDeleted(true)
-		}
-		if pageToken != "" {
-			call = call.PageToken(pageToken)
-		}
-		resp, err := call.Do()
-		if err != nil {
-			return fmt.Errorf("listing executions: %w", err)
-		}
-		all = append(all, resp.Executions...)
-		if resp.NextPageToken == "" {
-			break
-		}
-		pageToken = resp.NextPageToken
-	}
-	return emitFormatted(all, flagRunJobsFormat)
 }
 
 func runJobsExecDelete(cmd *cobra.Command, args []string) error {

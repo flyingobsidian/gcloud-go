@@ -2,11 +2,17 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
+	"github.com/flyingobsidian/gcloud-go/internal/gcp"
+	"github.com/spf13/cobra"
 	runv1 "google.golang.org/api/run/v1"
 )
+
+// runJobsExecDefaultPageSize matches gcloud's ListExecutions page size.
+const runJobsExecDefaultPageSize = 100
 
 // `gcloud run jobs executions list` uses the Cloud Run v1 (Knative-style)
 // API: it lists namespaces/{project}/executions on the regional endpoint,
@@ -106,4 +112,46 @@ func runJobsSortExecutions(execs []*runv1.Execution) {
 		}
 		return ti > tj
 	})
+}
+
+// runJobsSortAndLimit sorts executions as gcloud does, then keeps at most
+// limit of them (limit <= 0 means no limit).
+func runJobsSortAndLimit(execs []*runv1.Execution, limit int64) []*runv1.Execution {
+	runJobsSortExecutions(execs)
+	if limit > 0 && int64(len(execs)) > limit {
+		return execs[:limit]
+	}
+	return execs
+}
+
+func runJobsExecList(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.RunV1Service(ctx, flagAccount, flagRunJobsRegion)
+	if err != nil {
+		return err
+	}
+	pageSize := flagRunJobsExecPageSize
+	if pageSize <= 0 {
+		pageSize = runJobsExecDefaultPageSize
+	}
+	selector := runJobsExecLabelSelector(flagRunJobsExecJob)
+	page := func(ctx context.Context, continueToken string) (*runv1.ListExecutionsResponse, error) {
+		call := svc.Namespaces.Executions.List("namespaces/" + project).Context(ctx).Limit(pageSize)
+		if selector != "" {
+			call = call.LabelSelector(selector)
+		}
+		if continueToken != "" {
+			call = call.Continue(continueToken)
+		}
+		return call.Do()
+	}
+	all, err := runJobsListV1Executions(ctx, page)
+	if err != nil {
+		return fmt.Errorf("listing executions: %w", err)
+	}
+	return emitFormatted(runJobsSortAndLimit(all, flagRunJobsExecLimit), flagRunJobsFormat)
 }
