@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -223,6 +224,55 @@ func runLoggingCopy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("copying log entries: %w", err)
 	}
 	return emitFormatted(op, flagLogFormat)
+}
+
+// loggingTimestampLayout matches Python gcloud's logging util.FormatTimestamp.
+const loggingTimestampLayout = "2006-01-02T15:04:05.000000Z"
+
+// loggingReadFilter mirrors Python gcloud's MakeTimestampFilters and
+// JoinFilters: with descending order and a filter that does not mention
+// "timestamp", it prepends a lower bound of now minus freshness.
+func loggingReadFilter(logFilter, order string, freshness time.Duration, now time.Time) string {
+	var clauses []string
+	if order == "desc" && !strings.Contains(logFilter, "timestamp") {
+		since := now.Add(-freshness).UTC().Format(loggingTimestampLayout)
+		clauses = append(clauses, `timestamp>="`+since+`"`)
+	}
+	if logFilter != "" {
+		clauses = append(clauses, logFilter)
+	}
+	return strings.Join(clauses, " AND ")
+}
+
+// logEntriesLister performs a single Entries.List call.
+type logEntriesLister func(ctx context.Context, req *logging.ListLogEntriesRequest) (*logging.ListLogEntriesResponse, error)
+
+// loggingListEntries pages through Entries.List until the results run out or
+// limit entries have been collected (limit <= 0 means no limit). It never
+// returns a nil slice, so an empty result renders as [] in JSON.
+func loggingListEntries(ctx context.Context, list logEntriesLister, req *logging.ListLogEntriesRequest, limit int64) ([]*logging.LogEntry, error) {
+	if req.PageSize == 0 {
+		// The backend caps page size at 1000.
+		req.PageSize = 1000
+		if limit > 0 && limit < req.PageSize {
+			req.PageSize = limit
+		}
+	}
+	entries := []*logging.LogEntry{}
+	for {
+		resp, err := list(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, resp.Entries...)
+		if limit > 0 && int64(len(entries)) >= limit {
+			return entries[:limit], nil
+		}
+		if resp.NextPageToken == "" {
+			return entries, nil
+		}
+		req.PageToken = resp.NextPageToken
+	}
 }
 
 func runLoggingRead(cmd *cobra.Command, args []string) error {
