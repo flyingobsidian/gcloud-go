@@ -307,8 +307,8 @@ func runWFExecutionsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating execution: %w", err)
 	}
-	fmt.Printf("Started execution [%s].\n", created.Name)
-	return emitFormatted(created, "")
+	fmt.Fprintf(os.Stderr, "Started execution [%s].\n", created.Name)
+	return emitFormatted(created, flagFormat)
 }
 
 // runWFExecutionsDelete deletes the *history* of an execution: the workflow
