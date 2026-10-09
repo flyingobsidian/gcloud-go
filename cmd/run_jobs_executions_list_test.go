@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	runv1 "google.golang.org/api/run/v1"
@@ -155,5 +157,71 @@ func TestRunJobsExecListFlags(t *testing.T) {
 	}
 	if len(runJobsExecDescribeCmd.Flags().Lookup("job").Annotations[cobra.BashCompOneRequiredFlag]) == 0 {
 		t.Error("--job should stay required for describe")
+	}
+}
+
+// testTableExec builds an execution with the fields the default table reads.
+func testTableExec(name, completed string, running, succeeded, tasks int64, author string) *runv1.Execution {
+	e := &runv1.Execution{
+		Metadata: &runv1.ObjectMeta{
+			Name:              name,
+			CreationTimestamp: "2026-10-09T00:00:00.042Z",
+			Labels:            map[string]string{"run.googleapis.com/job": "my-job", "cloud.googleapis.com/location": "europe-west2"},
+			Annotations:       map[string]string{"serving.knative.dev/creator": author},
+		},
+		Spec:   &runv1.ExecutionSpec{TaskCount: tasks},
+		Status: &runv1.ExecutionStatus{RunningCount: running, SucceededCount: succeeded},
+	}
+	if completed != "" {
+		e.Status.Conditions = []*runv1.GoogleCloudRunV1Condition{{Type: "Completed", Status: completed}}
+	}
+	return e
+}
+
+func TestEmitRunJobsExecTable(t *testing.T) {
+	execs := []*runv1.Execution{
+		testTableExec("my-job-abc12", "Unknown", 1, 0, 1, "me@example.com"),
+		testTableExec("my-job-def34", "True", 0, 2, 2, "me@example.com"),
+		testTableExec("my-job-ghi56", "False", 0, 0, 1, ""),
+	}
+	var out, errOut bytes.Buffer
+	if err := emitRunJobsExecTable(&out, &errOut, execs, time.UTC); err != nil {
+		t.Fatalf("emitRunJobsExecTable: %v", err)
+	}
+	want := "   JOB     EXECUTION     REGION        RUNNING  COMPLETE  CREATED                  RUN BY\n" +
+		"…  my-job  my-job-abc12  europe-west2  1        0 / 1     2026-10-09 00:00:00 UTC  me@example.com\n" +
+		"✔  my-job  my-job-def34  europe-west2  0        2 / 2     2026-10-09 00:00:00 UTC  me@example.com\n" +
+		"X  my-job  my-job-ghi56  europe-west2  0        0 / 1     2026-10-09 00:00:00 UTC\n"
+	if out.String() != want {
+		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("unexpected stderr %q", errOut.String())
+	}
+}
+
+func TestEmitRunJobsExecTableEmpty(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if err := emitRunJobsExecTable(&out, &errOut, nil, time.UTC); err != nil {
+		t.Fatalf("emitRunJobsExecTable: %v", err)
+	}
+	if out.Len() != 0 || errOut.String() != "Listed 0 items.\n" {
+		t.Errorf("stdout %q, stderr %q", out.String(), errOut.String())
+	}
+}
+
+func TestRunJobsExecReadySymbolNoStatus(t *testing.T) {
+	if got := runJobsExecReadySymbol(&runv1.Execution{}); got != "…" {
+		t.Errorf("got %q, want …", got)
+	}
+}
+
+func TestRunJobsExecCreated(t *testing.T) {
+	bst := time.FixedZone("BST", 3600)
+	if got := runJobsExecCreated("2026-10-09T00:00:00Z", bst); got != "2026-10-09 01:00:00 BST" {
+		t.Errorf("got %q", got)
+	}
+	if got := runJobsExecCreated("not-a-time", time.UTC); got != "not-a-time" {
+		t.Errorf("unparseable: got %q", got)
 	}
 }

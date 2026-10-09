@@ -3,8 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -153,5 +158,98 @@ func runJobsExecList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing executions: %w", err)
 	}
-	return emitFormatted(runJobsSortAndLimit(all, flagRunJobsExecLimit), flagRunJobsFormat)
+	execs := runJobsSortAndLimit(all, flagRunJobsExecLimit)
+	if flagRunJobsFormat == "" {
+		return emitRunJobsExecTable(os.Stdout, os.Stderr, execs, time.Local)
+	}
+	return emitFormatted(execs, flagRunJobsFormat)
+}
+
+// Labels and annotations read by gcloud's default executions table.
+const (
+	runJobsExecRegionLabel      = "cloud.googleapis.com/location"
+	runJobsExecAuthorAnnotation = "serving.knative.dev/creator"
+)
+
+// runJobsExecTableHeaders are gcloud's default executions list columns; the
+// first (ready symbol) column has no label.
+var runJobsExecTableHeaders = []string{"", "JOB", "EXECUTION", "REGION", "RUNNING", "COMPLETE", "CREATED", "RUN BY"}
+
+// runJobsExecReadySymbol mirrors gcloud's ready_symbol for executions, whose
+// ready condition is Completed: … while unknown, ✔ on success, X on failure.
+func runJobsExecReadySymbol(e *runv1.Execution) string {
+	c := runJobsExecCondition(e, "Completed")
+	switch {
+	case c == nil || conditionStatusUnknown(c.Status):
+		return "\u2026"
+	case strings.EqualFold(c.Status, "true"):
+		return "\u2714"
+	default:
+		return "X"
+	}
+}
+
+// runJobsExecCreated formats the creation timestamp in loc as gcloud's
+// date("%Y-%m-%d %H:%M:%S %Z") does, passing unparseable values through.
+func runJobsExecCreated(ts string, loc *time.Location) string {
+	t, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		return ts
+	}
+	return t.In(loc).Format("2006-01-02 15:04:05 MST")
+}
+
+// runJobsExecTableRow returns the default table cells for one execution.
+func runJobsExecTableRow(e *runv1.Execution, loc *time.Location) []string {
+	meta := e.Metadata
+	if meta == nil {
+		meta = &runv1.ObjectMeta{}
+	}
+	var running, succeeded, tasks int64
+	if e.Status != nil {
+		running, succeeded = e.Status.RunningCount, e.Status.SucceededCount
+	}
+	if e.Spec != nil {
+		tasks = e.Spec.TaskCount
+	}
+	return []string{
+		runJobsExecReadySymbol(e),
+		meta.Labels[runJobsExecJobLabel],
+		meta.Name,
+		meta.Labels[runJobsExecRegionLabel],
+		strconv.FormatInt(running, 10),
+		fmt.Sprintf("%d / %d", succeeded, tasks),
+		runJobsExecCreated(meta.CreationTimestamp, loc),
+		meta.Annotations[runJobsExecAuthorAnnotation],
+	}
+}
+
+// emitRunJobsExecTable prints gcloud's default executions table to w, or
+// "Listed 0 items." to errW when there are none, as gcloud does.
+func emitRunJobsExecTable(w, errW io.Writer, execs []*runv1.Execution, loc *time.Location) error {
+	if len(execs) == 0 {
+		_, err := fmt.Fprintln(errW, "Listed 0 items.")
+		return err
+	}
+	rows := [][]string{runJobsExecTableHeaders}
+	for _, e := range execs {
+		rows = append(rows, runJobsExecTableRow(e, loc))
+	}
+	widths := make([]int, len(runJobsExecTableHeaders))
+	for _, row := range rows {
+		for i, cell := range row {
+			widths[i] = max(widths[i], utf8.RuneCountInString(cell))
+		}
+	}
+	// Like gcloud, never leave trailing spaces when the last cells are empty.
+	for _, row := range rows {
+		var line strings.Builder
+		if err := writePadded(&line, row, widths); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(w, strings.TrimRight(line.String(), " \n")); err != nil {
+			return err
+		}
+	}
+	return nil
 }
