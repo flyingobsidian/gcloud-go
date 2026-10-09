@@ -390,7 +390,19 @@ func runWFExecutionsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(all, flagFormat)
+	return emitFormatted(all, wfListFormat(flagFormat))
+}
+
+// wfExecutionsListFormat is gcloud's default output format for
+// `workflows executions list`.
+const wfExecutionsListFormat = "table(name,state,startTime,endTime)"
+
+// wfListFormat returns format, or gcloud's default table when it is unset.
+func wfListFormat(format string) string {
+	if format == "" {
+		return wfExecutionsListFormat
+	}
+	return format
 }
 
 func runWFExecutionsWait(cmd *cobra.Command, args []string) error {

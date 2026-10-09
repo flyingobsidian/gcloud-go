@@ -273,3 +273,30 @@ func TestWorkflowsExecutionsListArgs(t *testing.T) {
 		t.Error("--workflow should exist and be optional")
 	}
 }
+
+func TestWfListFormat(t *testing.T) {
+	if got := wfListFormat(""); got != wfExecutionsListFormat {
+		t.Errorf("default = %q, want %q", got, wfExecutionsListFormat)
+	}
+	if got := wfListFormat("json"); got != "json" {
+		t.Errorf("explicit = %q, want json", got)
+	}
+}
+
+func TestWfExecutionsListDefaultTable(t *testing.T) {
+	execs := []*workflowexecutions.Execution{{
+		Name:      "projects/p/locations/l/workflows/w/executions/e1",
+		State:     "SUCCEEDED",
+		StartTime: "2026-10-09T00:00:00.042Z",
+		EndTime:   "2026-10-09T00:00:01.042Z",
+	}}
+	var buf bytes.Buffer
+	if err := emitFormattedTo(&buf, execs, wfListFormat("")); err != nil {
+		t.Fatalf("emitFormattedTo: %v", err)
+	}
+	want := "NAME                                              STATE      START_TIME                END_TIME\n" +
+		"projects/p/locations/l/workflows/w/executions/e1  SUCCEEDED  2026-10-09T00:00:00.042Z  2026-10-09T00:00:01.042Z\n"
+	if buf.String() != want {
+		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
