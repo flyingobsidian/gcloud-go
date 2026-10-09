@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -150,5 +151,125 @@ func TestWfWaitForExecutionErrors(t *testing.T) {
 	}
 	if _, err := wfWaitForExecution(ctx, active, time.Hour, time.Hour); !errors.Is(err, context.Canceled) {
 		t.Errorf("cancelled: got %v, want context.Canceled", err)
+	}
+}
+
+func TestWfListParent(t *testing.T) {
+	defer func() { flagWFLocation, flagWFWorkflow = "", "" }()
+	t.Setenv("CLOUDSDK_WORKFLOWS_LOCATION", "")
+	cases := []struct {
+		name, location, workflowFlag string
+		args                         []string
+		want                         string
+		wantWarning                  bool
+	}{
+		{"positional", "europe-west2", "", []string{"wf1"}, "projects/p/locations/europe-west2/workflows/wf1", false},
+		{"flag", "europe-west2", "wf2", nil, "projects/p/locations/europe-west2/workflows/wf2", false},
+		{"positional beats flag", "europe-west2", "wf2", []string{"wf1"}, "projects/p/locations/europe-west2/workflows/wf1", false},
+		{"default location", "", "", []string{"wf1"}, "projects/p/locations/us-central1/workflows/wf1", true},
+		{"fully qualified", "", "", []string{"projects/x/locations/y/workflows/z"}, "projects/x/locations/y/workflows/z", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			flagWFLocation, flagWFWorkflow = tc.location, tc.workflowFlag
+			var buf bytes.Buffer
+			got, err := wfListParent(&buf, tc.args, "p")
+			if err != nil {
+				t.Fatalf("wfListParent: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+			if gotWarning := buf.Len() > 0; gotWarning != tc.wantWarning {
+				t.Errorf("warning = %q, want warning %v", buf.String(), tc.wantWarning)
+			}
+		})
+	}
+}
+
+func TestWfListParentMissingWorkflow(t *testing.T) {
+	flagWFLocation, flagWFWorkflow = "europe-west2", ""
+	defer func() { flagWFLocation = "" }()
+	if _, err := wfListParent(&bytes.Buffer{}, nil, "p"); err == nil {
+		t.Error("want error when no workflow is given")
+	}
+}
+
+// wfPagedExecutions serves n executions, two per page, and counts calls.
+func wfPagedExecutions(n int, calls *int) wfExecutionsPager {
+	return func(ctx context.Context, pageToken string) (*workflowexecutions.ListExecutionsResponse, error) {
+		*calls++
+		start := 0
+		if pageToken != "" {
+			fmt.Sscanf(pageToken, "%d", &start)
+		}
+		end := min(start+2, n)
+		resp := &workflowexecutions.ListExecutionsResponse{}
+		for i := start; i < end; i++ {
+			resp.Executions = append(resp.Executions, &workflowexecutions.Execution{Name: fmt.Sprint(i)})
+		}
+		if end < n {
+			resp.NextPageToken = fmt.Sprint(end)
+		}
+		return resp, nil
+	}
+}
+
+func TestWfListExecutions(t *testing.T) {
+	cases := []struct {
+		name               string
+		available          int
+		limit              int64
+		wantLen, wantCalls int
+	}{
+		{"no limit", 5, 0, 5, 3},
+		{"limit within first page", 5, 1, 1, 1},
+		{"limit across pages", 5, 3, 3, 2},
+		{"limit above available", 3, 10, 3, 2},
+		{"empty", 0, 0, 0, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			got, err := wfListExecutions(context.Background(), wfPagedExecutions(tc.available, &calls), tc.limit)
+			if err != nil {
+				t.Fatalf("wfListExecutions: %v", err)
+			}
+			if got == nil {
+				t.Fatal("got nil slice, want non-nil")
+			}
+			if len(got) != tc.wantLen || calls != tc.wantCalls {
+				t.Errorf("got %d executions in %d calls, want %d in %d", len(got), calls, tc.wantLen, tc.wantCalls)
+			}
+			for i, e := range got {
+				if e.Name != fmt.Sprint(i) {
+					t.Errorf("execution %d name = %q", i, e.Name)
+				}
+			}
+		})
+	}
+}
+
+func TestWfListExecutionsError(t *testing.T) {
+	boom := errors.New("boom")
+	page := func(context.Context, string) (*workflowexecutions.ListExecutionsResponse, error) { return nil, boom }
+	if _, err := wfListExecutions(context.Background(), page, 0); !errors.Is(err, boom) {
+		t.Errorf("got %v, want wrapped boom", err)
+	}
+}
+
+func TestWorkflowsExecutionsListArgs(t *testing.T) {
+	list := findSub(workflowsSubgroup("executions"), "list")
+	if list == nil {
+		t.Fatal("executions list missing")
+	}
+	if err := list.Args(list, []string{"wf1"}); err != nil {
+		t.Errorf("WORKFLOW arg rejected: %v", err)
+	}
+	if err := list.Args(list, []string{"a", "b"}); err == nil {
+		t.Error("two positional args accepted")
+	}
+	if f := list.Flags().Lookup("workflow"); f == nil || len(f.Annotations[cobra.BashCompOneRequiredFlag]) > 0 {
+		t.Error("--workflow should exist and be optional")
 	}
 }

@@ -86,9 +86,9 @@ var workflowsExecutionsDescribeCmd = &cobra.Command{
 }
 
 var workflowsExecutionsListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   "list [WORKFLOW]",
 	Short: "List workflow executions",
-	Args:  cobra.NoArgs,
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runWFExecutionsList,
 }
 
@@ -122,7 +122,6 @@ func init() {
 	workflowsExecutionsListCmd.Flags().StringVar(&flagWFOrderBy, "order-by", "", "Server-side ordering expression")
 	workflowsExecutionsListCmd.Flags().Int64Var(&flagWFPageSize, "page-size", 0, "Number of results per page")
 	workflowsExecutionsListCmd.Flags().Int64Var(&flagWFLimit, "limit", 0, "Maximum number of results to return")
-	workflowsExecutionsListCmd.MarkFlagRequired("workflow")
 
 	workflowsExecutionsWaitCmd.Flags().IntVar(&flagWFTimeoutSec, "timeout", 0, "Maximum seconds to wait (0 = no timeout)")
 
@@ -224,6 +223,49 @@ func wfExecutionName(id, project string) (string, error) {
 	return fmt.Sprintf("%s/executions/%s", parent, id), nil
 }
 
+// wfListParent resolves the workflow whose executions are listed, from the
+// WORKFLOW argument or --workflow. A bare workflow id is qualified with the
+// location from wfResolveLocation, which warns on w when it falls back to the
+// default location.
+func wfListParent(w io.Writer, args []string, project string) (string, error) {
+	workflow := flagWFWorkflow
+	if len(args) > 0 {
+		workflow = args[0]
+	}
+	if workflow == "" {
+		return "", fmt.Errorf("WORKFLOW argument or --workflow is required")
+	}
+	if strings.HasPrefix(workflow, "projects/") {
+		return workflow, nil
+	}
+	return wfWorkflowPath(project, wfResolveLocation(w), workflow), nil
+}
+
+// wfExecutionsPager fetches one page of executions for the given page token.
+type wfExecutionsPager func(ctx context.Context, pageToken string) (*workflowexecutions.ListExecutionsResponse, error)
+
+// wfListExecutions pages through executions until the results run out or
+// limit executions have been collected (limit <= 0 means no limit). It never
+// returns a nil slice, so an empty result renders as [] in JSON.
+func wfListExecutions(ctx context.Context, page wfExecutionsPager, limit int64) ([]*workflowexecutions.Execution, error) {
+	all := []*workflowexecutions.Execution{}
+	pageToken := ""
+	for {
+		resp, err := page(ctx, pageToken)
+		if err != nil {
+			return nil, fmt.Errorf("listing executions: %w", err)
+		}
+		all = append(all, resp.Executions...)
+		if limit > 0 && int64(len(all)) >= limit {
+			return all[:limit], nil
+		}
+		if resp.NextPageToken == "" {
+			return all, nil
+		}
+		pageToken = resp.NextPageToken
+	}
+}
+
 // --- Executions impl ---
 
 func runWFExecutionsCancel(cmd *cobra.Command, args []string) error {
@@ -319,7 +361,7 @@ func runWFExecutionsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	parent, err := wfWorkflowParent(project)
+	parent, err := wfListParent(os.Stderr, args, project)
 	if err != nil {
 		return err
 	}
@@ -328,9 +370,7 @@ func runWFExecutionsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	var all []*workflowexecutions.Execution
-	pageToken := ""
-	for {
+	page := func(ctx context.Context, pageToken string) (*workflowexecutions.ListExecutionsResponse, error) {
 		call := svc.Projects.Locations.Workflows.Executions.List(parent).Context(ctx)
 		if flagWFPageSize > 0 {
 			call = call.PageSize(flagWFPageSize)
@@ -344,19 +384,11 @@ func runWFExecutionsList(cmd *cobra.Command, args []string) error {
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
-		resp, err := call.Do()
-		if err != nil {
-			return fmt.Errorf("listing executions: %w", err)
-		}
-		all = append(all, resp.Executions...)
-		if flagWFLimit > 0 && int64(len(all)) >= flagWFLimit {
-			all = all[:flagWFLimit]
-			break
-		}
-		if resp.NextPageToken == "" {
-			break
-		}
-		pageToken = resp.NextPageToken
+		return call.Do()
+	}
+	all, err := wfListExecutions(ctx, page, flagWFLimit)
+	if err != nil {
+		return err
 	}
 	return emitFormatted(all, "")
 }
