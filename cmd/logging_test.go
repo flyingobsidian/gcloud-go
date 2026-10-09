@@ -168,3 +168,25 @@ func TestLoggingListEntriesError(t *testing.T) {
 		t.Errorf("err = %v, want %v", err, wantErr)
 	}
 }
+
+func TestLoggingReadFlags(t *testing.T) {
+	for name, def := range map[string]string{"freshness": "1d", "order": "desc", "limit": "0", "config-file": ""} {
+		f := loggingReadCmd.Flags().Lookup(name)
+		if f == nil {
+			t.Errorf("--%s missing", name)
+			continue
+		}
+		if f.DefValue != def {
+			t.Errorf("--%s default = %q, want %q", name, f.DefValue, def)
+		}
+	}
+	if f := loggingReadCmd.Flags().Lookup("config-file"); f != nil && len(f.Annotations[cobra.BashCompOneRequiredFlag]) > 0 {
+		t.Error("--config-file should be optional for read")
+	}
+	if err := loggingReadCmd.Args(loggingReadCmd, []string{`resource.type="gce_instance"`}); err != nil {
+		t.Errorf("one LOG_FILTER arg rejected: %v", err)
+	}
+	if err := loggingReadCmd.Args(loggingReadCmd, []string{"a", "b"}); err == nil {
+		t.Error("two positional args accepted")
+	}
+}

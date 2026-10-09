@@ -184,7 +184,15 @@ func loggingBasename(name string) string { return path.Base(name) }
 //
 // The four data-plane commands (copy/read/write/tail) accept a --config-file
 // with the full request body and forward it verbatim to the API. This mirrors
-// how our other config-heavy verbs work (SCC, database-migration).
+// how our other config-heavy verbs work (SCC, database-migration). For read
+// the config file is optional: a positional LOG_FILTER plus --freshness,
+// --order and --limit cover the common case, as in Python gcloud.
+
+var (
+	flagLogFreshness string
+	flagLogOrder     string
+	flagLogLimit     int64
+)
 
 var (
 	loggingCopyCmd = &cobra.Command{
@@ -193,8 +201,9 @@ var (
 		RunE:  runLoggingCopy,
 	}
 	loggingReadCmd = &cobra.Command{
-		Use:   "read",
+		Use:   "read [LOG_FILTER]",
 		Short: "Read log entries",
+		Args:  cobra.MaximumNArgs(1),
 		RunE:  runLoggingRead,
 	}
 	loggingWriteCmd = &cobra.Command{
@@ -276,20 +285,39 @@ func loggingListEntries(ctx context.Context, list logEntriesLister, req *logging
 }
 
 func runLoggingRead(cmd *cobra.Command, args []string) error {
+	order := strings.ToLower(flagLogOrder)
+	if order != "desc" && order != "asc" {
+		return fmt.Errorf("invalid --order %q: must be one of desc, asc", flagLogOrder)
+	}
+	freshness, err := parseGcloudDuration(flagLogFreshness)
+	if err != nil {
+		return fmt.Errorf("invalid --freshness: %w", err)
+	}
 	ctx := context.Background()
 	svc, err := loggingClient(ctx)
 	if err != nil {
 		return err
 	}
 	body := &logging.ListLogEntriesRequest{}
-	if err := loadYAMLOrJSONInto(flagLogConfigFile, body); err != nil {
-		return err
+	if flagLogConfigFile != "" {
+		if err := loadYAMLOrJSONInto(flagLogConfigFile, body); err != nil {
+			return err
+		}
 	}
-	if flagLogFilter != "" && body.Filter == "" {
-		body.Filter = flagLogFilter
+	// The filter comes from LOG_FILTER, else --filter, else --config-file.
+	logFilter := body.Filter
+	if flagLogFilter != "" {
+		logFilter = flagLogFilter
 	}
-	if flagLogOrderBy != "" && body.OrderBy == "" {
+	if len(args) > 0 {
+		logFilter = args[0]
+	}
+	body.Filter = loggingReadFilter(logFilter, order, freshness, time.Now())
+	if flagLogOrderBy != "" {
 		body.OrderBy = flagLogOrderBy
+	}
+	if body.OrderBy == "" {
+		body.OrderBy = "timestamp " + order
 	}
 	if flagLogPageSize > 0 && body.PageSize == 0 {
 		body.PageSize = flagLogPageSize
@@ -301,11 +329,14 @@ func runLoggingRead(cmd *cobra.Command, args []string) error {
 		}
 		body.ResourceNames = []string{p}
 	}
-	resp, err := svc.Entries.List(body).Context(ctx).Do()
+	list := func(ctx context.Context, req *logging.ListLogEntriesRequest) (*logging.ListLogEntriesResponse, error) {
+		return svc.Entries.List(req).Context(ctx).Do()
+	}
+	entries, err := loggingListEntries(ctx, list, body, flagLogLimit)
 	if err != nil {
 		return fmt.Errorf("reading log entries: %w", err)
 	}
-	return emitFormatted(resp.Entries, flagLogFormat)
+	return emitFormatted(entries, flagLogFormat)
 }
 
 func runLoggingWrite(cmd *cobra.Command, args []string) error {
@@ -355,14 +386,20 @@ func runLoggingTail(cmd *cobra.Command, args []string) error {
 
 func init() {
 	// entries data-plane commands
-	for _, c := range []*cobra.Command{loggingCopyCmd, loggingReadCmd, loggingWriteCmd, loggingTailCmd} {
+	for _, c := range []*cobra.Command{loggingCopyCmd, loggingWriteCmd, loggingTailCmd} {
 		c.Flags().StringVar(&flagLogConfigFile, "config-file", "", "Path to a JSON/YAML file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 		c.Flags().StringVar(&flagLogFormat, "format", "", "Output format")
 	}
-	loggingReadCmd.Flags().StringVar(&flagLogFilter, "filter", "", "Server-side list filter (overrides --config-file)")
-	loggingReadCmd.Flags().StringVar(&flagLogOrderBy, "order-by", "", "Server-side ordering expression")
+	loggingReadCmd.Flags().StringVar(&flagLogConfigFile, "config-file", "", "Path to a JSON/YAML file with the request body")
+	loggingReadCmd.Flags().StringVar(&flagLogFormat, "format", "", "Output format")
+	loggingReadCmd.Flags().StringVar(&flagLogFilter, "filter", "", "Server-side log filter (overrides --config-file; LOG_FILTER overrides this)")
+	loggingReadCmd.Flags().StringVar(&flagLogOrderBy, "order-by", "", "Server-side ordering expression (overrides --order)")
 	loggingReadCmd.Flags().Int64Var(&flagLogPageSize, "page-size", 0, "Page size")
+	loggingReadCmd.Flags().StringVar(&flagLogFreshness, "freshness", "1d",
+		"Return entries that are not older than this value, e.g. 7d or 1h30m. Works only with desc ordering and filters without a timestamp")
+	loggingReadCmd.Flags().StringVar(&flagLogOrder, "order", "desc", "Ordering of returned log entries based on timestamp: desc or asc")
+	loggingReadCmd.Flags().Int64Var(&flagLogLimit, "limit", 0, "Maximum number of log entries to return (0 = no limit)")
 	addLogScopeFlags(loggingReadCmd, loggingTailCmd)
 	loggingCmd.AddCommand(loggingCopyCmd, loggingReadCmd, loggingWriteCmd, loggingTailCmd)
 
