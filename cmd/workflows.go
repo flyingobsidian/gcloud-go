@@ -390,7 +390,7 @@ func runWFExecutionsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(all, "")
+	return emitFormatted(all, flagFormat)
 }
 
 func runWFExecutionsWait(cmd *cobra.Command, args []string) error {
