@@ -353,7 +353,7 @@ func runWFExecutionsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing execution: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormatted(got, flagFormat)
 }
 
 func runWFExecutionsList(cmd *cobra.Command, args []string) error {
@@ -431,7 +431,7 @@ func runWFExecutionsWait(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(got, "")
+	return emitFormatted(got, flagFormat)
 }
 
 // runWFRun executes a workflow and waits for the execution to finish,
@@ -462,5 +462,5 @@ func runWFRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("waiting for execution %s: %w", created.Name, err)
 	}
 	fmt.Fprintln(os.Stderr, "done.")
-	return emitFormatted(got, "")
+	return emitFormatted(got, flagFormat)
 }
