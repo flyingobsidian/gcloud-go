@@ -207,6 +207,17 @@ The remaining bullets don't need code changes:
   `issuancePolicy.allowRequesterSpecifiedNotBeforeTime: true` in the
   payload is supported today.
 
+## Agent Registry 587.0.0 (#1901)
+
+- **587.0.0** — `gcloud agent-registry bindings create` makes
+  `--source-identifier` optional (the `binding.source` argument group
+  flipped from `required: true` to `required: false`). gcloud-go's
+  `agent-registry bindings create` (see `cmd/agent_registry.go`) takes the
+  whole `Binding` body from `--config-file` and unmarshals it straight into
+  `google.golang.org/api/agentregistry/v1alpha.Binding` with no client-side
+  check on `source`, so omitting `source.identifier` from the payload
+  already works and the API is the sole validator — no code change needed.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
