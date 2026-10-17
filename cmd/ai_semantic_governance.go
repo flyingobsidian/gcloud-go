@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -19,6 +20,9 @@ import (
 // and re-affirmed at 581.0.0. Backed by the v1 aiplatform service; the
 // v1beta1 discovery document does not yet expose SemanticGovernance* in the
 // Go SDK, so gcloud-go does not currently ship a beta alias.
+//
+// `--agent-response-denial-message` on create/update (#1899) ports the
+// 587.0.0 addition that sets agentResponseCustomization.denialMessage.
 
 var aiSGPCmd = &cobra.Command{
 	Use:   "semantic-governance-policies",
@@ -37,7 +41,11 @@ var (
 	flagAISGPUpdateMask string
 	flagAISGPPolicyID   string
 	flagAISGPPageSize   int64
+
+	flagAISGPDenialMessage string
 )
+
+const aiSGPDenialMessageMask = "agentResponseCustomization.denialMessage"
 
 var (
 	aiSGPCreateCmd = &cobra.Command{
@@ -87,10 +95,14 @@ func init() {
 	_ = aiSGPCreateCmd.MarkFlagRequired("policy-id")
 
 	aiSGPUpdateCmd.Flags().StringVar(&flagAISGPConfigFile, "config-file", "",
-		"Path to a YAML/JSON file with the SemanticGovernancePolicy patch body (required)")
-	_ = aiSGPUpdateCmd.MarkFlagRequired("config-file")
+		"Path to a YAML/JSON file with the SemanticGovernancePolicy patch body")
 	aiSGPUpdateCmd.Flags().StringVar(&flagAISGPUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
+
+	for _, c := range []*cobra.Command{aiSGPCreateCmd, aiSGPUpdateCmd} {
+		c.Flags().StringVar(&flagAISGPDenialMessage, "agent-response-denial-message", "",
+			"Sets agent_response_customization.denial_message on the policy: a custom message shown to the end user when the policy denies a request. Max 1000 characters.")
+	}
 
 	aiSGPListCmd.Flags().Int64Var(&flagAISGPPageSize, "page-size", 0, "Maximum results per page")
 
@@ -117,6 +129,9 @@ func runAISGPCreate(cmd *cobra.Command, args []string) error {
 	body := &aiplatform.GoogleCloudAiplatformV1SemanticGovernancePolicy{}
 	if err := loadYAMLOrJSONInto(flagAISGPConfigFile, body); err != nil {
 		return err
+	}
+	if cmd.Flags().Changed("agent-response-denial-message") {
+		aiSGPSetDenialMessage(body, flagAISGPDenialMessage)
 	}
 	ctx := context.Background()
 	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAISGPRegion)
@@ -207,13 +222,22 @@ func runAISGPUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	denialSet := cmd.Flags().Changed("agent-response-denial-message")
+	if flagAISGPConfigFile == "" && !denialSet {
+		return fmt.Errorf("at least one of --config-file or --agent-response-denial-message must be specified")
+	}
 	body := &aiplatform.GoogleCloudAiplatformV1SemanticGovernancePolicy{}
-	if err := loadYAMLOrJSONInto(flagAISGPConfigFile, body); err != nil {
-		return err
+	if flagAISGPConfigFile != "" {
+		if err := loadYAMLOrJSONInto(flagAISGPConfigFile, body); err != nil {
+			return err
+		}
 	}
 	mask := flagAISGPUpdateMask
 	if mask == "" {
-		mask = joinMask(nonEmptyJSONFields(body))
+		mask = aiSGPUpdateMaskFor(body, denialSet)
+	}
+	if denialSet {
+		aiSGPSetDenialMessage(body, flagAISGPDenialMessage)
 	}
 	ctx := context.Background()
 	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAISGPRegion)
@@ -231,6 +255,30 @@ func runAISGPUpdate(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "Update request issued for semantic governance policy [%s] (operation: %s).\n",
 		args[0], op.Name)
 	return emitFormatted(op, flagAISGPFormat)
+}
+
+// aiSGPSetDenialMessage sets agentResponseCustomization.denialMessage on body,
+// keeping any other customization fields loaded from --config-file.
+func aiSGPSetDenialMessage(body *aiplatform.GoogleCloudAiplatformV1SemanticGovernancePolicy, msg string) {
+	if body.AgentResponseCustomization == nil {
+		body.AgentResponseCustomization = &aiplatform.GoogleCloudAiplatformV1AgentResponseCustomization{}
+	}
+	body.AgentResponseCustomization.DenialMessage = msg
+	body.AgentResponseCustomization.ForceSendFields = append(
+		body.AgentResponseCustomization.ForceSendFields, "DenialMessage")
+}
+
+// aiSGPUpdateMaskFor derives the default update mask from the populated
+// fields of the --config-file body, adding the nested denial-message path when
+// --agent-response-denial-message is set. Paths are sorted, as in
+// gcloud-python's set_semantic_governance_policy hook.
+func aiSGPUpdateMaskFor(body *aiplatform.GoogleCloudAiplatformV1SemanticGovernancePolicy, denialSet bool) string {
+	fields := nonEmptyJSONFields(body)
+	if denialSet && !slices.Contains(fields, "agentResponseCustomization") {
+		fields = append(fields, aiSGPDenialMessageMask)
+	}
+	slices.Sort(fields)
+	return joinMask(fields)
 }
 
 // aiSGPEName returns the fixed engine resource name for a region. The engine
