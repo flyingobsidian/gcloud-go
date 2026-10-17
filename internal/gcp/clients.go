@@ -12,6 +12,7 @@ import (
 	accessapproval "google.golang.org/api/accessapproval/v1"
 	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
 	agentidentity "google.golang.org/api/agentidentity/v1"
+	agentidentityalpha "google.golang.org/api/agentidentity/v1alpha"
 	agentregistry "google.golang.org/api/agentregistry/v1alpha"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 	aiplatformbeta "google.golang.org/api/aiplatform/v1beta1"
@@ -808,6 +809,22 @@ func AgentIdentityService(ctx context.Context, account string) (*agentidentity.S
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return agentidentity.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// AgentIdentityAlphaService returns an agentidentity v1alpha client. The
+// v1alpha surface carries the auth-provider authorization IAM methods that
+// v1 does not expose. A non-empty endpoint overrides the global base URL
+// (used for --endpoint-mode=regional).
+func AgentIdentityAlphaService(ctx context.Context, account, endpoint string) (*agentidentityalpha.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
+	}
+	return agentidentityalpha.NewService(ctx, opts...)
 }
 
 func CloudIdentityService(ctx context.Context, account string) (*cloudidentity.Service, error) {
