@@ -245,6 +245,15 @@ so none of the five items needs a code change:
   `userType` is a plain string, so `userType: ALLOYDB_IAM_GROUP` in the
   payload already works.
 
+## Anthos 588.0.0 (#1903)
+
+- **588.0.0** — "Updated anthos-cli with newer go version and library
+  dependencies." This is a rebuild of the separately shipped `anthoscli`
+  Go binary (the `anthoscli` component), not a change to gcloud-python's
+  `gcloud anthos` command surface. gcloud-go does not bundle `anthoscli`
+  (see the 569.0.0 note under Breaking Changes), and its `gcloud anthos`
+  commands in `cmd/anthos.go` are stubs, so there is nothing to mirror.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
