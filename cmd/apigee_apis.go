@@ -90,7 +90,7 @@ func runApigeeApisDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func runApigeeApisDescribe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -182,8 +182,12 @@ func runApigeeApisImport(cmd *cobra.Command, args []string) error {
 	if flagApigeeApiSpace != "" {
 		q.Set("space", flagApigeeApiSpace)
 	}
-	target := fmt.Sprintf("https://apigee.googleapis.com/v1/organizations/%s/apis?%s",
-		url.PathEscape(org), q.Encode())
+	host, err := gcp.ApigeeOrgHost(ctx, flagAccount, org)
+	if err != nil {
+		return err
+	}
+	target := fmt.Sprintf("https://%s/v1/organizations/%s/apis?%s",
+		host, url.PathEscape(org), q.Encode())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(bundle))
 	if err != nil {
@@ -218,7 +222,7 @@ func runApigeeApisList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}

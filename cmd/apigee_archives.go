@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apigee "google.golang.org/api/apigee/v1"
 )
@@ -98,7 +97,7 @@ func runApigeeArcCreate(cmd *cobra.Command, args []string) error {
 		body.Name = args[0]
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -115,7 +114,7 @@ func runApigeeArcDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -132,7 +131,7 @@ func runApigeeArcDescribe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -149,7 +148,7 @@ func runApigeeArcList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -187,7 +186,7 @@ func runApigeeArcUpdate(cmd *cobra.Command, args []string) error {
 	}
 	body.Name = name
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}

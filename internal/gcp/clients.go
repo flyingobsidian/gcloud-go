@@ -2,9 +2,11 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"github.com/flyingobsidian/gcloud-go/internal/httplog"
@@ -66,6 +68,7 @@ import (
 	firestore "google.golang.org/api/firestore/v1"
 	gkehub "google.golang.org/api/gkehub/v1"
 	gkeonprem "google.golang.org/api/gkeonprem/v1"
+	"google.golang.org/api/googleapi"
 	healthcare "google.golang.org/api/healthcare/v1"
 	cloudiam "google.golang.org/api/iam/v1"
 	iamv2 "google.golang.org/api/iam/v2"
@@ -648,6 +651,70 @@ func ApigeeService(ctx context.Context, account string) (*apigee.Service, error)
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return apigee.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// ApigeeServiceForOrg returns an Apigee v1 client routed to the endpoint that
+// serves the given organization's location (see ApigeeOrgHost). org may be a
+// bare ID or "organizations/ORG".
+func ApigeeServiceForOrg(ctx context.Context, account, org string) (*apigee.Service, error) {
+	host, err := ApigeeOrgHost(ctx, account, org)
+	if err != nil {
+		return nil, err
+	}
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return apigee.NewService(ctx, option.WithTokenSource(ts), option.WithEndpoint("https://"+host+"/"))
+}
+
+// ApigeeOrgHost returns the Apigee API host serving the given organization,
+// mirroring gcloud-python's `project_mapping.ResolveLocation` +
+// `request._GetApigeeHostByLocation`: the organization's location is looked
+// up via `organizations.getProjectMapping` on the global endpoint and mapped
+// to a host by ApigeeHostForLocation.
+func ApigeeOrgHost(ctx context.Context, account, org string) (string, error) {
+	global, err := ApigeeService(ctx, account)
+	if err != nil {
+		return "", err
+	}
+	org = strings.TrimPrefix(org, "organizations/")
+	denied := fmt.Errorf("Permission denied on resource \"organizations/%s\" (or it may not exist)", org)
+	mapping, err := global.Organizations.GetProjectMapping("organizations/" + org).Context(ctx).Do()
+	if err != nil {
+		var gerr *googleapi.Error
+		if errors.As(err, &gerr) && (gerr.Code == http.StatusNotFound ||
+			gerr.Code == http.StatusForbidden || gerr.Code == http.StatusUnauthorized) {
+			return "", denied
+		}
+		return "", fmt.Errorf("getting project mapping: %w", err)
+	}
+	if mapping.Organization == "" {
+		return "", denied
+	}
+	return ApigeeHostForLocation(mapping.Location), nil
+}
+
+const apigeeGlobalHost = "apigee.googleapis.com"
+
+// apigeeMREPRegions mirrors SUPPORTED_MREP_REGIONS in gcloud-python's
+// command_lib/apigee/request.py ("ch" added in 586.0.0 for the Switzerland
+// data residency zone).
+var apigeeMREPRegions = map[string]bool{"us": true, "eu": true, "in": true, "sa": true, "ch": true}
+
+// ApigeeHostForLocation returns the Apigee API host for an organization
+// location: the global host for "" or "global", the multi-region REP host
+// apigee.LOCATION.rep.googleapis.com for MREP regions, and the locational
+// host LOCATION-apigee.googleapis.com otherwise.
+func ApigeeHostForLocation(location string) string {
+	switch {
+	case location == "" || location == "global":
+		return apigeeGlobalHost
+	case apigeeMREPRegions[location]:
+		return fmt.Sprintf("apigee.%s.rep.googleapis.com", location)
+	default:
+		return fmt.Sprintf("%s-apigee.googleapis.com", location)
+	}
 }
 
 // StorageBatchOperationsService returns a Storage Batch Operations v1 client.
