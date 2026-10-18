@@ -218,6 +218,33 @@ The remaining bullets don't need code changes:
   check on `source`, so omitting `source.identifier` from the payload
   already works and the API is the sole validator — no code change needed.
 
+## AlloyDB 583.0.0–589.0.0 (#1902)
+
+gcloud-go's `alloydb clusters` commands (see `cmd/alloydb_all.go`) take the
+request body from `--config-file` and call `google.golang.org/api/alloydb/v1`,
+so none of the five items needs a code change:
+
+- **589.0.0** — `--enable-express` on `gcloud beta alloydb clusters
+  create|update` (sets `Cluster.expressConfig.enabled`), and **584.0.0** —
+  `--edition` (`EDITION_ALLOYDB` / `EDITION_ALLOYDB_DEVELOPER`) on
+  `gcloud alpha|beta alloydb clusters create|update`. Both fields exist only
+  in the v1alpha/v1beta `Cluster` messages; the v1 API (gcloud-python GA and
+  `google.golang.org/api/alloydb/v1` v0.298.0) has neither `expressConfig`
+  nor `edition`. They become settable via `--config-file` with no gcloud-go
+  code change once they reach v1.
+- **583.0.0** — `POSTGRES_19` on `--database-version` for
+  `gcloud alpha|beta alloydb clusters create` and `migrate-cloud-sql`. Python
+  appends the choice only for the alpha/beta tracks and the v1 enum still
+  stops at `POSTGRES_18`. gcloud-go has no `--database-version` flag;
+  `databaseVersion` is a plain string in the `--config-file` payload
+  (`Cluster` / `RestoreFromCloudSQLRequest.cluster`), so `POSTGRES_19` passes
+  through as soon as the v1 API accepts it.
+- **587.0.0** — IAM Group user types promoted to GA (`--type=IAM_GROUP` on
+  `gcloud alloydb users create`, mapping to `ALLOYDB_IAM_GROUP`). gcloud-go's
+  `alloydb users create` reads the `User` body from `--config-file`, and
+  `userType` is a plain string, so `userType: ALLOYDB_IAM_GROUP` in the
+  payload already works.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
