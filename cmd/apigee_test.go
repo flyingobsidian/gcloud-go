@@ -15,6 +15,19 @@ func apigeeSubgroup(name string) *cobra.Command {
 	return nil
 }
 
+func TestApigeeOrgID(t *testing.T) {
+	cases := map[string]string{
+		"organizations/my-org":                                     "my-org",
+		"organizations/my-org/apis/proxy":                          "my-org",
+		"organizations/my-org/environments/e/archiveDeployments/a": "my-org",
+	}
+	for in, want := range cases {
+		if got := apigeeOrgID(in); got != want {
+			t.Errorf("apigeeOrgID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestApigeeApisSubcommands(t *testing.T) {
 	g := apigeeSubgroup("apis")
 	if g == nil {

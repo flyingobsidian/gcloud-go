@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apigee "google.golang.org/api/apigee/v1"
 )
@@ -78,7 +77,7 @@ func runApigeePrdCreate(cmd *cobra.Command, args []string) error {
 		body.Name = args[0]
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -95,7 +94,7 @@ func runApigeePrdDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -112,7 +111,7 @@ func runApigeePrdDescribe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -129,7 +128,7 @@ func runApigeePrdList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -152,7 +151,7 @@ func runApigeePrdUpdate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}

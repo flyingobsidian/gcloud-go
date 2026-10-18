@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
+	apigee "google.golang.org/api/apigee/v1"
 )
 
 // --- gcloud apigee (#297) ---
@@ -25,6 +28,20 @@ func apigeeOrgName(org string) (string, error) {
 		return org, nil
 	}
 	return "organizations/" + org, nil
+}
+
+// apigeeOrgID returns ORG from an "organizations/ORG[/...]" resource name.
+func apigeeOrgID(resource string) string {
+	rest := strings.TrimPrefix(resource, "organizations/")
+	org, _, _ := strings.Cut(rest, "/")
+	return org
+}
+
+// apigeeServiceFor returns an Apigee client routed to the regional endpoint
+// for the organization that owns resource ("organizations/ORG/..."),
+// matching gcloud-python's per-organization location routing.
+func apigeeServiceFor(ctx context.Context, resource string) (*apigee.Service, error) {
+	return gcp.ApigeeServiceForOrg(ctx, flagAccount, apigeeOrgID(resource))
 }
 
 // apigeeResource returns organizations/ORG/COLLECTION/ID.

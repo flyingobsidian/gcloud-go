@@ -95,6 +95,24 @@ func TestAIPlatformEndpointForRegion(t *testing.T) {
 	}
 }
 
+func TestApigeeHostForLocation(t *testing.T) {
+	cases := []struct{ location, want string }{
+		{"", "apigee.googleapis.com"},
+		{"global", "apigee.googleapis.com"},
+		{"us", "apigee.us.rep.googleapis.com"},
+		{"eu", "apigee.eu.rep.googleapis.com"},
+		{"in", "apigee.in.rep.googleapis.com"},
+		{"sa", "apigee.sa.rep.googleapis.com"},
+		{"ch", "apigee.ch.rep.googleapis.com"},
+		{"europe-west6", "europe-west6-apigee.googleapis.com"},
+	}
+	for _, tc := range cases {
+		if got := ApigeeHostForLocation(tc.location); got != tc.want {
+			t.Errorf("ApigeeHostForLocation(%q) = %q, want %q", tc.location, got, tc.want)
+		}
+	}
+}
+
 // TestWithRequestLoggingReplacesOptions checks that enabling logging hands the
 // generated client a single prebuilt HTTP client instead of the auth options,
 // which google.golang.org/api rejects in combination.

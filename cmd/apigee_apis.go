@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -73,21 +74,32 @@ func apigeeApiName(id string) (string, error) {
 	return apigeeResource(flagApigeeApiOrganization, "apis", id)
 }
 
+// runApigeeApisDelete deletes an API proxy and all of its revisions after a
+// confirmation prompt, then prints the deleted proxy, matching gcloud-python's
+// `apigee apis delete` (584.0.0, GA in 589.0.0).
 func runApigeeApisDelete(cmd *cobra.Command, args []string) error {
 	name, err := apigeeApiName(args[0])
 	if err != nil {
 		return err
 	}
+	apiID := path.Base(name)
+	if err := promptContinue(
+		fmt.Sprintf("API proxy [%s] and all of its revisions will be deleted.", apiID),
+		"Deletion aborted by user.",
+	); err != nil {
+		return err
+	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Organizations.Apis.Delete(name).Context(ctx).Do(); err != nil {
-		return fmt.Errorf("deleting api: %w", err)
+	got, err := svc.Organizations.Apis.Delete(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("deleting API proxy: %w", err)
 	}
-	fmt.Printf("Deleted api [%s].\n", args[0])
-	return nil
+	fmt.Fprintf(os.Stderr, "Deleted API proxy [%s].\n", apiID)
+	return emitFormatted(got, flagApigeeApiFormat)
 }
 
 func runApigeeApisDescribe(cmd *cobra.Command, args []string) error {
@@ -96,7 +108,7 @@ func runApigeeApisDescribe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -170,8 +182,12 @@ func runApigeeApisImport(cmd *cobra.Command, args []string) error {
 	if flagApigeeApiSpace != "" {
 		q.Set("space", flagApigeeApiSpace)
 	}
-	target := fmt.Sprintf("https://apigee.googleapis.com/v1/organizations/%s/apis?%s",
-		url.PathEscape(org), q.Encode())
+	host, err := gcp.ApigeeOrgHost(ctx, flagAccount, org)
+	if err != nil {
+		return err
+	}
+	target := fmt.Sprintf("https://%s/v1/organizations/%s/apis?%s",
+		host, url.PathEscape(org), q.Encode())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(bundle))
 	if err != nil {
@@ -206,7 +222,7 @@ func runApigeeApisList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}

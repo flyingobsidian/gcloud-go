@@ -52,7 +52,7 @@ func runApigeeOrgDescribe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
-	svc, err := gcp.ApigeeService(ctx, flagAccount)
+	svc, err := apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
