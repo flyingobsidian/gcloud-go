@@ -254,6 +254,47 @@ so none of the five items needs a code change:
   (see the 569.0.0 note under Breaking Changes), and its `gcloud anthos`
   commands in `cmd/anthos.go` are stubs, so there is nothing to mirror.
 
+## Apigee 583.0.0–589.0.0 (#1904)
+
+Implemented:
+
+- **`gcloud apigee apis delete`** (584.0.0, GA in 589.0.0) — gcloud-go
+  already had the command; it now prompts "API proxy [API] and all of its
+  revisions will be deleted." (aborting with "Deletion aborted by user."),
+  logs "Deleted API proxy [API]." to stderr and prints the deleted proxy,
+  matching Python.
+- **DRZ endpoints for the CH region** (586.0.0) — Python routes every
+  organization-scoped Apigee request to the host for the organization's
+  location (looked up via `organizations.getProjectMapping` on the global
+  endpoint): `apigee.googleapis.com` for global,
+  `apigee.LOCATION.rep.googleapis.com` for the multi-region set (`us`, `eu`,
+  `in`, `sa`, and now `ch`), and `LOCATION-apigee.googleapis.com` otherwise.
+  gcloud-go previously sent everything to the global host; all
+  organization-scoped `apigee` commands, including `apis import`, now route
+  the same way (`gcp.ApigeeOrgHost`). `organizations list` and
+  `organizations provision` stay on the global endpoint. Python caches the
+  project mapping on disk (`.apigee-cached-project-mapping-v2`); gcloud-go
+  makes the lookup on each invocation.
+
+No code change needed:
+
+- **`gcloud apigee apis import` promoted to GA** (588.0.0) and
+  **`apis delete` / every `apigee apis` command serving GA** (589.0.0) —
+  gcloud-go does not maintain separate alpha/beta/GA tracks.
+- **`apis import --from-template` compiler fixes** (583.0.0, 588.0.0,
+  589.0.0: `FaultRule` step nesting, fault-rule `mode` warning, top-level
+  `EventFlow`, feature `defaultEndpoint` routes/fault rules and
+  `defaultTarget` merging, `uid`-only name prefixing, template
+  `endpoints`/`targets` precedence, generated `metadata.js`, policy child
+  ordering, `displayName` acceptance) — gcloud-go's `apis import` does not
+  yet compile Apigee Feature Templates (`--from-template` returns an error
+  pointing to `--from-bundle`), so these fixes land when the compiler is
+  ported.
+- **`--service-account` on `gcloud beta apigee apis deploy`** (588.0.0) —
+  beta-only, and gcloud-go has not implemented `apigee apis deploy`; the
+  flag (the `serviceAccount` query parameter) should be added with the
+  command.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
