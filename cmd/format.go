@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 	"unicode"
@@ -112,7 +113,9 @@ func jsonRows(v any) ([]map[string]any, error) {
 		return nil, err
 	}
 	var single map[string]any
-	if err := json.Unmarshal(data, &single); err == nil {
+	// A nil slice marshals to null, which unmarshals into a nil map without
+	// error; it must yield zero rows, not one empty row.
+	if err := json.Unmarshal(data, &single); err == nil && single != nil {
 		return []map[string]any{single}, nil
 	}
 	var many []map[string]any
@@ -122,7 +125,19 @@ func jsonRows(v any) ([]map[string]any, error) {
 	return nil, fmt.Errorf("value must be an object or an array of objects")
 }
 
+// isEmptyList reports whether v is a slice or array with no elements,
+// including a nil slice.
+func isEmptyList(v any) bool {
+	rv := reflect.ValueOf(v)
+	return (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) && rv.Len() == 0
+}
+
+// emitYAML prints nothing for an empty list, matching gcloud-python, which
+// emits one YAML document per record.
 func emitYAML(w io.Writer, v any) error {
+	if isEmptyList(v) {
+		return nil
+	}
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -139,13 +154,26 @@ func emitYAML(w io.Writer, v any) error {
 	return err
 }
 
+// printJSON prints v to stdout as indented JSON.
+func printJSON(v any) error {
+	return emitJSON(os.Stdout, v)
+}
+
+// emitJSON prints an empty list (including a nil slice) as [], matching
+// gcloud-python, rather than encoding/json's null.
 func emitJSON(w io.Writer, v any) error {
+	if isEmptyList(v) {
+		v = []any{}
+	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
 }
 
 func emitCSV(w io.Writer, rows []map[string]any, fields []string) error {
+	if len(rows) == 0 {
+		return nil
+	}
 	headers := make([]string, len(fields))
 	for i, f := range fields {
 		headers[i] = camelToSnake(baseField(f))
@@ -172,7 +200,12 @@ func csvEscape(s string) string {
 	return s
 }
 
+// emitTable prints nothing, not even the heading, for zero rows, matching
+// gcloud-python's TablePrinter.
 func emitTable(w io.Writer, rows []map[string]any, fields []string) error {
+	if len(rows) == 0 {
+		return nil
+	}
 	headers := make([]string, len(fields))
 	for i, f := range fields {
 		headers[i] = strings.ToUpper(camelToSnake(baseField(f)))

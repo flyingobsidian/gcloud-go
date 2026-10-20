@@ -241,6 +241,59 @@ func TestEmitFormattedOnList(t *testing.T) {
 	}
 }
 
+// TestEmitFormattedEmptyList covers #1984: an empty list result, nil or not,
+// prints [] for json and nothing for the other formats, matching gcloud-python.
+func TestEmitFormattedEmptyList(t *testing.T) {
+	var nilList []*sampleProject
+	emptyList := []sampleProject{}
+	formats := []struct {
+		format string
+		want   string
+	}{
+		{"json", "[]\n"},
+		{"yaml", ""},
+		{"", ""},
+		{"table(projectId,name)", ""},
+		{"csv(projectId,name)", ""},
+		{"text(projectId)", ""},
+		{"value(projectId)", ""},
+		{"config(projectId)", ""},
+		{"get(projectId)", ""},
+		{"flattened", ""},
+	}
+	for _, list := range []struct {
+		name string
+		v    any
+	}{{"nil", nilList}, {"empty", emptyList}} {
+		for _, f := range formats {
+			got := runFormat(t, list.v, f.format)
+			if got != f.want {
+				t.Errorf("%s list, format %q: got %q, want %q", list.name, f.format, got, f.want)
+			}
+		}
+	}
+}
+
+// TestEmitJSONNilSlice exercises the path printJSON uses, which list commands
+// call directly instead of going through emitFormatted.
+func TestEmitJSONNilSlice(t *testing.T) {
+	var buf bytes.Buffer
+	var all []*sampleProject
+	if err := emitJSON(&buf, all); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); got != "[]\n" {
+		t.Errorf("emitJSON(nil slice) = %q, want %q", got, "[]\n")
+	}
+}
+
+func TestEmitJSONNonEmptyListUnchanged(t *testing.T) {
+	got := runFormat(t, []sampleProject{fixtureProject()}, "json")
+	if !strings.HasPrefix(got, "[\n  {\n") || !strings.Contains(got, `"projectId": "MY_PROJECT"`) {
+		t.Errorf("json list output unexpected:\n%s", got)
+	}
+}
+
 func TestEmitFormattedUnknown(t *testing.T) {
 	var buf bytes.Buffer
 	if err := emitFormattedTo(&buf, fixtureProject(), "quux(a)"); err == nil {
