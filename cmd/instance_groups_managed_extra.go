@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
@@ -309,9 +307,7 @@ func runManagedList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagManagedListAllFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(migs)
+		return printJSON(migs)
 	}
 
 	fmt.Printf("%-30s %-15s %-10s %-30s\n", "NAME", "ZONE", "SIZE", "TEMPLATE")

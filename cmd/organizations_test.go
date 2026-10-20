@@ -208,3 +208,36 @@ func TestBuildConditionPopulated(t *testing.T) {
 		t.Errorf("unexpected condition: %+v", c)
 	}
 }
+
+// TestPrintOrgListEmpty covers #1984: no visible organizations must print []
+// for json (not null) and nothing for yaml or the default table.
+func TestPrintOrgListEmpty(t *testing.T) {
+	var none []*crm.Organization
+	for _, c := range []struct{ format, want string }{
+		{"json", "[]\n"},
+		{"yaml", ""},
+		{"", ""},
+	} {
+		got := captureStdout(t, func() {
+			if err := printOrgList(none, c.format); err != nil {
+				t.Errorf("printOrgList(%q) err = %v", c.format, err)
+			}
+		})
+		if got != c.want {
+			t.Errorf("printOrgList(nil, %q) = %q, want %q", c.format, got, c.want)
+		}
+	}
+}
+
+func TestPrintOrgListJSON(t *testing.T) {
+	orgs := []*crm.Organization{{Name: "organizations/123", DisplayName: "example.com"}}
+	got := captureStdout(t, func() {
+		if err := printOrgList(orgs, "json"); err != nil {
+			t.Errorf("printOrgList err = %v", err)
+		}
+	})
+	want := "[\n  {\n    \"displayName\": \"example.com\",\n    \"name\": \"organizations/123\"\n  }\n]\n"
+	if got != want {
+		t.Errorf("printOrgList json = %q, want %q", got, want)
+	}
+}

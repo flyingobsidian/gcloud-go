@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
@@ -597,9 +595,7 @@ func listEffectiveTags(ctx context.Context, svc *crm.Service, parent string) err
 func printListResults(v any, format string, tableFn func()) error {
 	switch format {
 	case "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(v)
+		return printJSON(v)
 	case "yaml":
 		return yamlEncode(v)
 	}

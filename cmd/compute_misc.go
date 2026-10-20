@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -376,9 +375,7 @@ func runForwardingRulesList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagFRListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allRules)
+		return printJSON(allRules)
 	}
 
 	fmt.Printf("%-30s %-20s %-15s %-10s %-30s\n", "NAME", "REGION", "IP_ADDRESS", "IP_PROTOCOL", "TARGET")
@@ -517,9 +514,7 @@ func runAddressesList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagAddressListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allAddrs)
+		return printJSON(allAddrs)
 	}
 
 	fmt.Printf("%-30s %-20s %-18s %-10s %-10s\n", "NAME", "REGION", "ADDRESS", "STATUS", "TYPE")

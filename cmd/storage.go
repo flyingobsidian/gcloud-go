@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -293,9 +292,7 @@ func runStorageBucketsList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagStorageBucketsFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allBuckets)
+		return printJSON(allBuckets)
 	}
 
 	if flagBucketsListURI {
@@ -795,9 +792,7 @@ func runStorageLs(cmd *cobra.Command, args []string) error {
 		for _, obj := range allObjects {
 			entries = append(entries, lsEntry{URL: fmt.Sprintf("gs://%s/%s", bucket, obj.Name), Size: obj.Size, Time: obj.TimeCreated})
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(entries)
+		return printJSON(entries)
 	}
 
 	// Print directories (prefixes).
@@ -833,9 +828,7 @@ func runStorageBucketsDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing bucket: %w", err)
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(bucket)
+	return printJSON(bucket)
 }
 
 // --- mv (#164) ---

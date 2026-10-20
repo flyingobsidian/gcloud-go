@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -328,9 +327,7 @@ func runSAList(cmd *cobra.Command, args []string) error {
 
 	switch flagSAListFormat {
 	case "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(all)
+		return printJSON(all)
 	case "yaml":
 		return yamlEncode(all)
 	}

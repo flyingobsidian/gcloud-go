@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -536,9 +535,7 @@ func formatInstanceList(instances []*compute.Instance) error {
 	}
 
 	if flagListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(instances)
+		return printJSON(instances)
 	}
 
 	if isGetFormat(flagListFormat) {

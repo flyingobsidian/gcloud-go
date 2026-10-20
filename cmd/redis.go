@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -264,9 +263,7 @@ func runRedisInstancesList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagRedisListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allInstances)
+		return printJSON(allInstances)
 	}
 
 	fmt.Printf("%-30s %-10s %-5s %-15s %-15s %-20s\n", "INSTANCE_NAME", "TIER", "SIZE", "REGION", "VERSION", "HOST:PORT")
