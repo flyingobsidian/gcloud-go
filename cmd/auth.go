@@ -343,7 +343,7 @@ func runAuthList(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("      Credentialed Accounts")
-	fmt.Println("ACTIVE  ACCOUNT")
+	printTableHeading(len(accounts), "ACTIVE  ACCOUNT\n")
 	for _, acct := range accounts {
 		marker := " "
 		if acct == active {
