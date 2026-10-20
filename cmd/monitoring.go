@@ -385,6 +385,9 @@ func formatPoliciesList(policies []*monitoring.AlertPolicy, format string) error
 		if err := json.Unmarshal(data, &generic); err != nil {
 			return err
 		}
+		if generic == nil {
+			generic = []any{}
+		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		enc.SetEscapeHTML(false)
@@ -498,9 +501,7 @@ func formatSnooze(s *monitoring.Snooze, format string) error {
 	case format == "" || format == "yaml":
 		return yamlEncode(s)
 	case format == "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(s)
+		return printJSON(s)
 	case isCsvFormat(format):
 		return printSnoozeColumns([]*monitoring.Snooze{s}, extractCsvFields(format), ",")
 	case isTableFormat(format):
@@ -609,9 +610,7 @@ func formatSnoozesList(snoozes []*monitoring.Snooze, format string) error {
 		}
 		return nil
 	case format == "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(snoozes)
+		return printJSON(snoozes)
 	case isCsvFormat(format):
 		return printSnoozeColumns(snoozes, extractCsvFields(format), ",")
 	case isTableFormat(format):
@@ -1028,9 +1027,7 @@ func runMonitoringChannelsList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagChanListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allChannels)
+		return printJSON(allChannels)
 	}
 
 	fmt.Printf("%-60s %-15s %-10s %s\n", "NAME", "TYPE", "ENABLED", "DISPLAY_NAME")

@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -368,9 +367,7 @@ func runSecretsVersionsList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagVersionsListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allVersions)
+		return printJSON(allVersions)
 	}
 
 	fmt.Printf("%-60s %-12s %-25s\n", "NAME", "STATE", "CREATED")
@@ -512,9 +509,7 @@ func runSecretsList(cmd *cobra.Command, args []string) error {
 
 	// Handle --format.
 	if flagSecretsFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allSecrets)
+		return printJSON(allSecrets)
 	}
 
 	if strings.HasPrefix(flagSecretsFormat, "get(") && strings.HasSuffix(flagSecretsFormat, ")") {
@@ -559,9 +554,7 @@ func runSecretsDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing secret: %w", err)
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(secret)
+	return printJSON(secret)
 }
 
 func runSecretsVersionsDescribe(cmd *cobra.Command, args []string) error {
@@ -583,9 +576,7 @@ func runSecretsVersionsDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing secret version: %w", err)
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+	return printJSON(v)
 }
 
 func runSecretsVersionsDisable(cmd *cobra.Command, args []string) error {

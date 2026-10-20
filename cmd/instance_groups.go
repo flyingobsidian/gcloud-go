@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
@@ -103,9 +101,7 @@ func filterUnmanagedInstances(items []*compute.InstanceWithNamedPorts, filter st
 func formatUnmanagedInstances(items []*compute.InstanceWithNamedPorts, format string) error {
 	switch {
 	case format == "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(items)
+		return printJSON(items)
 	case isGetFormat(format):
 		field := extractGetField(format)
 		for _, it := range items {

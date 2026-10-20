@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -282,9 +281,7 @@ func runFolderList(cmd *cobra.Command, args []string) error {
 
 	switch flagFolderListFormat {
 	case "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(all)
+		return printJSON(all)
 	case "yaml":
 		return yamlEncode(all)
 	}

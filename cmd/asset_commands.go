@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -479,9 +477,7 @@ func runAssetSearchAllIamPolicies(cmd *cobra.Command, args []string) error {
 
 	switch flagAssetListFormat {
 	case "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(all)
+		return printJSON(all)
 	case "yaml":
 		return yamlEncode(all)
 	}

@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
@@ -348,9 +346,7 @@ func runSchedulerJobsList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagSchedulerListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allJobs)
+		return printJSON(allJobs)
 	}
 
 	fmt.Printf("%-30s %-12s %-25s %-15s %-25s\n", "JOB_ID", "STATE", "SCHEDULE", "TARGET_TYPE", "NEXT_RUN")

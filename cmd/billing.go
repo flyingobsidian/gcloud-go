@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -333,9 +332,7 @@ func runBillingAcctList(cmd *cobra.Command, args []string) error {
 	}
 	switch flagBillingAcctListFormat {
 	case "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(all)
+		return printJSON(all)
 	case "yaml":
 		return yamlEncode(all)
 	}
@@ -794,9 +791,7 @@ func runBillingBudgetList(cmd *cobra.Command, args []string) error {
 
 	switch flagBudgetListFormat {
 	case "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(all)
+		return printJSON(all)
 	case "yaml":
 		return yamlEncode(all)
 	}
@@ -919,9 +914,7 @@ func runBillingProjectList(cmd *cobra.Command, args []string) error {
 
 	switch flagBillingProjectListFormat {
 	case "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(all)
+		return printJSON(all)
 	case "yaml":
 		return yamlEncode(all)
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
@@ -322,9 +321,7 @@ func runDataplexDatascansJobsList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagDataplexJobFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allJobs)
+		return printJSON(allJobs)
 	}
 
 	fmt.Printf("%-40s %-15s %-25s %-25s\n", "JOB_ID", "STATE", "START_TIME", "END_TIME")
@@ -382,9 +379,7 @@ func runDataplexDatascansDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing data scan: %w", err)
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(scan)
+	return printJSON(scan)
 }
 
 func runDataplexDatascansList(cmd *cobra.Command, args []string) error {
@@ -426,9 +421,7 @@ func runDataplexDatascansList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagDataplexListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allScans)
+		return printJSON(allScans)
 	}
 
 	fmt.Printf("%-30s %-15s %-25s %-20s\n", "NAME", "STATE", "CREATE_TIME", "TYPE")

@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -233,9 +231,7 @@ func runUnmanagedList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagUnmanagedListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(groups)
+		return printJSON(groups)
 	}
 
 	fmt.Printf("%-30s %-15s %-10s %-30s\n", "NAME", "ZONE", "SIZE", "DESCRIPTION")

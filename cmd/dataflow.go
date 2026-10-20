@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -207,9 +206,7 @@ func runDataflowJobsList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagDataflowListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allJobs)
+		return printJSON(allJobs)
 	}
 
 	fmt.Printf("%-40s %-20s %-20s %-10s %-15s %-25s\n", "JOB_ID", "NAME", "TYPE", "STATE", "REGION", "CREATION_TIME")

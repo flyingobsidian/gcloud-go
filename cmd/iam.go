@@ -508,9 +508,7 @@ func runWIPList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagWIPListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allPools)
+		return printJSON(allPools)
 	}
 
 	fmt.Printf("%-40s %-30s %s\n", "NAME", "DISPLAY_NAME", "STATE")
@@ -643,9 +641,7 @@ func runWIPProvList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(allProviders)
+	return printJSON(allProviders)
 }
 
 func runWIPProvDelete(cmd *cobra.Command, args []string) error {

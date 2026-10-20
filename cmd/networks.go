@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
@@ -79,9 +77,7 @@ func runNetworksList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagNetworksListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allNetworks)
+		return printJSON(allNetworks)
 	}
 
 	// Default table format matching gcloud-python:

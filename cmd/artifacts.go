@@ -284,9 +284,7 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 
 	if flagArtifactsScanAsync {
 		if flagArtifactsScanFormat == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(op)
+			return printJSON(op)
 		}
 		fmt.Printf("Scan started. Operation: %s\n", op.Name)
 		return nil
@@ -306,9 +304,7 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagArtifactsScanFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(op.Response)
+		return printJSON(op.Response)
 	}
 
 	fmt.Printf("Scan completed. Operation: %s\n", op.Name)
@@ -344,9 +340,7 @@ func runArtifactsListVulnerabilities(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagArtifactsVulnFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allOccurrences)
+		return printJSON(allOccurrences)
 	}
 
 	if len(allOccurrences) == 0 {
@@ -415,9 +409,7 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 	}
 
 	if flagArtImgListFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(allImages)
+		return printJSON(allImages)
 	}
 
 	fmt.Printf("%-60s %-20s %s\n", "IMAGE", "DIGEST", "TAGS")

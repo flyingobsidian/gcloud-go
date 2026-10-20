@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -91,9 +90,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 
 	// Handle --format
 	if flagInfoFormat == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(info)
+		return printJSON(info)
 	}
 
 	if strings.HasPrefix(flagInfoFormat, "value(") && strings.HasSuffix(flagInfoFormat, ")") {

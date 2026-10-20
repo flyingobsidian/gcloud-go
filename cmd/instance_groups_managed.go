@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
@@ -153,9 +151,7 @@ func runManagedListInstances(cmd *cobra.Command, args []string) error {
 func formatManagedInstances(instances []*compute.ManagedInstance, format string, showZone bool) error {
 	switch {
 	case format == "json":
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(instances)
+		return printJSON(instances)
 	case isGetFormat(format):
 		field := extractGetField(format)
 		for _, mi := range instances {
