@@ -178,7 +178,7 @@ func runEvPipList(cmd *cobra.Command, args []string) error {
 	if flagEvPipFormat != "" {
 		return emitFormatted(all, flagEvPipFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "UPDATE_TIME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "UPDATE_TIME")
 	for _, p := range all {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.UpdateTime)
 	}

@@ -301,7 +301,7 @@ func runDMCPList(cmd *cobra.Command, args []string) error {
 	if flagDMCPFormat != "" {
 		return emitFormatted(all, flagDMCPFormat)
 	}
-	fmt.Printf("%-40s %-20s %s\n", "NAME", "STATE", "TYPE")
+	printTableHeading(len(all), "%-40s %-20s %s\n", "NAME", "STATE", "TYPE")
 	for _, p := range all {
 		fmt.Printf("%-40s %-20s %s\n", path.Base(p.Name), p.State, connectionProfileType(p))
 	}

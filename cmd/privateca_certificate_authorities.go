@@ -247,7 +247,7 @@ func pcaCARunList(caType string) func(*cobra.Command, []string) error {
 		if flagPCAFormat != "" {
 			return emitFormatted(filtered, flagPCAFormat)
 		}
-		fmt.Printf("%-40s %-15s %s\n", "NAME", "STATE", "TIER")
+		printTableHeading(len(filtered), "%-40s %-15s %s\n", "NAME", "STATE", "TIER")
 		for _, ca := range filtered {
 			fmt.Printf("%-40s %-15s %s\n", path.Base(ca.Name), ca.State, ca.Tier)
 		}

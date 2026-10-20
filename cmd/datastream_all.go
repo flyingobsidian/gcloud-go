@@ -111,7 +111,7 @@ func runDSLocList(cmd *cobra.Command, args []string) error {
 	if flagDSFormat != "" {
 		return emitFormatted(resp.Locations, flagDSFormat)
 	}
-	fmt.Printf("%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeading(len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -226,7 +226,7 @@ func runDSOpList(cmd *cobra.Command, args []string) error {
 	if flagDSFormat != "" {
 		return emitFormatted(resp.Operations, flagDSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -392,7 +392,7 @@ func runDSCPList(cmd *cobra.Command, args []string) error {
 	if flagDSFormat != "" {
 		return emitFormatted(resp.ConnectionProfiles, flagDSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(resp.ConnectionProfiles), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, p := range resp.ConnectionProfiles {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.DisplayName)
 	}
@@ -550,7 +550,7 @@ func runDSPCList(cmd *cobra.Command, args []string) error {
 	if flagDSFormat != "" {
 		return emitFormatted(resp.PrivateConnections, flagDSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.PrivateConnections), "%-40s %s\n", "NAME", "STATE")
 	for _, pc := range resp.PrivateConnections {
 		fmt.Printf("%-40s %s\n", path.Base(pc.Name), pc.State)
 	}
@@ -689,7 +689,7 @@ func runDSRouteList(cmd *cobra.Command, args []string) error {
 	if flagDSFormat != "" {
 		return emitFormatted(resp.Routes, flagDSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DESTINATION_ADDRESS")
+	printTableHeading(len(resp.Routes), "%-40s %s\n", "NAME", "DESTINATION_ADDRESS")
 	for _, r := range resp.Routes {
 		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.DestinationAddress)
 	}
@@ -830,7 +830,7 @@ func runDSStreamList(cmd *cobra.Command, args []string) error {
 	if flagDSFormat != "" {
 		return emitFormatted(resp.Streams, flagDSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Streams), "%-40s %s\n", "NAME", "STATE")
 	for _, s := range resp.Streams {
 		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.State)
 	}
@@ -959,7 +959,7 @@ func runDSObjList(cmd *cobra.Command, args []string) error {
 	if flagDSFormat != "" {
 		return emitFormatted(resp.StreamObjects, flagDSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(resp.StreamObjects), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, o := range resp.StreamObjects {
 		fmt.Printf("%-40s %s\n", path.Base(o.Name), o.DisplayName)
 	}

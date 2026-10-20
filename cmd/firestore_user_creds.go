@@ -142,7 +142,7 @@ func runFSUCList(cmd *cobra.Command, args []string) error {
 	if flagFSUCFormat != "" {
 		return emitFormatted(resp.UserCreds, flagFSUCFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.UserCreds), "%-40s %s\n", "NAME", "STATE")
 	for _, u := range resp.UserCreds {
 		fmt.Printf("%-40s %s\n", path.Base(u.Name), u.State)
 	}

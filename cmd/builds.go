@@ -427,7 +427,7 @@ func runBuildsConnList(cmd *cobra.Command, args []string) error {
 	if flagBuildsFormat != "" {
 		return emitFormatted(resp.Connections, flagBuildsFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.Connections), "%-40s\n", "NAME")
 	for _, c := range resp.Connections {
 		fmt.Println(path.Base(c.Name))
 	}
@@ -642,7 +642,7 @@ func runBuildsRepoList(cmd *cobra.Command, args []string) error {
 	if flagBuildsFormat != "" {
 		return emitFormatted(resp.Repositories, flagBuildsFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "REMOTE_URI")
+	printTableHeading(len(resp.Repositories), "%-40s %s\n", "NAME", "REMOTE_URI")
 	for _, r := range resp.Repositories {
 		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.RemoteUri)
 	}
@@ -751,7 +751,7 @@ func runBuildsTrigList(cmd *cobra.Command, args []string) error {
 	if flagBuildsFormat != "" {
 		return emitFormatted(resp.Triggers, flagBuildsFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DESCRIPTION")
+	printTableHeading(len(resp.Triggers), "%-40s %s\n", "NAME", "DESCRIPTION")
 	for _, t := range resp.Triggers {
 		fmt.Printf("%-40s %s\n", t.Name, t.Description)
 	}
@@ -891,7 +891,7 @@ func runBuildsWPList(cmd *cobra.Command, args []string) error {
 	if flagBuildsFormat != "" {
 		return emitFormatted(resp.WorkerPools, flagBuildsFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.WorkerPools), "%-40s %s\n", "NAME", "STATE")
 	for _, wp := range resp.WorkerPools {
 		fmt.Printf("%-40s %s\n", path.Base(wp.Name), wp.State)
 	}

@@ -183,7 +183,7 @@ func runBatchJobList(cmd *cobra.Command, args []string) error {
 	if flagBatchFormat != "" {
 		return emitFormatted(resp.Jobs, flagBatchFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Jobs), "%-40s %s\n", "NAME", "STATE")
 	for _, j := range resp.Jobs {
 		state := ""
 		if j.Status != nil {
@@ -260,7 +260,7 @@ func runBatchTaskList(cmd *cobra.Command, args []string) error {
 	if flagBatchFormat != "" {
 		return emitFormatted(resp.Tasks, flagBatchFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Tasks), "%-40s %s\n", "NAME", "STATE")
 	for _, t := range resp.Tasks {
 		state := ""
 		if t.Status != nil {

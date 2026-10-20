@@ -194,7 +194,7 @@ func runFSDBList(cmd *cobra.Command, args []string) error {
 	if flagFSDBFormat != "" {
 		return emitFormatted(dbs, flagFSDBFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "LOCATION", "TYPE")
+	printTableHeading(len(dbs), "%-40s %-15s %s\n", "NAME", "LOCATION", "TYPE")
 	for _, d := range dbs {
 		fmt.Printf("%-40s %-15s %s\n", path.Base(d.Name), d.LocationId, d.Type)
 	}

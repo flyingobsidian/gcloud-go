@@ -97,7 +97,7 @@ func runFSBackupList(cmd *cobra.Command, args []string) error {
 	if flagFSBackupFormat != "" {
 		return emitFormatted(resp.Backups, flagFSBackupFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "STATE", "DATABASE")
+	printTableHeading(len(resp.Backups), "%-40s %-15s %s\n", "NAME", "STATE", "DATABASE")
 	for _, b := range resp.Backups {
 		fmt.Printf("%-40s %-15s %s\n", path.Base(b.Name), b.State, b.Database)
 	}
@@ -257,7 +257,7 @@ func runFSBSList(cmd *cobra.Command, args []string) error {
 	if flagFSBSFormat != "" {
 		return emitFormatted(resp.BackupSchedules, flagFSBSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "RETENTION")
+	printTableHeading(len(resp.BackupSchedules), "%-40s %s\n", "NAME", "RETENTION")
 	for _, s := range resp.BackupSchedules {
 		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.Retention)
 	}

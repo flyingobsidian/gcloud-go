@@ -276,7 +276,7 @@ func runADBBackupList(cmd *cobra.Command, args []string) error {
 	if flagADBFormat != "" {
 		return emitFormatted(resp.Backups, flagADBFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Backups), "%-40s %s\n", "NAME", "STATE")
 	for _, b := range resp.Backups {
 		fmt.Printf("%-40s %s\n", path.Base(b.Name), b.State)
 	}
@@ -516,7 +516,7 @@ func runADBClusterList(cmd *cobra.Command, args []string) error {
 	if flagADBFormat != "" {
 		return emitFormatted(resp.Clusters, flagADBFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "STATE", "CLUSTER_TYPE")
+	printTableHeading(len(resp.Clusters), "%-40s %-15s %s\n", "NAME", "STATE", "CLUSTER_TYPE")
 	for _, c := range resp.Clusters {
 		fmt.Printf("%-40s %-15s %s\n", path.Base(c.Name), c.State, c.ClusterType)
 	}
@@ -894,7 +894,7 @@ func runADBInstList(cmd *cobra.Command, args []string) error {
 	if flagADBFormat != "" {
 		return emitFormatted(resp.Instances, flagADBFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "STATE", "INSTANCE_TYPE")
+	printTableHeading(len(resp.Instances), "%-40s %-15s %s\n", "NAME", "STATE", "INSTANCE_TYPE")
 	for _, i := range resp.Instances {
 		fmt.Printf("%-40s %-15s %s\n", path.Base(i.Name), i.State, i.InstanceType)
 	}
@@ -1139,7 +1139,7 @@ func runADBUserList(cmd *cobra.Command, args []string) error {
 	if flagADBFormat != "" {
 		return emitFormatted(resp.Users, flagADBFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "USER_TYPE")
+	printTableHeading(len(resp.Users), "%-40s %s\n", "NAME", "USER_TYPE")
 	for _, u := range resp.Users {
 		fmt.Printf("%-40s %s\n", path.Base(u.Name), u.UserType)
 	}
@@ -1279,7 +1279,7 @@ func runADBOpList(cmd *cobra.Command, args []string) error {
 	if flagADBFormat != "" {
 		return emitFormatted(resp.Operations, flagADBFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}

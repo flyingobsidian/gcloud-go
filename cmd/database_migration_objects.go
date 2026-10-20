@@ -120,7 +120,7 @@ func runDMObjList(cmd *cobra.Command, args []string) error {
 	if flagDMObjFormat != "" {
 		return emitFormatted(all, flagDMObjFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "PHASE", "STATE")
+	printTableHeading(len(all), "%-40s %-15s %s\n", "NAME", "PHASE", "STATE")
 	for _, o := range all {
 		fmt.Printf("%-40s %-15s %s\n", path.Base(o.Name), o.Phase, o.State)
 	}

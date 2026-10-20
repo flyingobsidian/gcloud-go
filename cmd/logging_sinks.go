@@ -275,7 +275,7 @@ func runLogSinkList(cmd *cobra.Command, args []string) error {
 	if flagLogFormat != "" {
 		return emitFormatted(all, flagLogFormat)
 	}
-	fmt.Printf("%-30s %-60s %s\n", "NAME", "DESTINATION", "FILTER")
+	printTableHeading(len(all), "%-30s %-60s %s\n", "NAME", "DESTINATION", "FILTER")
 	for _, s := range all {
 		fmt.Printf("%-30s %-60s %s\n", s.Name, s.Destination, s.Filter)
 	}

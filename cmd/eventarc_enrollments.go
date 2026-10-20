@@ -178,7 +178,7 @@ func runEvEnrList(cmd *cobra.Command, args []string) error {
 	if flagEvEnrFormat != "" {
 		return emitFormatted(all, flagEvEnrFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "MESSAGE_BUS")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "MESSAGE_BUS")
 	for _, e := range all {
 		fmt.Printf("%-40s %s\n", path.Base(e.Name), e.MessageBus)
 	}

@@ -287,7 +287,7 @@ func runPSSchemaList(cmd *cobra.Command, args []string) error {
 	if flagPSFormat != "" {
 		return emitFormatted(all, flagPSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "TYPE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "TYPE")
 	for _, s := range all {
 		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.Type)
 	}
@@ -311,7 +311,7 @@ func runPSSchemaListRevs(cmd *cobra.Command, args []string) error {
 	if flagPSFormat != "" {
 		return emitFormatted(resp.Schemas, flagPSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "REVISION_ID", "CREATED")
+	printTableHeading(len(resp.Schemas), "%-40s %s\n", "REVISION_ID", "CREATED")
 	for _, s := range resp.Schemas {
 		fmt.Printf("%-40s %s\n", s.RevisionId, s.RevisionCreateTime)
 	}
@@ -490,7 +490,7 @@ func runPSSnapList(cmd *cobra.Command, args []string) error {
 	if flagPSFormat != "" {
 		return emitFormatted(all, flagPSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "TOPIC")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "TOPIC")
 	for _, s := range all {
 		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.Topic)
 	}

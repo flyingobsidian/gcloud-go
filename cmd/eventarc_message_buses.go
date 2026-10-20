@@ -215,7 +215,7 @@ func runEvMBList(cmd *cobra.Command, args []string) error {
 	if flagEvMBFormat != "" {
 		return emitFormatted(all, flagEvMBFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "UPDATE_TIME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "UPDATE_TIME")
 	for _, mb := range all {
 		fmt.Printf("%-40s %s\n", path.Base(mb.Name), mb.UpdateTime)
 	}

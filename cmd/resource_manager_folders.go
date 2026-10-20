@@ -286,7 +286,7 @@ func runFolderList(cmd *cobra.Command, args []string) error {
 		return yamlEncode(all)
 	}
 
-	fmt.Printf("%-30s %-15s %-20s %s\n", "DISPLAY_NAME", "ID", "PARENT", "STATE")
+	printTableHeading(len(all), "%-30s %-15s %-20s %s\n", "DISPLAY_NAME", "ID", "PARENT", "STATE")
 	for _, f := range all {
 		fmt.Printf("%-30s %-15s %-20s %s\n", f.DisplayName, path.Base(f.Name), f.Parent, f.State)
 	}

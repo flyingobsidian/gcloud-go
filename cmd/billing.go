@@ -336,7 +336,7 @@ func runBillingAcctList(cmd *cobra.Command, args []string) error {
 	case "yaml":
 		return yamlEncode(all)
 	}
-	fmt.Printf("%-25s %-40s %-6s %s\n", "ACCOUNT_ID", "NAME", "OPEN", "MASTER_ACCOUNT_ID")
+	printTableHeading(len(all), "%-25s %-40s %-6s %s\n", "ACCOUNT_ID", "NAME", "OPEN", "MASTER_ACCOUNT_ID")
 	for _, a := range all {
 		fmt.Printf("%-25s %-40s %-6t %s\n", path.Base(a.Name), a.DisplayName, a.Open, path.Base(a.MasterBillingAccount))
 	}
@@ -795,7 +795,7 @@ func runBillingBudgetList(cmd *cobra.Command, args []string) error {
 	case "yaml":
 		return yamlEncode(all)
 	}
-	fmt.Printf("%-40s %s\n", "BUDGET_ID", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "BUDGET_ID", "DISPLAY_NAME")
 	for _, b := range all {
 		fmt.Printf("%-40s %s\n", path.Base(b.Name), b.DisplayName)
 	}
@@ -918,7 +918,7 @@ func runBillingProjectList(cmd *cobra.Command, args []string) error {
 	case "yaml":
 		return yamlEncode(all)
 	}
-	fmt.Printf("%-30s %-25s %s\n", "PROJECT_ID", "BILLING_ACCOUNT_ID", "BILLING_ENABLED")
+	printTableHeading(len(all), "%-30s %-25s %s\n", "PROJECT_ID", "BILLING_ACCOUNT_ID", "BILLING_ENABLED")
 	for _, p := range all {
 		fmt.Printf("%-30s %-25s %v\n", p.ProjectId, path.Base(p.BillingAccountName), p.BillingEnabled)
 	}

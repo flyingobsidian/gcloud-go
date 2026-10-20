@@ -172,7 +172,7 @@ func runPCATplList(cmd *cobra.Command, args []string) error {
 	if flagPCAFormat != "" {
 		return emitFormatted(resp.CertificateTemplates, flagPCAFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.CertificateTemplates), "%-40s\n", "NAME")
 	for _, t := range resp.CertificateTemplates {
 		fmt.Println(path.Base(t.Name))
 	}

@@ -177,7 +177,7 @@ func formatManagedInstances(instances []*compute.ManagedInstance, format string,
 	}
 
 	if showZone {
-		fmt.Printf("%-40s %-10s %-15s %-20s %-15s\n", "NAME", "ZONE", "STATUS", "ACTION", "HEALTH")
+		printTableHeading(len(instances), "%-40s %-10s %-15s %-20s %-15s\n", "NAME", "ZONE", "STATUS", "ACTION", "HEALTH")
 		for _, mi := range instances {
 			fmt.Printf("%-40s %-10s %-15s %-20s %-15s\n",
 				managedInstanceField(mi, "NAME"), managedInstanceField(mi, "ZONE"),
@@ -186,7 +186,7 @@ func formatManagedInstances(instances []*compute.ManagedInstance, format string,
 		}
 		return nil
 	}
-	fmt.Printf("%-40s %-15s %-20s %-15s\n", "NAME", "STATUS", "ACTION", "HEALTH")
+	printTableHeading(len(instances), "%-40s %-15s %-20s %-15s\n", "NAME", "STATUS", "ACTION", "HEALTH")
 	for _, mi := range instances {
 		fmt.Printf("%-40s %-15s %-20s %-15s\n",
 			managedInstanceField(mi, "NAME"), managedInstanceField(mi, "STATUS"),

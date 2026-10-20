@@ -370,7 +370,7 @@ func runSecretsVersionsList(cmd *cobra.Command, args []string) error {
 		return printJSON(allVersions)
 	}
 
-	fmt.Printf("%-60s %-12s %-25s\n", "NAME", "STATE", "CREATED")
+	printTableHeading(len(allVersions), "%-60s %-12s %-25s\n", "NAME", "STATE", "CREATED")
 	for _, v := range allVersions {
 		fmt.Printf("%-60s %-12s %-25s\n", v.Name, v.State, v.CreateTime)
 	}
@@ -528,7 +528,7 @@ func runSecretsList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Default table format.
-	fmt.Printf("%-60s %s\n", "NAME", "CREATED")
+	printTableHeading(len(allSecrets), "%-60s %s\n", "NAME", "CREATED")
 	for _, s := range allSecrets {
 		fmt.Printf("%-60s %s\n", s.Name, s.CreateTime)
 	}

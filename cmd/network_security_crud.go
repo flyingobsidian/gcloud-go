@@ -129,13 +129,13 @@ func (b *nsCRUD[T]) runList(_ *cobra.Command, _ []string) error {
 		return emitFormatted(all, "")
 	}
 	if b.secondaryCol == nil {
-		fmt.Printf("%-50s\n", "NAME")
+		printTableHeading(len(all), "%-50s\n", "NAME")
 		for _, it := range all {
 			fmt.Printf("%-50s\n", b.nameCol(it))
 		}
 		return nil
 	}
-	fmt.Printf("%-50s %s\n", "NAME", b.secondaryHeader)
+	printTableHeading(len(all), "%-50s %s\n", "NAME", b.secondaryHeader)
 	for _, it := range all {
 		fmt.Printf("%-50s %s\n", b.nameCol(it), b.secondaryCol(it))
 	}

@@ -330,7 +330,7 @@ func runAGAPIList(cmd *cobra.Command, args []string) error {
 	if flagAGFormat != "" {
 		return emitFormatted(resp.Apis, flagAGFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Apis), "%-40s %s\n", "NAME", "STATE")
 	for _, a := range resp.Apis {
 		fmt.Printf("%-40s %s\n", path.Base(a.Name), a.State)
 	}
@@ -438,7 +438,7 @@ func runAGACList(cmd *cobra.Command, args []string) error {
 	if flagAGFormat != "" {
 		return emitFormatted(resp.ApiConfigs, flagAGFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.ApiConfigs), "%-40s %s\n", "NAME", "STATE")
 	for _, c := range resp.ApiConfigs {
 		fmt.Printf("%-40s %s\n", path.Base(c.Name), c.State)
 	}
@@ -544,7 +544,7 @@ func runAGGWList(cmd *cobra.Command, args []string) error {
 	if flagAGFormat != "" {
 		return emitFormatted(resp.Gateways, flagAGFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Gateways), "%-40s %s\n", "NAME", "STATE")
 	for _, gw := range resp.Gateways {
 		fmt.Printf("%-40s %s\n", path.Base(gw.Name), gw.State)
 	}
@@ -628,7 +628,7 @@ func runAGOpList(cmd *cobra.Command, args []string) error {
 	if flagAGFormat != "" {
 		return emitFormatted(resp.Operations, flagAGFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}

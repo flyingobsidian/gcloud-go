@@ -288,7 +288,7 @@ func runWBIList(cmd *cobra.Command, args []string) error {
 	if flagWBIFormat != "" {
 		return emitFormatted(resp.Instances, flagWBIFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Instances), "%-40s %s\n", "NAME", "STATE")
 	for _, i := range resp.Instances {
 		fmt.Printf("%-40s %s\n", path.Base(i.Name), i.State)
 	}

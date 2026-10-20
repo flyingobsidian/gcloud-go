@@ -559,7 +559,7 @@ func formatInstanceList(instances []*compute.Instance) error {
 		return nil
 	}
 
-	fmt.Printf("%-30s %-15s %-20s %-12s %-16s %-16s %-10s\n", "NAME", "ZONE", "MACHINE_TYPE", "PREEMPTIBLE", "INTERNAL_IP", "EXTERNAL_IP", "STATUS")
+	printTableHeading(len(instances), "%-30s %-15s %-20s %-12s %-16s %-16s %-10s\n", "NAME", "ZONE", "MACHINE_TYPE", "PREEMPTIBLE", "INTERNAL_IP", "EXTERNAL_IP", "STATUS")
 	for _, inst := range instances {
 		mt := path.Base(inst.MachineType)
 		intIP := getInternalIP(inst)

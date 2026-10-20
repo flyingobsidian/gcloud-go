@@ -173,7 +173,7 @@ func runEvChanList(cmd *cobra.Command, args []string) error {
 	if flagEvChanFormat != "" {
 		return emitFormatted(all, flagEvChanFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, c := range all {
 		fmt.Printf("%-40s %s\n", path.Base(c.Name), c.State)
 	}

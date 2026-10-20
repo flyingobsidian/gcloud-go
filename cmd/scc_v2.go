@@ -164,7 +164,7 @@ func sccV2ListFindings(parent string) error {
 		return emitFormatted(results, flagSccFormat)
 	}
 	// Default table matching the V1 codepath.
-	fmt.Printf("%-40s %-10s %s\n", "NAME", "STATE", "CATEGORY")
+	printTableHeading(len(results), "%-40s %-10s %s\n", "NAME", "STATE", "CATEGORY")
 	for _, r := range results {
 		finding, _ := r["finding"].(map[string]any)
 		if finding == nil {

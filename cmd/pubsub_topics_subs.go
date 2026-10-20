@@ -319,7 +319,7 @@ func runPSTopList(cmd *cobra.Command, args []string) error {
 	if flagPSFormat != "" {
 		return emitFormatted(all, flagPSFormat)
 	}
-	fmt.Printf("%s\n", "NAME")
+	printTableHeading(len(all), "%s\n", "NAME")
 	for _, t := range all {
 		fmt.Println(path.Base(t.Name))
 	}
@@ -589,7 +589,7 @@ func runPSSubList(cmd *cobra.Command, args []string) error {
 	if flagPSFormat != "" {
 		return emitFormatted(all, flagPSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "TOPIC")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "TOPIC")
 	for _, s := range all {
 		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.Topic)
 	}

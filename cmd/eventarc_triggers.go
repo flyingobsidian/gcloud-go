@@ -178,7 +178,7 @@ func runEvTrgList(cmd *cobra.Command, args []string) error {
 	if flagEvTrgFormat != "" {
 		return emitFormatted(all, flagEvTrgFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "TYPE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "TYPE")
 	for _, t := range all {
 		fmt.Printf("%-40s %s\n", path.Base(t.Name), triggerEventType(t))
 	}

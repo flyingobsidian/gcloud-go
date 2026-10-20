@@ -182,7 +182,7 @@ func printOrgList(orgs []*crm.Organization, format string) error {
 	if len(orgs) == 0 {
 		return nil
 	}
-	fmt.Printf("%-40s %-20s %s\n", "DISPLAY_NAME", "ID", "DIRECTORY_CUSTOMER_ID")
+	printTableHeading(len(orgs), "%-40s %-20s %s\n", "DISPLAY_NAME", "ID", "DIRECTORY_CUSTOMER_ID")
 	for _, o := range orgs {
 		fmt.Printf("%-40s %-20s %s\n", o.DisplayName, path.Base(o.Name), o.DirectoryCustomerId)
 	}

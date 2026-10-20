@@ -374,7 +374,7 @@ func runSecretsLocList(cmd *cobra.Command, args []string) error {
 	if flagSecretsLocListFmt != "" {
 		return emitFormatted(all, flagSecretsLocListFmt)
 	}
-	fmt.Printf("%-30s %s\n", "LOCATION_ID", "NAME")
+	printTableHeading(len(all), "%-30s %s\n", "LOCATION_ID", "NAME")
 	for _, l := range all {
 		fmt.Printf("%-30s %s\n", l.LocationId, path.Base(l.Name))
 	}

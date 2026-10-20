@@ -394,7 +394,7 @@ func runDMCWList(cmd *cobra.Command, args []string) error {
 	if flagDMCWFormat != "" {
 		return emitFormatted(all, flagDMCWFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, c := range all {
 		fmt.Printf("%-40s %s\n", path.Base(c.Name), c.DisplayName)
 	}
@@ -649,7 +649,7 @@ func runDMCWMRList(cmd *cobra.Command, args []string) error {
 	if flagDMCWFormat != "" {
 		return emitFormatted(all, flagDMCWFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, r := range all {
 		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.State)
 	}

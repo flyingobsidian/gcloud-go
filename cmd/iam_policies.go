@@ -180,7 +180,7 @@ func runIAMPolList(cmd *cobra.Command, args []string) error {
 	if flagIAMPolFmt != "" {
 		return emitFormatted(all, flagIAMPolFmt)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, p := range all {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.DisplayName)
 	}

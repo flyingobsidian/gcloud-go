@@ -340,7 +340,7 @@ func runNSOpList(cmd *cobra.Command, args []string) error {
 	if flagNSFormat != "" {
 		return emitFormatted(all, flagNSFormat)
 	}
-	fmt.Printf("%-60s %s\n", "NAME", "DONE")
+	printTableHeading(len(all), "%-60s %s\n", "NAME", "DONE")
 	for _, o := range all {
 		fmt.Printf("%-60s %v\n", nsBasename(o.Name), o.Done)
 	}

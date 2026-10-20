@@ -176,7 +176,7 @@ func runServicesList(cmd *cobra.Command, args []string) error {
 	}
 
 	return printListResults(all, flagServicesFormat, func() {
-		fmt.Printf("%-60s %-40s %s\n", "NAME", "TITLE", "STATE")
+		printTableHeading(len(all), "%-60s %-40s %s\n", "NAME", "TITLE", "STATE")
 		for _, s := range all {
 			title := ""
 			if s.Config != nil {

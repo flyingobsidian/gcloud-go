@@ -360,7 +360,7 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 	}
 
 	return printListResults(all, flagAPIKeyListFormat, func() {
-		fmt.Printf("%-40s %-30s %s\n", "NAME", "DISPLAY_NAME", "CREATE_TIME")
+		printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "DISPLAY_NAME", "CREATE_TIME")
 		for _, k := range all {
 			fmt.Printf("%-40s %-30s %s\n", k.Name, k.DisplayName, k.CreateTime)
 		}

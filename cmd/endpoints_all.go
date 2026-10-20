@@ -216,7 +216,7 @@ func runEPConfigList(cmd *cobra.Command, args []string) error {
 	if flagEPFormat != "" {
 		return emitFormatted(all, flagEPFormat)
 	}
-	fmt.Printf("%-30s %s\n", "CONFIG_ID", "SERVICE_NAME")
+	printTableHeading(len(all), "%-30s %s\n", "CONFIG_ID", "SERVICE_NAME")
 	for _, c := range all {
 		fmt.Printf("%-30s %s\n", c.Id, c.Name)
 	}
@@ -274,7 +274,7 @@ func runEPOpList(cmd *cobra.Command, args []string) error {
 	if flagEPFormat != "" {
 		return emitFormatted(all, flagEPFormat)
 	}
-	fmt.Printf("%-60s %-6s\n", "NAME", "DONE")
+	printTableHeading(len(all), "%-60s %-6s\n", "NAME", "DONE")
 	for _, op := range all {
 		fmt.Printf("%-60s %-6t\n", op.Name, op.Done)
 	}
@@ -375,7 +375,7 @@ func runEPSvcList(cmd *cobra.Command, args []string) error {
 	if flagEPFormat != "" {
 		return emitFormatted(all, flagEPFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "PROJECT_ID")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "PROJECT_ID")
 	for _, s := range all {
 		fmt.Printf("%-40s %s\n", s.ServiceName, s.ProducerProjectId)
 	}

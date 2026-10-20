@@ -212,7 +212,7 @@ func runMCRegionList(cmd *cobra.Command, args []string) error {
 	if flagMCFormat != "" {
 		return emitFormatted(resp.Locations, flagMCFormat)
 	}
-	fmt.Printf("%-20s %s\n", "REGION", "DISPLAY_NAME")
+	printTableHeading(len(resp.Locations), "%-20s %s\n", "REGION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -298,7 +298,7 @@ func runMCInstList(cmd *cobra.Command, args []string) error {
 	if flagMCFormat != "" {
 		return emitFormatted(resp.Instances, flagMCFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Instances), "%-40s %s\n", "NAME", "STATE")
 	for _, i := range resp.Instances {
 		fmt.Printf("%-40s %s\n", path.Base(i.Name), i.State)
 	}
@@ -427,7 +427,7 @@ func runMCOpList(cmd *cobra.Command, args []string) error {
 	if flagMCFormat != "" {
 		return emitFormatted(resp.Operations, flagMCFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}

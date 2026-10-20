@@ -111,7 +111,7 @@ func runEventarcLocationsList(cmd *cobra.Command, args []string) error {
 	if flagEvLocFormat != "" {
 		return emitFormatted(all, flagEvLocFormat)
 	}
-	fmt.Printf("%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range all {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -182,7 +182,7 @@ func runEvProvList(cmd *cobra.Command, args []string) error {
 	if flagEvProvFormat != "" {
 		return emitFormatted(all, flagEvProvFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, p := range all {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.DisplayName)
 	}

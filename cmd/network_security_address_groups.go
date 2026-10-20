@@ -240,7 +240,7 @@ func runNSAGList(cmd *cobra.Command, args []string) error {
 	if flagNSFormat != "" {
 		return emitFormatted(all, flagNSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "TYPE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "TYPE")
 	for _, g := range all {
 		fmt.Printf("%-40s %s\n", nsBasename(g.Name), g.Type)
 	}
@@ -465,7 +465,7 @@ func runNSOAGList(cmd *cobra.Command, args []string) error {
 	if flagNSFormat != "" {
 		return emitFormatted(all, flagNSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "TYPE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "TYPE")
 	for _, g := range all {
 		fmt.Printf("%-40s %s\n", nsBasename(g.Name), g.Type)
 	}

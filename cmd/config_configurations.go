@@ -73,7 +73,7 @@ func runConfigConfigurationsList(cmd *cobra.Command, args []string) error {
 
 	active := config.ActiveConfigName()
 
-	fmt.Println("NAME      IS_ACTIVE")
+	printTableHeading(len(names), "NAME      IS_ACTIVE\n")
 	for _, name := range names {
 		marker := "False"
 		if name == active {

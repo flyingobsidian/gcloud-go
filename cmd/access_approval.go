@@ -330,7 +330,7 @@ func runAAReqList(cmd *cobra.Command, args []string) error {
 	if flagAAFormat != "" {
 		return emitFormatted(all, flagAAFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "REQUEST_TIME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "REQUEST_TIME")
 	for _, r := range all {
 		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.RequestTime)
 	}

@@ -248,7 +248,7 @@ func runLogViewList(cmd *cobra.Command, args []string) error {
 	if flagLogFormat != "" {
 		return emitFormatted(all, flagLogFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "FILTER")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "FILTER")
 	for _, v := range all {
 		fmt.Printf("%-40s %s\n", loggingBasename(v.Name), v.Filter)
 	}

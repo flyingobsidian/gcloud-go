@@ -220,7 +220,7 @@ func runDMMJList(cmd *cobra.Command, args []string) error {
 	if flagDMMJFormat != "" {
 		return emitFormatted(all, flagDMMJFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "STATE", "TYPE")
+	printTableHeading(len(all), "%-40s %-15s %s\n", "NAME", "STATE", "TYPE")
 	for _, m := range all {
 		fmt.Printf("%-40s %-15s %s\n", path.Base(m.Name), m.State, m.Type)
 	}

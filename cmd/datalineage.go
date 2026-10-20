@@ -367,7 +367,7 @@ func runDLProcList(cmd *cobra.Command, args []string) error {
 	if flagDLFormat != "" {
 		return emitFormatted(resp.Processes, flagDLFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(resp.Processes), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, p := range resp.Processes {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.DisplayName)
 	}
@@ -482,7 +482,7 @@ func runDLRunList(cmd *cobra.Command, args []string) error {
 	if flagDLFormat != "" {
 		return emitFormatted(resp.Runs, flagDLFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Runs), "%-40s %s\n", "NAME", "STATE")
 	for _, r := range resp.Runs {
 		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.State)
 	}
@@ -597,7 +597,7 @@ func runDLEventList(cmd *cobra.Command, args []string) error {
 	if flagDLFormat != "" {
 		return emitFormatted(resp.LineageEvents, flagDLFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "START_TIME")
+	printTableHeading(len(resp.LineageEvents), "%-40s %s\n", "NAME", "START_TIME")
 	for _, e := range resp.LineageEvents {
 		fmt.Printf("%-40s %s\n", path.Base(e.Name), e.StartTime)
 	}

@@ -349,7 +349,7 @@ func runSchedulerJobsList(cmd *cobra.Command, args []string) error {
 		return printJSON(allJobs)
 	}
 
-	fmt.Printf("%-30s %-12s %-25s %-15s %-25s\n", "JOB_ID", "STATE", "SCHEDULE", "TARGET_TYPE", "NEXT_RUN")
+	printTableHeading(len(allJobs), "%-30s %-12s %-25s %-15s %-25s\n", "JOB_ID", "STATE", "SCHEDULE", "TARGET_TYPE", "NEXT_RUN")
 	for _, j := range allJobs {
 		jobID := path.Base(j.Name)
 		targetType := ""

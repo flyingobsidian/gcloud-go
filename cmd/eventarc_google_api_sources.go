@@ -178,7 +178,7 @@ func runEvGASList(cmd *cobra.Command, args []string) error {
 	if flagEvGASFormat != "" {
 		return emitFormatted(all, flagEvGASFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DESTINATION")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DESTINATION")
 	for _, g := range all {
 		fmt.Printf("%-40s %s\n", path.Base(g.Name), g.Destination)
 	}

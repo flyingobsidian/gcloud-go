@@ -865,7 +865,7 @@ func runSccAssetsList(cmd *cobra.Command, args []string) error {
 	if flagSccFormat != "" {
 		return emitFormatted(all, flagSccFormat)
 	}
-	fmt.Printf("%-60s %s\n", "NAME", "RESOURCE_TYPE")
+	printTableHeading(len(all), "%-60s %s\n", "NAME", "RESOURCE_TYPE")
 	for _, a := range all {
 		if a.Asset != nil {
 			name := a.Asset.Name
@@ -1103,7 +1103,7 @@ func runSccBQExportList(cmd *cobra.Command, args []string) error {
 	if flagSccFormat != "" {
 		return emitFormatted(all, flagSccFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DATASET")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DATASET")
 	for _, e := range all {
 		fmt.Printf("%-40s %s\n", path.Base(e.Name), e.Dataset)
 	}
@@ -1434,7 +1434,7 @@ func runSccEtdUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func printModulesEtd(modules []*securitycenter.EventThreatDetectionCustomModule) {
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(modules), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, m := range modules {
 		fmt.Printf("%-40s %s\n", path.Base(m.Name), m.DisplayName)
 	}
@@ -1725,7 +1725,7 @@ func runSccShaUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func printModulesSha(modules []*securitycenter.GoogleCloudSecuritycenterV1SecurityHealthAnalyticsCustomModule) {
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(modules), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, m := range modules {
 		fmt.Printf("%-40s %s\n", path.Base(m.Name), m.DisplayName)
 	}
@@ -2007,7 +2007,7 @@ func runSccFindingsList(cmd *cobra.Command, args []string) error {
 	if flagSccFormat != "" {
 		return emitFormatted(all, flagSccFormat)
 	}
-	fmt.Printf("%-40s %-10s %s\n", "NAME", "STATE", "CATEGORY")
+	printTableHeading(len(all), "%-40s %-10s %s\n", "NAME", "STATE", "CATEGORY")
 	for _, r := range all {
 		if r.Finding == nil {
 			continue
@@ -2356,7 +2356,7 @@ func runSccMuteList(cmd *cobra.Command, args []string) error {
 	if flagSccFormat != "" {
 		return emitFormatted(all, flagSccFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, m := range all {
 		fmt.Printf("%-40s %s\n", path.Base(m.Name), m.DisplayName)
 	}
@@ -2555,7 +2555,7 @@ func runSccNotifyList(cmd *cobra.Command, args []string) error {
 	if flagSccFormat != "" {
 		return emitFormatted(all, flagSccFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "PUBSUB_TOPIC")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "PUBSUB_TOPIC")
 	for _, n := range all {
 		fmt.Printf("%-40s %s\n", path.Base(n.Name), n.PubsubTopic)
 	}
@@ -2676,7 +2676,7 @@ func runSccOpList(cmd *cobra.Command, args []string) error {
 	if flagSccFormat != "" {
 		return emitFormatted(resp.Operations, flagSccFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -2775,7 +2775,7 @@ func runSccSourcesList(cmd *cobra.Command, args []string) error {
 	if flagSccFormat != "" {
 		return emitFormatted(sources, flagSccFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(sources), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, s := range sources {
 		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.DisplayName)
 	}

@@ -310,7 +310,7 @@ func runManagedList(cmd *cobra.Command, args []string) error {
 		return printJSON(migs)
 	}
 
-	fmt.Printf("%-30s %-15s %-10s %-30s\n", "NAME", "ZONE", "SIZE", "TEMPLATE")
+	printTableHeading(len(migs), "%-30s %-15s %-10s %-30s\n", "NAME", "ZONE", "SIZE", "TEMPLATE")
 	for _, m := range migs {
 		tmpl := path.Base(m.InstanceTemplate)
 		fmt.Printf("%-30s %-15s %-10d %-30s\n", m.Name, zone, m.TargetSize, tmpl)

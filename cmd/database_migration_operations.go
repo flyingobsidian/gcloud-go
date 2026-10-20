@@ -152,7 +152,7 @@ func runDMOpList(cmd *cobra.Command, args []string) error {
 	if flagDMOpFormat != "" {
 		return emitFormatted(all, flagDMOpFormat)
 	}
-	fmt.Printf("%-40s %-10s %s\n", "NAME", "DONE", "TARGET")
+	printTableHeading(len(all), "%-40s %-10s %s\n", "NAME", "DONE", "TARGET")
 	for _, o := range all {
 		fmt.Printf("%-40s %-10v %s\n", path.Base(o.Name), o.Done, operationTarget(o))
 	}

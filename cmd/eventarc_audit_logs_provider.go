@@ -125,7 +125,7 @@ func runEventarcAuditLogsServiceNamesList(cmd *cobra.Command, args []string) err
 	if flagFormat != "" {
 		return emitFormatted(services, flagFormat)
 	}
-	fmt.Printf("%-50s %s\n", "SERVICE_NAME", "DISPLAY_NAME")
+	printTableHeading(len(services), "%-50s %s\n", "SERVICE_NAME", "DISPLAY_NAME")
 	for _, s := range services {
 		fmt.Printf("%-50s %s\n", s.ServiceName, s.DisplayName)
 	}
@@ -145,7 +145,7 @@ func runEventarcAuditLogsMethodNamesList(cmd *cobra.Command, args []string) erro
 	if flagFormat != "" {
 		return emitFormatted(methods, flagFormat)
 	}
-	fmt.Println("METHOD_NAME")
+	printTableHeading(len(methods), "%s\n", "METHOD_NAME")
 	for _, m := range methods {
 		fmt.Println(m.MethodName)
 	}

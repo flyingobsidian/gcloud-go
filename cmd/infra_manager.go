@@ -560,7 +560,7 @@ func runIMDepList(cmd *cobra.Command, args []string) error {
 	if flagIMFormat != "" {
 		return emitFormatted(all, flagIMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, d := range all {
 		fmt.Printf("%-40s %s\n", path.Base(d.Name), d.State)
 	}
@@ -764,7 +764,7 @@ func runIMPrevList(cmd *cobra.Command, args []string) error {
 	if flagIMFormat != "" {
 		return emitFormatted(all, flagIMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, p := range all {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.State)
 	}
@@ -1012,7 +1012,7 @@ func runIMRevList(cmd *cobra.Command, args []string) error {
 	if flagIMFormat != "" {
 		return emitFormatted(all, flagIMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "ACTION")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "ACTION")
 	for _, r := range all {
 		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.Action)
 	}
@@ -1092,7 +1092,7 @@ func runIMTfList(cmd *cobra.Command, args []string) error {
 	if flagIMFormat != "" {
 		return emitFormatted(all, flagIMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, v := range all {
 		fmt.Printf("%-40s %s\n", path.Base(v.Name), v.State)
 	}

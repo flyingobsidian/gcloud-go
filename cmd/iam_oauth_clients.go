@@ -223,7 +223,7 @@ func runIAMOCList(cmd *cobra.Command, args []string) error {
 	if flagIAMOCFormat != "" {
 		return emitFormatted(all, flagIAMOCFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, c := range all {
 		fmt.Printf("%-40s %s\n", path.Base(c.Name), c.DisplayName)
 	}
@@ -349,7 +349,7 @@ func runIAMOCCredList(cmd *cobra.Command, args []string) error {
 	if flagIAMOCFormat != "" {
 		return emitFormatted(resp.OauthClientCredentials, flagIAMOCFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.OauthClientCredentials), "%-40s\n", "NAME")
 	for _, c := range resp.OauthClientCredentials {
 		fmt.Println(path.Base(c.Name))
 	}

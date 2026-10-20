@@ -129,7 +129,7 @@ func formatUnmanagedInstances(items []*compute.InstanceWithNamedPorts, format st
 		fmt.Println("No instances in group.")
 		return nil
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATUS")
+	printTableHeading(len(items), "%-40s %s\n", "NAME", "STATUS")
 	for _, it := range items {
 		fmt.Printf("%-40s %s\n", unmanagedInstanceField(it, "NAME"), unmanagedInstanceField(it, "STATUS"))
 	}
