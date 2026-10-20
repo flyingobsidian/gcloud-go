@@ -200,6 +200,16 @@ func csvEscape(s string) string {
 	return s
 }
 
+// printTableHeading prints the heading line of a hand-rolled default table to
+// stdout. It prints nothing when rows is zero, matching gcloud-python's
+// TablePrinter, which omits the heading for an empty list.
+func printTableHeading(rows int, format string, a ...any) {
+	if rows == 0 {
+		return
+	}
+	fmt.Printf(format, a...)
+}
+
 // emitTable prints nothing, not even the heading, for zero rows, matching
 // gcloud-python's TablePrinter.
 func emitTable(w io.Writer, rows []map[string]any, fields []string) error {
