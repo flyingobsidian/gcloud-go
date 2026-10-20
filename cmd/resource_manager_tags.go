@@ -325,12 +325,15 @@ func runTagKeyList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	return printListResults(all, flagTagKeyListFormat, func() {
-		fmt.Printf("%-40s %-30s %s\n", "NAME", "SHORT_NAME", "NAMESPACED_NAME")
-		for _, k := range all {
-			fmt.Printf("%-40s %-30s %s\n", k.Name, k.ShortName, k.NamespacedName)
-		}
-	})
+	return printListResults(all, flagTagKeyListFormat, func() { printTagKeyTable(all) })
+}
+
+// printTagKeyTable writes the default `tags keys list` table.
+func printTagKeyTable(all []*crm.TagKey) {
+	printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "SHORT_NAME", "NAMESPACED_NAME")
+	for _, k := range all {
+		fmt.Printf("%-40s %-30s %s\n", k.Name, k.ShortName, k.NamespacedName)
+	}
 }
 
 func runTagKeyUpdate(cmd *cobra.Command, args []string) error {
@@ -435,7 +438,7 @@ func runTagValueList(cmd *cobra.Command, args []string) error {
 	}
 
 	return printListResults(all, flagTagValueListFormat, func() {
-		fmt.Printf("%-40s %-30s %s\n", "NAME", "SHORT_NAME", "NAMESPACED_NAME")
+		printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "SHORT_NAME", "NAMESPACED_NAME")
 		for _, v := range all {
 			fmt.Printf("%-40s %-30s %s\n", v.Name, v.ShortName, v.NamespacedName)
 		}
@@ -549,7 +552,7 @@ func runTagBindingList(cmd *cobra.Command, args []string) error {
 	}
 
 	return printListResults(all, flagTagBindingListFormat, func() {
-		fmt.Printf("%-60s %-25s %s\n", "NAME", "TAG_VALUE", "NAMESPACED_NAME")
+		printTableHeading(len(all), "%-60s %-25s %s\n", "NAME", "TAG_VALUE", "NAMESPACED_NAME")
 		for _, b := range all {
 			fmt.Printf("%-60s %-25s %s\n", b.Name, b.TagValue, b.TagValueNamespacedName)
 		}
@@ -583,7 +586,7 @@ func listEffectiveTags(ctx context.Context, svc *crm.Service, parent string) err
 	}
 
 	return printListResults(all, flagTagBindingListFormat, func() {
-		fmt.Printf("%-40s %-25s %s\n", "NAMESPACED_TAG_KEY", "TAG_VALUE", "INHERITED")
+		printTableHeading(len(all), "%-40s %-25s %s\n", "NAMESPACED_TAG_KEY", "TAG_VALUE", "INHERITED")
 		for _, t := range all {
 			fmt.Printf("%-40s %-25s %v\n", t.NamespacedTagKey, t.TagValue, t.Inherited)
 		}
