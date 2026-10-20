@@ -166,15 +166,24 @@ func runOrgList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	switch flagOrgListFormat {
+	return printOrgList(all, flagOrgListFormat)
+}
+
+// printOrgList writes orgs in the requested format. An empty result prints
+// [] for json and nothing otherwise, matching gcloud-python.
+func printOrgList(orgs []*crm.Organization, format string) error {
+	switch format {
 	case "json":
-		return printJSON(all)
+		return printJSON(orgs)
 	case "yaml":
-		return yamlEncode(all)
+		return yamlEncode(orgs)
 	}
 
+	if len(orgs) == 0 {
+		return nil
+	}
 	fmt.Printf("%-40s %-20s %s\n", "DISPLAY_NAME", "ID", "DIRECTORY_CUSTOMER_ID")
-	for _, o := range all {
+	for _, o := range orgs {
 		fmt.Printf("%-40s %-20s %s\n", o.DisplayName, path.Base(o.Name), o.DirectoryCustomerId)
 	}
 	return nil
