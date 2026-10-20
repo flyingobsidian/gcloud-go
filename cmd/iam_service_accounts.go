@@ -332,7 +332,7 @@ func runSAList(cmd *cobra.Command, args []string) error {
 		return yamlEncode(all)
 	}
 
-	fmt.Printf("%-40s %-50s %s\n", "DISPLAY NAME", "EMAIL", "DISABLED")
+	printTableHeading(len(all), "%-40s %-50s %s\n", "DISPLAY NAME", "EMAIL", "DISABLED")
 	for _, sa := range all {
 		fmt.Printf("%-40s %-50s %v\n", sa.DisplayName, sa.Email, sa.Disabled)
 	}

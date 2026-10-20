@@ -320,7 +320,7 @@ func runProjectList(cmd *cobra.Command, args []string) error {
 		return yamlEncode(all)
 	}
 
-	fmt.Printf("%-30s %-30s %-20s %s\n", "PROJECT_ID", "NAME", "PROJECT_NUMBER", "STATE")
+	printTableHeading(len(all), "%-30s %-30s %-20s %s\n", "PROJECT_ID", "NAME", "PROJECT_NUMBER", "STATE")
 	for _, p := range all {
 		fmt.Printf("%-30s %-30s %-20s %s\n", p.ProjectId, p.DisplayName, path.Base(p.Name), p.State)
 	}
@@ -395,7 +395,7 @@ func runProjectGetAncestors(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("%-40s %s\n", "ID", "TYPE")
+	printTableHeading(len(ancestors), "%-40s %s\n", "ID", "TYPE")
 	for _, a := range ancestors {
 		fmt.Printf("%-40s %s\n", a.id, a.kind)
 	}
