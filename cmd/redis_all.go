@@ -189,7 +189,7 @@ func runRedisACLList(cmd *cobra.Command, args []string) error {
 	if flagRedisACLFormat != "" {
 		return emitFormatted(resp.AclPolicies, flagRedisACLFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.AclPolicies), "%-40s\n", "NAME")
 	for _, p := range resp.AclPolicies {
 		fmt.Println(path.Base(p.Name))
 	}
@@ -426,7 +426,7 @@ func runRedisClusterList(cmd *cobra.Command, args []string) error {
 	if flagRedisClusterFormat != "" {
 		return emitFormatted(resp.Clusters, flagRedisClusterFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "STATE", "SIZE_GB")
+	printTableHeading(len(resp.Clusters), "%-40s %-15s %s\n", "NAME", "STATE", "SIZE_GB")
 	for _, c := range resp.Clusters {
 		fmt.Printf("%-40s %-15s %d\n", path.Base(c.Name), c.State, c.SizeGb)
 	}
@@ -677,7 +677,7 @@ func runRedisBCList(cmd *cobra.Command, args []string) error {
 	if flagRedisBCFormat != "" {
 		return emitFormatted(resp.BackupCollections, flagRedisBCFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "CLUSTER")
+	printTableHeading(len(resp.BackupCollections), "%-40s %s\n", "NAME", "CLUSTER")
 	for _, bc := range resp.BackupCollections {
 		fmt.Printf("%-40s %s\n", path.Base(bc.Name), bc.Cluster)
 	}
@@ -735,7 +735,7 @@ func runRedisBackupsList(cmd *cobra.Command, args []string) error {
 	if flagRedisBCFormat != "" {
 		return emitFormatted(resp.Backups, flagRedisBCFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "STATE", "CREATE_TIME")
+	printTableHeading(len(resp.Backups), "%-40s %-15s %s\n", "NAME", "STATE", "CREATE_TIME")
 	for _, b := range resp.Backups {
 		fmt.Printf("%-40s %-15s %s\n", path.Base(b.Name), b.State, b.CreateTime)
 	}
@@ -863,7 +863,7 @@ func runRedisOpList(cmd *cobra.Command, args []string) error {
 	if flagRedisOpFormat != "" {
 		return emitFormatted(resp.Operations, flagRedisOpFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -928,7 +928,7 @@ func runRedisRegionsList(cmd *cobra.Command, args []string) error {
 	if flagRedisRZFormat != "" {
 		return emitFormatted(resp.Locations, flagRedisRZFormat)
 	}
-	fmt.Printf("%-20s %s\n", "REGION", "DISPLAY_NAME")
+	printTableHeading(len(resp.Locations), "%-20s %s\n", "REGION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -991,7 +991,7 @@ func runRedisZonesList(cmd *cobra.Command, args []string) error {
 	if flagRedisRZFormat != "" {
 		return emitFormatted(zones, flagRedisRZFormat)
 	}
-	fmt.Printf("%-30s %s\n", "ZONE", "REGION")
+	printTableHeading(len(zones), "%-30s %s\n", "ZONE", "REGION")
 	for _, z := range zones {
 		fmt.Printf("%-30s %s\n", z.Zone, z.Region)
 	}

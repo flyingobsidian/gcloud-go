@@ -207,7 +207,7 @@ func runMKClusterList(cmd *cobra.Command, args []string) error {
 	if flagMKFormat != "" {
 		return emitFormatted(resp.Clusters, flagMKFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Clusters), "%-40s %s\n", "NAME", "STATE")
 	for _, c := range resp.Clusters {
 		fmt.Printf("%-40s %s\n", path.Base(c.Name), c.State)
 	}
@@ -388,7 +388,7 @@ func runMKAclList(cmd *cobra.Command, args []string) error {
 	if flagMKFormat != "" {
 		return emitFormatted(resp.Acls, flagMKFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "RESOURCE_TYPE")
+	printTableHeading(len(resp.Acls), "%-40s %s\n", "NAME", "RESOURCE_TYPE")
 	for _, a := range resp.Acls {
 		fmt.Printf("%-40s %s\n", path.Base(a.Name), a.ResourceType)
 	}
@@ -589,7 +589,7 @@ func runMKTopicList(cmd *cobra.Command, args []string) error {
 	if flagMKFormat != "" {
 		return emitFormatted(resp.Topics, flagMKFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "PARTITION_COUNT")
+	printTableHeading(len(resp.Topics), "%-40s %s\n", "NAME", "PARTITION_COUNT")
 	for _, t := range resp.Topics {
 		fmt.Printf("%-40s %d\n", path.Base(t.Name), t.PartitionCount)
 	}
@@ -720,7 +720,7 @@ func runMKCGList(cmd *cobra.Command, args []string) error {
 	if flagMKFormat != "" {
 		return emitFormatted(resp.ConsumerGroups, flagMKFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.ConsumerGroups), "%-40s\n", "NAME")
 	for _, g := range resp.ConsumerGroups {
 		fmt.Println(path.Base(g.Name))
 	}
@@ -876,7 +876,7 @@ func runMKCCList(cmd *cobra.Command, args []string) error {
 	if flagMKFormat != "" {
 		return emitFormatted(resp.ConnectClusters, flagMKFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.ConnectClusters), "%-40s %s\n", "NAME", "STATE")
 	for _, c := range resp.ConnectClusters {
 		fmt.Printf("%-40s %s\n", path.Base(c.Name), c.State)
 	}
@@ -1052,7 +1052,7 @@ func runMKConnList(cmd *cobra.Command, args []string) error {
 	if flagMKFormat != "" {
 		return emitFormatted(resp.Connectors, flagMKFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.Connectors), "%-40s\n", "NAME")
 	for _, c := range resp.Connectors {
 		fmt.Println(path.Base(c.Name))
 	}
@@ -1185,7 +1185,7 @@ func runMKOpList(cmd *cobra.Command, args []string) error {
 	if flagMKFormat != "" {
 		return emitFormatted(resp.Operations, flagMKFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}

@@ -138,7 +138,7 @@ func runWBExecList(cmd *cobra.Command, args []string) error {
 	if flagWBExecFormat != "" {
 		return emitFormatted(resp.NotebookExecutionJobs, flagWBExecFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(resp.NotebookExecutionJobs), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, e := range resp.NotebookExecutionJobs {
 		fmt.Printf("%-40s %s\n", path.Base(e.Name), e.DisplayName)
 	}
@@ -294,7 +294,7 @@ func runWBSchedList(cmd *cobra.Command, args []string) error {
 	if flagWBSchedFormat != "" {
 		return emitFormatted(resp.Schedules, flagWBSchedFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "STATE", "DISPLAY_NAME")
+	printTableHeading(len(resp.Schedules), "%-40s %-15s %s\n", "NAME", "STATE", "DISPLAY_NAME")
 	for _, s := range resp.Schedules {
 		fmt.Printf("%-40s %-15s %s\n", path.Base(s.Name), s.State, s.DisplayName)
 	}

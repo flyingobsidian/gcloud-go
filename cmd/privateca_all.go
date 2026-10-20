@@ -70,7 +70,7 @@ func runPCALocList(cmd *cobra.Command, args []string) error {
 	if flagPCAFormat != "" {
 		return emitFormatted(resp.Locations, flagPCAFormat)
 	}
-	fmt.Printf("%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeading(len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -189,7 +189,7 @@ func runPCAOpList(cmd *cobra.Command, args []string) error {
 	if flagPCAFormat != "" {
 		return emitFormatted(resp.Operations, flagPCAFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -356,7 +356,7 @@ func runPCAPoolList(cmd *cobra.Command, args []string) error {
 	if flagPCAFormat != "" {
 		return emitFormatted(resp.CaPools, flagPCAFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "TIER")
+	printTableHeading(len(resp.CaPools), "%-40s %s\n", "NAME", "TIER")
 	for _, p := range resp.CaPools {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.Tier)
 	}
@@ -627,7 +627,7 @@ func runPCACertList(cmd *cobra.Command, args []string) error {
 	if flagPCAFormat != "" {
 		return emitFormatted(resp.Certificates, flagPCAFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "SUBJECT")
+	printTableHeading(len(resp.Certificates), "%-40s %s\n", "NAME", "SUBJECT")
 	for _, c := range resp.Certificates {
 		sub := ""
 		if c.CertificateDescription != nil && c.CertificateDescription.SubjectDescription != nil && c.CertificateDescription.SubjectDescription.Subject != nil {

@@ -199,7 +199,7 @@ func runLogOperationList(cmd *cobra.Command, args []string) error {
 	if flagLogFormat != "" {
 		return emitFormatted(all, flagLogFormat)
 	}
-	fmt.Printf("%-60s %s\n", "NAME", "DONE")
+	printTableHeading(len(all), "%-60s %s\n", "NAME", "DONE")
 	for _, o := range all {
 		fmt.Printf("%-60s %v\n", loggingBasename(o.Name), o.Done)
 	}

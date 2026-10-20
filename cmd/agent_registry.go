@@ -363,7 +363,7 @@ func runARAgentList(cmd *cobra.Command, args []string) error {
 	if flagARFormat != "" {
 		return emitFormatted(all, flagARFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, a := range all {
 		fmt.Printf("%-40s %s\n", path.Base(a.Name), a.DisplayName)
 	}
@@ -518,7 +518,7 @@ func runARBindingList(cmd *cobra.Command, args []string) error {
 	if flagARFormat != "" {
 		return emitFormatted(all, flagARFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, b := range all {
 		fmt.Printf("%-40s %s\n", path.Base(b.Name), b.DisplayName)
 	}
@@ -608,7 +608,7 @@ func runAREndpointList(cmd *cobra.Command, args []string) error {
 	if flagARFormat != "" {
 		return emitFormatted(all, flagARFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(all), "%-40s\n", "NAME")
 	for _, e := range all {
 		fmt.Printf("%-40s\n", path.Base(e.Name))
 	}
@@ -668,7 +668,7 @@ func runARMcpList(cmd *cobra.Command, args []string) error {
 	if flagARFormat != "" {
 		return emitFormatted(all, flagARFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, m := range all {
 		fmt.Printf("%-40s %s\n", path.Base(m.Name), m.DisplayName)
 	}
@@ -782,7 +782,7 @@ func runAROpList(cmd *cobra.Command, args []string) error {
 	if flagARFormat != "" {
 		return emitFormatted(all, flagARFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range all {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -915,7 +915,7 @@ func runARSvcList(cmd *cobra.Command, args []string) error {
 	if flagARFormat != "" {
 		return emitFormatted(all, flagARFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, s := range all {
 		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.DisplayName)
 	}

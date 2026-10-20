@@ -70,7 +70,7 @@ func runIAMListGrantableRoles(cmd *cobra.Command, args []string) error {
 	if flagIAMListRolesFmt != "" {
 		return emitFormatted(all, flagIAMListRolesFmt)
 	}
-	fmt.Printf("%-50s %s\n", "NAME", "TITLE")
+	printTableHeading(len(all), "%-50s %s\n", "NAME", "TITLE")
 	for _, r := range all {
 		fmt.Printf("%-50s %s\n", r.Name, r.Title)
 	}
@@ -103,7 +103,7 @@ func runIAMListTestablePermissions(cmd *cobra.Command, args []string) error {
 	if flagIAMListPermsFmt != "" {
 		return emitFormatted(all, flagIAMListPermsFmt)
 	}
-	fmt.Printf("%-70s %s\n", "NAME", "STAGE")
+	printTableHeading(len(all), "%-70s %s\n", "NAME", "STAGE")
 	for _, p := range all {
 		fmt.Printf("%-70s %s\n", p.Name, p.Stage)
 	}

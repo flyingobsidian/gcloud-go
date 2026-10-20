@@ -586,7 +586,7 @@ func runAppDomMapList(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(all, flagAppFormat)
 	}
-	fmt.Printf("%-40s %s\n", "ID", "SSL_CERTIFICATE_ID")
+	printTableHeading(len(all), "%-40s %s\n", "ID", "SSL_CERTIFICATE_ID")
 	for _, dm := range all {
 		cert := ""
 		if dm.SslSettings != nil {
@@ -757,7 +757,7 @@ func runAppFwList(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(all, flagAppFormat)
 	}
-	fmt.Printf("%-12s %-8s %-32s %s\n", "PRIORITY", "ACTION", "SOURCE_RANGE", "DESCRIPTION")
+	printTableHeading(len(all), "%-12s %-8s %-32s %s\n", "PRIORITY", "ACTION", "SOURCE_RANGE", "DESCRIPTION")
 	for _, r := range all {
 		fmt.Printf("%-12d %-8s %-32s %s\n", r.Priority, r.Action, r.SourceRange, r.Description)
 	}
@@ -838,7 +838,7 @@ func runAppFwTestIP(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(all, flagAppFormat)
 	}
-	fmt.Printf("%-12s %-8s %-32s %s\n", "PRIORITY", "ACTION", "SOURCE_RANGE", "DESCRIPTION")
+	printTableHeading(len(all), "%-12s %-8s %-32s %s\n", "PRIORITY", "ACTION", "SOURCE_RANGE", "DESCRIPTION")
 	for _, r := range all {
 		fmt.Printf("%-12d %-8s %-32s %s\n", r.Priority, r.Action, r.SourceRange, r.Description)
 	}
@@ -955,7 +955,7 @@ func runAppInstList(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(rows, flagAppFormat)
 	}
-	fmt.Printf("%-20s %-20s %-40s %s\n", "SERVICE", "VERSION", "ID", "VM_STATUS")
+	printTableHeading(len(rows), "%-20s %-20s %-40s %s\n", "SERVICE", "VERSION", "ID", "VM_STATUS")
 	for _, r := range rows {
 		fmt.Printf("%-20s %-20s %-40s %s\n", r.Service, r.Version, r.Instance.Id, r.Instance.VmStatus)
 	}
@@ -1158,7 +1158,7 @@ func runAppOpList(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(all, flagAppFormat)
 	}
-	fmt.Printf("%-50s %-8s\n", "ID", "DONE")
+	printTableHeading(len(all), "%-50s %-8s\n", "ID", "DONE")
 	for _, op := range all {
 		fmt.Printf("%-50s %v\n", path.Base(op.Name), op.Done)
 	}
@@ -1226,7 +1226,7 @@ func runAppRegionsList(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(all, flagAppFormat)
 	}
-	fmt.Printf("%-24s %-16s %s\n", "REGION", "STANDARD", "FLEXIBLE")
+	printTableHeading(len(all), "%-24s %-16s %s\n", "REGION", "STANDARD", "FLEXIBLE")
 	for _, l := range all {
 		std, flex := "-", "-"
 		var meta struct {
@@ -1276,7 +1276,7 @@ func runAppRuntimesList(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(resp.Runtimes, flagAppFormat)
 	}
-	fmt.Printf("%-24s %-16s %-16s %s\n", "NAME", "ENVIRONMENT", "STAGE", "DISPLAY_NAME")
+	printTableHeading(len(resp.Runtimes), "%-24s %-16s %-16s %s\n", "NAME", "ENVIRONMENT", "STAGE", "DISPLAY_NAME")
 	for _, r := range resp.Runtimes {
 		fmt.Printf("%-24s %-16s %-16s %s\n", r.Name, r.Environment, r.Stage, r.DisplayName)
 	}
@@ -1443,7 +1443,7 @@ func runAppSvcList(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(all, flagAppFormat)
 	}
-	fmt.Printf("%-24s %-16s %s\n", "SERVICE", "NUM_VERSIONS", "TRAFFIC")
+	printTableHeading(len(all), "%-24s %-16s %s\n", "SERVICE", "NUM_VERSIONS", "TRAFFIC")
 	for _, s := range all {
 		versions := 0
 		if vers, err := appListVersions(ctx, svc, app, s.Id); err == nil {
@@ -1676,7 +1676,7 @@ func runAppSSLList(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(all, flagAppFormat)
 	}
-	fmt.Printf("%-16s %-32s %s\n", "ID", "DISPLAY_NAME", "DOMAINS")
+	printTableHeading(len(all), "%-16s %-32s %s\n", "ID", "DISPLAY_NAME", "DOMAINS")
 	for _, c := range all {
 		fmt.Printf("%-16s %-32s %s\n", c.Id, c.DisplayName, strings.Join(c.DomainNames, ","))
 	}
@@ -1846,7 +1846,7 @@ func runAppVerList(cmd *cobra.Command, args []string) error {
 	if flagAppFormat != "" {
 		return emitFormatted(rows, flagAppFormat)
 	}
-	fmt.Printf("%-20s %-20s %-8s %-24s %s\n", "SERVICE", "VERSION.ID", "TRAFFIC", "LAST_DEPLOYED", "SERVING_STATUS")
+	printTableHeading(len(rows), "%-20s %-20s %-8s %-24s %s\n", "SERVICE", "VERSION.ID", "TRAFFIC", "LAST_DEPLOYED", "SERVING_STATUS")
 	for _, r := range rows {
 		fmt.Printf("%-20s %-20s %-8.2f %-24s %s\n", r.Service, r.Version.Id, r.TrafficSplit, r.Version.CreateTime, r.Version.ServingStatus)
 	}

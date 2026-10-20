@@ -303,7 +303,7 @@ func runNSDNSList(_ *cobra.Command, _ []string) error {
 	if flagNSFormat != "" {
 		return emitFormatted(all, flagNSFormat)
 	}
-	fmt.Printf("%-50s\n", "NAME")
+	printTableHeading(len(all), "%-50s\n", "NAME")
 	for _, d := range all {
 		fmt.Printf("%-50s\n", nsBasename(d.Name))
 	}

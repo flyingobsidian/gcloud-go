@@ -269,7 +269,7 @@ func runSDLocList(cmd *cobra.Command, args []string) error {
 	if flagSDFormat != "" {
 		return emitFormatted(resp.Locations, flagSDFormat)
 	}
-	fmt.Printf("%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeading(len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -355,7 +355,7 @@ func runSDNSList(cmd *cobra.Command, args []string) error {
 	if flagSDFormat != "" {
 		return emitFormatted(resp.Namespaces, flagSDFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.Namespaces), "%-40s\n", "NAME")
 	for _, n := range resp.Namespaces {
 		fmt.Println(path.Base(n.Name))
 	}
@@ -566,7 +566,7 @@ func runSDSvcList(cmd *cobra.Command, args []string) error {
 	if flagSDFormat != "" {
 		return emitFormatted(resp.Services, flagSDFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.Services), "%-40s\n", "NAME")
 	for _, s := range resp.Services {
 		fmt.Println(path.Base(s.Name))
 	}
@@ -699,7 +699,7 @@ func runSDEPList(cmd *cobra.Command, args []string) error {
 	if flagSDFormat != "" {
 		return emitFormatted(resp.Endpoints, flagSDFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "ADDRESS")
+	printTableHeading(len(resp.Endpoints), "%-40s %s\n", "NAME", "ADDRESS")
 	for _, e := range resp.Endpoints {
 		fmt.Printf("%-40s %s\n", path.Base(e.Name), e.Address)
 	}

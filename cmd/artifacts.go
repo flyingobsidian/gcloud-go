@@ -412,7 +412,7 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 		return printJSON(allImages)
 	}
 
-	fmt.Printf("%-60s %-20s %s\n", "IMAGE", "DIGEST", "TAGS")
+	printTableHeading(len(allImages), "%-60s %-20s %s\n", "IMAGE", "DIGEST", "TAGS")
 	for _, img := range allImages {
 		tags := ""
 		if flagArtImgListIncludeTags && len(img.Tags) > 0 {

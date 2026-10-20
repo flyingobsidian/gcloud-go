@@ -482,7 +482,7 @@ func runMSFedList(cmd *cobra.Command, args []string) error {
 	if flagMSFormat != "" {
 		return emitFormatted(resp.Federations, flagMSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Federations), "%-40s %s\n", "NAME", "STATE")
 	for _, f := range resp.Federations {
 		fmt.Printf("%-40s %s\n", path.Base(f.Name), f.State)
 	}
@@ -652,7 +652,7 @@ func runMSLocList(cmd *cobra.Command, args []string) error {
 	if flagMSFormat != "" {
 		return emitFormatted(resp.Locations, flagMSFormat)
 	}
-	fmt.Printf("%-30s %s\n", "LOCATION_ID", "NAME")
+	printTableHeading(len(resp.Locations), "%-30s %s\n", "LOCATION_ID", "NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-30s %s\n", l.LocationId, l.Name)
 	}
@@ -734,7 +734,7 @@ func runMSOpList(cmd *cobra.Command, args []string) error {
 	if flagMSFormat != "" {
 		return emitFormatted(resp.Operations, flagMSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -842,7 +842,7 @@ func runMSSvcList(cmd *cobra.Command, args []string) error {
 	if flagMSFormat != "" {
 		return emitFormatted(resp.Services, flagMSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Services), "%-40s %s\n", "NAME", "STATE")
 	for _, s := range resp.Services {
 		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.State)
 	}
@@ -1194,7 +1194,7 @@ func runMSBackupList(cmd *cobra.Command, args []string) error {
 	if flagMSFormat != "" {
 		return emitFormatted(resp.Backups, flagMSFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Backups), "%-40s %s\n", "NAME", "STATE")
 	for _, b := range resp.Backups {
 		fmt.Printf("%-40s %s\n", path.Base(b.Name), b.State)
 	}

@@ -306,7 +306,7 @@ func runLogBucketList(cmd *cobra.Command, args []string) error {
 	if flagLogFormat != "" {
 		return emitFormatted(all, flagLogFormat)
 	}
-	fmt.Printf("%-40s %-10s %s\n", "NAME", "RETENTION", "STATE")
+	printTableHeading(len(all), "%-40s %-10s %s\n", "NAME", "RETENTION", "STATE")
 	for _, b := range all {
 		fmt.Printf("%-40s %-10s %s\n",
 			loggingBasename(b.Name),

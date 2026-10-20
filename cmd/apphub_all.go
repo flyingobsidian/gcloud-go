@@ -117,7 +117,7 @@ func runAHLocList(cmd *cobra.Command, args []string) error {
 	if flagAHFormat != "" {
 		return emitFormatted(resp.Locations, flagAHFormat)
 	}
-	fmt.Printf("%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeading(len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -230,7 +230,7 @@ func runAHOpList(cmd *cobra.Command, args []string) error {
 	if flagAHFormat != "" {
 		return emitFormatted(resp.Operations, flagAHFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -445,7 +445,7 @@ func runAHAppList(cmd *cobra.Command, args []string) error {
 	if flagAHFormat != "" {
 		return emitFormatted(resp.Applications, flagAHFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(resp.Applications), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, a := range resp.Applications {
 		fmt.Printf("%-40s %s\n", path.Base(a.Name), a.DisplayName)
 	}
@@ -615,7 +615,7 @@ func runAHAppSvcList(cmd *cobra.Command, args []string) error {
 	if flagAHFormat != "" {
 		return emitFormatted(resp.Services, flagAHFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.Services), "%-40s\n", "NAME")
 	for _, s := range resp.Services {
 		fmt.Println(path.Base(s.Name))
 	}
@@ -777,7 +777,7 @@ func runAHAppWLList(cmd *cobra.Command, args []string) error {
 	if flagAHFormat != "" {
 		return emitFormatted(resp.Workloads, flagAHFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.Workloads), "%-40s\n", "NAME")
 	for _, w := range resp.Workloads {
 		fmt.Println(path.Base(w.Name))
 	}
@@ -883,7 +883,7 @@ func runAHDSList(cmd *cobra.Command, args []string) error {
 	if flagAHFormat != "" {
 		return emitFormatted(resp.DiscoveredServices, flagAHFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.DiscoveredServices), "%-40s\n", "NAME")
 	for _, ds := range resp.DiscoveredServices {
 		fmt.Println(path.Base(ds.Name))
 	}
@@ -980,7 +980,7 @@ func runAHDWList(cmd *cobra.Command, args []string) error {
 	if flagAHFormat != "" {
 		return emitFormatted(resp.DiscoveredWorkloads, flagAHFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.DiscoveredWorkloads), "%-40s\n", "NAME")
 	for _, dw := range resp.DiscoveredWorkloads {
 		fmt.Println(path.Base(dw.Name))
 	}
@@ -1123,7 +1123,7 @@ func runAHSPList(cmd *cobra.Command, args []string) error {
 	if flagAHFormat != "" {
 		return emitFormatted(resp.ServiceProjectAttachments, flagAHFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "SERVICE_PROJECT")
+	printTableHeading(len(resp.ServiceProjectAttachments), "%-40s %s\n", "NAME", "SERVICE_PROJECT")
 	for _, sp := range resp.ServiceProjectAttachments {
 		fmt.Printf("%-40s %s\n", path.Base(sp.Name), sp.ServiceProject)
 	}

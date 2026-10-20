@@ -353,7 +353,7 @@ func runDPMDepList(cmd *cobra.Command, args []string) error {
 	if flagDPMFormat != "" {
 		return emitFormatted(all, flagDPMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DESCRIPTION")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DESCRIPTION")
 	for _, d := range all {
 		fmt.Printf("%-40s %s\n", d.Name, d.Description)
 	}
@@ -504,7 +504,7 @@ func runDPMManifestList(cmd *cobra.Command, args []string) error {
 	if flagDPMFormat != "" {
 		return emitFormatted(all, flagDPMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "SELF_LINK")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "SELF_LINK")
 	for _, m := range all {
 		fmt.Printf("%-40s %s\n", m.Name, m.SelfLink)
 	}
@@ -563,7 +563,7 @@ func runDPMOpList(cmd *cobra.Command, args []string) error {
 	if flagDPMFormat != "" {
 		return emitFormatted(all, flagDPMFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "TYPE", "STATUS")
+	printTableHeading(len(all), "%-40s %-15s %s\n", "NAME", "TYPE", "STATUS")
 	for _, o := range all {
 		fmt.Printf("%-40s %-15s %s\n", o.Name, o.OperationType, o.Status)
 	}
@@ -643,7 +643,7 @@ func runDPMResourceList(cmd *cobra.Command, args []string) error {
 	if flagDPMFormat != "" {
 		return emitFormatted(all, flagDPMFormat)
 	}
-	fmt.Printf("%-40s %-30s %s\n", "NAME", "TYPE", "STATE")
+	printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "TYPE", "STATE")
 	for _, r := range all {
 		state := ""
 		if r.Update != nil {
@@ -689,7 +689,7 @@ func runDPMTypeList(cmd *cobra.Command, args []string) error {
 	if flagDPMFormat != "" {
 		return emitFormatted(all, flagDPMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "SELF_LINK")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "SELF_LINK")
 	for _, t := range all {
 		fmt.Printf("%-40s %s\n", t.Name, t.SelfLink)
 	}
@@ -729,7 +729,7 @@ func runDPMTypeProviders(cmd *cobra.Command, args []string) error {
 	if flagDPMFormat != "" {
 		return emitFormatted(all, flagDPMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DESCRIPTION")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DESCRIPTION")
 	for _, tp := range all {
 		fmt.Printf("%-40s %s\n", tp.Name, tp.Description)
 	}

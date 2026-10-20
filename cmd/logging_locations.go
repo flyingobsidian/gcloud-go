@@ -151,7 +151,7 @@ func runLogLocationList(cmd *cobra.Command, args []string) error {
 	if flagLogFormat != "" {
 		return emitFormatted(all, flagLogFormat)
 	}
-	fmt.Printf("%-20s %s\n", "LOCATION_ID", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-20s %s\n", "LOCATION_ID", "DISPLAY_NAME")
 	for _, l := range all {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -335,7 +335,7 @@ func runLogRDList(cmd *cobra.Command, args []string) error {
 	if flagLogFormat != "" {
 		return emitFormatted(all, flagLogFormat)
 	}
-	fmt.Printf("%-30s %s\n", "TYPE", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-30s %s\n", "TYPE", "DISPLAY_NAME")
 	for _, r := range all {
 		fmt.Printf("%-30s %s\n", r.Type, r.DisplayName)
 	}

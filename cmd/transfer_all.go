@@ -394,7 +394,7 @@ func runXferPoolList(cmd *cobra.Command, args []string) error {
 	if flagXferFormat != "" {
 		return emitFormatted(all, flagXferFormat)
 	}
-	fmt.Printf("%-40s %-16s %s\n", "NAME", "STATE", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %-16s %s\n", "NAME", "STATE", "DISPLAY_NAME")
 	for _, p := range all {
 		fmt.Printf("%-40s %-16s %s\n", path.Base(p.Name), p.State, p.DisplayName)
 	}
@@ -779,7 +779,7 @@ func runXferJobList(cmd *cobra.Command, args []string) error {
 	if flagXferFormat != "" {
 		return emitFormatted(all, flagXferFormat)
 	}
-	fmt.Printf("%-40s %-10s %s\n", "NAME", "STATUS", "DESCRIPTION")
+	printTableHeading(len(all), "%-40s %-10s %s\n", "NAME", "STATUS", "DESCRIPTION")
 	for _, j := range all {
 		fmt.Printf("%-40s %-10s %s\n", strings.TrimPrefix(j.Name, "transferJobs/"), j.Status, j.Description)
 	}
@@ -980,7 +980,7 @@ func runXferOpList(cmd *cobra.Command, args []string) error {
 	if flagXferFormat != "" {
 		return emitFormatted(all, flagXferFormat)
 	}
-	fmt.Printf("%-60s %-6s\n", "NAME", "DONE")
+	printTableHeading(len(all), "%-60s %-6s\n", "NAME", "DONE")
 	for _, op := range all {
 		fmt.Printf("%-60s %-6t\n", op.Name, op.Done)
 	}

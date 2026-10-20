@@ -247,7 +247,7 @@ func runLogSavedQueryList(cmd *cobra.Command, args []string) error {
 	if flagLogFormat != "" {
 		return emitFormatted(all, flagLogFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "VISIBILITY", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %-15s %s\n", "NAME", "VISIBILITY", "DISPLAY_NAME")
 	for _, q := range all {
 		fmt.Printf("%-40s %-15s %s\n", loggingBasename(q.Name), q.Visibility, q.DisplayName)
 	}
@@ -610,7 +610,7 @@ func runLogScopeList(cmd *cobra.Command, args []string) error {
 	if flagLogFormat != "" {
 		return emitFormatted(all, flagLogFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DESCRIPTION")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DESCRIPTION")
 	for _, s := range all {
 		fmt.Printf("%-40s %s\n", loggingBasename(s.Name), s.Description)
 	}

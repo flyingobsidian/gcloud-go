@@ -237,7 +237,7 @@ func runObTSList(cmd *cobra.Command, args []string) error {
 	if flagObFormat != "" {
 		return emitFormatted(resp.TraceScopes, flagObFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.TraceScopes), "%-40s\n", "NAME")
 	for _, ts := range resp.TraceScopes {
 		fmt.Println(path.Base(ts.Name))
 	}

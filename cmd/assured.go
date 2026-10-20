@@ -257,7 +257,7 @@ func runAssuredWorkloadList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 	return printListResults(all, flagAssuredListFormat, func() {
-		fmt.Printf("%-60s %-30s %s\n", "NAME", "DISPLAY_NAME", "COMPLIANCE_REGIME")
+		printTableHeading(len(all), "%-60s %-30s %s\n", "NAME", "DISPLAY_NAME", "COMPLIANCE_REGIME")
 		for _, w := range all {
 			fmt.Printf("%-60s %-30s %s\n", w.Name, w.DisplayName, w.ComplianceRegime)
 		}

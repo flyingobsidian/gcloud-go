@@ -164,7 +164,7 @@ func runEvCCList(cmd *cobra.Command, args []string) error {
 	if flagEvCCFormat != "" {
 		return emitFormatted(all, flagEvCCFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "CHANNEL")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "CHANNEL")
 	for _, c := range all {
 		fmt.Printf("%-40s %s\n", path.Base(c.Name), c.Channel)
 	}

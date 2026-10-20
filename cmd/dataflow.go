@@ -209,7 +209,7 @@ func runDataflowJobsList(cmd *cobra.Command, args []string) error {
 		return printJSON(allJobs)
 	}
 
-	fmt.Printf("%-40s %-20s %-20s %-10s %-15s %-25s\n", "JOB_ID", "NAME", "TYPE", "STATE", "REGION", "CREATION_TIME")
+	printTableHeading(len(allJobs), "%-40s %-20s %-20s %-10s %-15s %-25s\n", "JOB_ID", "NAME", "TYPE", "STATE", "REGION", "CREATION_TIME")
 	for _, j := range allJobs {
 		fmt.Printf("%-40s %-20s %-20s %-10s %-15s %-25s\n", j.Id, j.Name, j.Type, j.CurrentState, j.Location, j.CreateTime)
 	}

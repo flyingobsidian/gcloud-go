@@ -378,7 +378,7 @@ func runForwardingRulesList(cmd *cobra.Command, args []string) error {
 		return printJSON(allRules)
 	}
 
-	fmt.Printf("%-30s %-20s %-15s %-10s %-30s\n", "NAME", "REGION", "IP_ADDRESS", "IP_PROTOCOL", "TARGET")
+	printTableHeading(len(allRules), "%-30s %-20s %-15s %-10s %-30s\n", "NAME", "REGION", "IP_ADDRESS", "IP_PROTOCOL", "TARGET")
 	for _, fr := range allRules {
 		fmt.Printf("%-30s %-20s %-15s %-10s %-30s\n", fr.Name, fr.Region, fr.IPAddress, fr.IPProtocol, fr.Target)
 	}
@@ -517,7 +517,7 @@ func runAddressesList(cmd *cobra.Command, args []string) error {
 		return printJSON(allAddrs)
 	}
 
-	fmt.Printf("%-30s %-20s %-18s %-10s %-10s\n", "NAME", "REGION", "ADDRESS", "STATUS", "TYPE")
+	printTableHeading(len(allAddrs), "%-30s %-20s %-18s %-10s %-10s\n", "NAME", "REGION", "ADDRESS", "STATUS", "TYPE")
 	for _, a := range allAddrs {
 		fmt.Printf("%-30s %-20s %-18s %-10s %-10s\n", a.Name, a.Region, a.Address, a.Status, a.AddressType)
 	}

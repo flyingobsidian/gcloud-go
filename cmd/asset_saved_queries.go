@@ -220,7 +220,7 @@ func runAssetSavedQueryList(cmd *cobra.Command, args []string) error {
 	}
 
 	return printListResults(all, flagAssetSQListFormat, func() {
-		fmt.Printf("%-60s %s\n", "NAME", "DESCRIPTION")
+		printTableHeading(len(all), "%-60s %s\n", "NAME", "DESCRIPTION")
 		for _, q := range all {
 			fmt.Printf("%-60s %s\n", q.Name, q.Description)
 		}

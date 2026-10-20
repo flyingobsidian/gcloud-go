@@ -396,7 +396,7 @@ func runAIAPList(cmd *cobra.Command, args []string) error {
 	if flagAIFormat != "" {
 		return emitFormatted(all, flagAIFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, p := range all {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.State)
 	}
@@ -663,7 +663,7 @@ func runAIASList(cmd *cobra.Command, args []string) error {
 	if flagAIFormat != "" {
 		return emitFormatted(all, flagAIFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(all), "%-40s\n", "NAME")
 	for _, s := range all {
 		fmt.Printf("%-40s\n", path.Base(s.Name))
 	}

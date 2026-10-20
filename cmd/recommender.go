@@ -250,7 +250,7 @@ func runRecInsList(cmd *cobra.Command, args []string) error {
 	if flagRecFormat != "" {
 		return emitFormatted(resp.Insights, flagRecFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "CATEGORY")
+	printTableHeading(len(resp.Insights), "%-40s %s\n", "NAME", "CATEGORY")
 	for _, i := range resp.Insights {
 		fmt.Printf("%-40s %s\n", path.Base(i.Name), i.Category)
 	}
@@ -345,7 +345,7 @@ func runRecRecList(cmd *cobra.Command, args []string) error {
 	if flagRecFormat != "" {
 		return emitFormatted(resp.Recommendations, flagRecFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "PRIORITY")
+	printTableHeading(len(resp.Recommendations), "%-40s %s\n", "NAME", "PRIORITY")
 	for _, r := range resp.Recommendations {
 		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.Priority)
 	}

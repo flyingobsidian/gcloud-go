@@ -234,7 +234,7 @@ func runUnmanagedList(cmd *cobra.Command, args []string) error {
 		return printJSON(groups)
 	}
 
-	fmt.Printf("%-30s %-15s %-10s %-30s\n", "NAME", "ZONE", "SIZE", "DESCRIPTION")
+	printTableHeading(len(groups), "%-30s %-15s %-10s %-30s\n", "NAME", "ZONE", "SIZE", "DESCRIPTION")
 	for _, g := range groups {
 		fmt.Printf("%-30s %-15s %-10d %-30s\n", g.Name, zone, g.Size, g.Description)
 	}
@@ -324,7 +324,7 @@ func runUnmanagedGetNamedPorts(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("%-20s %s\n", "NAME", "PORT")
+	printTableHeading(len(ig.NamedPorts), "%-20s %s\n", "NAME", "PORT")
 	for _, np := range ig.NamedPorts {
 		fmt.Printf("%-20s %d\n", np.Name, np.Port)
 	}

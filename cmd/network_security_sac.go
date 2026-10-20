@@ -182,7 +182,7 @@ func runNSSacAttachmentList(_ *cobra.Command, _ []string) error {
 	if flagNSFormat != "" {
 		return emitFormatted(all, flagNSFormat)
 	}
-	fmt.Printf("%-50s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-50s %s\n", "NAME", "STATE")
 	for _, a := range all {
 		fmt.Printf("%-50s %s\n", nsBasename(a.Name), a.State)
 	}
@@ -313,7 +313,7 @@ func runNSSacRealmList(_ *cobra.Command, _ []string) error {
 	if flagNSFormat != "" {
 		return emitFormatted(all, flagNSFormat)
 	}
-	fmt.Printf("%-50s\n", "NAME")
+	printTableHeading(len(all), "%-50s\n", "NAME")
 	for _, r := range all {
 		fmt.Printf("%-50s\n", nsBasename(r.Name))
 	}

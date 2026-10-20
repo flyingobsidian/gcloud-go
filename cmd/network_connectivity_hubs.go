@@ -168,7 +168,7 @@ func runNCHubListSpokes(cmd *cobra.Command, args []string) error {
 	if flagNCFormat != "" {
 		return emitFormatted(all, flagNCFormat)
 	}
-	fmt.Printf("%-50s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-50s %s\n", "NAME", "STATE")
 	for _, s := range all {
 		fmt.Printf("%-50s %s\n", ncBasename(s.Name), s.State)
 	}

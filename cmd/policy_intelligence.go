@@ -190,7 +190,7 @@ func runPISimOPList(cmd *cobra.Command, args []string) error {
 	if flagPISimOPFormat != "" {
 		return emitFormatted(previews, flagPISimOPFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(previews), "%-40s %s\n", "NAME", "STATE")
 	for _, p := range previews {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.State)
 	}
@@ -297,7 +297,7 @@ func runPIQueryActivity(cmd *cobra.Command, args []string) error {
 	if flagPIQAFormat != "" {
 		return emitFormatted(all, flagPIQAFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "ACTIVITY_TYPE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "ACTIVITY_TYPE")
 	for _, a := range all {
 		fmt.Printf("%-40s %s\n", path.Base(a.FullResourceName), a.ActivityType)
 	}

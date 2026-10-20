@@ -202,7 +202,7 @@ func runTasksLocList(cmd *cobra.Command, args []string) error {
 	if flagTasksFormat != "" {
 		return emitFormatted(resp.Locations, flagTasksFormat)
 	}
-	fmt.Printf("%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeading(len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -335,7 +335,7 @@ func runTQList(cmd *cobra.Command, args []string) error {
 	if flagTasksFormat != "" {
 		return emitFormatted(resp.Queues, flagTasksFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Queues), "%-40s %s\n", "NAME", "STATE")
 	for _, q := range resp.Queues {
 		fmt.Printf("%-40s %s\n", path.Base(q.Name), q.State)
 	}

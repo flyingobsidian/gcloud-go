@@ -92,7 +92,7 @@ func runBTOpList(cmd *cobra.Command, args []string) error {
 	if flagBTOpFormat != "" {
 		return emitFormatted(all, flagBTOpFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range all {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}

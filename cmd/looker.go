@@ -235,7 +235,7 @@ func runLKRegionsList(cmd *cobra.Command, args []string) error {
 	if flagLKFormat != "" {
 		return emitFormatted(resp.Locations, flagLKFormat)
 	}
-	fmt.Printf("%-20s %s\n", "REGION", "DISPLAY_NAME")
+	printTableHeading(len(resp.Locations), "%-20s %s\n", "REGION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -299,7 +299,7 @@ func runLKOpList(cmd *cobra.Command, args []string) error {
 	if flagLKFormat != "" {
 		return emitFormatted(resp.Operations, flagLKFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -385,7 +385,7 @@ func runLKInstList(cmd *cobra.Command, args []string) error {
 	if flagLKFormat != "" {
 		return emitFormatted(resp.Instances, flagLKFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Instances), "%-40s %s\n", "NAME", "STATE")
 	for _, i := range resp.Instances {
 		fmt.Printf("%-40s %s\n", path.Base(i.Name), i.State)
 	}
@@ -578,7 +578,7 @@ func runLKBackupList(cmd *cobra.Command, args []string) error {
 	if flagLKFormat != "" {
 		return emitFormatted(resp.InstanceBackups, flagLKFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.InstanceBackups), "%-40s %s\n", "NAME", "STATE")
 	for _, b := range resp.InstanceBackups {
 		fmt.Printf("%-40s %s\n", path.Base(b.Name), b.State)
 	}

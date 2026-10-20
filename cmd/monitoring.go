@@ -394,7 +394,7 @@ func formatPoliciesList(policies []*monitoring.AlertPolicy, format string) error
 		return enc.Encode(generic)
 	}
 
-	fmt.Printf("%-60s %-10s %s\n", "NAME", "ENABLED", "DISPLAY_NAME")
+	printTableHeading(len(policies), "%-60s %-10s %s\n", "NAME", "ENABLED", "DISPLAY_NAME")
 	for _, p := range policies {
 		fmt.Printf("%-60s %-10t %s\n", p.Name, p.Enabled, p.DisplayName)
 	}
@@ -618,7 +618,7 @@ func formatSnoozesList(snoozes []*monitoring.Snooze, format string) error {
 	}
 
 	// Default columnar table.
-	fmt.Printf("%-60s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeading(len(snoozes), "%-60s %s\n", "NAME", "DISPLAY_NAME")
 	for _, s := range snoozes {
 		fmt.Printf("%-60s %s\n", s.Name, s.DisplayName)
 	}
@@ -1030,7 +1030,7 @@ func runMonitoringChannelsList(cmd *cobra.Command, args []string) error {
 		return printJSON(allChannels)
 	}
 
-	fmt.Printf("%-60s %-15s %-10s %s\n", "NAME", "TYPE", "ENABLED", "DISPLAY_NAME")
+	printTableHeading(len(allChannels), "%-60s %-15s %-10s %s\n", "NAME", "TYPE", "ENABLED", "DISPLAY_NAME")
 	for _, ch := range allChannels {
 		fmt.Printf("%-60s %-15s %-10t %s\n", ch.Name, ch.Type, ch.Enabled, ch.DisplayName)
 	}

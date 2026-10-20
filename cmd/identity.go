@@ -489,7 +489,7 @@ func runIDMembList(cmd *cobra.Command, args []string) error {
 	if flagIDFormat != "" {
 		return emitFormatted(all, flagIDFormat)
 	}
-	fmt.Printf("%-40s %-40s %s\n", "MEMBERSHIP", "MEMBER", "ROLES")
+	printTableHeading(len(all), "%-40s %-40s %s\n", "MEMBERSHIP", "MEMBER", "ROLES")
 	for _, m := range all {
 		var roles []string
 		for _, r := range m.Roles {
@@ -791,7 +791,7 @@ func runIDGroupsSearch(cmd *cobra.Command, args []string) error {
 	if flagIDFormat != "" {
 		return emitFormatted(all, flagIDFormat)
 	}
-	fmt.Printf("%-40s %-40s %s\n", "NAME", "GROUP_KEY", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-40s %-40s %s\n", "NAME", "GROUP_KEY", "DISPLAY_NAME")
 	for _, g := range all {
 		key := ""
 		if g.GroupKey != nil {

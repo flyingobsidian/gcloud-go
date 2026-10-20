@@ -324,7 +324,7 @@ func runDataplexDatascansJobsList(cmd *cobra.Command, args []string) error {
 		return printJSON(allJobs)
 	}
 
-	fmt.Printf("%-40s %-15s %-25s %-25s\n", "JOB_ID", "STATE", "START_TIME", "END_TIME")
+	printTableHeading(len(allJobs), "%-40s %-15s %-25s %-25s\n", "JOB_ID", "STATE", "START_TIME", "END_TIME")
 	for _, j := range allJobs {
 		fmt.Printf("%-40s %-15s %-25s %-25s\n", path.Base(j.Name), j.State, j.StartTime, j.EndTime)
 	}
@@ -424,7 +424,7 @@ func runDataplexDatascansList(cmd *cobra.Command, args []string) error {
 		return printJSON(allScans)
 	}
 
-	fmt.Printf("%-30s %-15s %-25s %-20s\n", "NAME", "STATE", "CREATE_TIME", "TYPE")
+	printTableHeading(len(allScans), "%-30s %-15s %-25s %-20s\n", "NAME", "STATE", "CREATE_TIME", "TYPE")
 	for _, s := range allScans {
 		scanType := ""
 		if s.DataQualitySpec != nil {

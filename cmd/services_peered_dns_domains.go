@@ -130,7 +130,7 @@ func runPeeredDNSList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing peered DNS domains: %w", err)
 	}
 	return printListResults(resp.PeeredDnsDomains, flagPeeredDNSListFormat, func() {
-		fmt.Printf("%-30s %s\n", "NAME", "DNS_SUFFIX")
+		printTableHeading(len(resp.PeeredDnsDomains), "%-30s %s\n", "NAME", "DNS_SUFFIX")
 		for _, d := range resp.PeeredDnsDomains {
 			fmt.Printf("%-30s %s\n", d.Name, d.DnsSuffix)
 		}

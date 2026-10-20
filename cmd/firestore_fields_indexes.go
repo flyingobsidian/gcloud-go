@@ -97,7 +97,7 @@ func runFSFieldsTTLList(cmd *cobra.Command, args []string) error {
 	if flagFSFieldsFormat != "" {
 		return emitFormatted(resp.Fields, flagFSFieldsFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "TTL_STATE")
+	printTableHeading(len(resp.Fields), "%-40s %s\n", "NAME", "TTL_STATE")
 	for _, f := range resp.Fields {
 		state := ""
 		if f.TtlConfig != nil {
@@ -306,7 +306,7 @@ func runFSIdxCompList(cmd *cobra.Command, args []string) error {
 	if flagFSIdxFormat != "" {
 		return emitFormatted(resp.Indexes, flagFSIdxFormat)
 	}
-	fmt.Printf("%-40s %-15s %s\n", "NAME", "STATE", "QUERY_SCOPE")
+	printTableHeading(len(resp.Indexes), "%-40s %-15s %s\n", "NAME", "STATE", "QUERY_SCOPE")
 	for _, i := range resp.Indexes {
 		fmt.Printf("%-40s %-15s %s\n", path.Base(i.Name), i.State, i.QueryScope)
 	}
@@ -347,7 +347,7 @@ func runFSIdxFieldsList(cmd *cobra.Command, args []string) error {
 	if flagFSIdxFormat != "" {
 		return emitFormatted(resp.Fields, flagFSIdxFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.Fields), "%-40s\n", "NAME")
 	for _, f := range resp.Fields {
 		fmt.Println(path.Base(f.Name))
 	}

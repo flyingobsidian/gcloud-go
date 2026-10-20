@@ -266,7 +266,7 @@ func runRedisInstancesList(cmd *cobra.Command, args []string) error {
 		return printJSON(allInstances)
 	}
 
-	fmt.Printf("%-30s %-10s %-5s %-15s %-15s %-20s\n", "INSTANCE_NAME", "TIER", "SIZE", "REGION", "VERSION", "HOST:PORT")
+	printTableHeading(len(allInstances), "%-30s %-10s %-5s %-15s %-15s %-20s\n", "INSTANCE_NAME", "TIER", "SIZE", "REGION", "VERSION", "HOST:PORT")
 	for _, inst := range allInstances {
 		name := path.Base(inst.Name)
 		hostPort := fmt.Sprintf("%s:%d", inst.Host, inst.Port)

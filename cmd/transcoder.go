@@ -192,7 +192,7 @@ func runTCJobList(cmd *cobra.Command, args []string) error {
 	if flagTCJobFormat != "" {
 		return emitFormatted(resp.Jobs, flagTCJobFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Jobs), "%-40s %s\n", "NAME", "STATE")
 	for _, j := range resp.Jobs {
 		fmt.Printf("%-40s %s\n", path.Base(j.Name), j.State)
 	}
@@ -272,7 +272,7 @@ func runTCTplList(cmd *cobra.Command, args []string) error {
 	if flagTCTplFormat != "" {
 		return emitFormatted(resp.JobTemplates, flagTCTplFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.JobTemplates), "%-40s\n", "NAME")
 	for _, t := range resp.JobTemplates {
 		fmt.Println(path.Base(t.Name))
 	}

@@ -302,7 +302,7 @@ func runMVMTPList(cmd *cobra.Command, args []string) error {
 	if flagMVMFormat != "" {
 		return emitFormatted(all, flagMVMFormat)
 	}
-	fmt.Printf("%-40s %-30s %s\n", "NAME", "PROJECT", "CREATE_TIME")
+	printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "PROJECT", "CREATE_TIME")
 	for _, tp := range all {
 		fmt.Printf("%-40s %-30s %s\n", path.Base(tp.Name), tp.Project, tp.CreateTime)
 	}
@@ -505,7 +505,7 @@ func runMVMIIList(cmd *cobra.Command, args []string) error {
 	if flagMVMFormat != "" {
 		return emitFormatted(all, flagMVMFormat)
 	}
-	fmt.Printf("%-40s %-60s %s\n", "NAME", "CLOUD_STORAGE_URI", "CREATE_TIME")
+	printTableHeading(len(all), "%-40s %-60s %s\n", "NAME", "CLOUD_STORAGE_URI", "CREATE_TIME")
 	for _, ii := range all {
 		fmt.Printf("%-40s %-60s %s\n", path.Base(ii.Name), ii.CloudStorageUri, ii.CreateTime)
 	}

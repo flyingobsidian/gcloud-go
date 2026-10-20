@@ -419,7 +419,7 @@ func runFuncEventTypesList(cmd *cobra.Command, args []string) error {
 		if flagFuncFormat != "" {
 			return emitFormatted(gen2TriggerEvents, flagFuncFormat)
 		}
-		fmt.Printf("%-60s %s\n", "NAME", "DESCRIPTION")
+		printTableHeading(len(gen2TriggerEvents), "%-60s %s\n", "NAME", "DESCRIPTION")
 		for _, e := range gen2TriggerEvents {
 			fmt.Printf("%-60s %s\n", e.Name, e.Description)
 		}
@@ -541,7 +541,7 @@ func runFuncLogsRead(cmd *cobra.Command, args []string) error {
 	if flagFuncFormat != "" {
 		return emitFormatted(rows, flagFuncFormat)
 	}
-	fmt.Printf("%-6s %-32s %-32s %-24s %s\n", "LEVEL", "NAME", "EXECUTION_ID", "TIME_UTC", "LOG")
+	printTableHeading(len(rows), "%-6s %-32s %-32s %-24s %s\n", "LEVEL", "NAME", "EXECUTION_ID", "TIME_UTC", "LOG")
 	for _, r := range rows {
 		fmt.Printf("%-6s %-32s %-32s %-24s %s\n", r.Level, r.Name, r.ExecutionID, r.TimeUTC, r.Log)
 	}
@@ -609,7 +609,7 @@ func runFuncRegionsList(cmd *cobra.Command, args []string) error {
 	if flagFuncFormat != "" {
 		return emitFormatted(all, flagFuncFormat)
 	}
-	fmt.Printf("%s\n", "NAME")
+	printTableHeading(len(all), "%s\n", "NAME")
 	for _, l := range all {
 		id := l.LocationId
 		if id == "" {
@@ -643,7 +643,7 @@ func runFuncRuntimesList(cmd *cobra.Command, args []string) error {
 	if flagFuncFormat != "" {
 		return emitFormatted(resp.Runtimes, flagFuncFormat)
 	}
-	fmt.Printf("%-24s %-16s %s\n", "NAME", "STAGE", "ENVIRONMENT")
+	printTableHeading(len(resp.Runtimes), "%-24s %-16s %s\n", "NAME", "STAGE", "ENVIRONMENT")
 	for _, r := range resp.Runtimes {
 		fmt.Printf("%-24s %-16s %s\n", r.Name, r.Stage, r.Environment)
 	}

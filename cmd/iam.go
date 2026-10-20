@@ -511,7 +511,7 @@ func runWIPList(cmd *cobra.Command, args []string) error {
 		return printJSON(allPools)
 	}
 
-	fmt.Printf("%-40s %-30s %s\n", "NAME", "DISPLAY_NAME", "STATE")
+	printTableHeading(len(allPools), "%-40s %-30s %s\n", "NAME", "DISPLAY_NAME", "STATE")
 	for _, p := range allPools {
 		fmt.Printf("%-40s %-30s %s\n", path.Base(p.Name), p.DisplayName, p.State)
 	}

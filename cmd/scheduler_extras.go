@@ -200,7 +200,7 @@ func runSchedLocList(cmd *cobra.Command, args []string) error {
 	if flagSchedLocFormat != "" {
 		return emitFormatted(resp.Locations, flagSchedLocFormat)
 	}
-	fmt.Printf("%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeading(len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}
@@ -282,7 +282,7 @@ func runSchedOpList(cmd *cobra.Command, args []string) error {
 	if flagSchedOpFormat != "" {
 		return emitFormatted(resp.Operations, flagSchedOpFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}

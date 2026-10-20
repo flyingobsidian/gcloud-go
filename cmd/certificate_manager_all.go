@@ -219,7 +219,7 @@ func runCMCertList(cmd *cobra.Command, args []string) error {
 	if flagCMFormat != "" {
 		return emitFormatted(resp.Certificates, flagCMFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.Certificates), "%-40s\n", "NAME")
 	for _, c := range resp.Certificates {
 		fmt.Println(path.Base(c.Name))
 	}
@@ -363,7 +363,7 @@ func runCMDAList(cmd *cobra.Command, args []string) error {
 	if flagCMFormat != "" {
 		return emitFormatted(resp.DnsAuthorizations, flagCMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DOMAIN")
+	printTableHeading(len(resp.DnsAuthorizations), "%-40s %s\n", "NAME", "DOMAIN")
 	for _, d := range resp.DnsAuthorizations {
 		fmt.Printf("%-40s %s\n", path.Base(d.Name), d.Domain)
 	}
@@ -507,7 +507,7 @@ func runCMICList(cmd *cobra.Command, args []string) error {
 	if flagCMFormat != "" {
 		return emitFormatted(resp.CertificateIssuanceConfigs, flagCMFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.CertificateIssuanceConfigs), "%-40s\n", "NAME")
 	for _, i := range resp.CertificateIssuanceConfigs {
 		fmt.Println(path.Base(i.Name))
 	}
@@ -652,7 +652,7 @@ func runCMMapList(cmd *cobra.Command, args []string) error {
 	if flagCMFormat != "" {
 		return emitFormatted(resp.CertificateMaps, flagCMFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.CertificateMaps), "%-40s\n", "NAME")
 	for _, m := range resp.CertificateMaps {
 		fmt.Println(path.Base(m.Name))
 	}
@@ -818,7 +818,7 @@ func runCMMEList(cmd *cobra.Command, args []string) error {
 	if flagCMFormat != "" {
 		return emitFormatted(resp.CertificateMapEntries, flagCMFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.CertificateMapEntries), "%-40s\n", "NAME")
 	for _, e := range resp.CertificateMapEntries {
 		fmt.Println(path.Base(e.Name))
 	}
@@ -962,7 +962,7 @@ func runCMTCList(cmd *cobra.Command, args []string) error {
 	if flagCMFormat != "" {
 		return emitFormatted(resp.TrustConfigs, flagCMFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.TrustConfigs), "%-40s\n", "NAME")
 	for _, t := range resp.TrustConfigs {
 		fmt.Println(path.Base(t.Name))
 	}
@@ -1059,7 +1059,7 @@ func runCMOpList(cmd *cobra.Command, args []string) error {
 	if flagCMFormat != "" {
 		return emitFormatted(resp.Operations, flagCMFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}

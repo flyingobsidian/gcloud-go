@@ -156,7 +156,7 @@ func runDMPCList(cmd *cobra.Command, args []string) error {
 	if flagDMPCFormat != "" {
 		return emitFormatted(all, flagDMPCFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, p := range all {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.State)
 	}

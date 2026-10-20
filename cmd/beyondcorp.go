@@ -289,7 +289,7 @@ func runBCOpList(cmd *cobra.Command, args []string) error {
 	if flagBCFormat != "" {
 		return emitFormatted(resp.Operations, flagBCFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -375,7 +375,7 @@ func runBCSGList(cmd *cobra.Command, args []string) error {
 	if flagBCFormat != "" {
 		return emitFormatted(resp.SecurityGateways, flagBCFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.SecurityGateways), "%-40s %s\n", "NAME", "STATE")
 	for _, g := range resp.SecurityGateways {
 		fmt.Printf("%-40s %s\n", path.Base(g.Name), g.State)
 	}
@@ -662,7 +662,7 @@ func runBCSGAppList(cmd *cobra.Command, args []string) error {
 	if flagBCFormat != "" {
 		return emitFormatted(resp.Applications, flagBCFormat)
 	}
-	fmt.Printf("%-40s\n", "NAME")
+	printTableHeading(len(resp.Applications), "%-40s\n", "NAME")
 	for _, a := range resp.Applications {
 		fmt.Println(path.Base(a.Name))
 	}

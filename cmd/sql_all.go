@@ -261,7 +261,7 @@ func runSQLBackupList(cmd *cobra.Command, args []string) error {
 	if flagSQLFormat != "" {
 		return emitFormatted(resp.Items, flagSQLFormat)
 	}
-	fmt.Printf("%-20s %-24s %-10s %s\n", "ID", "WINDOW_START_TIME", "STATUS", "TYPE")
+	printTableHeading(len(resp.Items), "%-20s %-24s %-10s %s\n", "ID", "WINDOW_START_TIME", "STATUS", "TYPE")
 	for _, b := range resp.Items {
 		fmt.Printf("%-20d %-24s %-10s %s\n", b.Id, b.WindowStartTime, b.Status, b.Type)
 	}
@@ -535,7 +535,7 @@ func runSQLDatabaseList(cmd *cobra.Command, args []string) error {
 	if flagSQLFormat != "" {
 		return emitFormatted(resp.Items, flagSQLFormat)
 	}
-	fmt.Printf("%-32s %-16s %s\n", "NAME", "CHARSET", "COLLATION")
+	printTableHeading(len(resp.Items), "%-32s %-16s %s\n", "NAME", "CHARSET", "COLLATION")
 	for _, d := range resp.Items {
 		fmt.Printf("%-32s %-16s %s\n", d.Name, d.Charset, d.Collation)
 	}
@@ -666,7 +666,7 @@ func runSQLFlagsList(cmd *cobra.Command, args []string) error {
 	if flagSQLFormat != "" {
 		return emitFormatted(resp.Items, flagSQLFormat)
 	}
-	fmt.Printf("%-40s %-12s %s\n", "NAME", "TYPE", "APPLIES_TO")
+	printTableHeading(len(resp.Items), "%-40s %-12s %s\n", "NAME", "TYPE", "APPLIES_TO")
 	for _, f := range resp.Items {
 		fmt.Printf("%-40s %-12s %s\n", f.Name, f.Type, strings.Join(f.AppliesTo, ","))
 	}
@@ -955,7 +955,7 @@ func runSQLInstanceList(cmd *cobra.Command, args []string) error {
 	if flagSQLFormat != "" {
 		return emitFormatted(resp.Items, flagSQLFormat)
 	}
-	fmt.Printf("%-32s %-16s %-14s %-14s %s\n", "NAME", "DATABASE_VERSION", "REGION", "TIER", "STATE")
+	printTableHeading(len(resp.Items), "%-32s %-16s %-14s %-14s %s\n", "NAME", "DATABASE_VERSION", "REGION", "TIER", "STATE")
 	for _, i := range resp.Items {
 		tier := ""
 		if i.Settings != nil {
@@ -1378,7 +1378,7 @@ func runSQLOpList(cmd *cobra.Command, args []string) error {
 	if flagSQLFormat != "" {
 		return emitFormatted(resp.Items, flagSQLFormat)
 	}
-	fmt.Printf("%-40s %-14s %-24s %s\n", "NAME", "TYPE", "START", "STATUS")
+	printTableHeading(len(resp.Items), "%-40s %-14s %-24s %s\n", "NAME", "TYPE", "START", "STATUS")
 	for _, o := range resp.Items {
 		fmt.Printf("%-40s %-14s %-24s %s\n", o.Name, o.OperationType, o.StartTime, o.Status)
 	}
@@ -1639,7 +1639,7 @@ func runSQLSSLCertList(cmd *cobra.Command, args []string) error {
 	if flagSQLFormat != "" {
 		return emitFormatted(resp.Items, flagSQLFormat)
 	}
-	fmt.Printf("%-30s %-40s %s\n", "COMMON_NAME", "SHA1_FINGERPRINT", "EXPIRATION_TIME")
+	printTableHeading(len(resp.Items), "%-30s %-40s %s\n", "COMMON_NAME", "SHA1_FINGERPRINT", "EXPIRATION_TIME")
 	for _, c := range resp.Items {
 		fmt.Printf("%-30s %-40s %s\n", c.CommonName, c.Sha1Fingerprint, c.ExpirationTime)
 	}
@@ -1670,7 +1670,7 @@ func runSQLTiersList(cmd *cobra.Command, args []string) error {
 	if flagSQLFormat != "" {
 		return emitFormatted(resp.Items, flagSQLFormat)
 	}
-	fmt.Printf("%-30s %-12s %-14s %s\n", "TIER", "AVAILABLE_REGIONS", "RAM_BYTES", "DISK_BYTES")
+	printTableHeading(len(resp.Items), "%-30s %-12s %-14s %s\n", "TIER", "AVAILABLE_REGIONS", "RAM_BYTES", "DISK_BYTES")
 	for _, t := range resp.Items {
 		fmt.Printf("%-30s %-12d %-14d %d\n", t.Tier, len(t.Region), t.RAM, t.DiskQuota)
 	}
@@ -1807,7 +1807,7 @@ func runSQLUserList(cmd *cobra.Command, args []string) error {
 	if flagSQLFormat != "" {
 		return emitFormatted(resp.Items, flagSQLFormat)
 	}
-	fmt.Printf("%-30s %-16s %s\n", "NAME", "HOST", "TYPE")
+	printTableHeading(len(resp.Items), "%-30s %-16s %s\n", "NAME", "HOST", "TYPE")
 	for _, u := range resp.Items {
 		fmt.Printf("%-30s %-16s %s\n", u.Name, u.Host, u.Type)
 	}

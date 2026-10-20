@@ -354,7 +354,7 @@ func runVSOpList(cmd *cobra.Command, args []string) error {
 	if flagVSOpFormat != "" {
 		return emitFormatted(items, flagVSOpFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(items), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range items {
 		name, _ := o["name"].(string)
 		done, _ := o["done"].(bool)

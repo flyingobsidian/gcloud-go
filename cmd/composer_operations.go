@@ -151,7 +151,7 @@ func runComposerOpList(cmd *cobra.Command, args []string) error {
 	if flagComposerOpFormat != "" {
 		return emitFormatted(all, flagComposerOpFormat)
 	}
-	fmt.Printf("%-50s %s\n", "NAME", "DONE")
+	printTableHeading(len(all), "%-50s %s\n", "NAME", "DONE")
 	for _, o := range all {
 		fmt.Printf("%-50s %v\n", path.Base(o.Name), o.Done)
 	}

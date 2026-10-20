@@ -207,7 +207,7 @@ func runAssetFeedList(cmd *cobra.Command, args []string) error {
 	}
 
 	return printListResults(resp.Feeds, flagAssetFeedListFormat, func() {
-		fmt.Printf("%-60s %s\n", "NAME", "TOPIC")
+		printTableHeading(len(resp.Feeds), "%-60s %s\n", "NAME", "TOPIC")
 		for _, f := range resp.Feeds {
 			topic := ""
 			if f.FeedOutputConfig != nil && f.FeedOutputConfig.PubsubDestination != nil {

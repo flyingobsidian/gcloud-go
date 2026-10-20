@@ -321,7 +321,7 @@ func runNCSupportedServiceList(cmd *cobra.Command, args []string) error {
 	if flagNCFormat != "" {
 		return emitFormatted(all, flagNCFormat)
 	}
-	fmt.Printf("%-50s\n", "NAME")
+	printTableHeading(len(all), "%-50s\n", "NAME")
 	for _, s := range all {
 		fmt.Printf("%-50s\n", ncBasename(s.Name))
 	}

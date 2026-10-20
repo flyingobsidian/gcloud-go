@@ -234,7 +234,7 @@ func runAssetList(cmd *cobra.Command, args []string) error {
 	}
 
 	return printListResults(all, flagAssetListFormat, func() {
-		fmt.Printf("%-60s %-40s %s\n", "NAME", "ASSET_TYPE", "UPDATE_TIME")
+		printTableHeading(len(all), "%-60s %-40s %s\n", "NAME", "ASSET_TYPE", "UPDATE_TIME")
 		for _, a := range all {
 			fmt.Printf("%-60s %-40s %s\n", a.Name, a.AssetType, a.UpdateTime)
 		}
@@ -423,7 +423,7 @@ func runAssetSearchAllResources(cmd *cobra.Command, args []string) error {
 	}
 
 	return printListResults(all, flagAssetListFormat, func() {
-		fmt.Printf("%-60s %-40s %s\n", "NAME", "ASSET_TYPE", "LOCATION")
+		printTableHeading(len(all), "%-60s %-40s %s\n", "NAME", "ASSET_TYPE", "LOCATION")
 		for _, r := range all {
 			fmt.Printf("%-60s %-40s %s\n", r.Name, r.AssetType, r.Location)
 		}
@@ -481,7 +481,7 @@ func runAssetSearchAllIamPolicies(cmd *cobra.Command, args []string) error {
 	case "yaml":
 		return yamlEncode(all)
 	}
-	fmt.Printf("%-60s %-40s %s\n", "RESOURCE", "PROJECT", "ORGANIZATION")
+	printTableHeading(len(all), "%-60s %-40s %s\n", "RESOURCE", "PROJECT", "ORGANIZATION")
 	for _, r := range all {
 		fmt.Printf("%-60s %-40s %s\n", r.Resource, r.Project, r.Organization)
 	}

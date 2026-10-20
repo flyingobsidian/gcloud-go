@@ -453,7 +453,7 @@ func runSccManageServicesList(cmd *cobra.Command, args []string) error {
 	}
 	// Default table matches the shape the other scc list commands use:
 	// short name + intended state + effective state.
-	fmt.Printf("%-40s %-24s %s\n", "NAME", "INTENDED_STATE", "EFFECTIVE_STATE")
+	printTableHeading(len(services), "%-40s %-24s %s\n", "NAME", "INTENDED_STATE", "EFFECTIVE_STATE")
 	for _, s := range services {
 		name, _ := s["name"].(string)
 		intended, _ := s["intendedEnablementState"].(string)

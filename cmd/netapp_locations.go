@@ -77,7 +77,7 @@ func runNetAppLocList(cmd *cobra.Command, args []string) error {
 	if flagNetAppLocFormat != "" {
 		return emitFormatted(all, flagNetAppLocFormat)
 	}
-	fmt.Printf("%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeading(len(all), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range all {
 		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
 	}

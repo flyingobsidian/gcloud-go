@@ -211,7 +211,7 @@ func runOrgPolicyList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	fmt.Printf("%-70s %s\n", "CONSTRAINT", "ETAG")
+	printTableHeading(len(all), "%-70s %s\n", "CONSTRAINT", "ETAG")
 	for _, p := range all {
 		fmt.Printf("%-70s %s\n", p.Name, p.Etag)
 	}

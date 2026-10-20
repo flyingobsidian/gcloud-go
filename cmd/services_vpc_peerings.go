@@ -164,7 +164,7 @@ func runVpcPeeringList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing VPC peerings: %w", err)
 	}
 	return printListResults(resp.Connections, flagVpcPeeringListFormat, func() {
-		fmt.Printf("%-30s %-40s %s\n", "PEERING", "NETWORK", "RESERVED_RANGES")
+		printTableHeading(len(resp.Connections), "%-30s %-40s %s\n", "PEERING", "NETWORK", "RESERVED_RANGES")
 		for _, c := range resp.Connections {
 			fmt.Printf("%-30s %-40s %s\n", c.Peering, c.Network, strings.Join(c.ReservedPeeringRanges, ","))
 		}

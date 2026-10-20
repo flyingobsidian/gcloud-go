@@ -279,7 +279,7 @@ func runNCOpList(cmd *cobra.Command, args []string) error {
 	if flagNCFormat != "" {
 		return emitFormatted(all, flagNCFormat)
 	}
-	fmt.Printf("%-60s %s\n", "NAME", "DONE")
+	printTableHeading(len(all), "%-60s %s\n", "NAME", "DONE")
 	for _, o := range all {
 		fmt.Printf("%-60s %v\n", ncBasename(o.Name), o.Done)
 	}
@@ -356,7 +356,7 @@ func runNCLocList(cmd *cobra.Command, args []string) error {
 	if flagNCFormat != "" {
 		return emitFormatted(all, flagNCFormat)
 	}
-	fmt.Printf("%-30s %s\n", "NAME", "LOCATION_ID")
+	printTableHeading(len(all), "%-30s %s\n", "NAME", "LOCATION_ID")
 	for _, l := range all {
 		fmt.Printf("%-30s %s\n", ncBasename(l.Name), l.LocationId)
 	}

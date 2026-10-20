@@ -412,7 +412,7 @@ func runPostureList(cmd *cobra.Command, args []string) error {
 	if flagPostureFormat != "" {
 		return emitFormatted(resp.Postures, flagPostureFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.Postures), "%-40s %s\n", "NAME", "STATE")
 	for _, p := range resp.Postures {
 		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.State)
 	}
@@ -551,7 +551,7 @@ func runPDList(cmd *cobra.Command, args []string) error {
 	if flagPostureFormat != "" {
 		return emitFormatted(resp.PostureDeployments, flagPostureFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(resp.PostureDeployments), "%-40s %s\n", "NAME", "STATE")
 	for _, d := range resp.PostureDeployments {
 		fmt.Printf("%-40s %s\n", path.Base(d.Name), d.State)
 	}
@@ -632,7 +632,7 @@ func runPTList(cmd *cobra.Command, args []string) error {
 	if flagPostureFormat != "" {
 		return emitFormatted(resp.PostureTemplates, flagPostureFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DESCRIPTION")
+	printTableHeading(len(resp.PostureTemplates), "%-40s %s\n", "NAME", "DESCRIPTION")
 	for _, t := range resp.PostureTemplates {
 		fmt.Printf("%-40s %s\n", path.Base(t.Name), t.Description)
 	}
@@ -720,7 +720,7 @@ func runPOList(cmd *cobra.Command, args []string) error {
 	if flagPostureFormat != "" {
 		return emitFormatted(resp.Operations, flagPostureFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "DONE")
+	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
 		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
 	}
@@ -792,7 +792,7 @@ func runIaCList(cmd *cobra.Command, args []string) error {
 	if flagPostureFormat != "" {
 		return emitFormatted(resp.Reports, flagPostureFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "CREATE_TIME")
+	printTableHeading(len(resp.Reports), "%-40s %s\n", "NAME", "CREATE_TIME")
 	for _, r := range resp.Reports {
 		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.CreateTime)
 	}

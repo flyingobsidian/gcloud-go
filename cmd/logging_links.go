@@ -236,7 +236,7 @@ func runLogLinkList(cmd *cobra.Command, args []string) error {
 	if flagLogFormat != "" {
 		return emitFormatted(all, flagLogFormat)
 	}
-	fmt.Printf("%-40s %s\n", "NAME", "STATE")
+	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, l := range all {
 		fmt.Printf("%-40s %s\n", loggingBasename(l.Name), l.LifecycleState)
 	}

@@ -82,7 +82,7 @@ func runNetworksList(cmd *cobra.Command, args []string) error {
 
 	// Default table format matching gcloud-python:
 	// NAME, SUBNET_MODE, BGP_ROUTING_MODE, IPV4_RANGE, GATEWAY_IPV4
-	fmt.Printf("%-30s %-15s %-20s %-18s %-15s\n", "NAME", "SUBNET_MODE", "BGP_ROUTING_MODE", "IPV4_RANGE", "GATEWAY_IPV4")
+	printTableHeading(len(allNetworks), "%-30s %-15s %-20s %-18s %-15s\n", "NAME", "SUBNET_MODE", "BGP_ROUTING_MODE", "IPV4_RANGE", "GATEWAY_IPV4")
 	for _, n := range allNetworks {
 		subnetMode := networkSubnetMode(n)
 		bgpMode := networkBGPRoutingMode(n)

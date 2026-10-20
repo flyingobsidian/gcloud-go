@@ -379,7 +379,7 @@ func runAssetAnalyzeOrgPolicies(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 	return printListResults(all, flagAssetOPFormat, func() {
-		fmt.Printf("%-40s %s\n", "CONSTRAINT", "CONSOLIDATED_POLICY_ATTACHED_TO")
+		printTableHeading(len(all), "%-40s %s\n", "CONSTRAINT", "CONSOLIDATED_POLICY_ATTACHED_TO")
 		for _, r := range all {
 			attached := ""
 			if r.ConsolidatedPolicy != nil {
@@ -428,7 +428,7 @@ func runAssetAnalyzeOrgPolicyGovernedAssets(cmd *cobra.Command, args []string) e
 		pageToken = resp.NextPageToken
 	}
 	return printListResults(all, flagAssetOPFormat, func() {
-		fmt.Printf("%-60s\n", "GOVERNED_ASSET")
+		printTableHeading(len(all), "%-60s\n", "GOVERNED_ASSET")
 		for _, g := range all {
 			if g.GovernedResource != nil {
 				fmt.Printf("%-60s\n", g.GovernedResource.FullResourceName)
@@ -477,7 +477,7 @@ func runAssetAnalyzeOrgPolicyGovernedContainers(cmd *cobra.Command, args []strin
 		pageToken = resp.NextPageToken
 	}
 	return printListResults(all, flagAssetOPFormat, func() {
-		fmt.Printf("%-60s %s\n", "NAME", "PARENT")
+		printTableHeading(len(all), "%-60s %s\n", "NAME", "PARENT")
 		for _, g := range all {
 			fmt.Printf("%-60s %s\n", g.FullResourceName, g.Parent)
 		}
