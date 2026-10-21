@@ -117,7 +117,10 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	fmt.Fprintln(cmd.ErrOrStderr(), "Your active configuration is: [default]")
+	// gcloud-python only reports a non-default active configuration here.
+	if name := config.ActiveConfigName(); name != "default" {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Your active configuration is: [%s]\n", name)
+	}
 	if val == "" {
 		fmt.Println("(unset)")
 		return nil
@@ -176,7 +179,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Fprintln(cmd.ErrOrStderr(), "Your active configuration is: [default]")
+	fmt.Fprintf(cmd.ErrOrStderr(), "\nYour active configuration is: [%s]\n", config.ActiveConfigName())
 	return nil
 }
 
