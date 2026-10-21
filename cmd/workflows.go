@@ -13,6 +13,7 @@ import (
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	workflowexecutions "google.golang.org/api/workflowexecutions/v1"
+	workflows "google.golang.org/api/workflows/v1"
 )
 
 // --- gcloud workflows (#950) ---
@@ -42,6 +43,13 @@ const wfDefaultLocation = "us-central1"
 
 // wfRunMaxWait matches gcloud's 24-hour limit on waiting for `workflows run`.
 const wfRunMaxWait = 24 * time.Hour
+
+var workflowsListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List workflows",
+	Args:  cobra.NoArgs,
+	RunE:  runWFList,
+}
 
 var workflowsRunCmd = &cobra.Command{
 	Use:   "run WORKFLOW",
@@ -109,7 +117,9 @@ func init() {
 		c.Flags().StringVar(&flagWFWorkflow, "workflow", "", "Workflow name (required unless EXECUTION is a fully-qualified resource)")
 	}
 	workflowsRunCmd.Flags().StringVar(&flagWFLocation, "location", "",
-		"Location containing the workflow; alternatively set CLOUDSDK_WORKFLOWS_LOCATION (default "+wfDefaultLocation+")")
+		"Location containing the workflow; alternatively set the workflows/location property (default "+wfDefaultLocation+")")
+	workflowsListCmd.Flags().StringVar(&flagWFLocation, "location", "",
+		"Location to list workflows from; alternatively set the workflows/location property (default "+wfDefaultLocation+")")
 	for _, c := range []*cobra.Command{workflowsExecutionsCreateCmd, workflowsRunCmd} {
 		c.Flags().StringVar(&flagWFData, "data", "", "JSON-encoded arguments for the execution")
 		c.Flags().StringToStringVar(&flagWFLabels, "labels", nil, "Labels (key=value)")
@@ -120,8 +130,10 @@ func init() {
 
 	workflowsExecutionsListCmd.Flags().StringVar(&flagWFFilter, "filter", "", "Server-side filter expression")
 	workflowsExecutionsListCmd.Flags().StringVar(&flagWFOrderBy, "order-by", "", "Server-side ordering expression")
-	workflowsExecutionsListCmd.Flags().Int64Var(&flagWFPageSize, "page-size", 0, "Number of results per page")
-	workflowsExecutionsListCmd.Flags().Int64Var(&flagWFLimit, "limit", 0, "Maximum number of results to return")
+	for _, c := range []*cobra.Command{workflowsExecutionsListCmd, workflowsListCmd} {
+		c.Flags().Int64Var(&flagWFPageSize, "page-size", 0, "Number of results per page")
+		c.Flags().Int64Var(&flagWFLimit, "limit", 0, "Maximum number of results to return")
+	}
 
 	workflowsExecutionsWaitCmd.Flags().IntVar(&flagWFTimeoutSec, "timeout", 0, "Maximum seconds to wait (0 = no timeout)")
 
@@ -129,12 +141,12 @@ func init() {
 		workflowsExecutionsCancelCmd, workflowsExecutionsCreateCmd, workflowsExecutionsDeleteCmd,
 		workflowsExecutionsDescribeCmd, workflowsExecutionsListCmd, workflowsExecutionsWaitCmd,
 	)
-	workflowsCmd.AddCommand(workflowsExecutionsCmd, workflowsRunCmd)
+	workflowsCmd.AddCommand(workflowsExecutionsCmd, workflowsListCmd, workflowsRunCmd)
 
 	// The workflows resource itself (deploy/execute/etc.) is not covered by this
 	// task; keep those subcommands as documented stubs so users get a clear
 	// "not yet implemented" message rather than a missing-command error.
-	for _, name := range []string{"delete", "deploy", "describe", "execute", "list"} {
+	for _, name := range []string{"delete", "deploy", "describe", "execute"} {
 		registerStubCommand(workflowsCmd, name, "Not yet implemented")
 	}
 	rootCmd.AddCommand(workflowsCmd)
@@ -161,16 +173,24 @@ func wfWorkflowPath(project, location, workflow string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/workflows/%s", project, location, workflow)
 }
 
-// wfResolveLocation returns the location from --location or
-// CLOUDSDK_WORKFLOWS_LOCATION, falling back to gcloud's default location
-// with the same warning gcloud prints.
-func wfResolveLocation(w io.Writer) string {
-	if loc := config.Resolve(flagWFLocation, "CLOUDSDK_WORKFLOWS_LOCATION", ""); loc != "" {
-		return loc
+// wfResolveLocation returns the location from --location or the
+// workflows/location property (CLOUDSDK_WORKFLOWS_LOCATION or the active
+// configuration), falling back to gcloud's default location with the same
+// warning gcloud prints.
+func wfResolveLocation(w io.Writer) (string, error) {
+	if flagWFLocation != "" {
+		return flagWFLocation, nil
+	}
+	loc, err := config.Property("workflows", "location")
+	if err != nil {
+		return "", fmt.Errorf("reading workflows/location: %w", err)
+	}
+	if loc != "" {
+		return loc, nil
 	}
 	fmt.Fprintf(w, "WARNING: The default location(%s) was used since the location flag was not specified.\n",
 		wfDefaultLocation)
-	return wfDefaultLocation
+	return wfDefaultLocation, nil
 }
 
 // wfNewExecution builds an execution from the --data, --labels,
@@ -238,7 +258,36 @@ func wfListParent(w io.Writer, args []string, project string) (string, error) {
 	if strings.HasPrefix(workflow, "projects/") {
 		return workflow, nil
 	}
-	return wfWorkflowPath(project, wfResolveLocation(w), workflow), nil
+	location, err := wfResolveLocation(w)
+	if err != nil {
+		return "", err
+	}
+	return wfWorkflowPath(project, location, workflow), nil
+}
+
+// wfWorkflowsPager fetches one page of workflows for the given page token.
+type wfWorkflowsPager func(ctx context.Context, pageToken string) (*workflows.ListWorkflowsResponse, error)
+
+// wfListWorkflows pages through workflows until the results run out or limit
+// workflows have been collected (limit <= 0 means no limit). It never returns
+// a nil slice, so an empty result renders as [] in JSON.
+func wfListWorkflows(ctx context.Context, page wfWorkflowsPager, limit int64) ([]*workflows.Workflow, error) {
+	all := []*workflows.Workflow{}
+	pageToken := ""
+	for {
+		resp, err := page(ctx, pageToken)
+		if err != nil {
+			return nil, fmt.Errorf("listing workflows: %w", err)
+		}
+		all = append(all, resp.Workflows...)
+		if limit > 0 && int64(len(all)) >= limit {
+			return all[:limit], nil
+		}
+		if resp.NextPageToken == "" {
+			return all, nil
+		}
+		pageToken = resp.NextPageToken
+	}
 }
 
 // wfExecutionsPager fetches one page of executions for the given page token.
@@ -264,6 +313,47 @@ func wfListExecutions(ctx context.Context, page wfExecutionsPager, limit int64) 
 		}
 		pageToken = resp.NextPageToken
 	}
+}
+
+// --- Workflows impl ---
+
+// wfWorkflowsListFormat is gcloud's default output format for `workflows list`.
+const wfWorkflowsListFormat = "table(name,state,revisionId,updateTime)"
+
+func runWFList(cmd *cobra.Command, args []string) error {
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	location, err := wfResolveLocation(os.Stderr)
+	if err != nil {
+		return err
+	}
+	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
+	ctx := context.Background()
+	svc, err := gcp.WorkflowsService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	page := func(ctx context.Context, pageToken string) (*workflows.ListWorkflowsResponse, error) {
+		call := svc.Projects.Locations.Workflows.List(parent).Context(ctx)
+		if flagWFPageSize > 0 {
+			call = call.PageSize(flagWFPageSize)
+		}
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		return call.Do()
+	}
+	all, err := wfListWorkflows(ctx, page, flagWFLimit)
+	if err != nil {
+		return err
+	}
+	format := flagFormat
+	if format == "" {
+		format = wfWorkflowsListFormat
+	}
+	return emitFormatted(all, format)
 }
 
 // --- Executions impl ---
@@ -441,7 +531,11 @@ func runWFRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	parent := wfWorkflowPath(project, wfResolveLocation(os.Stderr), args[0])
+	location, err := wfResolveLocation(os.Stderr)
+	if err != nil {
+		return err
+	}
+	parent := wfWorkflowPath(project, location, args[0])
 	ctx, cancel := context.WithTimeout(context.Background(), wfRunMaxWait)
 	defer cancel()
 	svc, err := gcp.WorkflowExecutionsService(ctx, flagAccount)
