@@ -68,3 +68,40 @@ func TestSchedulerAppLocationListError(t *testing.T) {
 		t.Errorf("err = %v, want wrapped list error", err)
 	}
 }
+
+func TestEmitSchedulerJobsTable(t *testing.T) {
+	jobs := []*cloudscheduler.Job{
+		{
+			Name: "projects/p/locations/europe-west2/jobs/nightly", Schedule: "0 2 * * *", TimeZone: "Europe/London",
+			HttpTarget: &cloudscheduler.HttpTarget{}, State: "ENABLED",
+		},
+		{
+			Name: "projects/p/locations/europe-west2/jobs/ping", Schedule: "*/5 * * * *", TimeZone: "Etc/UTC",
+			PubsubTarget: &cloudscheduler.PubsubTarget{}, State: "PAUSED",
+		},
+	}
+	var out, errOut bytes.Buffer
+	if err := emitSchedulerJobsTable(&out, &errOut, jobs); err != nil {
+		t.Fatal(err)
+	}
+	want := "" +
+		"ID       LOCATION      SCHEDULE (TZ)              TARGET_TYPE  STATE\n" +
+		"nightly  europe-west2  0 2 * * * (Europe/London)  HTTP         ENABLED\n" +
+		"ping     europe-west2  */5 * * * * (Etc/UTC)      Pub/Sub      PAUSED\n"
+	if out.String() != want {
+		t.Errorf("table =\n%s\nwant\n%s", out.String(), want)
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("unexpected stderr %q", errOut.String())
+	}
+}
+
+func TestEmitSchedulerJobsTableEmpty(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if err := emitSchedulerJobsTable(&out, &errOut, nil); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() != 0 || errOut.String() != "Listed 0 items.\n" {
+		t.Errorf("stdout %q, stderr %q", out.String(), errOut.String())
+	}
+}

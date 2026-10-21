@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -64,8 +65,7 @@ var schedulerJobsListCmd = &cobra.Command{
 }
 
 var (
-	flagSchedulerListFormat string
-	flagSchedulerListURI    bool
+	flagSchedulerListURI bool
 )
 
 // --- scheduler jobs create (#198) ---
@@ -147,7 +147,6 @@ func init() {
 		c.Flags().StringVar(&flagSchedulerLocation, "location", "", "Location of the job")
 	}
 
-	schedulerJobsListCmd.Flags().StringVar(&flagSchedulerListFormat, "format", "", "Output format (e.g. json)")
 	schedulerJobsListCmd.Flags().BoolVar(&flagSchedulerListURI, "uri", false, "Print resource names")
 
 	// create common flags
@@ -417,22 +416,59 @@ func runSchedulerJobsList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if flagSchedulerListFormat == "json" {
-		return printJSON(allJobs)
-	}
-
-	printTableHeading(len(allJobs), "%-30s %-12s %-25s %-15s %-25s\n", "JOB_ID", "STATE", "SCHEDULE", "TARGET_TYPE", "NEXT_RUN")
-	for _, j := range allJobs {
-		jobID := path.Base(j.Name)
-		targetType := ""
-		if j.HttpTarget != nil {
-			targetType = "HTTP"
-		} else if j.PubsubTarget != nil {
-			targetType = "PUBSUB"
-		} else if j.AppEngineHttpTarget != nil {
-			targetType = "APP_ENGINE"
+	if flagFormat != "" {
+		if allJobs == nil {
+			allJobs = []*cloudscheduler.Job{}
 		}
-		fmt.Printf("%-30s %-12s %-25s %-15s %-25s\n", jobID, j.State, j.Schedule, targetType, j.ScheduleTime)
+		return emitFormatted(allJobs, flagFormat)
+	}
+	return emitSchedulerJobsTable(os.Stdout, os.Stderr, allJobs)
+}
+
+// schedulerJobsTableHeaders are the columns of gcloud's default
+// `scheduler jobs list` table.
+var schedulerJobsTableHeaders = []string{"ID", "LOCATION", "SCHEDULE (TZ)", "TARGET_TYPE", "STATE"}
+
+// schedulerJobsTableRow renders j as a row of gcloud's default table.
+func schedulerJobsTableRow(j *cloudscheduler.Job) []string {
+	location := ""
+	if parts := strings.Split(j.Name, "/"); len(parts) >= 3 {
+		location = parts[len(parts)-3]
+	}
+	targetType := ""
+	if j.PubsubTarget != nil {
+		targetType += "Pub/Sub"
+	}
+	if j.AppEngineHttpTarget != nil {
+		targetType += "App Engine"
+	}
+	if j.HttpTarget != nil {
+		targetType += "HTTP"
+	}
+	return []string{path.Base(j.Name), location, fmt.Sprintf("%s (%s)", j.Schedule, j.TimeZone), targetType, j.State}
+}
+
+// emitSchedulerJobsTable prints gcloud's default jobs table to w, or
+// "Listed 0 items." to errW when there are none, as gcloud does.
+func emitSchedulerJobsTable(w, errW io.Writer, jobs []*cloudscheduler.Job) error {
+	if len(jobs) == 0 {
+		_, err := fmt.Fprintln(errW, "Listed 0 items.")
+		return err
+	}
+	rows := [][]string{schedulerJobsTableHeaders}
+	for _, j := range jobs {
+		rows = append(rows, schedulerJobsTableRow(j))
+	}
+	widths := make([]int, len(schedulerJobsTableHeaders))
+	for _, row := range rows {
+		for i, cell := range row {
+			widths[i] = max(widths[i], utf8.RuneCountInString(cell))
+		}
+	}
+	for _, row := range rows {
+		if err := writePadded(w, row, widths); err != nil {
+			return err
+		}
 	}
 	return nil
 }
