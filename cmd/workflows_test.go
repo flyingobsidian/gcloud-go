@@ -5,12 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/spf13/cobra"
 	workflowexecutions "google.golang.org/api/workflowexecutions/v1"
+	workflows "google.golang.org/api/workflows/v1"
 )
 
 func workflowsSubgroup(name string) *cobra.Command {
@@ -81,31 +84,52 @@ func TestWfWorkflowPath(t *testing.T) {
 	}
 }
 
+// wfIsolateConfig points gcloud config at an empty directory so tests don't
+// read the developer's workflows/location property.
+func wfIsolateConfig(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("CLOUDSDK_CONFIG", dir)
+	t.Setenv("CLOUDSDK_ACTIVE_CONFIG_NAME", "default")
+	t.Setenv("CLOUDSDK_WORKFLOWS_LOCATION", "")
+	return dir
+}
+
 func TestWfResolveLocation(t *testing.T) {
 	defer func() { flagWFLocation = "" }()
+	dir := wfIsolateConfig(t)
 
-	t.Setenv("CLOUDSDK_WORKFLOWS_LOCATION", "")
-	flagWFLocation = "europe-west2"
-	var buf bytes.Buffer
-	if got := wfResolveLocation(&buf); got != "europe-west2" || buf.Len() != 0 {
-		t.Errorf("flag: got %q with output %q", got, buf.String())
+	resolve := func(name, want string, wantWarning bool) {
+		t.Helper()
+		var buf bytes.Buffer
+		got, err := wfResolveLocation(&buf)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got != want {
+			t.Errorf("%s: got %q, want %q", name, got, want)
+		}
+		if gotWarning := strings.Contains(buf.String(), "WARNING: The default location(us-central1) was used"); gotWarning != wantWarning {
+			t.Errorf("%s: output %q, want warning %v", name, buf.String(), wantWarning)
+		}
 	}
 
-	flagWFLocation = ""
+	resolve("default", wfDefaultLocation, true)
+
+	if err := os.MkdirAll(filepath.Join(dir, "configurations"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ini := "[workflows]\nlocation = europe-west1\n"
+	if err := os.WriteFile(filepath.Join(dir, "configurations", "config_default"), []byte(ini), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resolve("config", "europe-west1", false)
+
 	t.Setenv("CLOUDSDK_WORKFLOWS_LOCATION", "asia-east1")
-	buf.Reset()
-	if got := wfResolveLocation(&buf); got != "asia-east1" || buf.Len() != 0 {
-		t.Errorf("env: got %q with output %q", got, buf.String())
-	}
+	resolve("env", "asia-east1", false)
 
-	t.Setenv("CLOUDSDK_WORKFLOWS_LOCATION", "")
-	buf.Reset()
-	if got := wfResolveLocation(&buf); got != wfDefaultLocation {
-		t.Errorf("default: got %q, want %q", got, wfDefaultLocation)
-	}
-	if !strings.Contains(buf.String(), "WARNING: The default location(us-central1) was used") {
-		t.Errorf("default: missing warning, got %q", buf.String())
-	}
+	flagWFLocation = "europe-west2"
+	resolve("flag", "europe-west2", false)
 }
 
 func TestWfWaitForExecution(t *testing.T) {
@@ -156,7 +180,7 @@ func TestWfWaitForExecutionErrors(t *testing.T) {
 
 func TestWfListParent(t *testing.T) {
 	defer func() { flagWFLocation, flagWFWorkflow = "", "" }()
-	t.Setenv("CLOUDSDK_WORKFLOWS_LOCATION", "")
+	wfIsolateConfig(t)
 	cases := []struct {
 		name, location, workflowFlag string
 		args                         []string
@@ -298,5 +322,96 @@ func TestWfExecutionsListDefaultTable(t *testing.T) {
 		"projects/p/locations/l/workflows/w/executions/e1  SUCCEEDED  2026-10-09T00:00:00.042Z  2026-10-09T00:00:01.042Z\n"
 	if buf.String() != want {
 		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+func TestWorkflowsListFlags(t *testing.T) {
+	list := workflowsSubgroup("list")
+	if list == nil {
+		t.Fatal("workflows missing list")
+	}
+	if list.RunE == nil {
+		t.Fatal("workflows list is still a stub")
+	}
+	for _, name := range []string{"location", "limit", "page-size"} {
+		if list.Flags().Lookup(name) == nil {
+			t.Errorf("workflows list missing --%s", name)
+		}
+	}
+}
+
+// wfPagedWorkflows serves n workflows, two per page, and counts calls.
+func wfPagedWorkflows(n int, calls *int) wfWorkflowsPager {
+	return func(ctx context.Context, pageToken string) (*workflows.ListWorkflowsResponse, error) {
+		*calls++
+		start := 0
+		if pageToken != "" {
+			fmt.Sscanf(pageToken, "%d", &start)
+		}
+		resp := &workflows.ListWorkflowsResponse{}
+		for i := start; i < n && i < start+2; i++ {
+			resp.Workflows = append(resp.Workflows, &workflows.Workflow{Name: fmt.Sprintf("wf%d", i)})
+		}
+		if start+2 < n {
+			resp.NextPageToken = fmt.Sprintf("%d", start+2)
+		}
+		return resp, nil
+	}
+}
+
+func TestWfListWorkflows(t *testing.T) {
+	cases := []struct {
+		name      string
+		n         int
+		limit     int64
+		want      int
+		wantCalls int
+	}{
+		{"all pages", 5, 0, 5, 3},
+		{"limit stops paging", 5, 3, 3, 2},
+		{"empty", 0, 0, 0, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			got, err := wfListWorkflows(context.Background(), wfPagedWorkflows(tc.n, &calls), tc.limit)
+			if err != nil {
+				t.Fatalf("wfListWorkflows: %v", err)
+			}
+			if got == nil {
+				t.Fatal("wfListWorkflows returned nil slice")
+			}
+			if len(got) != tc.want || calls != tc.wantCalls {
+				t.Errorf("got %d workflows in %d calls, want %d in %d", len(got), calls, tc.want, tc.wantCalls)
+			}
+		})
+	}
+}
+
+func TestWfListWorkflowsError(t *testing.T) {
+	page := func(context.Context, string) (*workflows.ListWorkflowsResponse, error) {
+		return nil, errors.New("boom")
+	}
+	if _, err := wfListWorkflows(context.Background(), page, 0); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("want wrapped error, got %v", err)
+	}
+}
+
+func TestWfWorkflowsListDefaultTable(t *testing.T) {
+	var buf bytes.Buffer
+	wfs := []*workflows.Workflow{{
+		Name:       "projects/p/locations/us-central1/workflows/wf1",
+		State:      "ACTIVE",
+		RevisionId: "000001-abc",
+		UpdateTime: "2026-10-21T00:00:00Z",
+	}}
+	if err := emitFormattedTo(&buf, wfs, wfWorkflowsListFormat); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"NAME", "STATE", "REVISION_ID", "UPDATE_TIME", "workflows/wf1", "000001-abc"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("table output missing %q:\n%s", want, out)
+		}
 	}
 }

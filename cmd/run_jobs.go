@@ -137,8 +137,13 @@ func init() {
 		runJobsRemoveIamCmd,
 	}
 	for _, c := range jobsAll {
-		c.Flags().StringVar(&flagRunJobsRegion, "region", "", "Cloud Run region (required)")
 		c.Flags().StringVar(&flagRunJobsFormat, "format", "", "Output format")
+		if c == runJobsListCmd {
+			// As in gcloud, list spans every region unless --region is given.
+			c.Flags().StringVar(&flagRunJobsRegion, "region", "", "Cloud Run region; default all regions")
+			continue
+		}
+		c.Flags().StringVar(&flagRunJobsRegion, "region", "", "Cloud Run region (required)")
 		_ = c.MarkFlagRequired("region")
 	}
 	for _, c := range []*cobra.Command{runJobsCreateCmd, runJobsReplaceCmd, runJobsUpdateCmd} {
@@ -318,6 +323,17 @@ func runJobsList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
+	if flagRunJobsRegion == "" {
+		v1, err := gcp.RunV1Service(ctx, flagAccount, "")
+		if err != nil {
+			return err
+		}
+		all, err := runListAllJobs(ctx, os.Stderr, v1, project)
+		if err != nil {
+			return err
+		}
+		return emitFormatted(all, flagRunJobsFormat)
+	}
 	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
 	if err != nil {
 		return err
