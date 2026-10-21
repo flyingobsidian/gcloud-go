@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // TestConfigGetAndGetValueRegistered ensures both the canonical `get` and
@@ -63,5 +66,39 @@ func TestConfigSetPreservesOtherSections(t *testing.T) {
 	want := "[workflows]\nlocation = europe-west2\n\n[core]\nproject = x\n\n[builds]\n"
 	if string(data) != want {
 		t.Errorf("config file =\n%s\nwant\n%s", data, want)
+	}
+}
+
+// TestConfigReportsActiveConfigName is the #2014 regression: `config get`
+// and `config list` must report the actual active configuration, not
+// always [default]. `config get` stays silent for the default config.
+func TestConfigReportsActiveConfigName(t *testing.T) {
+	t.Setenv("CLOUDSDK_CONFIG", t.TempDir())
+
+	tests := []struct {
+		name     string
+		active   string
+		run      func(*cobra.Command, []string) error
+		args     []string
+		wantErrs string
+	}{
+		{"get named", "work", runConfigGet, []string{"core/project"}, "Your active configuration is: [work]\n"},
+		{"get default", "", runConfigGet, []string{"core/project"}, ""},
+		{"list named", "work", runConfigList, nil, "\nYour active configuration is: [work]\n"},
+		{"list default", "", runConfigList, nil, "\nYour active configuration is: [default]\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CLOUDSDK_ACTIVE_CONFIG_NAME", tt.active)
+			var stderr bytes.Buffer
+			c := &cobra.Command{}
+			c.SetErr(&stderr)
+			if err := tt.run(c, tt.args); err != nil {
+				t.Fatal(err)
+			}
+			if got := stderr.String(); got != tt.wantErrs {
+				t.Errorf("stderr = %q, want %q", got, tt.wantErrs)
+			}
+		})
 	}
 }
