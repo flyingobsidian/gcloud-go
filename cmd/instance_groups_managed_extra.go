@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"path"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
@@ -45,10 +44,7 @@ var managedListCmd = &cobra.Command{
 	RunE:  runManagedList,
 }
 
-var (
-	flagManagedListAllFormat string
-	flagManagedListURI       bool
-)
+var flagManagedListURI bool
 
 // --- managed update ---
 
@@ -130,7 +126,6 @@ func init() {
 	managedDeleteCmd.Flags().StringVar(&flagManagedDeleteRegion, "region", "", "Region")
 
 	// list
-	managedListCmd.Flags().StringVar(&flagManagedListAllFormat, "format", "", "Output format (e.g. json)")
 	managedListCmd.Flags().BoolVar(&flagManagedListURI, "uri", false, "Print resource URIs")
 
 	// update
@@ -266,55 +261,6 @@ func runManagedDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Printf("Deleted managed instance group [%s].\n", group)
-	return nil
-}
-
-func runManagedList(cmd *cobra.Command, args []string) error {
-	project, zone, err := resolveProjectZone()
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
-	if err != nil {
-		return err
-	}
-
-	var migs []*compute.InstanceGroupManager
-	pageToken := ""
-	for {
-		call := svc.InstanceGroupManagers.List(project, zone).Context(ctx)
-		if pageToken != "" {
-			call = call.PageToken(pageToken)
-		}
-		resp, err := call.Do()
-		if err != nil {
-			return fmt.Errorf("listing managed instance groups: %w", err)
-		}
-		migs = append(migs, resp.Items...)
-		if resp.NextPageToken == "" {
-			break
-		}
-		pageToken = resp.NextPageToken
-	}
-
-	if flagManagedListURI {
-		for _, m := range migs {
-			fmt.Println(m.SelfLink)
-		}
-		return nil
-	}
-
-	if flagManagedListAllFormat == "json" {
-		return printJSON(migs)
-	}
-
-	printTableHeading(len(migs), "%-30s %-15s %-10s %-30s\n", "NAME", "ZONE", "SIZE", "TEMPLATE")
-	for _, m := range migs {
-		tmpl := path.Base(m.InstanceTemplate)
-		fmt.Printf("%-30s %-15s %-10d %-30s\n", m.Name, zone, m.TargetSize, tmpl)
-	}
 	return nil
 }
 
