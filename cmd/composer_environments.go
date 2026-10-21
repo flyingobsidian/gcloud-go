@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	composer "google.golang.org/api/composer/v1"
@@ -21,6 +23,8 @@ var (
 	flagComposerEnvConfigFile    string
 	flagComposerEnvUpdateMask    string
 	flagComposerEnvFilter        string
+	flagComposerEnvListLocations []string
+	flagComposerEnvListLimit     int64
 	flagComposerEnvPageSize      int64
 	flagComposerEnvImageVersion  string
 	flagComposerEnvSnapLocation  string
@@ -110,10 +114,20 @@ func init() {
 		composerEnvListUpgradesCmd, composerEnvListPackagesCmd, composerEnvRunCmd,
 	}
 	for _, c := range all {
+		c.Flags().StringVar(&flagComposerEnvFormat, "format", "", "Output format")
+		if c == composerEnvListCmd {
+			continue
+		}
 		c.Flags().StringVar(&flagComposerEnvLocation, "location", "", "Composer location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagComposerEnvFormat, "format", "", "Output format")
 	}
+	// As in gcloud, list takes --locations, falling back to composer/location.
+	composerEnvListCmd.Flags().StringSliceVar(&flagComposerEnvListLocations, "locations", nil,
+		"Locations in which to list environments; default the composer/location property")
+	// --location is kept as a hidden alias for earlier gcloud-go releases.
+	composerEnvListCmd.Flags().StringVar(&flagComposerEnvLocation, "location", "", "Composer location")
+	_ = composerEnvListCmd.Flags().MarkHidden("location")
+	composerEnvListCmd.Flags().Int64Var(&flagComposerEnvListLimit, "limit", 0, "Maximum number of environments to list (0 = no limit)")
 	for _, c := range []*cobra.Command{composerEnvCreateCmd, composerEnvUpdateCmd} {
 		c.Flags().StringVar(&flagComposerEnvConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Environment body (required)")
@@ -222,19 +236,83 @@ func runComposerEnvDescribe(cmd *cobra.Command, args []string) error {
 	return emitFormatted(got, flagComposerEnvFormat)
 }
 
+// errComposerNoLocations is gcloud's error when `environments list` has
+// neither --locations nor the composer/location property.
+var errComposerNoLocations = errors.New(
+	"Missing required argument [--locations]: One or more locations in which to list environments must be provided.")
+
+// composerEnvListLocations returns --locations (or the hidden --location),
+// else the composer/location property.
+func composerEnvListLocations() ([]string, error) {
+	if len(flagComposerEnvListLocations) > 0 {
+		return flagComposerEnvListLocations, nil
+	}
+	if flagComposerEnvLocation != "" {
+		return []string{flagComposerEnvLocation}, nil
+	}
+	location, err := config.Property("composer", "location")
+	if err != nil {
+		return nil, fmt.Errorf("reading composer/location: %w", err)
+	}
+	if location == "" {
+		return nil, errComposerNoLocations
+	}
+	return []string{location}, nil
+}
+
+// composerEnvPager fetches one page of environments in parent.
+type composerEnvPager func(ctx context.Context, parent, pageToken string) (*composer.ListEnvironmentsResponse, error)
+
+// listComposerEnvs lists environments in each parent in turn until they run
+// out or limit have been collected (limit <= 0 means no limit), skipping
+// names without the client-side --filter substring. It never returns a nil
+// slice.
+func listComposerEnvs(ctx context.Context, parents []string, page composerEnvPager, filter string, limit int64) ([]*composer.Environment, error) {
+	all := []*composer.Environment{}
+	for _, parent := range parents {
+		pageToken := ""
+		for {
+			resp, err := page(ctx, parent, pageToken)
+			if err != nil {
+				return nil, fmt.Errorf("listing environments: %w", err)
+			}
+			for _, e := range resp.Environments {
+				if filter != "" && !strings.Contains(e.Name, filter) {
+					continue
+				}
+				all = append(all, e)
+				if limit > 0 && int64(len(all)) >= limit {
+					return all, nil
+				}
+			}
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
+		}
+	}
+	return all, nil
+}
+
 func runComposerEnvList(cmd *cobra.Command, args []string) error {
-	parent, err := composerEnvParent()
+	project, err := resolveProject()
 	if err != nil {
 		return err
+	}
+	locations, err := composerEnvListLocations()
+	if err != nil {
+		return err
+	}
+	parents := make([]string, len(locations))
+	for i, loc := range locations {
+		parents[i] = fmt.Sprintf("projects/%s/locations/%s", project, loc)
 	}
 	ctx := context.Background()
 	svc, err := gcp.ComposerService(ctx, flagAccount)
 	if err != nil {
 		return err
 	}
-	var all []*composer.Environment
-	pageToken := ""
-	for {
+	page := func(ctx context.Context, parent, pageToken string) (*composer.ListEnvironmentsResponse, error) {
 		call := svc.Projects.Locations.Environments.List(parent).Context(ctx)
 		if flagComposerEnvPageSize > 0 {
 			call = call.PageSize(flagComposerEnvPageSize)
@@ -242,20 +320,11 @@ func runComposerEnvList(cmd *cobra.Command, args []string) error {
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
-		resp, err := call.Do()
-		if err != nil {
-			return fmt.Errorf("listing environments: %w", err)
-		}
-		for _, e := range resp.Environments {
-			if flagComposerEnvFilter != "" && !strings.Contains(e.Name, flagComposerEnvFilter) {
-				continue
-			}
-			all = append(all, e)
-		}
-		if resp.NextPageToken == "" {
-			break
-		}
-		pageToken = resp.NextPageToken
+		return call.Do()
+	}
+	all, err := listComposerEnvs(ctx, parents, page, flagComposerEnvFilter, flagComposerEnvListLimit)
+	if err != nil {
+		return err
 	}
 	return emitFormatted(all, flagComposerEnvFormat)
 }
