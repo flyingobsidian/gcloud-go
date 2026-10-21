@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -78,6 +77,7 @@ func LoadNamed(name string) (*Properties, error) {
 }
 
 // Save writes properties in gcloud's INI format to the active configuration.
+// Sections and keys that Properties doesn't model are preserved.
 func (p *Properties) Save() error {
 	dir, err := ConfigDir()
 	if err != nil {
@@ -129,7 +129,8 @@ func CreateConfiguration(name string) error {
 		return fmt.Errorf("configuration [%s] already exists", name)
 	}
 
-	return saveINI(path, &Properties{})
+	// Python gcloud creates new configurations as empty files.
+	return os.WriteFile(path, nil, 0600)
 }
 
 // ActivateConfiguration sets the active configuration by name.
@@ -206,114 +207,53 @@ func DeleteConfiguration(name string) error {
 
 // loadINI parses a gcloud INI configuration file.
 func loadINI(path string) (*Properties, error) {
-	f, err := os.Open(path)
+	f, err := readINIFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return &Properties{}, nil
-		}
-		return nil, fmt.Errorf("reading config: %w", err)
+		return nil, err
 	}
-	defer f.Close()
-
 	p := &Properties{}
-	section := ""
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
-			continue
-		}
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			section = line[1 : len(line)-1]
-			continue
-		}
-		key, val, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		val = strings.TrimSpace(val)
-
-		switch section {
-		case "core":
-			switch key {
-			case "account":
-				p.Core.Account = val
-			case "project":
-				p.Core.Project = val
-			}
-		case "compute":
-			switch key {
-			case "zone":
-				p.Compute.Zone = val
-			case "region":
-				p.Compute.Region = val
-			}
-		case "billing":
-			if key == "quota_project" {
-				p.Billing.QuotaProject = val
-			}
-		case "dataflow":
-			if key == "region" {
-				p.Dataflow.Region = val
-			}
-		case "run":
-			if key == "region" {
-				p.Run.Region = val
-			}
-		case "redis":
-			if key == "region" {
-				p.Redis.Region = val
-			}
-		case "functions":
-			if key == "region" {
-				p.Functions.Region = val
-			}
-		}
+	for _, field := range p.fields() {
+		*field.val = f.get(field.section, field.key)
 	}
-	return p, scanner.Err()
+	return p, nil
 }
 
-// saveINI writes properties in gcloud INI format.
+// saveINI writes the typed properties to the INI file at path, updating only
+// their keys so that sections and keys Properties doesn't model survive.
 func saveINI(path string, p *Properties) error {
-	var b strings.Builder
-	b.WriteString("[core]\n")
-	if p.Core.Account != "" {
-		fmt.Fprintf(&b, "account = %s\n", p.Core.Account)
+	f, err := readINIFile(path)
+	if err != nil {
+		return err
 	}
-	if p.Core.Project != "" {
-		fmt.Fprintf(&b, "project = %s\n", p.Core.Project)
-	}
-
-	if p.Compute.Zone != "" || p.Compute.Region != "" {
-		b.WriteString("\n[compute]\n")
-		if p.Compute.Zone != "" {
-			fmt.Fprintf(&b, "zone = %s\n", p.Compute.Zone)
-		}
-		if p.Compute.Region != "" {
-			fmt.Fprintf(&b, "region = %s\n", p.Compute.Region)
+	for _, field := range p.fields() {
+		if *field.val == "" {
+			f.unset(field.section, field.key)
+		} else {
+			f.set(field.section, field.key, *field.val)
 		}
 	}
+	return f.write(path)
+}
 
-	if p.Billing.QuotaProject != "" {
-		fmt.Fprintf(&b, "\n[billing]\nquota_project = %s\n", p.Billing.QuotaProject)
+// propertyField ties a Properties field to its section/key in the file.
+type propertyField struct {
+	section, key string
+	val          *string
+}
+
+// fields lists the properties modelled by Properties.
+func (p *Properties) fields() []propertyField {
+	return []propertyField{
+		{"core", "account", &p.Core.Account},
+		{"core", "project", &p.Core.Project},
+		{"compute", "zone", &p.Compute.Zone},
+		{"compute", "region", &p.Compute.Region},
+		{"billing", "quota_project", &p.Billing.QuotaProject},
+		{"dataflow", "region", &p.Dataflow.Region},
+		{"run", "region", &p.Run.Region},
+		{"redis", "region", &p.Redis.Region},
+		{"functions", "region", &p.Functions.Region},
 	}
-
-	for _, s := range []struct {
-		name   string
-		region string
-	}{
-		{"dataflow", p.Dataflow.Region},
-		{"run", p.Run.Region},
-		{"redis", p.Redis.Region},
-		{"functions", p.Functions.Region},
-	} {
-		if s.region != "" {
-			fmt.Fprintf(&b, "\n[%s]\nregion = %s\n", s.name, s.region)
-		}
-	}
-
-	return os.WriteFile(path, []byte(b.String()), 0600)
 }
 
 // Resolve returns the effective value for a setting, preferring flag > env > config.
