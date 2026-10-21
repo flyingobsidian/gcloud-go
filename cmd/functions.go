@@ -86,7 +86,7 @@ func init() {
 	// Legacy stubs still to be implemented under #342.
 	for _, name := range []string{
 		"add-invoker-policy-binding", "call", "delete", "deploy", "describe", "detach",
-		"list", "remove-invoker-policy-binding",
+		"remove-invoker-policy-binding",
 	} {
 		registerStubCommand(functionsCmd, name, "Not yet implemented")
 	}
