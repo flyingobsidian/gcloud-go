@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	"sort"
 	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
@@ -21,6 +23,7 @@ var containerClustersCmd = &cobra.Command{Use: "clusters", Short: "Manage GKE cl
 
 var (
 	flagCtnClLocation   string
+	flagCtnClRegion     string
 	flagCtnClFormat     string
 	flagCtnClConfigFile string
 )
@@ -39,7 +42,7 @@ var (
 		Args: cobra.ExactArgs(1), RunE: runCtnClDescribe,
 	}
 	containerClListCmd = &cobra.Command{
-		Use: "list", Short: "List GKE clusters in a location",
+		Use: "list", Short: "List GKE clusters in a location, or in all locations",
 		Args: cobra.NoArgs, RunE: runCtnClList,
 	}
 	containerClUpdateCmd = &cobra.Command{
@@ -58,10 +61,17 @@ func init() {
 		containerClListCmd, containerClUpdateCmd, containerClCompleteCpUpgradeCmd,
 	}
 	for _, c := range all {
+		c.Flags().StringVar(&flagCtnClFormat, "format", "", "Output format")
+		if c == containerClListCmd {
+			continue
+		}
 		c.Flags().StringVar(&flagCtnClLocation, "location", "", "Cluster location (region or zone) (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagCtnClFormat, "format", "", "Output format")
 	}
+	// Like gcloud, list queries every location unless one is given.
+	containerClListCmd.Flags().StringVar(&flagCtnClLocation, "location", "", "Cluster location (region or zone); default all locations")
+	containerClListCmd.Flags().StringVar(&flagCtnClRegion, "region", "", "Cluster region; default all locations")
+	containerClListCmd.MarkFlagsMutuallyExclusive("location", "region")
 	containerClCreateCmd.Flags().StringVar(&flagCtnClConfigFile, "config-file", "", "YAML/JSON file with a container.Cluster body (required)")
 	_ = containerClCreateCmd.MarkFlagRequired("config-file")
 	containerClUpdateCmd.Flags().StringVar(&flagCtnClConfigFile, "config-file", "", "YAML/JSON file with a container.ClusterUpdate body (required)")
@@ -151,11 +161,24 @@ func runCtnClDescribe(cmd *cobra.Command, args []string) error {
 	return emitFormatted(got, flagCtnClFormat)
 }
 
+// ctnClListLocation returns the location `clusters list` queries: --location,
+// --region or an explicit --zone, else "-" for all locations. As in gcloud,
+// the compute/zone and compute/region properties are ignored.
+func ctnClListLocation() string {
+	for _, loc := range []string{flagCtnClLocation, flagCtnClRegion, flagZone} {
+		if loc != "" {
+			return loc
+		}
+	}
+	return "-"
+}
+
 func runCtnClList(cmd *cobra.Command, args []string) error {
-	parent, err := ctnParent()
+	project, err := resolveProject()
 	if err != nil {
 		return err
 	}
+	parent := fmt.Sprintf("projects/%s/locations/%s", project, ctnClListLocation())
 	ctx := context.Background()
 	svc, err := gcp.ContainerService(ctx, flagAccount)
 	if err != nil {
@@ -165,7 +188,68 @@ func runCtnClList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing clusters: %w", err)
 	}
-	return emitFormatted(resp.Clusters, flagCtnClFormat)
+	if len(resp.MissingZones) > 0 {
+		fmt.Fprintf(os.Stderr, "WARNING: The following zones did not respond: %s. List results may be incomplete.\n",
+			strings.Join(resp.MissingZones, ", "))
+	}
+	clusters := ctnSortClusters(resp.Clusters)
+	if flagCtnClFormat != "" {
+		return emitFormatted(clusters, flagCtnClFormat)
+	}
+	return emitFormatted(ctnClTableRows(clusters), ctnClListFormat)
+}
+
+// ctnSortClusters sorts clusters by (zone, name) like gcloud, returning a
+// non-nil slice so an empty list renders as [] in JSON.
+func ctnSortClusters(clusters []*container.Cluster) []*container.Cluster {
+	sorted := append([]*container.Cluster{}, clusters...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].Zone != sorted[j].Zone {
+			return sorted[i].Zone < sorted[j].Zone
+		}
+		return sorted[i].Name < sorted[j].Name
+	})
+	return sorted
+}
+
+// ctnClListFormat is gcloud's default `clusters list` table, over the rows
+// built by ctnClTableRows.
+const ctnClListFormat = "table(name,location,masterVersion,masterIp,machineType,nodeVersion,numNodes,status,stackType)"
+
+// ctnClTableRows projects clusters onto the columns of gcloud's default table.
+func ctnClTableRows(clusters []*container.Cluster) []map[string]any {
+	rows := make([]map[string]any, 0, len(clusters))
+	for _, c := range clusters {
+		machineType, nodeVersion := "", ""
+		if len(c.NodePools) > 0 {
+			// gcloud hides currentNodeVersion for clusters without node
+			// pools, where it is the cluster API version.
+			nodeVersion = c.CurrentNodeVersion
+			if c.NodePools[0].Config != nil {
+				machineType = c.NodePools[0].Config.MachineType
+			}
+		}
+		numNodes := c.CurrentNodeCount
+		if numNodes == 0 {
+			numNodes = c.InitialNodeCount
+		}
+		stackType := "IPV4"
+		if c.IpAllocationPolicy != nil && c.IpAllocationPolicy.StackType != "" {
+			stackType = c.IpAllocationPolicy.StackType
+		}
+		rows = append(rows, map[string]any{
+			"name":          c.Name,
+			"location":      c.Zone,
+			"masterVersion": c.CurrentMasterVersion,
+			"masterIp":      c.Endpoint,
+			"machineType":   machineType,
+			"nodeVersion":   nodeVersion,
+			"numNodes":      numNodes,
+			"status":        c.Status,
+			"stackType":     stackType,
+		})
+	}
+	return rows
 }
 
 func runCtnClUpdate(cmd *cobra.Command, args []string) error {
