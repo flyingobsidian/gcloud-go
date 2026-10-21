@@ -341,7 +341,7 @@ func init() {
 	buildsCmd.AddCommand(buildsWorkerPoolsCmd)
 
 	// existing stubs for top-level verbs (submit, cancel, etc.) still register below
-	for _, name := range []string{"cancel", "describe", "get-default-service-account", "list", "log", "submit"} {
+	for _, name := range []string{"cancel", "describe", "get-default-service-account", "log", "submit"} {
 		registerStubCommand(buildsCmd, name, "Not yet implemented")
 	}
 
