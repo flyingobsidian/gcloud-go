@@ -67,7 +67,6 @@ func init() {
 		"health-sources":                 "Manage health sources",
 		"http-health-checks":             "Manage legacy HTTP health checks",
 		"https-health-checks":            "Manage legacy HTTPS health checks",
-		"images":                         "Manage disk images",
 		"instant-snapshot-groups":        "Manage instant snapshot groups",
 		"instant-snapshots":              "Manage instant snapshots",
 		"interconnects":                  "Manage Cloud Interconnect",
