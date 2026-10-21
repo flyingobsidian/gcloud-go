@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -104,8 +105,13 @@ func init() {
 		runServicesSetIamCmd, runServicesAddIamCmd, runServicesRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagRunServicesRegion, "region", "", "Cloud Run region (required)")
 		c.Flags().StringVar(&flagRunServicesFormat, "format", "", "Output format")
+		if c == runServicesListCmd {
+			// As in gcloud, list spans every region unless --region is given.
+			c.Flags().StringVar(&flagRunServicesRegion, "region", "", "Cloud Run region; default all regions")
+			continue
+		}
+		c.Flags().StringVar(&flagRunServicesRegion, "region", "", "Cloud Run region (required)")
 		_ = c.MarkFlagRequired("region")
 	}
 	for _, c := range []*cobra.Command{runServicesReplaceCmd, runServicesUpdateCmd} {
@@ -188,6 +194,17 @@ func runSvcList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := context.Background()
+	if flagRunServicesRegion == "" {
+		v1, err := gcp.RunV1Service(ctx, flagAccount, "")
+		if err != nil {
+			return err
+		}
+		all, err := runListAllServices(ctx, os.Stderr, v1, project)
+		if err != nil {
+			return err
+		}
+		return emitFormatted(all, flagRunServicesFormat)
+	}
 	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
 	if err != nil {
 		return err
