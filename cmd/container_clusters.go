@@ -196,6 +196,10 @@ func runCtnClList(cmd *cobra.Command, args []string) error {
 	if flagCtnClFormat != "" {
 		return emitFormatted(clusters, flagCtnClFormat)
 	}
+	if len(clusters) == 0 {
+		fmt.Fprintln(os.Stderr, "Listed 0 items.")
+		return nil
+	}
 	return emitFormatted(ctnClTableRows(clusters), ctnClListFormat)
 }
 
