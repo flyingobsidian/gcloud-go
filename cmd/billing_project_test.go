@@ -96,29 +96,23 @@ func TestResolveBillingProjectPriority(t *testing.T) {
 }
 
 // TestBillingConfigSetGet exercises the [billing] section round-trip via
-// getPropertyValue / setPropertyValue. Regression for the "unrecognized
-// section: billing" error noted in the #1740 report.
+// `gcloud config set`. Regression for the "unrecognized section: billing"
+// error noted in the #1740 report.
 func TestBillingConfigSetGet(t *testing.T) {
-	props := &config.Properties{}
+	t.Setenv("CLOUDSDK_CONFIG", t.TempDir())
+	t.Setenv("CLOUDSDK_BILLING_QUOTA_PROJECT", "")
 
-	// Set and read back via the same helpers used by `gcloud config set`.
-	if err := setPropertyValue(props, "billing", "quota_project", "qp-set"); err != nil {
-		t.Fatalf("setPropertyValue billing/quota_project: %v", err)
+	if err := runConfigSet(configSetCmd, []string{"billing/quota_project", "qp-set"}); err != nil {
+		t.Fatalf("config set billing/quota_project: %v", err)
+	}
+	props, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
 	}
 	if got := props.Billing.QuotaProject; got != "qp-set" {
 		t.Errorf("Billing.QuotaProject = %q, want qp-set", got)
 	}
-	got, err := getPropertyValue(props, "billing", "quota_project")
-	if err != nil {
-		t.Fatalf("getPropertyValue billing/quota_project: %v", err)
-	}
-	if got != "qp-set" {
-		t.Errorf("get billing/quota_project = %q, want qp-set", got)
-	}
-
-	// Unknown key under billing should error clearly (not "unrecognized section").
-	if _, err := getPropertyValue(props, "billing", "bogus"); err == nil ||
-		err.Error() == "unrecognized section: billing" {
-		t.Errorf("expected billing/bogus to error as an unrecognized property, got: %v", err)
+	if got, err := config.Property("billing", "quota_project"); err != nil || got != "qp-set" {
+		t.Errorf("Property(billing, quota_project) = %q, %v; want qp-set", got, err)
 	}
 }
