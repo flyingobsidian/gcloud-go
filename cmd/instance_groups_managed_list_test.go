@@ -163,3 +163,10 @@ func TestComputeResourcePath(t *testing.T) {
 		t.Errorf("computeResourcePath = %q, want %q", got, want)
 	}
 }
+
+func TestManagedListSortedScopes(t *testing.T) {
+	got := managedListSortedScopes(map[string]int{"zones/b": 1, "regions/a": 2, "zones/a": 3})
+	if want := "regions/a zones/a zones/b"; strings.Join(got, " ") != want {
+		t.Errorf("managedListSortedScopes = %v, want %s", got, want)
+	}
+}

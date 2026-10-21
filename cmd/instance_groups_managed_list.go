@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -104,9 +105,12 @@ func runManagedList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if flagFormat != "" {
+	switch {
+	case flagFormat != "":
 		err = emitFormatted(records, flagFormat)
-	} else {
+	case len(records) == 0:
+		fmt.Fprintln(os.Stderr, "Listed 0 items.")
+	default:
 		err = emitFormatted(managedListTableRows(records), managedListFormat)
 	}
 	if err != nil {
@@ -144,8 +148,8 @@ func fetchManagedListMIGs(ctx context.Context, svc *compute.Service, project str
 		return migs, nil
 	}
 	err := svc.InstanceGroupManagers.AggregatedList(project).Pages(ctx, func(resp *compute.InstanceGroupManagerAggregatedList) error {
-		for _, scoped := range resp.Items {
-			for _, m := range scoped.InstanceGroupManagers {
+		for _, k := range managedListSortedScopes(resp.Items) {
+			for _, m := range resp.Items[k].InstanceGroupManagers {
 				if scope.keep(m) {
 					migs = append(migs, m)
 				}
@@ -164,8 +168,8 @@ func fetchManagedListMIGs(ctx context.Context, svc *compute.Service, project str
 func fetchAllInstanceGroups(ctx context.Context, svc *compute.Service, project string) ([]*compute.InstanceGroup, error) {
 	var groups []*compute.InstanceGroup
 	err := svc.InstanceGroups.AggregatedList(project).Pages(ctx, func(resp *compute.InstanceGroupAggregatedList) error {
-		for _, scoped := range resp.Items {
-			groups = append(groups, scoped.InstanceGroups...)
+		for _, k := range managedListSortedScopes(resp.Items) {
+			groups = append(groups, resp.Items[k].InstanceGroups...)
 		}
 		return nil
 	})
@@ -179,8 +183,8 @@ func fetchAllInstanceGroups(ctx context.Context, svc *compute.Service, project s
 func fetchAllAutoscalers(ctx context.Context, svc *compute.Service, project string) ([]*compute.Autoscaler, error) {
 	var autoscalers []*compute.Autoscaler
 	err := svc.Autoscalers.AggregatedList(project).Pages(ctx, func(resp *compute.AutoscalerAggregatedList) error {
-		for _, scoped := range resp.Items {
-			autoscalers = append(autoscalers, scoped.Autoscalers...)
+		for _, k := range managedListSortedScopes(resp.Items) {
+			autoscalers = append(autoscalers, resp.Items[k].Autoscalers...)
 		}
 		return nil
 	})
@@ -188,6 +192,18 @@ func fetchAllAutoscalers(ctx context.Context, svc *compute.Service, project stri
 		return nil, fmt.Errorf("listing autoscalers: %w", err)
 	}
 	return autoscalers, nil
+}
+
+// managedListSortedScopes returns the keys of an aggregated list's items
+// ("regions/...", "zones/...") in a stable order, so output order doesn't
+// depend on map iteration.
+func managedListSortedScopes[V any](items map[string]V) []string {
+	keys := make([]string, 0, len(items))
+	for k := range items {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // computeResourcePath strips the API host and version from a Compute URL,
