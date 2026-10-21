@@ -25,9 +25,9 @@ var unmanagedCmd = &cobra.Command{
 }
 
 // disksCmd is the real `compute disks` group. Its subcommands are attached
-// from their own files (see disks_resize.go for #1727). The `list`/`describe`
-// stubs registered by the stub-registration loop below are skipped for
-// "disks" so they don't shadow this real group.
+// from their own files (see disks_resize.go for #1727 and compute_lists.go
+// for list). "disks" is left out of the stub-registration loop below so it
+// doesn't shadow this real group.
 var disksCmd = &cobra.Command{
 	Use:   "disks",
 	Short: "Manage Compute Engine disks",
@@ -38,10 +38,10 @@ func init() {
 	computeCmd.AddCommand(instancesCmd)
 	computeCmd.AddCommand(instanceGroupsCmd)
 	computeCmd.AddCommand(disksCmd)
-	// Preserve the previous stub-group behaviour for `list`/`describe` so
-	// existing users don't see a regression on those subcommand paths — they
-	// still return "not yet implemented" but at least appear in --help.
-	registerStubCommand(disksCmd, "list", "Not yet implemented")
+	// Preserve the previous stub-group behaviour for `describe` so existing
+	// users don't see a regression on that subcommand path — it still returns
+	// "not yet implemented" but at least appears in --help. `list` is in
+	// compute_lists.go.
 	registerStubCommand(disksCmd, "describe", "Not yet implemented")
 
 	// Stub registrations for compute subgroups present in gcloud-python but
@@ -52,7 +52,6 @@ func init() {
 		"accelerator-types":       "GPU / accelerator types",
 		"advice":                  "Advisor recommendations",
 		"backend-buckets":         "Manage backend buckets",
-		"backend-services":        "Manage backend services",
 		"commitments":             "Manage committed use discounts",
 		"composite-health-checks": "Manage composite health checks",
 		"connect-to-serial-port":  "Connect to a VM's serial port",
@@ -62,16 +61,12 @@ func init() {
 		"disk-types":                     "List available disk types",
 		"external-vpn-gateways":          "Manage external VPN gateways",
 		"firewall-policies":              "Manage hierarchical firewall policies",
-		"firewall-rules":                 "Manage VPC firewall rules",
 		"future-reservations":            "Manage future capacity reservations",
 		"global-vm-extension-policies":   "Manage global VM extension policies",
 		"health-aggregation-policies":    "Manage health aggregation policies",
-		"health-checks":                  "Manage health checks",
 		"health-sources":                 "Manage health sources",
 		"http-health-checks":             "Manage legacy HTTP health checks",
 		"https-health-checks":            "Manage legacy HTTPS health checks",
-		"images":                         "Manage disk images",
-		"instance-templates":             "Manage instance templates",
 		"instant-snapshot-groups":        "Manage instant snapshot groups",
 		"instant-snapshots":              "Manage instant snapshots",
 		"interconnects":                  "Manage Cloud Interconnect",
@@ -97,15 +92,12 @@ func init() {
 		"resource-policies":              "Manage resource policies",
 		"rollout-plans":                  "Manage rollout plans",
 		"rollouts":                       "Manage rollouts",
-		"routers":                        "Manage Cloud Routers",
 		"routes":                         "Manage VPC routes",
 		"security-policies":              "Manage Cloud Armor security policies",
 		"service-attachments":            "Manage service attachments",
 		"shared-vpc":                     "Manage Shared VPC",
-		"snapshots":                      "Manage disk snapshots",
 		"snapshot-settings":              "Manage snapshot settings",
 		"sole-tenancy":                   "Manage sole-tenant nodes",
-		"ssl-certificates":               "Manage SSL certificates",
 		"ssl-policies":                   "Manage SSL policies",
 		"storage-pools":                  "Manage storage pools",
 		"storage-pool-types":             "List storage pool types",
@@ -118,7 +110,6 @@ func init() {
 		"target-tcp-proxies":             "Manage target TCP proxies",
 		"target-vpn-gateways":            "Manage Classic VPN gateways",
 		"tpus":                           "Manage Cloud TPU nodes",
-		"url-maps":                       "Manage URL maps",
 		"vpn-gateways":                   "Manage HA VPN gateways",
 		"vpn-tunnels":                    "Manage VPN tunnels",
 		"zones":                          "List Compute Engine zones",
