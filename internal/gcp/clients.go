@@ -132,6 +132,7 @@ import (
 	vmmigration "google.golang.org/api/vmmigration/v1"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 	workflowexecutions "google.golang.org/api/workflowexecutions/v1"
+	workflows "google.golang.org/api/workflows/v1"
 	workstations "google.golang.org/api/workstations/v1"
 )
 
@@ -1087,6 +1088,14 @@ func WorkflowExecutionsService(ctx context.Context, account string) (*workflowex
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return workflowexecutions.NewService(ctx, option.WithTokenSource(ts))
+}
+
+func WorkflowsService(ctx context.Context, account string) (*workflows.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return workflows.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func MonitoringV1Service(ctx context.Context, account string) (*monitoringv1.Service, error) {
