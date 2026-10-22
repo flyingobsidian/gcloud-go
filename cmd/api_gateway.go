@@ -64,6 +64,11 @@ var (
 	flagAGFormat     string
 	flagAGAsync      bool
 	flagAGAPI        string
+
+	// flagAGGWEnableStreaming sets streamingMode=STREAMING_MODE_ENABLED on
+	// `gateways create` (gcloud-python 585.0.0). The mode is immutable, so
+	// the flag only opts in; when omitted API Gateway selects the mode.
+	flagAGGWEnableStreaming bool
 )
 
 // --- apis ---
@@ -219,6 +224,12 @@ func init() {
 			"Path to a JSON/YAML file with the Gateway message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
+	agGWCreateCmd.Flags().BoolVar(&flagAGGWEnableStreaming, "enable-streaming", false,
+		"Creates the gateway with streaming enabled, which supports Server-Sent "+
+			"Events (SSE), HTTP/2 streaming, HTTP chunked transfer, WebSockets, and "+
+			"gRPC bidirectional streaming. This can only be set when the gateway is "+
+			"created and cannot be changed afterwards. When omitted, API Gateway "+
+			"selects the streaming mode.")
 	agGWUpdateCmd.Flags().StringVar(&flagAGUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 	for _, c := range []*cobra.Command{agGWCreateCmd, agGWDeleteCmd, agGWUpdateCmd} {
@@ -471,6 +482,14 @@ func runAGACUpdate(cmd *cobra.Command, args []string) error {
 	return agFinishOp(ctx, svc, op, "Update API config", args[0], flagAGAsync)
 }
 
+// applyAGGWEnableStreaming opts the gateway body into streaming when
+// --enable-streaming is set; otherwise the --config-file value is kept.
+func applyAGGWEnableStreaming(gw *apigateway.ApigatewayGateway, enable bool) {
+	if enable {
+		gw.StreamingMode = "STREAMING_MODE_ENABLED"
+	}
+}
+
 func runAGGWCreate(cmd *cobra.Command, args []string) error {
 	project, err := resolveProject()
 	if err != nil {
@@ -480,6 +499,7 @@ func runAGGWCreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagAGConfigFile, gw); err != nil {
 		return err
 	}
+	applyAGGWEnableStreaming(gw, flagAGGWEnableStreaming)
 	ctx := context.Background()
 	svc, err := gcp.APIGatewayService(ctx, flagAccount)
 	if err != nil {
