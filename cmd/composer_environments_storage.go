@@ -193,6 +193,38 @@ func joinGCS(parts ...string) string {
 	return out
 }
 
+// realPath resolves p like Python's os.path.realpath: the path is made
+// absolute and symlinks are resolved for the longest existing prefix, with
+// any non-existent remainder appended unchanged.
+func realPath(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return filepath.Clean(p)
+	}
+	rest := ""
+	for cur := abs; ; {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(resolved, rest)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return abs
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
+	}
+}
+
+// composerPathInsideDir reports whether path resolves strictly inside dir,
+// mirroring gcloud-python's storage_util._IsPathInsideDirectory.
+func composerPathInsideDir(path, dir string) bool {
+	realDir, real := realPath(dir), realPath(path)
+	if real == realDir {
+		return false
+	}
+	return strings.HasPrefix(real, strings.TrimSuffix(realDir, string(filepath.Separator))+string(filepath.Separator))
+}
+
 func composerStorageExportFn(kind string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		bucket, prefix, err := composerEnvBucketAndPrefix(kind)
@@ -223,6 +255,14 @@ func composerStorageExportFn(kind string) func(*cobra.Command, []string) error {
 					continue
 				}
 				target := filepath.Join(flagComposerStDestination, rel)
+				// Object names are controlled by whoever can write to the
+				// bucket; skip any that would land outside --destination
+				// via '..' segments or existing symlinks (gcloud-python 589.0.0).
+				if !composerPathInsideDir(target, flagComposerStDestination) {
+					fmt.Fprintf(os.Stderr, "WARNING: Skipping export of [gs://%s/%s] because it would be written outside of the destination directory [%s].\n",
+						bucket, o.Name, flagComposerStDestination)
+					continue
+				}
 				if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 					return err
 				}

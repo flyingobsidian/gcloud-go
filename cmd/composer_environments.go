@@ -176,6 +176,24 @@ func composerEnvResolvedName(id string) (string, error) {
 	return composerEnvName(project, flagComposerEnvLocation, id), nil
 }
 
+// flagComposerEnvDevelopmentMode is --enable-development-mode on `create`
+// (gcloud-python 583.0.0), which sets Environment.mode=DEVELOPMENT.
+var flagComposerEnvDevelopmentMode bool
+
+func init() {
+	composerEnvCreateCmd.Flags().BoolVar(&flagComposerEnvDevelopmentMode, "enable-development-mode", false,
+		"Enable development mode for the environment. Development mode constrains the "+
+			"environment configuration but allows environment hibernation; use it only for test environments.")
+}
+
+// applyComposerDevelopmentMode sets mode=DEVELOPMENT when requested, leaving
+// any --config-file mode otherwise.
+func applyComposerDevelopmentMode(env *composer.Environment, enable bool) {
+	if enable {
+		env.Mode = "DEVELOPMENT"
+	}
+}
+
 func runComposerEnvCreate(cmd *cobra.Command, args []string) error {
 	parent, err := composerEnvParent()
 	if err != nil {
@@ -188,6 +206,7 @@ func runComposerEnvCreate(cmd *cobra.Command, args []string) error {
 	if body.Name == "" {
 		body.Name = fmt.Sprintf("%s/environments/%s", parent, args[0])
 	}
+	applyComposerDevelopmentMode(body, flagComposerEnvDevelopmentMode)
 	ctx := context.Background()
 	svc, err := gcp.ComposerService(ctx, flagAccount)
 	if err != nil {
