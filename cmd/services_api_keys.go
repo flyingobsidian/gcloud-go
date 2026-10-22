@@ -80,7 +80,6 @@ var (
 	flagAPIKeyAllowedAndroidPackages []string
 	flagAPIKeyAllowedAndroidSHAs     []string
 	flagAPIKeyAPITargets             []string
-	flagAPIKeyClearRestrictions      bool
 	flagAPIKeyAppendRestrictions     bool
 	flagAPIKeyServiceAccount         string
 	flagAPIKeyListShowDeleted        bool
@@ -103,7 +102,6 @@ func init() {
 	}
 	restrictionFlags(apiKeyCreateCmd)
 	restrictionFlags(apiKeyUpdateCmd)
-	apiKeyUpdateCmd.Flags().BoolVar(&flagAPIKeyClearRestrictions, "clear-restrictions", false, "Clear all restrictions on the key")
 	apiKeyUpdateCmd.Flags().BoolVar(&flagAPIKeyAppendRestrictions, "append", false,
 		"Merge new --allowed-application and --api-target restrictions with the "+
 			"key's existing restrictions instead of replacing them")
@@ -264,7 +262,32 @@ func mergeAPIKeyRestrictions(base, add *apikeys.V2Restrictions) *apikeys.V2Restr
 	return &merged
 }
 
+// errAPIKeyCreateNeedsTarget mirrors the InvalidArgumentException that
+// gcloud-python 586.0.0+ raises when `services api-keys create` lacks
+// --api-target.
+var errAPIKeyCreateNeedsTarget = fmt.Errorf("Invalid value for [--api-target]: API keys must be created with API target restrictions. Please specify `--api-target`.")
+
+// errAPIKeyUpdateNeedsTarget mirrors the InvalidArgumentException that
+// gcloud-python 586.0.0+ raises when `services api-keys update` would leave a
+// key without API target restrictions.
+var errAPIKeyUpdateNeedsTarget = fmt.Errorf("Invalid value for [--api-target]: API keys must have API target restrictions. Please specify `--api-target` to restrict this key.")
+
+// checkAPIKeyUpdateTargets reports whether an update may proceed: the key must
+// already carry API targets or the caller must be supplying --api-target.
+func checkAPIKeyUpdateTargets(current *apikeys.V2Key, specifyingTarget bool) error {
+	if specifyingTarget {
+		return nil
+	}
+	if current != nil && current.Restrictions != nil && len(current.Restrictions.ApiTargets) > 0 {
+		return nil
+	}
+	return errAPIKeyUpdateNeedsTarget
+}
+
 func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
+	if !cmd.Flags().Changed("api-target") {
+		return errAPIKeyCreateNeedsTarget
+	}
 	project, err := resolveProject()
 	if err != nil {
 		return err
@@ -410,6 +433,13 @@ func runAPIKeyUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	name := apiKeyName(project, args[0])
+	current, err := svc.Projects.Locations.Keys.Get(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("fetching existing API key: %w", err)
+	}
+	if err := checkAPIKeyUpdateTargets(current, cmd.Flags().Changed("api-target")); err != nil {
+		return err
+	}
 	key := &apikeys.V2Key{Name: name}
 
 	var masks []string
@@ -425,19 +455,9 @@ func runAPIKeyUpdate(cmd *cobra.Command, args []string) error {
 		key.ServiceAccountEmail = flagAPIKeyServiceAccount
 		masks = append(masks, "service_account_email")
 	}
-	if flagAPIKeyClearRestrictions && flagAPIKeyAppendRestrictions {
-		return fmt.Errorf("--clear-restrictions and --append are mutually exclusive")
-	}
-	if flagAPIKeyClearRestrictions {
-		key.Restrictions = &apikeys.V2Restrictions{}
-		masks = append(masks, "restrictions")
-	} else if r := buildAPIKeyRestrictions(); r != nil {
+	if r := buildAPIKeyRestrictions(); r != nil {
 		if flagAPIKeyAppendRestrictions {
-			existing, gerr := svc.Projects.Locations.Keys.Get(name).Context(ctx).Do()
-			if gerr != nil {
-				return fmt.Errorf("fetching existing key for --append: %w", gerr)
-			}
-			r = mergeAPIKeyRestrictions(existing.Restrictions, r)
+			r = mergeAPIKeyRestrictions(current.Restrictions, r)
 		}
 		key.Restrictions = r
 		masks = append(masks, "restrictions")

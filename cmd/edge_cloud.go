@@ -13,7 +13,6 @@ func init() {
 	registerStubGroup(container, "operations", "Manage operations", "describe", "list")
 	registerStubGroup(container, "regions", "List Edge Container regions", "list")
 	registerStubGroup(container, "zones", "List Edge Container zones", "list")
-	registerStubGroup(container, "vpn-connections", "Manage VPN connections", "create", "delete", "describe", "list")
 	// gcloud-python exposes `get-server-config` as a leaf under
 	// `edge-cloud container`, not a subgroup with a `describe` sub. Match
 	// that shape.

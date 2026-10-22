@@ -117,6 +117,27 @@ If a native Go implementation of the `bq` CLI is prioritised for
 gcloud-go, this issue can be re-scoped or split into follow-up feature
 requests. Nothing to port for the migration-workflows surface we do have.
 
+## Breaking Changes 584.0.0–589.0.0 (#1915)
+
+The Cloud Services items (586.0.0) are implemented: `services api-keys
+create` fails without `--api-target`, `services api-keys update` fails
+unless the key already has API targets or `--api-target` is given (the
+existing key is now always fetched first, as in Python), and
+`--clear-restrictions` is removed from `update`. The `edge-cloud container
+vpn-connections` stub group is removed (587.0.0).
+
+The other items need no gcloud-go code change:
+
+- **`skaffold` deprecation (589.0.0), `managed-flink-client` removal
+  (588.0.0), `kustomize` and `kpt` removal and `gcloud-man-pages`
+  deprecation (586.0.0)** — Python components; gcloud-go is a single binary
+  whose `components` commands are not applicable stubs.
+- **`google-cloud-sdk` Snap removal** (586.0.0) — no Snap package exists for
+  gcloud-go (see the 580.0.0 note below).
+- **`storage buckets anywhere-caches pause` deprecation/removal (584.0.0,
+  587.0.0) and the `ADMIT_ON_SECOND_MISS` `--admission-policy` deprecation
+  (585.0.0)** — gcloud-go has not ported `storage buckets anywhere-caches`.
+
 ## Breaking Changes 569.0.0–582.0.0 (#1763)
 
 The one code-affecting item — the `--auto-commit` default flip on
