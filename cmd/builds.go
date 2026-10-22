@@ -331,6 +331,13 @@ func init() {
 	}
 	buildsWPUpdateCmd.Flags().StringVar(&flagBuildsUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
+	for _, c := range []*cobra.Command{buildsWPCreateCmd, buildsWPUpdateCmd} {
+		c.Flags().StringVar(&flagBuildsWorkerRelease, "worker-release", "",
+			"Specifies the release channel or version to use for the build worker image. "+
+				"Accepts release channel names (`rapid`, `regular`, `stable`) or specific "+
+				"release versions (for example, `2026.09`, `legacy`). See "+
+				"https://docs.cloud.google.com/build/docs/release-channels.")
+	}
 	for _, c := range []*cobra.Command{buildsWPCreateCmd, buildsWPDeleteCmd, buildsWPUpdateCmd} {
 		c.Flags().BoolVar(&flagBuildsAsync, "async", false, "Return the long-running operation without waiting")
 	}
@@ -818,6 +825,48 @@ func buildsWPName(id, project, region string) string {
 	return buildsChild("workerPools", id, buildsLocationParent(project, region))
 }
 
+// flagBuildsWorkerRelease sets privatePoolV1Config.workerConfig.workerRelease
+// on `worker-pools create|update` (gcloud-python 587.0.0).
+var flagBuildsWorkerRelease string
+
+// buildsWPWorkerReleaseMask is the update-mask path for --worker-release.
+const buildsWPWorkerReleaseMask = "privatePoolV1Config.workerConfig.workerRelease"
+
+// applyBuildsWPWorkerRelease sets the worker release on the pool body when
+// --worker-release was given, overriding any value from --config-file.
+func applyBuildsWPWorkerRelease(cmd *cobra.Command, wp *cloudbuild.WorkerPool) bool {
+	if !cmd.Flags().Changed("worker-release") {
+		return false
+	}
+	if wp.PrivatePoolV1Config == nil {
+		wp.PrivatePoolV1Config = &cloudbuild.PrivatePoolV1Config{}
+	}
+	if wp.PrivatePoolV1Config.WorkerConfig == nil {
+		wp.PrivatePoolV1Config.WorkerConfig = &cloudbuild.WorkerConfig{}
+	}
+	wp.PrivatePoolV1Config.WorkerConfig.WorkerRelease = flagBuildsWorkerRelease
+	return true
+}
+
+// buildsWPUpdateMask returns the update mask: --update-mask or the body's
+// populated top-level fields, plus the worker-release path when that flag is
+// set and not already covered by privatePoolV1Config.
+func buildsWPUpdateMask(fields []string, workerRelease bool) string {
+	if workerRelease {
+		covered := false
+		for _, f := range fields {
+			switch f {
+			case "privatePoolV1Config", "privatePoolV1Config.workerConfig", buildsWPWorkerReleaseMask:
+				covered = true
+			}
+		}
+		if !covered {
+			fields = append(fields, buildsWPWorkerReleaseMask)
+		}
+	}
+	return joinMask(fields)
+}
+
 func runBuildsWPCreate(cmd *cobra.Command, args []string) error {
 	project, err := resolveProject()
 	if err != nil {
@@ -827,6 +876,7 @@ func runBuildsWPCreate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagBuildsConfigFile, wp); err != nil {
 		return err
 	}
+	applyBuildsWPWorkerRelease(cmd, wp)
 	ctx := context.Background()
 	svc, err := gcp.CloudBuildService(ctx, flagAccount)
 	if err != nil {
@@ -907,10 +957,13 @@ func runBuildsWPUpdate(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(flagBuildsConfigFile, wp); err != nil {
 		return err
 	}
-	mask := flagBuildsUpdateMask
-	if mask == "" {
-		mask = joinMask(nonEmptyJSONFields(wp))
+	var fields []string
+	if flagBuildsUpdateMask != "" {
+		fields = strings.Split(flagBuildsUpdateMask, ",")
+	} else {
+		fields = nonEmptyJSONFields(wp)
 	}
+	mask := buildsWPUpdateMask(fields, applyBuildsWPWorkerRelease(cmd, wp))
 	ctx := context.Background()
 	svc, err := gcp.CloudBuildService(ctx, flagAccount)
 	if err != nil {

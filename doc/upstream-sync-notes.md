@@ -177,6 +177,17 @@ The release-note bullets (Go/CVE rebuilds of the `cbt` emulator and
 micro-precision timestamp support) concern the Python SDK's bundled `cbt`
 and Bigtable emulator components, which gcloud-go does not ship.
 
+## Cloud Build 587.0.0 (#1922)
+
+`--worker-release` on `gcloud builds worker-pools create|update` is
+implemented: it sets `privatePoolV1Config.workerConfig.workerRelease` on the
+`--config-file` body, and `update` adds
+`privatePoolV1Config.workerConfig.workerRelease` to the update mask unless
+the mask already covers `privatePoolV1Config`. `--worker-release` on
+`gcloud builds submit` (`options.workerRelease`) is not added because
+gcloud-go's `builds submit` is still a "not yet implemented" stub; it should
+land with the `submit` implementation.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
