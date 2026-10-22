@@ -205,3 +205,39 @@ func TestArtifactsStubSubcommandsRegistered(t *testing.T) {
 		}
 	}
 }
+
+func TestParseArtifactImageNameDomainScoped(t *testing.T) {
+	cases := map[string]string{
+		"us-docker.pkg.dev/p/r/img":                            "projects/p/locations/us/repositories/r/dockerImages/img",
+		"https://us-docker.pkg.dev/p/r/a/b@sha256:abc":         "projects/p/locations/us/repositories/r/dockerImages/a/b@sha256:abc",
+		"europe-west1-docker.pkg.dev/example.com/proj/r/img":   "projects/example.com:proj/locations/europe-west1/repositories/r/dockerImages/img",
+		"https://us-docker.pkg.dev/example.com/proj/r/img:tag": "projects/example.com:proj/locations/us/repositories/r/dockerImages/img:tag",
+	}
+	for in, want := range cases {
+		got, err := parseArtifactImageName(in)
+		if err != nil || got != want {
+			t.Errorf("parseArtifactImageName(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	if _, err := parseArtifactImageName("us-docker.pkg.dev/p/r"); err == nil {
+		t.Error("expected error for path without image")
+	}
+	loc, proj, repo, img, ok := parseDockerPath("us-docker.pkg.dev/example.com/proj/r")
+	if !ok || loc != "us" || proj != "example.com:proj" || repo != "r" || img != "" {
+		t.Errorf("parseDockerPath repo = %q %q %q %q %v", loc, proj, repo, img, ok)
+	}
+}
+
+func TestArtFilesUploadType(t *testing.T) {
+	for in, want := range map[string]string{"attachment": "ATTACHMENT", "Artifact": "ARTIFACT"} {
+		if got, err := artFilesUploadType(in); err != nil || got != want {
+			t.Errorf("artFilesUploadType(%q) = %q, %v", in, got, err)
+		}
+	}
+	if _, err := artFilesUploadType("conda"); err == nil {
+		t.Error("expected error for invalid file type")
+	}
+	if got := artMimeType("pkg.unknownext"); got != "application/octet-stream" {
+		t.Errorf("artMimeType = %q", got)
+	}
+}

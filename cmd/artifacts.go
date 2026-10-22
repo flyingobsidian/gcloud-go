@@ -367,12 +367,7 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 	}
 
 	parent := fmt.Sprintf("projects/-/locations/-/repositories/-/packages/-")
-	parts := strings.Split(strings.TrimSuffix(args[0], "/"), "/")
-	if len(parts) >= 3 {
-		host := parts[0]
-		location := strings.TrimSuffix(host, "-docker.pkg.dev")
-		project := parts[1]
-		repo := parts[2]
+	if location, project, repo, _, ok := parseDockerPath(args[0]); ok {
 		parent = fmt.Sprintf("projects/%s/locations/%s/repositories/%s/packages/-", project, location, repo)
 	}
 
@@ -456,16 +451,46 @@ func runArtifactsDockerImagesDescribe(cmd *cobra.Command, args []string) error {
 }
 
 func parseArtifactImageName(image string) (string, error) {
-	parts := strings.SplitN(image, "/", 4)
-	if len(parts) < 4 {
+	location, project, repo, imagePart, ok := parseDockerPath(image)
+	if !ok || imagePart == "" {
 		return "", fmt.Errorf("invalid image path: expected LOCATION-docker.pkg.dev/PROJECT/REPO/IMAGE")
 	}
-	host := parts[0]
-	location := strings.TrimSuffix(host, "-docker.pkg.dev")
-	project := parts[1]
-	repo := parts[2]
-	imagePart := parts[3]
 	return fmt.Sprintf("projects/%s/locations/%s/repositories/%s/dockerImages/%s", project, location, repo, imagePart), nil
+}
+
+// parseDockerPath splits an Artifact Registry Docker path
+// ([https://]LOCATION-docker.pkg.dev/PROJECT/REPO[/IMAGE...]) into its parts.
+// A domain-scoped project ("example.com:proj") appears in Docker paths as two
+// segments ("example.com/proj"); a first project segment containing a dot is
+// read that way and rejoined with ":", matching gcloud-python 586.0.0's
+// docker_util regexes. image is everything after REPO ("" if absent).
+func parseDockerPath(path string) (location, project, repo, image string, ok bool) {
+	path = strings.TrimPrefix(path, "https://")
+	var parts []string
+	for _, p := range strings.Split(path, "/") {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	if len(parts) < 3 {
+		return "", "", "", "", false
+	}
+	host := parts[0]
+	if i := strings.Index(host, "docker."); i > 0 && (host[i-1] == '-' || host[i-1] == '.') {
+		location = host[:i-1]
+	} else {
+		location = strings.TrimSuffix(host, "-docker.pkg.dev")
+	}
+	repoIndex := 2
+	if strings.Contains(parts[1], ".") && len(parts) >= 4 {
+		project = parts[1] + ":" + parts[2]
+		repoIndex = 3
+	} else {
+		project = parts[1]
+	}
+	repo = parts[repoIndex]
+	image = strings.Join(parts[repoIndex+1:], "/")
+	return location, project, repo, image, true
 }
 
 func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
@@ -487,15 +512,10 @@ func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	parts := strings.SplitN(args[0], "/", 4)
-	if len(parts) < 4 {
+	location, project, repo, imagePart, ok := parseDockerPath(args[0])
+	if !ok || imagePart == "" {
 		return fmt.Errorf("invalid image path: expected LOCATION-docker.pkg.dev/PROJECT/REPO/IMAGE")
 	}
-	host := parts[0]
-	location := strings.TrimSuffix(host, "-docker.pkg.dev")
-	project := parts[1]
-	repo := parts[2]
-	imagePart := parts[3]
 
 	pkgName := imagePart
 	if idx := strings.Index(pkgName, "@"); idx >= 0 {
