@@ -152,6 +152,16 @@ Python, fetches a single page of `--page-size` (default 1000) alerts, with
 `--limit` and `--uri` applied client-side; `describe` accepts a short alert
 id or `projects/P/alerts/ID`. Both default to YAML output.
 
+## Cloud Backup DR 584.0.0–585.0.0 (#1920)
+
+The new `backup-dr auto-protection-policies`, `auto-protection-bindings`,
+`applied-auto-protection-policies` and `binding-matching-resources` groups
+are alpha/beta-only in gcloud-python and their resources exist only in the
+`backupdr/v1beta` API (the `v1` Go client has no auto-protection methods).
+As with #1769 below, gcloud-go's `backup-dr` groups are still "not yet
+implemented" stubs, so these groups should land with the real `backup-dr`
+implementation rather than as further stubs.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
