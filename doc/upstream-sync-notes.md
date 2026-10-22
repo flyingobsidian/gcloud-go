@@ -188,6 +188,22 @@ the mask already covers `privatePoolV1Config`. `--worker-release` on
 gcloud-go's `builds submit` is still a "not yet implemented" stub; it should
 land with the `submit` implementation.
 
+## Cloud Composer 583.0.0–589.0.0 (#1923)
+
+All items are implemented:
+
+- **`storage dags|data|plugins export` skip objects outside `--destination`**
+  (589.0.0) — objects whose names resolve (after `..` segments and existing
+  symlinks) outside the destination directory are skipped with Python's
+  `WARNING: Skipping export of [gs://...] ...` message.
+- **`environments hibernate` / `environments resume`** (583.0.0, alpha/beta)
+  — call the Composer v1beta1 `Hibernate`/`Resume` methods (absent from
+  v1). Without `--async` they wait for the operation with Python's
+  `Waiting for [ENV] to be hibernated|resumed with [OP]...done.` line; with
+  `--async` they print the update-in-progress line and the operation.
+- **`--enable-development-mode` on `environments create`** (583.0.0) — sets
+  `mode: DEVELOPMENT` on the `--config-file` body.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys

@@ -49,6 +49,7 @@ import (
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 	cloudtasks "google.golang.org/api/cloudtasks/v2"
 	composer "google.golang.org/api/composer/v1"
+	composerbeta "google.golang.org/api/composer/v1beta1"
 	config1 "google.golang.org/api/config/v1"
 	container "google.golang.org/api/container/v1"
 	datacatalog "google.golang.org/api/datacatalog/v1"
@@ -1169,6 +1170,16 @@ func ComposerService(ctx context.Context, account string) (*composer.Service, er
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return composer.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// ComposerBetaService returns a Composer v1beta1 client. Environment
+// hibernate/resume are only exposed on v1beta1 as of this build.
+func ComposerBetaService(ctx context.Context, account string) (*composerbeta.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return composerbeta.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func DataCatalogService(ctx context.Context, account string) (*datacatalog.Service, error) {
