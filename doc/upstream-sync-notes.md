@@ -129,6 +129,13 @@ traditional OpenSSL PEM (PKCS#1 / SEC 1) to `--key-output-file` with mode
 the `--config-file` body, which still supplies the subject and X.509
 configuration.
 
+## Cloud API Gateway 585.0.0 (#1917)
+
+`--enable-streaming` on `gcloud api-gateway gateways create` is implemented:
+it sets `streamingMode: STREAMING_MODE_ENABLED` on the `--config-file` body
+(the field is immutable, so `gateways update` has no such flag). When the
+flag is omitted the body's own `streamingMode`, if any, is sent unchanged.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
