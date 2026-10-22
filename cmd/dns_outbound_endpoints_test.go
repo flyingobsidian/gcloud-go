@@ -55,7 +55,7 @@ func TestDNSOENames(t *testing.T) {
 	}
 }
 
-func TestDNSOEApplyLabels(t *testing.T) {
+func TestApplyLabelsDiff(t *testing.T) {
 	cur := map[string]string{"a": "1", "b": "2"}
 	cases := []struct {
 		clear   bool
@@ -70,7 +70,7 @@ func TestDNSOEApplyLabels(t *testing.T) {
 		{true, nil, map[string]string{"z": "0"}, map[string]string{"z": "0"}, true},
 	}
 	for i, c := range cases {
-		got, changed := dnsOEApplyLabels(cur, c.clear, c.remove, c.update)
+		got, changed := applyLabelsDiff(cur, c.clear, c.remove, c.update)
 		if !reflect.DeepEqual(got, c.want) || changed != c.changed {
 			t.Errorf("case %d: got %v, %v; want %v, %v", i, got, changed, c.want, c.changed)
 		}
