@@ -382,6 +382,26 @@ sent by Python), so no item needs a code change:
   `delta-sharing`, `hive` or `data-product-sharing` subgroups (see the
   570.0.0–578.0.0 note below); these land when those subgroups are added.
 
+## BigQuery 583.0.0–589.0.0 (#1914)
+
+No item needs a gcloud-go code change:
+
+- **All nine release-note bullets** (ADLS `abfs://`/`abfss://` URIs in
+  `--external_table_definition`, `--dataplex_entry_group` on
+  `bq mk|update --transfer_config` and the matching `bq ls` filter,
+  clearing/`--service_directory_service` on `bq mk|update --connection`,
+  the `--s3_service_directory_service` deprecation, `--migration_workflow`
+  setup skipping, reservation-group `creationTime`/`updateTime`, and
+  `--precedence`/`--condition` on reservation assignments) target the
+  standalone Python `bq` binary in `platform/bq/`, as with #1762 below.
+  gcloud-go's `bq` group only wraps the BigQuery Migration API
+  (`bq migration-workflows`).
+- **New alpha commands `gcloud alpha bq query` and `gcloud alpha bq
+  translation describe|generate-source-ddl|translate-batch|
+  translate-metadata`** — alpha-only, like the `bq datasets`, `bq tables`
+  and `bq jobs` subgroups that gcloud-go has not ported either. They land
+  when those alpha `bq` subgroups are added.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
