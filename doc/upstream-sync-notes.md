@@ -218,6 +218,20 @@ All items are implemented:
   `forwardingConfig.outboundEndpoints[].name` or
   `alternativeNameServerConfig.outboundEndpoints[].name` there.
 
+## Cloud Dataflow 585.0.0 (#1925)
+
+- **`--additional-pipeline-options` on `dataflow jobs run`** is implemented
+  and sent as `environment.additionalPipelineOptions`. The Go client's
+  classic-template `RuntimeEnvironment` lacks that field, so when the flag
+  is given `templates.create` is issued over REST with the field added;
+  otherwise the typed client is used as before. (`flex-template run`
+  already had the flag.) gcloud-go's `jobs run` has no `--update`, so
+  Python's `--update` / `--additional-pipeline-options` conflict check
+  does not apply.
+- **`dataflow config-store-settings create|delete|describe|list|resolve`**
+  — alpha-only in gcloud-python (organization/folder-scoped); not ported,
+  in line with other alpha-only groups (see #1914).
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
