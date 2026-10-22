@@ -341,6 +341,16 @@ code change:
   `--config-file` rather than per-field flags, so there is no flag help text
   to update; the API remains the validator.
 
+## Beyondcorp 589.0.0 (#1912)
+
+- **589.0.0** — the `gcloud beta beyondcorp app` group (App Connector
+  connectors, connections and gateways) is deprecated: Python marks it with
+  `@base.Deprecate`, so its commands print "BeyondCorp App Connector is
+  deprecated and will be removed in a future release." The group exists only
+  on the alpha/beta tracks and gcloud-go does not implement it (its
+  `beyondcorp` command covers `operations` and `security-gateways`), so there
+  is no command to deprecate. The group should not be ported.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
