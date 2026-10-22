@@ -329,6 +329,18 @@ No code change needed:
   command to hide; if `app-lifecycle-manager` is ported, the `saas-runtime`
   alias should not be added.
 
+## Artifact Registry 584.0.0–587.0.0 (#1909)
+
+Implemented: `gcloud artifacts files upload` (584.0.0) and domain-scoped
+project parsing in the Docker image commands (586.0.0). One item needs no
+code change:
+
+- **587.0.0** — help text for `gcloud artifacts repositories create` now
+  says custom remote repository URIs must use HTTPS. gcloud-go takes the
+  remote repository config (including custom upstream URIs) from
+  `--config-file` rather than per-field flags, so there is no flag help text
+  to update; the API remains the validator.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
