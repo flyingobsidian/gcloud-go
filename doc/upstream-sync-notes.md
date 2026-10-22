@@ -136,6 +136,14 @@ it sets `streamingMode: STREAMING_MODE_ENABLED` on the `--config-file` body
 (the field is immutable, so `gateways update` has no such flag). When the
 flag is omitted the body's own `streamingMode`, if any, is sent unchanged.
 
+## Access Context Manager 583.0.0 (#1918)
+
+`gcloud access-context-manager lookup-configured-perimeter --resource=...`
+is implemented on the v1 API (`projects|folders/*:lookupConfiguredServicePerimeter`),
+with Python's `projects/`/`folders/` validation and its four-line
+`SERVICE_PERIMETER` / `RESTRICTED_RESOURCE` / `..._DRY_RUN` display when
+`--format` is not given.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
