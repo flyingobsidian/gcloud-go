@@ -162,6 +162,21 @@ As with #1769 below, gcloud-go's `backup-dr` groups are still "not yet
 implemented" stubs, so these groups should land with the real `backup-dr`
 implementation rather than as further stubs.
 
+## Cloud Bigtable 583.0.0–588.0.0 (#1921)
+
+The alpha restored-table flags on `gcloud bigtable tables restore` are
+implemented: `--deletion-protection` / `--no-deletion-protection`,
+`--enable-automated-backup` (the default 7d retention / 1d frequency policy)
+and `--automated-backup-retention-period` / `--automated-backup-locations`
+(retention defaults to 7d, no explicit frequency). They are sent as
+`RestoreTableRequest.table` with an `updateMask` of `deletion_protection`
+and/or `automated_backup_policy`, as in gcloud-python. The hidden
+`--automated-backup-keep-hot-duration` flag is not ported.
+
+The release-note bullets (Go/CVE rebuilds of the `cbt` emulator and
+micro-precision timestamp support) concern the Python SDK's bundled `cbt`
+and Bigtable emulator components, which gcloud-go does not ship.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
