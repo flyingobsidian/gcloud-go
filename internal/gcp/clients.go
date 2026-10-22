@@ -236,12 +236,19 @@ func AuditManagerService(ctx context.Context, account string) (*auditmanager.Ser
 	return auditmanager.NewService(ctx, option.WithTokenSource(ts))
 }
 
-func AssuredWorkloadsService(ctx context.Context, account string) (*assuredworkloads.Service, error) {
+// AssuredWorkloadsService returns an Assured Workloads v1 client. A non-empty
+// endpoint (e.g. https://REGION-assuredworkloads.googleapis.com/) overrides
+// the global default.
+func AssuredWorkloadsService(ctx context.Context, account, endpoint string) (*assuredworkloads.Service, error) {
 	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
 	if err != nil {
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
-	return assuredworkloads.NewService(ctx, option.WithTokenSource(ts))
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
+	}
+	return assuredworkloads.NewService(ctx, opts...)
 }
 
 func ServiceUsageService(ctx context.Context, account string) (*serviceusage.Service, error) {

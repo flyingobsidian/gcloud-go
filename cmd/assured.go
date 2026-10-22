@@ -158,9 +158,25 @@ func assuredWorkloadName(id string) string {
 	return fmt.Sprintf("%s/workloads/%s", assuredParent(), id)
 }
 
+// assuredV1Service returns a v1 client for the regional Assured Workloads
+// endpoint, logging it as gcloud-python's
+// AssuredWorkloadsEndpointOverridesFromRegion does.
+func assuredV1Service(ctx context.Context, region string) (*aw.Service, error) {
+	return gcp.AssuredWorkloadsService(ctx, flagAccount, assuredRegionalEndpoint(region))
+}
+
+// assuredOperationRegion returns the region of OPERATION_NAME, falling back
+// to --location when only an operation ID is given.
+func assuredOperationRegion(name string) string {
+	if r := assuredRegionOf(name); r != "" {
+		return r
+	}
+	return flagAssuredLocation
+}
+
 func runAssuredOpDescribe(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
-	svc, err := gcp.AssuredWorkloadsService(ctx, flagAccount)
+	svc, err := assuredV1Service(ctx, assuredOperationRegion(args[0]))
 	if err != nil {
 		return err
 	}
@@ -173,7 +189,7 @@ func runAssuredOpDescribe(cmd *cobra.Command, args []string) error {
 
 func runAssuredOpList(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
-	svc, err := gcp.AssuredWorkloadsService(ctx, flagAccount)
+	svc, err := assuredV1Service(ctx, flagAssuredLocation)
 	if err != nil {
 		return err
 	}
@@ -196,7 +212,7 @@ func runAssuredWorkloadCreate(cmd *cobra.Command, args []string) error {
 		return runAssuredWorkloadCreateV2(cmd, args)
 	}
 	ctx := context.Background()
-	svc, err := gcp.AssuredWorkloadsService(ctx, flagAccount)
+	svc, err := assuredV1Service(ctx, flagAssuredLocation)
 	if err != nil {
 		return err
 	}
@@ -237,7 +253,7 @@ func runAssuredWorkloadDelete(cmd *cobra.Command, args []string) error {
 		return runAssuredWorkloadDeleteV2(name)
 	}
 	ctx := context.Background()
-	svc, err := gcp.AssuredWorkloadsService(ctx, flagAccount)
+	svc, err := assuredV1Service(ctx, assuredRegionOf(name))
 	if err != nil {
 		return err
 	}
@@ -265,7 +281,7 @@ func runAssuredWorkloadDescribe(cmd *cobra.Command, args []string) error {
 		return runAssuredWorkloadDescribeV2(name)
 	}
 	ctx := context.Background()
-	svc, err := gcp.AssuredWorkloadsService(ctx, flagAccount)
+	svc, err := assuredV1Service(ctx, assuredRegionOf(name))
 	if err != nil {
 		return err
 	}
@@ -285,7 +301,7 @@ func runAssuredWorkloadList(cmd *cobra.Command, args []string) error {
 		return runAssuredWorkloadListV2()
 	}
 	ctx := context.Background()
-	svc, err := gcp.AssuredWorkloadsService(ctx, flagAccount)
+	svc, err := assuredV1Service(ctx, flagAssuredLocation)
 	if err != nil {
 		return err
 	}
@@ -340,7 +356,7 @@ func runAssuredWorkloadUpdate(cmd *cobra.Command, args []string) error {
 		return runAssuredWorkloadUpdateV2(cmd, name)
 	}
 	ctx := context.Background()
-	svc, err := gcp.AssuredWorkloadsService(ctx, flagAccount)
+	svc, err := assuredV1Service(ctx, assuredRegionOf(name))
 	if err != nil {
 		return err
 	}
