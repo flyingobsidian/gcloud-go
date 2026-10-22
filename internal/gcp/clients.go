@@ -27,6 +27,7 @@ import (
 	apphub "google.golang.org/api/apphub/v1"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 	assuredworkloads "google.golang.org/api/assuredworkloads/v1"
+	auditmanager "google.golang.org/api/auditmanager/v1"
 	baremetalsolution "google.golang.org/api/baremetalsolution/v2"
 	batchapi "google.golang.org/api/batch/v1"
 	beyondcorp "google.golang.org/api/beyondcorp/v1"
@@ -224,6 +225,15 @@ func CloudResourceManagerService(ctx context.Context, account string) (*cloudres
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
 	return cloudresourcemanager.NewService(ctx, option.WithTokenSource(ts))
+}
+
+// AuditManagerService returns an Audit Manager v1 client.
+func AuditManagerService(ctx context.Context, account string) (*auditmanager.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	return auditmanager.NewService(ctx, option.WithTokenSource(ts))
 }
 
 func AssuredWorkloadsService(ctx context.Context, account string) (*assuredworkloads.Service, error) {

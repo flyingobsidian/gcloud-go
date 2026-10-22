@@ -14,6 +14,9 @@ import (
 // called out in the issue as stubs that return a clear error. A follow-up
 // PR should wire these commands to a real client when a Go SDK is available
 // (either from google-api-go-client or a bespoke HTTP client).
+//
+// audit-schedules and operations describe are implemented against
+// google.golang.org/api/auditmanager/v1 in audit_manager_audit_schedules.go.
 
 var auditManagerCmd = &cobra.Command{
 	Use:   "audit-manager",
@@ -56,7 +59,6 @@ func init() {
 		{auditManagerEnrollmentsCmd, "delete"},
 		{auditManagerEnrollmentsCmd, "describe"},
 		{auditManagerEnrollmentsCmd, "list"},
-		{auditManagerOperationsCmd, "describe"},
 		{auditManagerOperationsCmd, "list"},
 	}
 	for _, s := range auditManagerStubs {
