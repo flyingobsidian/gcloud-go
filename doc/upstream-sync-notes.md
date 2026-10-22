@@ -318,6 +318,17 @@ No code change needed:
   has not implemented it, so there is nothing to fix. The corrected mappings
   apply when the command is ported.
 
+## App Lifecycle Manager 589.0.0 (#1907)
+
+- **589.0.0** — the deprecated `gcloud beta saas-runtime` group is now
+  hidden (its commands still run with a deprecation warning pointing to
+  `gcloud beta app-lifecycle-manager`). In 589.0.0 `saas-runtime` is an
+  alpha/beta-only alias that `gcloud_main.py` maps onto a fixed set of
+  `app-lifecycle-manager` subgroups, and `app-lifecycle-manager` itself is
+  alpha/beta-only. gcloud-go implements neither group, so there is no
+  command to hide; if `app-lifecycle-manager` is ported, the `saas-runtime`
+  alias should not be added.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
