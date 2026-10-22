@@ -144,6 +144,14 @@ with Python's `projects/`/`folders/` validation and its four-line
 `SERVICE_PERIMETER` / `RESTRICTED_RESOURCE` / `..._DRY_RUN` display when
 `--format` is not given.
 
+## Cloud Alerting 589.0.0 (#1919)
+
+`gcloud monitoring alerts` (GA in 589.0.0) is implemented: `list` sends
+`--filter` and `--sort-by` to the API as `filter`/`orderBy` and, like
+Python, fetches a single page of `--page-size` (default 1000) alerts, with
+`--limit` and `--uri` applied client-side; `describe` accepts a short alert
+id or `projects/P/alerts/ID`. Both default to YAML output.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
