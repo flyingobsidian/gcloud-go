@@ -204,6 +204,20 @@ All items are implemented:
 - **`--enable-development-mode` on `environments create`** (583.0.0) — sets
   `mode: DEVELOPMENT` on the `--config-file` body.
 
+## Cloud DNS 589.0.0 (#1924)
+
+- **`gcloud dns outbound-endpoints create|delete|describe|list|update`** is
+  implemented on the DNS v1 API, with gcloud-python's network/subnetwork
+  short-name expansion, labels flags, delete confirmation, `--async`,
+  JSON default output for create/update, the NAME/ENDPOINT_IP/NETWORK/
+  SUBNETWORK/DESCRIPTION list table, and `--endpoint-mode` (only
+  `regional` selects `dns.LOCATION.rep.googleapis.com`).
+- **`--outbound-endpoints` on `dns managed-zones create|update` and
+  `dns policies create|update`** — gcloud-go's commands take the full
+  `ManagedZone` / `Policy` body from `--config-file`; set
+  `forwardingConfig.outboundEndpoints[].name` or
+  `alternativeNameServerConfig.outboundEndpoints[].name` there.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
