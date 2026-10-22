@@ -117,6 +117,18 @@ If a native Go implementation of the `bq` CLI is prioritised for
 gcloud-go, this issue can be re-scoped or split into follow-up feature
 requests. Nothing to port for the migration-workflows surface we do have.
 
+## Certificate Authority Service 588.0.0 (#1916)
+
+`--key-algorithm` on `gcloud privateca certificates create` is implemented
+together with the `--generate-key` / `--key-output-file` group it belongs
+to (gcloud-go previously took the key only from `--config-file`). With
+`--generate-key`, gcloud-go generates an `rsa-2048` (default), `rsa-3072`,
+`rsa-4096`, `ec-p256` or `ec-p384` key pair, writes the private key as a
+traditional OpenSSL PEM (PKCS#1 / SEC 1) to `--key-output-file` with mode
+0400 and Python's key-export warning, and sets `config.publicKey` (PEM) on
+the `--config-file` body, which still supplies the subject and X.509
+configuration.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys

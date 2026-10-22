@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
@@ -529,6 +530,14 @@ var (
 	// when the issuing CA pool's issuancePolicy has
 	// `allowRequesterSpecifiedNotBeforeTime: true`.
 	flagPCACertNotBefore string
+
+	// --generate-key / --key-output-file / --key-algorithm on
+	// `certificates create`: generate a key pair locally, write the private
+	// key to --key-output-file and send the public key as
+	// config.publicKey (gcloud-python 588.0.0 added --key-algorithm).
+	flagPCACertGenerateKey   bool
+	flagPCACertKeyOutputFile string
+	flagPCACertKeyAlgorithm  string
 )
 
 func init() {
@@ -550,6 +559,13 @@ func init() {
 		"RFC 3339 timestamp for Certificate.requestedNotBeforeTime; requires "+
 			"the issuing CA pool's issuancePolicy to set "+
 			"allowRequesterSpecifiedNotBeforeTime=true")
+	pcaCertCreateCmd.Flags().BoolVar(&flagPCACertGenerateKey, "generate-key", false,
+		"Use this flag to have a new private key securely generated on your machine.")
+	pcaCertCreateCmd.Flags().StringVar(&flagPCACertKeyOutputFile, "key-output-file", "",
+		"The path where the generated private key file should be written (in PEM format).")
+	pcaCertCreateCmd.Flags().StringVar(&flagPCACertKeyAlgorithm, "key-algorithm", "rsa-2048",
+		"The crypto algorithm to use for generating the client-side private key. "+
+			"KEY_ALGORITHM must be one of: "+strings.Join(pcaKeyAlgorithms, ", ")+".")
 	pcaCertRevokeCmd.Flags().StringVar(&flagPCACertRevokeReason, "reason", "REVOCATION_REASON_UNSPECIFIED",
 		"Reason for revocation (see the ReasonForRevocation enum)")
 	pcaCertExportCmd.Flags().StringVar(&flagPCACertOutputFile, "output-file", "",
@@ -564,14 +580,43 @@ func pcaCertName(id, project, location, pool string) string {
 	return pcaResourceName("certificates", id, parent)
 }
 
+// validatePCACertKeyFlags enforces the --generate-key argument group:
+// --generate-key and --key-output-file go together, and --key-algorithm
+// only applies with --generate-key.
+func validatePCACertKeyFlags(cmd *cobra.Command) error {
+	if err := validatePCAKeyAlgorithm(flagPCACertKeyAlgorithm); err != nil {
+		return err
+	}
+	if flagPCACertGenerateKey {
+		if flagPCACertKeyOutputFile == "" {
+			return fmt.Errorf("argument --generate-key: --key-output-file must be specified.")
+		}
+		return nil
+	}
+	for _, f := range []string{"key-output-file", "key-algorithm"} {
+		if cmd.Flags().Changed(f) {
+			return fmt.Errorf("argument --%s: --generate-key must be specified.", f)
+		}
+	}
+	return nil
+}
+
 func runPCACertCreate(cmd *cobra.Command, args []string) error {
 	project, err := resolveProject()
 	if err != nil {
 		return err
 	}
+	if err := validatePCACertKeyFlags(cmd); err != nil {
+		return err
+	}
 	cert := &privateca.Certificate{}
 	if err := loadYAMLOrJSONInto(flagPCACertConfigFile, cert); err != nil {
 		return err
+	}
+	if flagPCACertGenerateKey {
+		if err := applyPCAGeneratedKey(cert, flagPCACertKeyAlgorithm, flagPCACertKeyOutputFile); err != nil {
+			return err
+		}
 	}
 	// --requested-not-before-time wins over any value from --config-file so
 	// the flag has a predictable effect regardless of the body content.
