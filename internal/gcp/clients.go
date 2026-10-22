@@ -1206,6 +1206,20 @@ func DNSService(ctx context.Context, account string) (*dns.Service, error) {
 	return dns.NewService(ctx, option.WithTokenSource(ts))
 }
 
+// DNSServiceAt returns a Cloud DNS v1 client pointed at endpoint (a
+// regional endpoint base URL), or the global endpoint when endpoint is "".
+func DNSServiceAt(ctx context.Context, account, endpoint string) (*dns.Service, error) {
+	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("obtaining credentials: %w", err)
+	}
+	opts := []option.ClientOption{option.WithTokenSource(ts)}
+	if endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
+	}
+	return dns.NewService(ctx, opts...)
+}
+
 func ManagedIdentitiesService(ctx context.Context, account string) (*managedidentities.Service, error) {
 	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
 	if err != nil {
