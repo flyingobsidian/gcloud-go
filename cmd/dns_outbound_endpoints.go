@@ -336,32 +336,6 @@ func emitDNSOEList(w, errW io.Writer, all []*dns.OutboundEndpoint, format string
 	return emitFormattedTo(w, rows, "table(name,endpointIp,network,subnetwork,description)")
 }
 
-// dnsOEApplyLabels applies gcloud's labels Diff (clear, then remove, then
-// update) to current and reports whether the result differs.
-func dnsOEApplyLabels(current map[string]string, clear bool, remove []string, update map[string]string) (map[string]string, bool) {
-	next := map[string]string{}
-	if !clear {
-		for k, v := range current {
-			next[k] = v
-		}
-	}
-	for _, k := range remove {
-		delete(next, k)
-	}
-	for k, v := range update {
-		next[k] = v
-	}
-	if len(next) != len(current) {
-		return next, true
-	}
-	for k, v := range next {
-		if cv, ok := current[k]; !ok || cv != v {
-			return next, true
-		}
-	}
-	return next, false
-}
-
 func runDNSOEUpdate(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	_, parent, svc, err := dnsOEService(ctx)
@@ -379,7 +353,7 @@ func runDNSOEUpdate(cmd *cobra.Command, args []string) error {
 		mask = append(mask, "description")
 	}
 	if flagDNSOEClearLabels || len(flagDNSOERemoveLabels) > 0 || len(flagDNSOEUpdateLabels) > 0 {
-		if labels, changed := dnsOEApplyLabels(ep.Labels, flagDNSOEClearLabels, flagDNSOERemoveLabels, flagDNSOEUpdateLabels); changed {
+		if labels, changed := applyLabelsDiff(ep.Labels, flagDNSOEClearLabels, flagDNSOERemoveLabels, flagDNSOEUpdateLabels); changed {
 			ep.Labels = labels
 			if len(labels) == 0 {
 				ep.NullFields = append(ep.NullFields, "Labels")

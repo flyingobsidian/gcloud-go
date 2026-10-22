@@ -232,6 +232,24 @@ All items are implemented:
   — alpha-only in gcloud-python (organization/folder-scoped); not ported,
   in line with other alpha-only groups (see #1914).
 
+## Cloud Dataplex 587.0.0–588.0.0 (#1926)
+
+- **`gcloud dataplex data-products`** (GA in 588.0.0) is implemented on the
+  Dataplex v1 API: `create|update|delete|describe|list`, the four IAM
+  commands, and `data-assets create|update|delete|describe|list`.
+  `--access-groups` takes gcloud-python's JSON strings (snake_case keys,
+  unknown keys rejected, `id` required); updates send only the flags given
+  in the update mask, labels use the update/remove/clear diff, and the
+  create/update/delete commands print the declarative
+  `... request issued for: [ID]` / `Waiting for operation [...]` lines
+  (resources are printed after create/update only with `--format`). The
+  upstream `get` → `describe` rename needs no change; gcloud-go only ever
+  had `describe`.
+- **`gcloud dataplex dbt` promoted to GA** (587.0.0) — the group holds only
+  `dbt metadata-jobs create`, which builds a Dataplex metadata job; gcloud-go's
+  `dataplex metadata-jobs` is still a stub (#541), so `dbt` should land with
+  that implementation.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
