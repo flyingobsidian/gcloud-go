@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -115,6 +118,9 @@ func init() {
 	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunGCSLocation, "gcs-location", "", "GCS path to the template (required)")
 	dataflowJobsRunCmd.MarkFlagRequired("gcs-location")
 	dataflowJobsRunCmd.Flags().StringToStringVar(&flagDFRunParameters, "parameters", nil, "Template parameters (key=value)")
+	dataflowJobsRunCmd.Flags().StringSliceVar(&flagDFRunPipelineOptions, "additional-pipeline-options", nil,
+		"Additional pipeline options to pass to the job for launching a Dataflow template. "+
+			"Example: --additional-pipeline-options=option1=value1,option2=value2")
 	dataflowJobsRunCmd.Flags().StringVar(&flagDFRunStagingLocation, "staging-location", "", "GCS staging location")
 	dataflowJobsRunCmd.Flags().Int64Var(&flagDFRunMaxWorkers, "max-workers", 0, "Maximum number of workers")
 	dataflowJobsRunCmd.Flags().Int64Var(&flagDFRunNumWorkers, "num-workers", 0, "Initial number of workers")
@@ -295,6 +301,46 @@ func runDataflowJobsDrain(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// flagDFRunPipelineOptions is --additional-pipeline-options on `jobs run`
+// (gcloud-python 585.0.0), sent as environment.additionalPipelineOptions.
+var flagDFRunPipelineOptions []string
+
+// dataflowTemplateRequestBody returns req as a JSON object with
+// environment.additionalPipelineOptions set. The Go client's
+// RuntimeEnvironment has no such field yet, so the body is built generically.
+func dataflowTemplateRequestBody(req *dataflow.CreateJobFromTemplateRequest, options []string) (map[string]any, error) {
+	raw, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	var body map[string]any
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, err
+	}
+	env, _ := body["environment"].(map[string]any)
+	if env == nil {
+		env = map[string]any{}
+		body["environment"] = env
+	}
+	env["additionalPipelineOptions"] = options
+	return body, nil
+}
+
+// dataflowCreateJobWithPipelineOptions issues templates.create over REST so
+// that environment.additionalPipelineOptions reaches the API.
+func dataflowCreateJobWithPipelineOptions(ctx context.Context, project, region string, req *dataflow.CreateJobFromTemplateRequest, options []string) (*dataflow.Job, error) {
+	body, err := dataflowTemplateRequestBody(req, options)
+	if err != nil {
+		return nil, err
+	}
+	var job dataflow.Job
+	p := fmt.Sprintf("/projects/%s/locations/%s/templates", url.PathEscape(project), url.PathEscape(region))
+	if err := newRESTClient("https://dataflow.googleapis.com/v1b3").do(ctx, http.MethodPost, p, nil, body, &job); err != nil {
+		return nil, err
+	}
+	return &job, nil
+}
+
 func runDataflowJobsRun(cmd *cobra.Command, args []string) error {
 	project, region, err := resolveDataflowRegion()
 	if err != nil {
@@ -345,7 +391,12 @@ func runDataflowJobsRun(cmd *cobra.Command, args []string) error {
 		req.Parameters = flagDFRunParameters
 	}
 
-	job, err := svc.Projects.Locations.Templates.Create(project, region, req).Context(ctx).Do()
+	var job *dataflow.Job
+	if len(flagDFRunPipelineOptions) > 0 {
+		job, err = dataflowCreateJobWithPipelineOptions(ctx, project, region, req, flagDFRunPipelineOptions)
+	} else {
+		job, err = svc.Projects.Locations.Templates.Create(project, region, req).Context(ctx).Do()
+	}
 	if err != nil {
 		return fmt.Errorf("launching dataflow job: %w", err)
 	}
