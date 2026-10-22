@@ -307,6 +307,17 @@ No code change needed:
   `serviceType: {enumValues: {values: [{id: agent}]}}` in the import file now
   reaches the API instead of being dropped on unmarshal.
 
+## App Engine 589.0.0 (#1906)
+
+- **589.0.0** — three fixes to `gcloud beta app migrate-to-run` (Serverless
+  VPC Access connector dropped for deployed versions, Flexible
+  `instance_ip_mode` wrongly mapped to Cloud Run ingress, internal-only
+  Flexible apps not routing all egress through Direct VPC).
+  `app migrate-to-run` is a beta-only command that translates an App Engine
+  service/version config into a Cloud Run service and deploys it; gcloud-go
+  has not implemented it, so there is nothing to fix. The corrected mappings
+  apply when the command is ported.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
