@@ -351,6 +351,37 @@ code change:
   `beyondcorp` command covers `operations` and `security-gateways`), so there
   is no command to deprecate. The group should not be ported.
 
+## BigLake 584.0.0–589.0.0 (#1913)
+
+gcloud-go implements only `gcloud biglake iceberg catalogs`, whose `create`
+and `update` take the catalog body from `--config-file` (hyphenated keys, as
+sent by Python), so no item needs a code change:
+
+- **`--kms-key` / `--kms-keyring` / `--kms-location` / `--kms-project`**
+  (584.0.0) and **`--cross-cloud-cache=enabled|disabled`** (584.0.0) on
+  `iceberg catalogs create|update` — Python sends them as
+  `encryption-config: {kms-key-name: ...}` and
+  `cross-cloud-cache-options: {enabled: ...}`; set those keys in the
+  `--config-file` payload.
+- **Federated catalog flags promoted to GA / beta** (586.0.0), including the
+  new `workday` `--federated-catalog-type` and `--workday-base-url` /
+  `--workday-tenant` — gcloud-go has no per-track flags; the
+  `federated-catalog-options` object (including `identity-mode` and
+  `metadata-service-directory-name`) is set through `--config-file`.
+- **`iceberg catalogs update` now sends update-mask paths** for
+  `metadata_service_directory_name`, `identity_mode`,
+  `encryption_config.kms_key_name` and `cross_cloud_cache_options.enabled`
+  (source-level) — gcloud-go's `update` derives the mask from the top-level
+  keys of the `--config-file` body (or takes `--update-mask`), so these
+  objects are already included whenever they are present in the payload.
+- **`--kms-key` and `--cross-cloud-cache` on `delta-sharing catalogs
+  create|update`** (584.0.0, 585.0.0), **`--service-directory-name` on
+  `delta-sharing catalogs update`** (589.0.0), **`hive catalogs|databases|
+  tables` promoted to GA on the Hive v1 API** (588.0.0) and the alpha
+  **`data-product-sharing unpublish`** — gcloud-go has not ported the
+  `delta-sharing`, `hive` or `data-product-sharing` subgroups (see the
+  570.0.0–578.0.0 note below); these land when those subgroups are added.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
