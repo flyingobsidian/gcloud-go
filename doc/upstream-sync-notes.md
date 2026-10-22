@@ -295,6 +295,18 @@ No code change needed:
   flag (the `serviceAccount` query parameter) should be added with the
   command.
 
+## Apihub 588.0.0 (#1905)
+
+- **588.0.0** — `--service-type-enum-values` (and the related clear flags) on
+  `gcloud apihub apis update`, setting the API's `serviceType` system
+  attribute (`code`, `model`, `agent`, `skill`). gcloud-go has no
+  `apihub apis update`; API bodies are written with `apihub apis import`,
+  which loads a `GoogleCloudApihubV1Api` from a YAML/JSON file and patches
+  every non-empty field. `google.golang.org/api` was bumped to v0.307.0, whose
+  `apihub/v1` `Api` struct carries `serviceType` (v0.298.0 lacked it), so
+  `serviceType: {enumValues: {values: [{id: agent}]}}` in the import file now
+  reaches the API instead of being dropped on unmarshal.
+
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
