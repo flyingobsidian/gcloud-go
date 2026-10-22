@@ -263,10 +263,14 @@ func runBTTblRestore(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Instances.Tables.Restore(parent, &bigtableadmin.RestoreTableRequest{
+	req := &bigtableadmin.RestoreTableRequest{
 		TableId: args[0],
 		Backup:  flagBTTblBackup,
-	}).Context(ctx).Do()
+	}
+	if err := applyBTRestoreTableProperties(cmd, req); err != nil {
+		return err
+	}
+	op, err := svc.Projects.Instances.Tables.Restore(parent, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("restoring table: %w", err)
 	}
