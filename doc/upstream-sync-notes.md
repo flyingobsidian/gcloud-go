@@ -288,6 +288,22 @@ new CLI flags are needed:
   (587.0.0) — gcloud-go's `--network` has always been optional (the instance
   can also come from `--config-from-file`), so no change is needed.
 
+## Cloud Firestore 584.0.0–589.0.0 (#1929)
+
+- **`gcloud firestore change-streams` promoted to beta (584.0.0) and GA
+  (589.0.0)** — implemented as `firestore change-streams
+  create|delete|describe|list` on the Firestore Admin v1 API. `create` takes
+  `--database-scope` or `--collection-group-scope` (one required) and
+  `--retention` (default `7d`, 1–7 whole days, sent as seconds); `delete`
+  prompts and accepts `--etag`. As in gcloud-python, `create` and `delete`
+  print nothing unless `--format` is given, and `list` returns a single page.
+- **Search configuration options promoted to GA on `gcloud firestore indexes
+  composite create`** (584.0.0) — gcloud-go's `indexes composite create`
+  takes the full `Index` body via `--config-file`, and the Go client exposes
+  `fields[].searchConfig` and `searchIndexOptions`, so search indexes can
+  already be created from the payload. Python's client-side check that
+  `--search-index-options` needs a `search-config` field is left to the API.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
