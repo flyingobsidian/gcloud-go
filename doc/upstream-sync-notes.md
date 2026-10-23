@@ -394,6 +394,22 @@ stubs:
   `memcache instances create` takes the full `Instance` body via
   `--config-file`, and the Go client exposes `tags`, so no flag is needed.
 
+## Cloud Observability 586.0.0 (#1936)
+
+- **`gcloud observability buckets create` and `update`** (586.0.0) are
+  implemented on the Observability v1 API, along with `buckets describe` and
+  `list` (also promoted to GA), which gcloud-go did not have before. `create`
+  and `update` take `--display-name`, `--description` and
+  `--cmek-settings-kms-key` (`update` also takes `--clear-cmek-settings`),
+  wait on the operation unless `--async`, and print the declarative
+  `Create request issued for:` / `Request issued for:` messages; `create`
+  prints `Created bucket [ID].` and nothing on stdout, and `update`
+  read-modify-writes the bucket with a mask of the given fields, then prints
+  the updated bucket. `list` takes `--show-deleted`.
+- **Observability commands promoted from beta to GA** — gcloud-go does not
+  split tracks. The `buckets datasets` (plus `links` and `views`) and
+  `settings` groups are not yet ported.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
