@@ -69,3 +69,9 @@ func TestRedisZonesSubcommands(t *testing.T) {
 	}
 	assertSubcommands(t, g, []string{"list"})
 }
+
+func TestRedisInstancesCreateHasTags(t *testing.T) {
+	if redisInstancesCreateCmd.Flags().Lookup("tags") == nil {
+		t.Error("--tags missing on redis instances create")
+	}
+}
