@@ -304,6 +304,25 @@ new CLI flags are needed:
   already be created from the payload. Python's client-side check that
   `--search-index-options` needs a `search-config` field is left to the API.
 
+## Cloud IAM 585.0.0–588.0.0 (#1930)
+
+- **`gcloud iam workforce-pools subjects revoke-sessions`** (588.0.0) is
+  implemented, together with the existing GA `subjects delete` and
+  `subjects undelete` commands so the `subjects` group is complete. All three
+  take `SUBJECT` (an ID with `--location` and `--workforce-pool`, or a full
+  `locations/…/subjects/…` name), wait on the subject operation unless
+  `--async`, and print gcloud-python's declarative
+  `Request issued for:` / `Waiting for operation` messages; `delete` prints
+  `Deleted workforce pool subject [ID].` and nothing on stdout.
+- **`enabled-for-users-groups` value of `--scim-usage` promoted to GA on
+  `gcloud iam workforce-pools providers`** (585.0.0) — gcloud-go's
+  `providers create|update` take the full `WorkforcePoolProvider` body via
+  `--config-file`, and the Go client's `scimUsage` accepts
+  `ENABLED_FOR_USERS_GROUPS`, so no change is needed.
+- **`gcloud iam workforce-pools providers scim-tenants get-iam-policy` /
+  `set-iam-policy`** — alpha-only in gcloud-python; gcloud-go has no
+  `scim-tenants` group, so these are not ported (see #1914).
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys

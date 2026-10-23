@@ -14,8 +14,9 @@ import (
 //
 // Workforce pools live under organizations (not projects) at
 // locations/LOCATION. This surface adds the top-level pool CRUD plus the
-// providers subgroup. subjects/operations sub-subgroups remain stubs for
-// follow-up issues since the surface is large.
+// providers subgroup; the subjects subgroup is in
+// iam_workforce_pools_subjects.go. The operations sub-subgroups are not yet
+// ported.
 
 var iamWorkforcePoolsCmd = &cobra.Command{Use: "workforce-pools", Short: "Manage Workforce Identity Federation pools"}
 var iamWorkforcePoolsProvidersCmd = &cobra.Command{Use: "providers", Short: "Manage workforce-pool providers"}
