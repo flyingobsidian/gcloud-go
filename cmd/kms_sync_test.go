@@ -88,3 +88,13 @@ func TestKmsInventoryFlagsPresent(t *testing.T) {
 		t.Error("search-protected-resources missing --scope flag")
 	}
 }
+
+func TestKmsKeyringsDelete(t *testing.T) {
+	c := kmsSub("keyrings", "delete")
+	if c == nil {
+		t.Fatal("kms keyrings delete missing")
+	}
+	if c.Flags().Lookup("location") == nil {
+		t.Error("--location flag missing on keyrings delete")
+	}
+}

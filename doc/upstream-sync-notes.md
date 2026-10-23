@@ -336,6 +336,13 @@ new CLI flags are needed:
   use gcloud-go's usual `--condition-expression` / `--condition-title` /
   `--condition-description` flags, as on the `dest-groups` IAM commands.
 
+## Cloud Key Management Service 583.0.0–589.0.0 (#1932)
+
+- **`gcloud kms keyrings delete`** is implemented: it deletes
+  `projects/P/locations/L/keyRings/KEYRING` (or a full name) with
+  `--location`, and like gcloud-python's `DeleteCommand` it neither waits on
+  the returned operation nor prints anything unless `--format` is given.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys

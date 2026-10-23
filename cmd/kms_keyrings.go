@@ -38,6 +38,13 @@ var kmsKRCreateCmd = &cobra.Command{
 	RunE:  runKmsKRCreate,
 }
 
+var kmsKRDeleteCmd = &cobra.Command{
+	Use:   "delete KEYRING",
+	Short: "Delete a key ring",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runKmsKRDelete,
+}
+
 var kmsKRDescribeCmd = &cobra.Command{
 	Use:   "describe KEYRING",
 	Short: "Describe a key ring",
@@ -82,7 +89,7 @@ var kmsKRRemoveIamCmd = &cobra.Command{
 
 func init() {
 	all := []*cobra.Command{
-		kmsKRCreateCmd, kmsKRDescribeCmd, kmsKRListCmd,
+		kmsKRCreateCmd, kmsKRDeleteCmd, kmsKRDescribeCmd, kmsKRListCmd,
 		kmsKRGetIamCmd, kmsKRSetIamCmd, kmsKRAddIamCmd, kmsKRRemoveIamCmd,
 	}
 	for _, c := range all {
@@ -133,6 +140,32 @@ func runKmsKRCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating key ring: %w", err)
 	}
 	return emitFormatted(out, flagKmsKRFormat)
+}
+
+// runKmsKRDelete mirrors gcloud-python's keyrings delete (589.0.0): a
+// DeleteCommand that issues the request and prints nothing unless --format.
+func runKmsKRDelete(cmd *cobra.Command, args []string) error {
+	if args[0] == "" {
+		return fmt.Errorf("Invalid value for [keyring]: keyring id must be non-empty.")
+	}
+	project, err := resolveProject()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	svc, err := gcp.KMSService(ctx, flagAccount)
+	if err != nil {
+		return err
+	}
+	name := kmsKRName(project, flagKmsKRLocation, args[0])
+	op, err := svc.Projects.Locations.KeyRings.Delete(name).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("deleting key ring: %w", err)
+	}
+	if flagKmsKRFormat != "" {
+		return emitFormatted(op, flagKmsKRFormat)
+	}
+	return nil
 }
 
 func runKmsKRDescribe(cmd *cobra.Command, args []string) error {
