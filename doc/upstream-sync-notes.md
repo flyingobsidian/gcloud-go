@@ -410,6 +410,16 @@ stubs:
   split tracks. The `buckets datasets` (plus `links` and `views`) and
   `settings` groups are not yet ported.
 
+## Cloud On Demand Scanning 588.0.0 (#1937)
+
+- **Extraction library migrated to osv-scalibr, with dynamic linking
+  support** (588.0.0) — this changes gcloud-python's separately installed
+  `local-extract` component, which `artifacts docker images scan` shells out
+  to. gcloud-go does not ship that component: its `scan` does its own local
+  package extraction (`extractLocalPackages` in `cmd/artifacts.go`, which
+  runs the image with Docker) or skips it with `--remote`, and then calls the
+  same On-Demand Scanning `analyzePackages` API. No change is needed.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
