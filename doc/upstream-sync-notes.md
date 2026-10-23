@@ -250,6 +250,30 @@ All items are implemented:
   `dataplex metadata-jobs` is still a stub (#541), so `dbt` should land with
   that implementation.
 
+## Cloud Dataproc 587.0.0 (#1927)
+
+As with #1775, gcloud-go's `dataproc clusters create/update` and
+`dataproc workflow-templates set-managed-cluster` take the full `Cluster` /
+`ManagedCluster` body via `--config-file` / `--source`, and every field the
+new flags populate is exposed by `google.golang.org/api/dataproc/v1`, so no
+new CLI flags are needed:
+
+- **`--multizone`** (GA) on `clusters create` and `workflow-templates
+  set-managed-cluster` — Python leaves `gceClusterConfig.zoneUri` empty and
+  sets `gceClusterConfig.multiZoneConfig.targetShape: ANY`. Set both in the
+  payload.
+- **`--master-flexible-config`, `--worker-flexible-config`,
+  `--secondary-worker-flexible-config`** (alpha/beta) on `clusters create`,
+  `clusters update` (worker/secondary-worker only) and `workflow-templates
+  set-managed-cluster` — populate `config.masterFlexibleConfig`,
+  `config.workerFlexibleConfig` and `config.secondaryWorkerFlexibleConfig`
+  (`FlexibleInstanceGroupConfig`: `numInstances`, `coreCount`,
+  `hardwareClass`, `bootDiskSizeGb`) in place of the corresponding
+  `InstanceGroupConfig`, with `zoneUri` left empty. Python's client-side
+  conflict checks between the flexible-config flags and the standard
+  machine-type/accelerator flags have no equivalent because gcloud-go has no
+  such flags; the API validates the payload.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
