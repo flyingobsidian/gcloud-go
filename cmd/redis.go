@@ -53,6 +53,7 @@ var (
 	flagRedisVersion        string
 	flagRedisNetwork        string
 	flagRedisConfig         map[string]string
+	flagRedisTags           map[string]string
 	flagRedisEnableAuth     bool
 	flagRedisTransitEncrypt string
 	flagRedisLabels         map[string]string
@@ -135,6 +136,8 @@ func init() {
 	redisInstancesCreateCmd.Flags().StringVar(&flagRedisVersion, "redis-version", "", "Redis version")
 	redisInstancesCreateCmd.Flags().StringVar(&flagRedisNetwork, "network", "", "Network")
 	redisInstancesCreateCmd.Flags().StringToStringVar(&flagRedisConfig, "redis-config", nil, "Redis config (key=value)")
+	// GA in gcloud-python 584.0.0 (#1935).
+	redisInstancesCreateCmd.Flags().StringToStringVar(&flagRedisTags, "tags", nil, "List of tag KEY=VALUE pairs to add")
 	redisInstancesCreateCmd.Flags().BoolVar(&flagRedisEnableAuth, "enable-auth", false, "Enable AUTH")
 	redisInstancesCreateCmd.Flags().StringVar(&flagRedisTransitEncrypt, "transit-encryption-mode", "", "Transit encryption mode")
 	redisInstancesCreateCmd.Flags().StringToStringVar(&flagRedisLabels, "labels", nil, "Labels (key=value)")
@@ -346,6 +349,9 @@ func runRedisInstancesCreate(cmd *cobra.Command, args []string) error {
 	}
 	if flagRedisTransitEncrypt != "" {
 		inst.TransitEncryptionMode = flagRedisTransitEncrypt
+	}
+	if len(flagRedisTags) > 0 {
+		inst.Tags = flagRedisTags
 	}
 	if len(flagRedisLabels) > 0 {
 		inst.Labels = flagRedisLabels

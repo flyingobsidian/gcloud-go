@@ -374,6 +374,26 @@ stubs:
   update`**, plus the `--location` value-type change on the instances
   commands.
 
+## Cloud Memorystore 584.0.0–585.0.0 (#1935)
+
+- **Memorystore token auth promoted to GA** (585.0.0) — implemented
+  `memorystore instances create-token-auth-user INSTANCE --token-auth-user`,
+  `instances token-auth-users create-auth-token|delete|describe|list` and
+  `instances token-auth-users auth-tokens delete|describe|list`, on the same
+  REST endpoint as the rest of gcloud-go's `memorystore` surface. Resources
+  are given as IDs with `--location` / `--instance` / `--token-auth-user`, or
+  as full names; mutations print the declarative
+  `Request issued for:` / `Waiting for operation` messages and wait unless
+  `--async`, and `token-auth-users delete` takes `--force` and `--request-id`.
+  `--authorization-mode=token-auth` on `instances create|update` needs no
+  flag: both take the full `Instance` body via `--config-file`, so set
+  `authorizationMode: TOKEN_AUTH` there.
+- **`--tags` on `gcloud redis instances create`** (584.0.0) is implemented as
+  a `KEY=VALUE` map sent as `Instance.tags`.
+- **`--tags` on `gcloud memcache instances create`** (585.0.0) — gcloud-go's
+  `memcache instances create` takes the full `Instance` body via
+  `--config-file`, and the Go client exposes `tags`, so no flag is needed.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
