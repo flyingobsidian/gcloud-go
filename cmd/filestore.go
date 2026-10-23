@@ -246,7 +246,7 @@ func init() {
 		c.Flags().StringVar(&flagFSLocation, "zone", "", "Zone (or region) containing the instance")
 	}
 	filestoreInstancesCreateCmd.Flags().StringVar(&flagFSInstanceTier, "tier", "", "Service tier (e.g. STANDARD, PREMIUM, ENTERPRISE, ZONAL, REGIONAL)")
-	filestoreInstancesCreateCmd.Flags().StringVar(&flagFSInstanceNetwork, "network", "", "VPC network to attach to (name=NAME[,reserved-ip-range=CIDR])")
+	filestoreInstancesCreateCmd.Flags().StringVar(&flagFSInstanceNetwork, "network", "", "Network config: name=NAME[,reserved-ip-range=RANGE][,connect-mode=MODE][,address-mode=MODE][,psc-endpoint-project=PROJECT][,psc-requested-ip-address=IP]")
 	filestoreInstancesCreateCmd.Flags().StringVar(&flagFSInstanceFileShareName, "file-share-name", "", "Name of the file share")
 	filestoreInstancesCreateCmd.Flags().Int64Var(&flagFSInstanceFileShareCapGB, "file-share-capacity-gb", 0, "File share capacity in GB")
 	filestoreInstancesCreateCmd.Flags().StringVar(&flagFSDescription, "description", "", "Instance description")
@@ -520,7 +520,10 @@ func runFSInstancesCreate(cmd *cobra.Command, args []string) error {
 		inst.Labels = flagFSLabels
 	}
 	if flagFSInstanceNetwork != "" {
-		net := &filestore.NetworkConfig{Network: flagFSInstanceNetwork}
+		net, err := fsParseNetwork(flagFSInstanceNetwork)
+		if err != nil {
+			return err
+		}
 		inst.Networks = append(inst.Networks, net)
 	}
 	if flagFSInstanceFileShareName != "" || flagFSInstanceFileShareCapGB > 0 {
@@ -736,6 +739,66 @@ func runFSLocationsList(cmd *cobra.Command, args []string) error {
 
 // fsListLocations paginates the whole locations list, honoring the shared
 // --filter/--page-size/--limit flags.
+// fsNetworkKeys are the --network dict keys accepted by gcloud-python's v1
+// track (network_arg_spec_beta_v1).
+var fsNetworkKeys = []string{
+	"address-mode", "connect-mode", "name", "psc-endpoint-project",
+	"psc-requested-ip-address", "reserved-ip-range",
+}
+
+// fsParseNetwork builds a NetworkConfig from the --network dict, mirroring
+// FilestoreClient.MakeNetworkConfig. A bare value without '=' is taken as
+// the network name.
+func fsParseNetwork(spec string) (*filestore.NetworkConfig, error) {
+	vals := map[string]string{}
+	if !strings.Contains(spec, "=") {
+		vals["name"] = spec
+	} else {
+		for _, part := range strings.Split(spec, ",") {
+			k, v, ok := strings.Cut(part, "=")
+			if !ok {
+				return nil, fmt.Errorf("argument --network: Bad syntax for dict arg: [%s]", part)
+			}
+			valid := false
+			for _, key := range fsNetworkKeys {
+				if k == key {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return nil, fmt.Errorf("argument --network: valid keys are [%s]; received: %s",
+					strings.Join(fsNetworkKeys, ", "), k)
+			}
+			vals[k] = v
+		}
+	}
+	net := &filestore.NetworkConfig{
+		Network:         vals["name"],
+		ReservedIpRange: vals["reserved-ip-range"],
+	}
+	if m, ok := vals["address-mode"]; ok {
+		if m != "MODE_IPV4" && m != "MODE_IPV6" {
+			return nil, fmt.Errorf("[%s] is not a valid address-mode. Must be one of MODE_IPV4 or MODE_IPV6.", m)
+		}
+		net.Modes = []string{m}
+	}
+	connectMode := "DIRECT_PEERING"
+	if m, ok := vals["connect-mode"]; ok {
+		connectMode = m
+	}
+	switch connectMode {
+	case "DIRECT_PEERING", "PRIVATE_SERVICE_ACCESS", "PRIVATE_SERVICE_CONNECT":
+	default:
+		return nil, fmt.Errorf("[%s] is not a valid connect-mode. Must be one of DIRECT_PEERING or PRIVATE_SERVICE_ACCESS.", connectMode)
+	}
+	net.ConnectMode = connectMode
+	if p, ip := vals["psc-endpoint-project"], vals["psc-requested-ip-address"]; p != "" || ip != "" {
+		net.PscConfig = &filestore.PscConfig{EndpointProject: p, RequestedIpAddress: ip}
+	}
+	return net, nil
+}
+
 func fsListLocations() ([]*filestore.Location, error) {
 	project, err := resolveProject()
 	if err != nil {

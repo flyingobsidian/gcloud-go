@@ -274,6 +274,20 @@ new CLI flags are needed:
   machine-type/accelerator flags have no equivalent because gcloud-go has no
   such flags; the API validates the payload.
 
+## Cloud Filestore 585.0.0–587.0.0 (#1928)
+
+- **`psc-requested-ip-address` key on `--network`** for `filestore instances
+  create` (585.0.0) is implemented. `--network` is now parsed as gcloud-python's
+  v1 dict (`name`, `reserved-ip-range`, `connect-mode`, `address-mode`,
+  `psc-endpoint-project`, `psc-requested-ip-address`), building
+  `NetworkConfig` as `MakeNetworkConfig` does, with `connect-mode` defaulting
+  to `DIRECT_PEERING` and the PSC keys populating `pscConfig`. Previously the
+  whole flag value was sent as the network name; a bare value without `=` is
+  still accepted as the name.
+- **`--network` optional on `gcloud beta filestore instances create`**
+  (587.0.0) — gcloud-go's `--network` has always been optional (the instance
+  can also come from `--config-from-file`), so no change is needed.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
