@@ -115,6 +115,12 @@ func init() {
 		// SI variants) and normalises them to GiB.
 		c.Flags().StringVar(&flagMKBrokerDiskGiB, "broker-disk-size-gib", "",
 			"Disk size for each broker in GiB (accepts byte-unit suffixes such as 100Gi or 2Ti)")
+		c.Flags().BoolVar(&flagMKPublicCluster, "public-cluster", false,
+			"Enable a public cluster. If disabled, public cluster config is cleared")
+		c.Flags().BoolVar(&flagMKNoPublicCluster, "no-public-cluster", false, "Disable a public cluster")
+		c.MarkFlagsMutuallyExclusive("public-cluster", "no-public-cluster")
+		c.Flags().StringSliceVar(&flagMKAllowedRanges, "allowed-source-ip-ranges", nil,
+			"Comma-separated IPv4 CIDR ranges allowed to connect to the public cluster (requires --public-cluster)")
 	}
 	mkClusterUpdateCmd.Flags().StringVar(&flagMKUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
@@ -141,6 +147,9 @@ func runMKClusterCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err := applyBrokerDiskFlag(cluster); err != nil {
+		return err
+	}
+	if err := mkApplyPublicClusterCreate(cluster, flagMKPublicCluster, flagMKAllowedRanges); err != nil {
 		return err
 	}
 	ctx := context.Background()
@@ -219,8 +228,9 @@ func runMKClusterUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if flagMKConfigFile == "" && flagMKBrokerDiskGiB == "" {
-		return fmt.Errorf("either --config-file or --broker-disk-size-gib is required")
+	publicFlags := flagMKPublicCluster || flagMKNoPublicCluster || len(flagMKAllowedRanges) > 0
+	if flagMKConfigFile == "" && flagMKBrokerDiskGiB == "" && !publicFlags {
+		return fmt.Errorf("one of --config-file, --broker-disk-size-gib, --public-cluster, --no-public-cluster or --allowed-source-ip-ranges is required")
 	}
 	cluster := &managedkafka.Cluster{}
 	if flagMKConfigFile != "" {
@@ -240,6 +250,10 @@ func runMKClusterUpdate(cmd *cobra.Command, args []string) error {
 			}
 			mask += "brokerCapacityConfig.diskSizeGib"
 		}
+	}
+	mask, err = mkApplyPublicClusterUpdate(cluster, flagMKPublicCluster, flagMKNoPublicCluster, flagMKAllowedRanges, mask)
+	if err != nil {
+		return err
 	}
 	ctx := context.Background()
 	svc, err := gcp.ManagedKafkaService(ctx, flagAccount)
