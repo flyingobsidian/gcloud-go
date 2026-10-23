@@ -323,6 +323,19 @@ new CLI flags are needed:
   `set-iam-policy`** — alpha-only in gcloud-python; gcloud-go has no
   `scim-tenants` group, so these are not ported (see #1914).
 
+## Cloud Identity-Aware Proxy 587.0.0 (#1931)
+
+- **`gcloud iap tcp get-iam-policy|set-iam-policy|add-iam-policy-binding|remove-iam-policy-binding`**
+  (alpha/beta) are implemented. `--resource-type=cloud-run` is required, with
+  optional `--region` and `--service` or `--instance` (region required with
+  either). The resource is
+  `projects/PROJECT_NUMBER/iap_tunnel/cloudRun[/locations/REGION[/services/S|/instances/I]]`
+  (the project number is looked up as in Python). Set/add/remove print
+  `Updated IAM policy for iap tcp iam resource [NAME].`; add/remove print no
+  policy unless `--format` is given, as Python returns nothing. Conditions
+  use gcloud-go's usual `--condition-expression` / `--condition-title` /
+  `--condition-description` flags, as on the `dest-groups` IAM commands.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
