@@ -96,3 +96,38 @@ func TestIsZoneLocationID(t *testing.T) {
 		}
 	}
 }
+
+func TestFSParseNetwork(t *testing.T) {
+	net, err := fsParseNetwork("name=default,connect-mode=PRIVATE_SERVICE_CONNECT,psc-requested-ip-address=10.0.0.5,address-mode=MODE_IPV4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if net.Network != "default" || net.ConnectMode != "PRIVATE_SERVICE_CONNECT" {
+		t.Errorf("got network=%q connectMode=%q", net.Network, net.ConnectMode)
+	}
+	if net.PscConfig == nil || net.PscConfig.RequestedIpAddress != "10.0.0.5" || net.PscConfig.EndpointProject != "" {
+		t.Errorf("pscConfig = %+v", net.PscConfig)
+	}
+	if len(net.Modes) != 1 || net.Modes[0] != "MODE_IPV4" {
+		t.Errorf("modes = %v", net.Modes)
+	}
+
+	net, err = fsParseNetwork("name=vpc,reserved-ip-range=10.0.0.0/29")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if net.ReservedIpRange != "10.0.0.0/29" || net.ConnectMode != "DIRECT_PEERING" || net.PscConfig != nil {
+		t.Errorf("got %+v", net)
+	}
+
+	net, err = fsParseNetwork("default")
+	if err != nil || net.Network != "default" {
+		t.Errorf("bare name: %+v, %v", net, err)
+	}
+
+	for _, bad := range []string{"name=a,bogus=1", "name=a,connect-mode=NOPE", "name=a,address-mode=X", "name=a,junk"} {
+		if _, err := fsParseNetwork(bad); err == nil {
+			t.Errorf("fsParseNetwork(%q): expected error", bad)
+		}
+	}
+}
