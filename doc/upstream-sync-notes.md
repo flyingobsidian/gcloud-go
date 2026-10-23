@@ -343,6 +343,20 @@ new CLI flags are needed:
   `--location`, and like gcloud-python's `DeleteCommand` it neither waits on
   the returned operation nor prints anything unless `--format` is given.
 
+## Cloud Managed Kafka 584.0.0 (#1933)
+
+- **`--public-cluster` and `--allowed-source-ip-ranges` promoted to GA on
+  `managed-kafka clusters create` and `update`** — implemented (with
+  `--no-public-cluster`), populating
+  `gcpConfig.accessConfig.publicClusterConfig.allowedSourceIpRanges` on top
+  of the `--config-file` body. Validation follows
+  `MapSubnetsToNetworkConfig` (create: ranges require `--public-cluster` and
+  vice versa) and `PrepareUpdateWithPublicCluster` (update:
+  `--no-public-cluster` clears the config and rejects ranges; ranges imply
+  enabling). On update, `gcpConfig.accessConfig.publicClusterConfig` is
+  appended to the update mask, and the flags alone are enough to run
+  `update` without `--config-file`.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
