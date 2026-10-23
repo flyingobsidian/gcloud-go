@@ -357,6 +357,23 @@ new CLI flags are needed:
   appended to the update mask, and the flags alone are enough to run
   `update` without `--config-file`.
 
+## Cloud Managed Lustre 587.0.0 (#1934)
+
+gcloud-go's `lustre instances` and `lustre operations` commands are still
+"not yet implemented" stubs (`cmd/lustre.go`): there is no generated Lustre
+client in `google.golang.org/api` (still absent at v0.307.0), which is why
+#1257 was closed unimplemented. As with Backup DR (#1920), the 587.0.0
+changes should land with a real `lustre` implementation rather than as more
+stubs:
+
+- **`lustre instances directory-policies create|delete|describe|list`**
+  (promoted to GA) and **`lustre instances mirrors
+  create|delete|describe|list|update`** (alpha).
+- **`--target-version`, `--region`, `--key-ring` on `instances create`** and
+  **`--target-version`, `--region`, `--clear-placement-policy` on `instances
+  update`**, plus the `--location` value-type change on the instances
+  commands.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
