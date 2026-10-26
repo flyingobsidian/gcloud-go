@@ -1,6 +1,85 @@
 package cmd
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+
+	managedkafka "google.golang.org/api/managedkafka/v1"
+)
+
+func TestApplyBrokerDiskFlag(t *testing.T) {
+	cases := []struct {
+		name    string
+		flag    string
+		cluster *managedkafka.Cluster
+		want    *managedkafka.BrokerCapacityConfig
+		wantErr bool
+	}{
+		{name: "unset leaves cluster untouched", flag: "", cluster: &managedkafka.Cluster{}, want: nil},
+		{name: "creates config when nil", flag: "500", cluster: &managedkafka.Cluster{}, want: &managedkafka.BrokerCapacityConfig{DiskSizeGib: 500}},
+		{name: "parses units", flag: "1TiB", cluster: &managedkafka.Cluster{}, want: &managedkafka.BrokerCapacityConfig{DiskSizeGib: 1024}},
+		{
+			name:    "overrides config-file value",
+			flag:    "200Gi",
+			cluster: &managedkafka.Cluster{BrokerCapacityConfig: &managedkafka.BrokerCapacityConfig{DiskSizeGib: 100}},
+			want:    &managedkafka.BrokerCapacityConfig{DiskSizeGib: 200},
+		},
+		{name: "invalid value", flag: "1.5Gi", cluster: &managedkafka.Cluster{}, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			old := flagMKBrokerDiskGiB
+			flagMKBrokerDiskGiB = tc.flag
+			t.Cleanup(func() { flagMKBrokerDiskGiB = old })
+
+			err := applyBrokerDiskFlag(tc.cluster)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("applyBrokerDiskFlag() = nil, want error")
+				}
+				if tc.cluster.BrokerCapacityConfig != nil {
+					t.Errorf("BrokerCapacityConfig = %+v, want nil on error", tc.cluster.BrokerCapacityConfig)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("applyBrokerDiskFlag() error: %v", err)
+			}
+			got := tc.cluster.BrokerCapacityConfig
+			if tc.want == nil {
+				if got != nil {
+					t.Errorf("BrokerCapacityConfig = %+v, want nil", got)
+				}
+				return
+			}
+			if got == nil || got.DiskSizeGib != tc.want.DiskSizeGib {
+				t.Errorf("BrokerCapacityConfig = %+v, want DiskSizeGib %d", got, tc.want.DiskSizeGib)
+			}
+		})
+	}
+}
+
+func TestApplyBrokerDiskFlagRequestBody(t *testing.T) {
+	old := flagMKBrokerDiskGiB
+	flagMKBrokerDiskGiB = "0"
+	t.Cleanup(func() { flagMKBrokerDiskGiB = old })
+
+	cluster := &managedkafka.Cluster{}
+	if err := applyBrokerDiskFlag(cluster); err != nil {
+		t.Fatalf("applyBrokerDiskFlag() error: %v", err)
+	}
+	raw, err := json.Marshal(cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `"brokerCapacityConfig":{"diskSizeGib":"0"}`; !strings.Contains(string(raw), want) {
+		t.Errorf("request body %s does not contain %s", raw, want)
+	}
+	if got := joinMask(nonEmptyJSONFields(cluster)); got != "brokerCapacityConfig" {
+		t.Errorf("derived update mask = %q, want %q", got, "brokerCapacityConfig")
+	}
+}
 
 func TestParseBrokerDiskSizeGiB(t *testing.T) {
 	cases := []struct {

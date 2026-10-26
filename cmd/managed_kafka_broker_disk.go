@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -10,13 +9,11 @@ import (
 )
 
 // applyBrokerDiskFlag validates --broker-disk-size-gib (using the same
-// byte-unit parser as gcloud-python 576.0.0) and threads it onto the Cluster
-// request body. The managedkafka v1 discovery in this SDK release does not yet
-// expose a broker_capacity_config field on Cluster; when the client library
-// adds the field we can populate cluster.BrokerCapacityConfig.DiskSizeGib
-// directly. Until then the flag is accepted, validated, and logged so callers
-// see a clear diagnostic rather than a silent no-op.
-func applyBrokerDiskFlag(_ *managedkafka.Cluster) error {
+// byte-unit parser as gcloud-python 576.0.0) and sets it on
+// cluster.brokerCapacityConfig.diskSizeGib, matching the api_field of
+// gcloud-python's broker-disk flag. Other brokerCapacityConfig fields loaded
+// from --config-file are preserved; the flag overrides diskSizeGib.
+func applyBrokerDiskFlag(cluster *managedkafka.Cluster) error {
 	if flagMKBrokerDiskGiB == "" {
 		return nil
 	}
@@ -24,10 +21,13 @@ func applyBrokerDiskFlag(_ *managedkafka.Cluster) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr,
-		"Warning: --broker-disk-size-gib=%dGiB parsed successfully; the current managedkafka v1 SDK does not yet expose brokerCapacityConfig.diskSizeGib, so include it in --config-file for now.\n",
-		gib,
-	)
+	if cluster.BrokerCapacityConfig == nil {
+		cluster.BrokerCapacityConfig = &managedkafka.BrokerCapacityConfig{}
+	}
+	cluster.BrokerCapacityConfig.DiskSizeGib = gib
+	// Send an explicit 0 too, so the API rejects it rather than it being
+	// silently dropped by omitempty.
+	cluster.BrokerCapacityConfig.ForceSendFields = append(cluster.BrokerCapacityConfig.ForceSendFields, "DiskSizeGib")
 	return nil
 }
 
