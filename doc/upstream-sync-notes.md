@@ -433,6 +433,14 @@ stubs:
   `--bigtable-key-fields` / `--bigtable-delimiter`. Python's client-side
   checks (row-key schema excludes key fields/delimiter; delimiter requires key
   fields) are left to the API.
+## Cloud Resource Manager 588.0.0 (#1939)
+
+- **`--recommend` on `gcloud beta projects delete` and `remove-iam-policy-binding`
+  no longer has any effect** — gcloud-python keeps the flag (an `ArgBoolean`,
+  default false) only so existing invocations still parse. gcloud-go never
+  implemented the change-risk recommendations; it now accepts `--recommend`
+  with the same `true|yes|false|no` validation on both commands and ignores
+  it, so scripts written against the beta track run unchanged.
 
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
