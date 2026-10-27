@@ -893,11 +893,29 @@ func runSQLInstanceCreate(cmd *cobra.Command, args []string) error {
 		inst.Settings.StorageAutoResizeLimit = flagSQLStorageAutoIncreaseLimit
 		inst.Settings.ForceSendFields = append(inst.Settings.ForceSendFields, "StorageAutoResizeLimit")
 	}
-	op, err := svc.Instances.Insert(project, inst).Context(ctx).Do()
+	call := svc.Instances.Insert(project, inst).Context(ctx)
+	if params := sqlInstanceRoutingParams(inst); params != "" {
+		call.Header().Set("x-goog-request-params", params)
+	}
+	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("creating instance: %w", err)
 	}
 	return sqlFinishOp(ctx, svc, project, op, "Create instance", args[0])
+}
+
+// sqlInstanceRoutingParams builds the x-goog-request-params routing header
+// that gcloud-python 588.0.0 sends on instance creation
+// (_BuildRoutingParams in surface/sql/instances/create.py).
+func sqlInstanceRoutingParams(inst *sqladmin.DatabaseInstance) string {
+	var params []string
+	if inst.Settings != nil && inst.Settings.Edition != "" {
+		params = append(params, "edition="+inst.Settings.Edition)
+	}
+	if inst.Region != "" {
+		params = append(params, "region="+inst.Region)
+	}
+	return strings.Join(params, "&")
 }
 
 func runSQLInstanceDelete(cmd *cobra.Command, args []string) error {

@@ -477,6 +477,27 @@ and `run domain-mappings create` take the full resource body via
   gcloud-python's v1 service printer and source deploys, neither of which
   gcloud-go implements (`run deploy` takes only `--image`).
 
+## Cloud SQL 583.0.0–588.0.0 (#1941)
+
+- **Routing parameters on instance creation** (588.0.0) — implemented:
+  `sql instances create` now sends `x-goog-request-params:
+  edition=EDITION&region=REGION` (each part only when set), built from the
+  instance body as Python's `_BuildRoutingParams` does. gcloud-go has no
+  `--edition` flag, so the edition comes from `settings.edition` in
+  `--config-file`.
+- **`cloud-sql-proxy` component bumps to 2.25.3, 2.25.4 and 2.26.0**
+  (583.0.0–588.0.0) — gcloud-go does not ship the packaged Cloud SQL Proxy
+  component; install the proxy separately.
+- **`gcloud sql blue-green-deployments create|delete|describe|list|switchover`**
+  — alpha/beta-only in gcloud-python; not ported (see #1914), although the
+  `sqladmin/v1` Go client exposes the `BlueGreenDeployments` service if they
+  reach GA.
+- **Hidden flags and groups** (SQL Server password policy,
+  `--semi-managed-patch-database-gcs-uri`, `--database-center-integration`,
+  `POSTGRES_19`, `sql workload-captures`) — hidden in gcloud-python, so not
+  surfaced; the instance fields can be set via `--config-file` where the v1
+  API exposes them.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
