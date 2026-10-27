@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	sqladmin "google.golang.org/api/sqladmin/v1"
 	"testing"
 
 	"github.com/spf13/cobra"
+	sqladmin "google.golang.org/api/sqladmin/v1"
 )
 
 func sqlSubgroup(name string) *cobra.Command {
