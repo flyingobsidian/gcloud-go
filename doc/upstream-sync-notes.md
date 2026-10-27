@@ -420,6 +420,20 @@ stubs:
   runs the image with Docker) or skips it with `--remote`, and then calls the
   same On-Demand Scanning `analyzePackages` API. No change is needed.
 
+## Cloud Pub/Sub 583.0.0–589.0.0 (#1938)
+
+- **`--bigtable-use-row-key-schema`, `--bigtable-key-fields` and
+  `--bigtable-delimiter` on `pubsub subscriptions create` / `update`**
+  (alpha/beta) — gcloud-go's `subscriptions create` and `update` take the
+  full `Subscription` body via `--config-file`, and the Go client exposes
+  `bigtableConfig.columnFamilyMapping`, so no new flags are needed. Set
+  `columnFamilyMapping.rowKeySchema: {}` for `--bigtable-use-row-key-schema`,
+  or `columnFamilyMapping.delimitedKey.keyFields` (plus optional
+  `delimitedKey.delimiter`, a base64-encoded bytes field) for
+  `--bigtable-key-fields` / `--bigtable-delimiter`. Python's client-side
+  checks (row-key schema excludes key fields/delimiter; delimiter requires key
+  fields) are left to the API.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
