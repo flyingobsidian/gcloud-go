@@ -498,6 +498,23 @@ and `run domain-mappings create` take the full resource body via
   surfaced; the instance fields can be set via `--config-file` where the v1
   API exposes them.
 
+## Cloud Services 584.0.0 (#1942)
+
+- **`--[no-]check-existing-usage` on `services api-keys update` and
+  `delete`** (584.0.0) is implemented: both send `checkExistingUsage=CHECK`
+  by default and `SKIP` with `--no-check-existing-usage` (or
+  `--check-existing-usage=false`), as `get_check_existing_usage_enum` does.
+- **`--clear-restrictions` removed from `api-keys update`** and **`update`
+  always fetching the current key / requiring API targets** — already
+  implemented under #1915.
+- **Source-level changes to `services list --enabled` (v2beta, `--show-details`),
+  `services enable|disable` with `catalogs/NAME`, `--folder` /
+  `--organization`, and `disable --async`** — these are in gcloud-python's
+  alpha/beta command classes only; the GA `list`, `enable` and `disable`
+  that gcloud-go mirrors are unchanged. The hidden `services groups`,
+  `policies`, `catalogs list-members`, `list-dependents` and `mcp` changes
+  are likewise not surfaced.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys

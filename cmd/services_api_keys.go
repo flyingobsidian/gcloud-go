@@ -86,7 +86,18 @@ var (
 	flagAPIKeyListFormat             string
 	flagAPIKeyListPageSize           int64
 	flagAPIKeyListLimit              int64
+	flagAPIKeyCheckUsage             bool
+	flagAPIKeyNoCheckUsage           bool
 )
+
+// apiKeyCheckExistingUsage mirrors get_check_existing_usage_enum: CHECK
+// unless the check was explicitly turned off.
+func apiKeyCheckExistingUsage(check, noCheck bool) string {
+	if noCheck || !check {
+		return "SKIP"
+	}
+	return "CHECK"
+}
 
 func init() {
 	restrictionFlags := func(c *cobra.Command) {
@@ -105,6 +116,14 @@ func init() {
 	apiKeyUpdateCmd.Flags().BoolVar(&flagAPIKeyAppendRestrictions, "append", false,
 		"Merge new --allowed-application and --api-target restrictions with the "+
 			"key's existing restrictions instead of replacing them")
+
+	// --[no-]check-existing-usage added in gcloud-python 584.0.0 (#1942).
+	for _, c := range []*cobra.Command{apiKeyUpdateCmd, apiKeyDeleteCmd} {
+		c.Flags().BoolVar(&flagAPIKeyCheckUsage, "check-existing-usage", true,
+			"Check existing usage before the key is changed; the request fails if the key has incompatible traffic in the last 7 days (defaults to true)")
+		c.Flags().BoolVar(&flagAPIKeyNoCheckUsage, "no-check-existing-usage", false, "Skip the existing usage check")
+		c.MarkFlagsMutuallyExclusive("check-existing-usage", "no-check-existing-usage")
+	}
 
 	apiKeyListCmd.Flags().BoolVar(&flagAPIKeyListShowDeleted, "show-deleted", false, "Include deleted keys in results")
 	apiKeyListCmd.Flags().StringVar(&flagAPIKeyListFormat, "format", "", "Output format (json, yaml, or table)")
@@ -321,7 +340,8 @@ func runAPIKeyDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Keys.Delete(apiKeyName(project, args[0])).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Keys.Delete(apiKeyName(project, args[0])).
+		CheckExistingUsage(apiKeyCheckExistingUsage(flagAPIKeyCheckUsage, flagAPIKeyNoCheckUsage)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting API key: %w", err)
 	}
@@ -466,7 +486,8 @@ func runAPIKeyUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no updatable fields provided")
 	}
 
-	op, err := svc.Projects.Locations.Keys.Patch(name, key).UpdateMask(strings.Join(masks, ",")).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Keys.Patch(name, key).UpdateMask(strings.Join(masks, ",")).
+		CheckExistingUsage(apiKeyCheckExistingUsage(flagAPIKeyCheckUsage, flagAPIKeyNoCheckUsage)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating API key: %w", err)
 	}
