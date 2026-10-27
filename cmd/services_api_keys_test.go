@@ -3,6 +3,7 @@ package cmd
 import (
 	"testing"
 
+	"github.com/spf13/cobra"
 	apikeys "google.golang.org/api/apikeys/v2"
 )
 
@@ -45,5 +46,24 @@ func TestCheckAPIKeyUpdateTargets(t *testing.T) {
 func TestAPIKeyUpdateHasNoClearRestrictions(t *testing.T) {
 	if apiKeyUpdateCmd.Flags().Lookup("clear-restrictions") != nil {
 		t.Error("--clear-restrictions was removed in gcloud-python 586.0.0")
+	}
+}
+
+func TestAPIKeyCheckExistingUsage(t *testing.T) {
+	for _, c := range []*cobra.Command{apiKeyUpdateCmd, apiKeyDeleteCmd} {
+		for _, f := range []string{"check-existing-usage", "no-check-existing-usage"} {
+			if c.Flags().Lookup(f) == nil {
+				t.Errorf("--%s missing on api-keys %s", f, c.Name())
+			}
+		}
+	}
+	if got := apiKeyCheckExistingUsage(true, false); got != "CHECK" {
+		t.Errorf("default = %q", got)
+	}
+	if got := apiKeyCheckExistingUsage(true, true); got != "SKIP" {
+		t.Errorf("--no-check-existing-usage = %q", got)
+	}
+	if got := apiKeyCheckExistingUsage(false, false); got != "SKIP" {
+		t.Errorf("--check-existing-usage=false = %q", got)
 	}
 }
