@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	sqladmin "google.golang.org/api/sqladmin/v1"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -121,4 +122,20 @@ func TestSQLUsersSubcommands(t *testing.T) {
 		t.Fatal("sql users missing")
 	}
 	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "set-password", "patch"})
+}
+
+func TestSQLInstanceRoutingParams(t *testing.T) {
+	for _, tc := range []struct {
+		inst *sqladmin.DatabaseInstance
+		want string
+	}{
+		{&sqladmin.DatabaseInstance{}, ""},
+		{&sqladmin.DatabaseInstance{Region: "us-central1"}, "region=us-central1"},
+		{&sqladmin.DatabaseInstance{Region: "us-central1", Settings: &sqladmin.Settings{Edition: "ENTERPRISE_PLUS"}},
+			"edition=ENTERPRISE_PLUS&region=us-central1"},
+	} {
+		if got := sqlInstanceRoutingParams(tc.inst); got != tc.want {
+			t.Errorf("got %q, want %q", got, tc.want)
+		}
+	}
 }
