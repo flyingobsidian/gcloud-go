@@ -155,6 +155,9 @@ func runDeployRun(cmd *cobra.Command, args []string) error {
 			body.Template.Scaling.MaxInstanceCount = flagRunDeployMaxInstances
 		}
 	}
+	if err := applyRunScalingTargets(body.Template, flagRunDeployScalingCPUTarget, flagRunDeployScalingConcurrencyTarget); err != nil {
+		return err
+	}
 	if flagRunDeployVpcConnector != "" {
 		if body.Template.VpcAccess == nil {
 			body.Template.VpcAccess = &runv2.GoogleCloudRunV2VpcAccess{}

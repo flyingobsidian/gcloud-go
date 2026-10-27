@@ -441,6 +441,41 @@ stubs:
   implemented the change-risk recommendations; it now accepts `--recommend`
   with the same `true|yes|false|no` validation on both commands and ignores
   it, so scripts written against the beta track run unchanged.
+## Cloud Run 583.0.0–587.0.0 (#1940)
+
+gcloud-go's `run` surface is narrower than gcloud-python's: `run deploy`
+takes a core flag set, while `run services|jobs|worker-pools create|update`
+and `run domain-mappings create` take the full resource body via
+`--config-file`. Against that surface:
+
+- **`--scaling-cpu-target` and `--scaling-concurrency-target` promoted to GA
+  on `run deploy`, with the CPU cap lowered to 0.90** (587.0.0) — implemented
+  on `run deploy` with Python's `ServiceUtilizationValue` /
+  `ServiceCpuUtilizationValue` validation (0.1–0.90 for CPU, 0.1–0.95 for
+  concurrency, `default` to unset, `disabled` for 0). Python's v1 path writes
+  the `run.googleapis.com/scaling-*-target` template annotations; gcloud-go
+  deploys through v2, which rejects `run.googleapis.com` annotations, so the
+  values go to `template.scaling.cpuUtilization` / `concurrencyUtilization`.
+  For `run services update`, set those fields in the `--config-file` body.
+- **`type=ephemeral-disk` in `--add-volume` promoted to GA** and
+  **custom `*.cloud.run` URLs on `domain-mappings create`** (586.0.0–587.0.0)
+  — gcloud-go has no `--add-volume` flag; volumes (including
+  `emptyDir`-backed ephemeral disks) and domain mappings are set in the
+  `--config-file` body, so no change is needed.
+- **Beta/alpha-only additions** — `run services ssh`, `run instances ssh`,
+  `run instances dev sync`, `run instances deploy|update --use-http2` /
+  `--clear-key`, `--domain` on `run deploy`, `--identity-type` /
+  `--identity-certificate` / `--functional-type` on services and jobs, the
+  worker-pool `--scaling` / `--scaling-cpu-target` / `--vpc-connector`
+  rework, and the GPU/long-timeout jobs prompt. gcloud-go has no
+  `run instances` group and does not port alpha/beta-only features (see
+  #1914); the identity and worker-pool scaling fields are reachable through
+  the `--config-file` bodies where the v2 API exposes them.
+- **Source-level changes** — the `[Warning]` about revision-level
+  `autoscaling.knative.dev` annotations, the `run.googleapis.com/build-config`
+  annotation, and the source-deploy CMEK / upload-size hints apply to
+  gcloud-python's v1 service printer and source deploys, neither of which
+  gcloud-go implements (`run deploy` takes only `--image`).
 
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
