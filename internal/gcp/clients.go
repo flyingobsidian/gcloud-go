@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"github.com/flyingobsidian/gcloud-go/internal/httplog"
 	"golang.org/x/oauth2"
 	accessapproval "google.golang.org/api/accessapproval/v1"
@@ -140,551 +139,345 @@ import (
 
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
 
-func SchedulerService(ctx context.Context, account string) (*cloudscheduler.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudscheduler.NewService(ctx, option.WithTokenSource(ts))
+// Scheduler returns a client for the Scheduler API.
+func (c *Clients) Scheduler(ctx context.Context) (*cloudscheduler.Service, error) {
+	return newService(ctx, c, cloudscheduler.NewService)
 }
 
-func DataflowService(ctx context.Context, account string) (*dataflow.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return dataflow.NewService(ctx, option.WithTokenSource(ts))
+// Dataflow returns a client for the Dataflow API.
+func (c *Clients) Dataflow(ctx context.Context) (*dataflow.Service, error) {
+	return newService(ctx, c, dataflow.NewService)
 }
 
-func DataMigrationService(ctx context.Context, account string) (*datamigration.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return datamigration.NewService(ctx, option.WithTokenSource(ts))
+// DataMigration returns a client for the DataMigration API.
+func (c *Clients) DataMigration(ctx context.Context) (*datamigration.Service, error) {
+	return newService(ctx, c, datamigration.NewService)
 }
 
-func StorageService(ctx context.Context, account string) (*storage.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return storage.NewService(ctx, option.WithTokenSource(ts))
+// Storage returns a client for the Storage API.
+func (c *Clients) Storage(ctx context.Context) (*storage.Service, error) {
+	return newService(ctx, c, storage.NewService)
 }
 
-func MonitoringService(ctx context.Context, account string) (*monitoring.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return monitoring.NewService(ctx, option.WithTokenSource(ts))
+// Monitoring returns a client for the Monitoring API.
+func (c *Clients) Monitoring(ctx context.Context) (*monitoring.Service, error) {
+	return newService(ctx, c, monitoring.NewService)
 }
 
-func RedisService(ctx context.Context, account string) (*redis.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return redis.NewService(ctx, option.WithTokenSource(ts))
+// Redis returns a client for the Redis API.
+func (c *Clients) Redis(ctx context.Context) (*redis.Service, error) {
+	return newService(ctx, c, redis.NewService)
 }
 
-func DataplexService(ctx context.Context, account string) (*dataplex.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return dataplex.NewService(ctx, option.WithTokenSource(ts))
+// Dataplex returns a client for the Dataplex API.
+func (c *Clients) Dataplex(ctx context.Context) (*dataplex.Service, error) {
+	return newService(ctx, c, dataplex.NewService)
 }
 
-func OSLoginService(ctx context.Context, account string) (*oslogin.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return oslogin.NewService(ctx, option.WithTokenSource(ts))
+// OSLogin returns a client for the OSLogin API.
+func (c *Clients) OSLogin(ctx context.Context) (*oslogin.Service, error) {
+	return newService(ctx, c, oslogin.NewService)
 }
 
-func ArtifactRegistryService(ctx context.Context, account string) (*artifactregistry.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return artifactregistry.NewService(ctx, option.WithTokenSource(ts))
+// ArtifactRegistry returns a client for the ArtifactRegistry API.
+func (c *Clients) ArtifactRegistry(ctx context.Context) (*artifactregistry.Service, error) {
+	return newService(ctx, c, artifactregistry.NewService)
 }
 
-func IAMService(ctx context.Context, account string) (*cloudiam.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudiam.NewService(ctx, option.WithTokenSource(ts))
+// IAM returns a client for the IAM API.
+func (c *Clients) IAM(ctx context.Context) (*cloudiam.Service, error) {
+	return newService(ctx, c, cloudiam.NewService)
 }
 
-func CloudResourceManagerService(ctx context.Context, account string) (*cloudresourcemanager.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudresourcemanager.NewService(ctx, option.WithTokenSource(ts))
+// CloudResourceManager returns a client for the CloudResourceManager API.
+func (c *Clients) CloudResourceManager(ctx context.Context) (*cloudresourcemanager.Service, error) {
+	return newService(ctx, c, cloudresourcemanager.NewService)
 }
 
-// AuditManagerService returns an Audit Manager v1 client.
-func AuditManagerService(ctx context.Context, account string) (*auditmanager.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return auditmanager.NewService(ctx, option.WithTokenSource(ts))
+// AuditManager returns an Audit Manager v1 client.
+func (c *Clients) AuditManager(ctx context.Context) (*auditmanager.Service, error) {
+	return newService(ctx, c, auditmanager.NewService)
 }
 
-// AssuredWorkloadsService returns an Assured Workloads v1 client. A non-empty
+// AssuredWorkloads returns an Assured Workloads v1 client. A non-empty
 // endpoint (e.g. https://REGION-assuredworkloads.googleapis.com/) overrides
 // the global default.
-func AssuredWorkloadsService(ctx context.Context, account, endpoint string) (*assuredworkloads.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+func (c *Clients) AssuredWorkloads(ctx context.Context, endpoint string) (*assuredworkloads.Service, error) {
+	var opts []option.ClientOption
 	if endpoint != "" {
 		opts = append(opts, option.WithEndpoint(endpoint))
 	}
-	return assuredworkloads.NewService(ctx, opts...)
+	return newService(ctx, c, assuredworkloads.NewService, opts...)
 }
 
-func ServiceUsageService(ctx context.Context, account string) (*serviceusage.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return serviceusage.NewService(ctx, option.WithTokenSource(ts))
+// ServiceUsage returns a client for the ServiceUsage API.
+func (c *Clients) ServiceUsage(ctx context.Context) (*serviceusage.Service, error) {
+	return newService(ctx, c, serviceusage.NewService)
 }
 
-func APIKeysService(ctx context.Context, account string) (*apikeys.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return apikeys.NewService(ctx, option.WithTokenSource(ts))
+// APIKeys returns a client for the APIKeys API.
+func (c *Clients) APIKeys(ctx context.Context) (*apikeys.Service, error) {
+	return newService(ctx, c, apikeys.NewService)
 }
 
-func ServiceNetworkingService(ctx context.Context, account string) (*servicenetworking.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return servicenetworking.NewService(ctx, option.WithTokenSource(ts))
+// ServiceNetworking returns a client for the ServiceNetworking API.
+func (c *Clients) ServiceNetworking(ctx context.Context) (*servicenetworking.APIService, error) {
+	return newService(ctx, c, servicenetworking.NewService)
 }
 
-func CloudAssetService(ctx context.Context, account string) (*cloudasset.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudasset.NewService(ctx, option.WithTokenSource(ts))
+// CloudAsset returns a client for the CloudAsset API.
+func (c *Clients) CloudAsset(ctx context.Context) (*cloudasset.Service, error) {
+	return newService(ctx, c, cloudasset.NewService)
 }
 
-func OrgPolicyService(ctx context.Context, account string) (*orgpolicy.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return orgpolicy.NewService(ctx, option.WithTokenSource(ts))
+// OrgPolicy returns a client for the OrgPolicy API.
+func (c *Clients) OrgPolicy(ctx context.Context) (*orgpolicy.Service, error) {
+	return newService(ctx, c, orgpolicy.NewService)
 }
 
-func CloudBillingService(ctx context.Context, account string) (*cloudbilling.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudbilling.NewService(ctx, option.WithTokenSource(ts))
+// CloudBilling returns a client for the CloudBilling API.
+func (c *Clients) CloudBilling(ctx context.Context) (*cloudbilling.APIService, error) {
+	return newService(ctx, c, cloudbilling.NewService)
 }
 
-func BillingBudgetsService(ctx context.Context, account string) (*billingbudgets.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return billingbudgets.NewService(ctx, option.WithTokenSource(ts))
+// BillingBudgets returns a client for the BillingBudgets API.
+func (c *Clients) BillingBudgets(ctx context.Context) (*billingbudgets.Service, error) {
+	return newService(ctx, c, billingbudgets.NewService)
 }
 
-func IAMCredentialsService(ctx context.Context, account string) (*iamcredentials.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return iamcredentials.NewService(ctx, option.WithTokenSource(ts))
+// IAMCredentials returns a client for the IAMCredentials API.
+func (c *Clients) IAMCredentials(ctx context.Context) (*iamcredentials.Service, error) {
+	return newService(ctx, c, iamcredentials.NewService)
 }
 
-func OnDemandScanningService(ctx context.Context, account string) (*ondemandscanning.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return ondemandscanning.NewService(ctx, option.WithTokenSource(ts))
+// OnDemandScanning returns a client for the OnDemandScanning API.
+func (c *Clients) OnDemandScanning(ctx context.Context) (*ondemandscanning.Service, error) {
+	return newService(ctx, c, ondemandscanning.NewService)
 }
 
-func EventarcService(ctx context.Context, account string) (*eventarc.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return eventarc.NewService(ctx, option.WithTokenSource(ts))
+// Eventarc returns a client for the Eventarc API.
+func (c *Clients) Eventarc(ctx context.Context) (*eventarc.Service, error) {
+	return newService(ctx, c, eventarc.NewService)
 }
 
-func FirestoreService(ctx context.Context, account string) (*firestore.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return firestore.NewService(ctx, option.WithTokenSource(ts))
+// Firestore returns a client for the Firestore API.
+func (c *Clients) Firestore(ctx context.Context) (*firestore.Service, error) {
+	return newService(ctx, c, firestore.NewService)
 }
 
-func PolicySimulatorService(ctx context.Context, account string) (*policysimulator.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return policysimulator.NewService(ctx, option.WithTokenSource(ts))
+// PolicySimulator returns a client for the PolicySimulator API.
+func (c *Clients) PolicySimulator(ctx context.Context) (*policysimulator.Service, error) {
+	return newService(ctx, c, policysimulator.NewService)
 }
 
-func PolicyTroubleshooterService(ctx context.Context, account string) (*policytroubleshooter.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return policytroubleshooter.NewService(ctx, option.WithTokenSource(ts))
+// PolicyTroubleshooter returns a client for the PolicyTroubleshooter API.
+func (c *Clients) PolicyTroubleshooter(ctx context.Context) (*policytroubleshooter.Service, error) {
+	return newService(ctx, c, policytroubleshooter.NewService)
 }
 
-func PolicyAnalyzerService(ctx context.Context, account string) (*policyanalyzer.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return policyanalyzer.NewService(ctx, option.WithTokenSource(ts))
+// PolicyAnalyzer returns a client for the PolicyAnalyzer API.
+func (c *Clients) PolicyAnalyzer(ctx context.Context) (*policyanalyzer.Service, error) {
+	return newService(ctx, c, policyanalyzer.NewService)
 }
 
-func PrivateCAService(ctx context.Context, account string) (*privateca.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return privateca.NewService(ctx, option.WithTokenSource(ts))
+// PrivateCA returns a client for the PrivateCA API.
+func (c *Clients) PrivateCA(ctx context.Context) (*privateca.Service, error) {
+	return newService(ctx, c, privateca.NewService)
 }
 
-func BeyondCorpService(ctx context.Context, account string) (*beyondcorp.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return beyondcorp.NewService(ctx, option.WithTokenSource(ts))
+// BeyondCorp returns a client for the BeyondCorp API.
+func (c *Clients) BeyondCorp(ctx context.Context) (*beyondcorp.Service, error) {
+	return newService(ctx, c, beyondcorp.NewService)
 }
 
-func CloudBuildService(ctx context.Context, account string) (*cloudbuild.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudbuild.NewService(ctx, option.WithTokenSource(ts))
+// CloudBuild returns a client for the CloudBuild API.
+func (c *Clients) CloudBuild(ctx context.Context) (*cloudbuild.Service, error) {
+	return newService(ctx, c, cloudbuild.NewService)
 }
 
-func CloudBuildV2Service(ctx context.Context, account string) (*cloudbuild2.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudbuild2.NewService(ctx, option.WithTokenSource(ts))
+// CloudBuildV2 returns a client for the CloudBuildV2 API.
+func (c *Clients) CloudBuildV2(ctx context.Context) (*cloudbuild2.Service, error) {
+	return newService(ctx, c, cloudbuild2.NewService)
 }
 
-func PubSubService(ctx context.Context, account string) (*pubsub.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return pubsub.NewService(ctx, option.WithTokenSource(ts))
+// PubSub returns a client for the PubSub API.
+func (c *Clients) PubSub(ctx context.Context) (*pubsub.Service, error) {
+	return newService(ctx, c, pubsub.NewService)
 }
 
-func IAMV2Service(ctx context.Context, account string) (*iamv2.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return iamv2.NewService(ctx, option.WithTokenSource(ts))
+// IAMV2 returns a client for the IAMV2 API.
+func (c *Clients) IAMV2(ctx context.Context) (*iamv2.Service, error) {
+	return newService(ctx, c, iamv2.NewService)
 }
 
-func AccessApprovalService(ctx context.Context, account string) (*accessapproval.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return accessapproval.NewService(ctx, option.WithTokenSource(ts))
+// AccessApproval returns a client for the AccessApproval API.
+func (c *Clients) AccessApproval(ctx context.Context) (*accessapproval.Service, error) {
+	return newService(ctx, c, accessapproval.NewService)
 }
 
-func AccessContextManagerService(ctx context.Context, account string) (*accesscontextmanager.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return accesscontextmanager.NewService(ctx, option.WithTokenSource(ts))
+// AccessContextManager returns a client for the AccessContextManager API.
+func (c *Clients) AccessContextManager(ctx context.Context) (*accesscontextmanager.Service, error) {
+	return newService(ctx, c, accesscontextmanager.NewService)
 }
 
-func MetastoreService(ctx context.Context, account string) (*metastore.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return metastore.NewService(ctx, option.WithTokenSource(ts))
+// Metastore returns a client for the Metastore API.
+func (c *Clients) Metastore(ctx context.Context) (*metastore.APIService, error) {
+	return newService(ctx, c, metastore.NewService)
 }
 
-func ObservabilityService(ctx context.Context, account string) (*observability.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return observability.NewService(ctx, option.WithTokenSource(ts))
+// Observability returns a client for the Observability API.
+func (c *Clients) Observability(ctx context.Context) (*observability.Service, error) {
+	return newService(ctx, c, observability.NewService)
 }
 
-func DataLineageService(ctx context.Context, account string) (*datalineage.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return datalineage.NewService(ctx, option.WithTokenSource(ts))
+// DataLineage returns a client for the DataLineage API.
+func (c *Clients) DataLineage(ctx context.Context) (*datalineage.Service, error) {
+	return newService(ctx, c, datalineage.NewService)
 }
 
-func BatchService(ctx context.Context, account string) (*batchapi.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return batchapi.NewService(ctx, option.WithTokenSource(ts))
+// Batch returns a client for the Batch API.
+func (c *Clients) Batch(ctx context.Context) (*batchapi.Service, error) {
+	return newService(ctx, c, batchapi.NewService)
 }
 
-func LookerService(ctx context.Context, account string) (*looker.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return looker.NewService(ctx, option.WithTokenSource(ts))
+// Looker returns a client for the Looker API.
+func (c *Clients) Looker(ctx context.Context) (*looker.Service, error) {
+	return newService(ctx, c, looker.NewService)
 }
 
-func ServiceDirectoryService(ctx context.Context, account string) (*servicedirectory.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return servicedirectory.NewService(ctx, option.WithTokenSource(ts))
+// ServiceDirectory returns a client for the ServiceDirectory API.
+func (c *Clients) ServiceDirectory(ctx context.Context) (*servicedirectory.APIService, error) {
+	return newService(ctx, c, servicedirectory.NewService)
 }
 
-func RecommenderService(ctx context.Context, account string) (*recommender.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return recommender.NewService(ctx, option.WithTokenSource(ts))
+// Recommender returns a client for the Recommender API.
+func (c *Clients) Recommender(ctx context.Context) (*recommender.Service, error) {
+	return newService(ctx, c, recommender.NewService)
 }
 
-func MemcacheService(ctx context.Context, account string) (*memcache.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return memcache.NewService(ctx, option.WithTokenSource(ts))
+// Memcache returns a client for the Memcache API.
+func (c *Clients) Memcache(ctx context.Context) (*memcache.Service, error) {
+	return newService(ctx, c, memcache.NewService)
 }
 
-func CloudTasksService(ctx context.Context, account string) (*cloudtasks.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudtasks.NewService(ctx, option.WithTokenSource(ts))
+// CloudTasks returns a client for the CloudTasks API.
+func (c *Clients) CloudTasks(ctx context.Context) (*cloudtasks.Service, error) {
+	return newService(ctx, c, cloudtasks.NewService)
 }
 
-func AlloyDBService(ctx context.Context, account string) (*alloydb.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return alloydb.NewService(ctx, option.WithTokenSource(ts))
+// AlloyDB returns a client for the AlloyDB API.
+func (c *Clients) AlloyDB(ctx context.Context) (*alloydb.Service, error) {
+	return newService(ctx, c, alloydb.NewService)
 }
 
-func APIGatewayService(ctx context.Context, account string) (*apigateway.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return apigateway.NewService(ctx, option.WithTokenSource(ts))
+// APIGateway returns a client for the APIGateway API.
+func (c *Clients) APIGateway(ctx context.Context) (*apigateway.Service, error) {
+	return newService(ctx, c, apigateway.NewService)
 }
 
-func AppHubService(ctx context.Context, account string) (*apphub.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return apphub.NewService(ctx, option.WithTokenSource(ts))
+// AppHub returns a client for the AppHub API.
+func (c *Clients) AppHub(ctx context.Context) (*apphub.APIService, error) {
+	return newService(ctx, c, apphub.NewService)
 }
 
-func CertificateManagerService(ctx context.Context, account string) (*certificatemanager.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return certificatemanager.NewService(ctx, option.WithTokenSource(ts))
+// CertificateManager returns a client for the CertificateManager API.
+func (c *Clients) CertificateManager(ctx context.Context) (*certificatemanager.Service, error) {
+	return newService(ctx, c, certificatemanager.NewService)
 }
 
-func DatastreamService(ctx context.Context, account string) (*datastream.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return datastream.NewService(ctx, option.WithTokenSource(ts))
+// Datastream returns a client for the Datastream API.
+func (c *Clients) Datastream(ctx context.Context) (*datastream.Service, error) {
+	return newService(ctx, c, datastream.NewService)
 }
 
-func ManagedKafkaService(ctx context.Context, account string) (*managedkafka.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return managedkafka.NewService(ctx, option.WithTokenSource(ts))
+// ManagedKafka returns a client for the ManagedKafka API.
+func (c *Clients) ManagedKafka(ctx context.Context) (*managedkafka.Service, error) {
+	return newService(ctx, c, managedkafka.NewService)
 }
 
-func TranscoderService(ctx context.Context, account string) (*transcoder.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return transcoder.NewService(ctx, option.WithTokenSource(ts))
+// Transcoder returns a client for the Transcoder API.
+func (c *Clients) Transcoder(ctx context.Context) (*transcoder.Service, error) {
+	return newService(ctx, c, transcoder.NewService)
 }
 
-func NotebooksService(ctx context.Context, account string) (*notebooks.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return notebooks.NewService(ctx, option.WithTokenSource(ts))
+// Notebooks returns a client for the Notebooks API.
+func (c *Clients) Notebooks(ctx context.Context) (*notebooks.Service, error) {
+	return newService(ctx, c, notebooks.NewService)
 }
 
-// NotebooksV1Service returns a Cloud Notebooks v1 client. The v1 API exposes
+// NotebooksV1 returns a Cloud Notebooks v1 client. The v1 API exposes
 // the User-Managed Notebook Environments, Instances, and Managed Runtimes
 // surfaces that gcloud's `notebooks` command tree targets; v2 covers only a
 // subset (Instances).
-func NotebooksV1Service(ctx context.Context, account string) (*notebooksv1.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return notebooksv1.NewService(ctx, option.WithTokenSource(ts))
+func (c *Clients) NotebooksV1(ctx context.Context) (*notebooksv1.Service, error) {
+	return newService(ctx, c, notebooksv1.NewService)
 }
 
-// IAPService returns a Cloud Identity-Aware Proxy v1 client. Backs
+// IAP returns a Cloud Identity-Aware Proxy v1 client. Backs
 // `gcloud iap oauth-brands`, `gcloud iap oauth-clients`, `gcloud iap settings`
 // and `gcloud iap tcp dest-groups`.
-func IAPService(ctx context.Context, account string) (*iap.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return iap.NewService(ctx, option.WithTokenSource(ts))
+func (c *Clients) IAP(ctx context.Context) (*iap.Service, error) {
+	return newService(ctx, c, iap.NewService)
 }
 
-// NetworkServicesService returns a Network Services v1 client. The v1 client
+// NetworkServices returns a Network Services v1 client. The v1 client
 // covers the IAM-only Media CDN Edge Cache surfaces; the full EdgeCache CRUD
 // endpoints (keysets, origins, services) are reached via a raw REST client in
 // cmd/edge_cache.go because they are not generated in google.golang.org/api.
-func NetworkServicesService(ctx context.Context, account string) (*networkservices.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return networkservices.NewService(ctx, option.WithTokenSource(ts))
+func (c *Clients) NetworkServices(ctx context.Context) (*networkservices.Service, error) {
+	return newService(ctx, c, networkservices.NewService)
 }
 
-// NetworkServicesBetaService returns a Network Services v1beta1 client. Some
+// NetworkServicesBeta returns a Network Services v1beta1 client. Some
 // surfaces (e.g. agent-gateways) are only exposed on v1beta1 as of this build.
-func NetworkServicesBetaService(ctx context.Context, account string) (*networkservicesbeta.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return networkservicesbeta.NewService(ctx, option.WithTokenSource(ts))
+func (c *Clients) NetworkServicesBeta(ctx context.Context) (*networkservicesbeta.Service, error) {
+	return newService(ctx, c, networkservicesbeta.NewService)
 }
 
-// DeveloperConnectService returns a Developer Connect v1 client.
-func DeveloperConnectService(ctx context.Context, account string) (*developerconnect.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return developerconnect.NewService(ctx, option.WithTokenSource(ts))
+// DeveloperConnect returns a Developer Connect v1 client.
+func (c *Clients) DeveloperConnect(ctx context.Context) (*developerconnect.Service, error) {
+	return newService(ctx, c, developerconnect.NewService)
 }
 
-// WorkstationsService returns a Cloud Workstations v1 client.
-func WorkstationsService(ctx context.Context, account string) (*workstations.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return workstations.NewService(ctx, option.WithTokenSource(ts))
+// Workstations returns a Cloud Workstations v1 client.
+func (c *Clients) Workstations(ctx context.Context) (*workstations.Service, error) {
+	return newService(ctx, c, workstations.NewService)
 }
 
-// SourceRepoService returns a Cloud Source Repositories v1 client.
-func SourceRepoService(ctx context.Context, account string) (*sourcerepo.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return sourcerepo.NewService(ctx, option.WithTokenSource(ts))
+// SourceRepo returns a Cloud Source Repositories v1 client.
+func (c *Clients) SourceRepo(ctx context.Context) (*sourcerepo.Service, error) {
+	return newService(ctx, c, sourcerepo.NewService)
 }
 
-// BareMetalSolutionService returns a Bare Metal Solution v2 client.
-func BareMetalSolutionService(ctx context.Context, account string) (*baremetalsolution.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return baremetalsolution.NewService(ctx, option.WithTokenSource(ts))
+// BareMetalSolution returns a Bare Metal Solution v2 client.
+func (c *Clients) BareMetalSolution(ctx context.Context) (*baremetalsolution.Service, error) {
+	return newService(ctx, c, baremetalsolution.NewService)
 }
 
-// HealthcareService returns a Cloud Healthcare API v1 client.
-func HealthcareService(ctx context.Context, account string) (*healthcare.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return healthcare.NewService(ctx, option.WithTokenSource(ts))
+// Healthcare returns a Cloud Healthcare API v1 client.
+func (c *Clients) Healthcare(ctx context.Context) (*healthcare.Service, error) {
+	return newService(ctx, c, healthcare.NewService)
 }
 
-// VmwareEngineService returns a VMware Engine v1 client.
-func VmwareEngineService(ctx context.Context, account string) (*vmwareengine.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return vmwareengine.NewService(ctx, option.WithTokenSource(ts))
+// VmwareEngine returns a VMware Engine v1 client.
+func (c *Clients) VmwareEngine(ctx context.Context) (*vmwareengine.Service, error) {
+	return newService(ctx, c, vmwareengine.NewService)
 }
 
-// ApigeeService returns an Apigee v1 client.
-func ApigeeService(ctx context.Context, account string) (*apigee.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return apigee.NewService(ctx, option.WithTokenSource(ts))
+// Apigee returns an Apigee v1 client.
+func (c *Clients) Apigee(ctx context.Context) (*apigee.Service, error) {
+	return newService(ctx, c, apigee.NewService)
 }
 
-// ApigeeServiceForOrg returns an Apigee v1 client routed to the endpoint that
+// ApigeeForOrg returns an Apigee v1 client routed to the endpoint that
 // serves the given organization's location (see ApigeeOrgHost). org may be a
 // bare ID or "organizations/ORG".
-func ApigeeServiceForOrg(ctx context.Context, account, org string) (*apigee.Service, error) {
-	host, err := ApigeeOrgHost(ctx, account, org)
+func (c *Clients) ApigeeForOrg(ctx context.Context, org string) (*apigee.Service, error) {
+	host, err := c.ApigeeOrgHost(ctx, org)
 	if err != nil {
 		return nil, err
 	}
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return apigee.NewService(ctx, option.WithTokenSource(ts), option.WithEndpoint("https://"+host+"/"))
+	return newService(ctx, c, apigee.NewService, option.WithEndpoint("https://"+host+"/"))
 }
 
 // ApigeeOrgHost returns the Apigee API host serving the given organization,
@@ -692,8 +485,8 @@ func ApigeeServiceForOrg(ctx context.Context, account, org string) (*apigee.Serv
 // `request._GetApigeeHostByLocation`: the organization's location is looked
 // up via `organizations.getProjectMapping` on the global endpoint and mapped
 // to a host by ApigeeHostForLocation.
-func ApigeeOrgHost(ctx context.Context, account, org string) (string, error) {
-	global, err := ApigeeService(ctx, account)
+func (c *Clients) ApigeeOrgHost(ctx context.Context, org string) (string, error) {
+	global, err := c.Apigee(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -736,95 +529,59 @@ func ApigeeHostForLocation(location string) string {
 	}
 }
 
-// StorageBatchOperationsService returns a Storage Batch Operations v1 client.
-func StorageBatchOperationsService(ctx context.Context, account string) (*storagebatchoperations.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return storagebatchoperations.NewService(ctx, option.WithTokenSource(ts))
+// StorageBatchOperations returns a Storage Batch Operations v1 client.
+func (c *Clients) StorageBatchOperations(ctx context.Context) (*storagebatchoperations.Service, error) {
+	return newService(ctx, c, storagebatchoperations.NewService)
 }
 
-// OracleDatabaseService returns an Oracle Database v1 client.
-func OracleDatabaseService(ctx context.Context, account string) (*oracledatabase.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return oracledatabase.NewService(ctx, option.WithTokenSource(ts))
+// OracleDatabase returns an Oracle Database v1 client.
+func (c *Clients) OracleDatabase(ctx context.Context) (*oracledatabase.Service, error) {
+	return newService(ctx, c, oracledatabase.NewService)
 }
 
-// ContainerService returns a GKE (container) v1 client.
-func ContainerService(ctx context.Context, account string) (*container.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return container.NewService(ctx, option.WithTokenSource(ts))
+// Container returns a GKE (container) v1 client.
+func (c *Clients) Container(ctx context.Context) (*container.Service, error) {
+	return newService(ctx, c, container.NewService)
 }
 
-// GKEHubService returns a GKE Hub (fleet) v1 client.
-func GKEHubService(ctx context.Context, account string) (*gkehub.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return gkehub.NewService(ctx, option.WithTokenSource(ts))
+// GKEHub returns a GKE Hub (fleet) v1 client.
+func (c *Clients) GKEHub(ctx context.Context) (*gkehub.Service, error) {
+	return newService(ctx, c, gkehub.NewService)
 }
 
-// GKEOnPremService returns an Anthos-on-Prem (gkeonprem) v1 client. It
+// GKEOnPrem returns an Anthos-on-Prem (gkeonprem) v1 client. It
 // backs `container bare-metal` and `container vmware`.
-func GKEOnPremService(ctx context.Context, account string) (*gkeonprem.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return gkeonprem.NewService(ctx, option.WithTokenSource(ts))
+func (c *Clients) GKEOnPrem(ctx context.Context) (*gkeonprem.Service, error) {
+	return newService(ctx, c, gkeonprem.NewService)
 }
 
-// BinaryAuthorizationService returns a Binary Authorization v1 client.
-func BinaryAuthorizationService(ctx context.Context, account string) (*binaryauthorization.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return binaryauthorization.NewService(ctx, option.WithTokenSource(ts))
+// BinaryAuthorization returns a Binary Authorization v1 client.
+func (c *Clients) BinaryAuthorization(ctx context.Context) (*binaryauthorization.Service, error) {
+	return newService(ctx, c, binaryauthorization.NewService)
 }
 
-// TestingService returns a Firebase Test Lab v1 client.
-func TestingService(ctx context.Context, account string) (*testing.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return testing.NewService(ctx, option.WithTokenSource(ts))
+// Testing returns a Firebase Test Lab v1 client.
+func (c *Clients) Testing(ctx context.Context) (*testing.APIService, error) {
+	return newService(ctx, c, testing.NewService)
 }
 
-func AIPlatformService(ctx context.Context, account, region string) (*aiplatform.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+func (c *Clients) AIPlatform(ctx context.Context, region string) (*aiplatform.Service, error) {
+	var opts []option.ClientOption
 	if endpoint := aiplatformEndpointForRegion(region); endpoint != "" {
 		opts = append(opts, option.WithEndpoint(endpoint))
 	}
-	return aiplatform.NewService(ctx, opts...)
+	return newService(ctx, c, aiplatform.NewService, opts...)
 }
 
-// AIPlatformBetaService returns a regional aiplatform v1beta1 client. v1beta1
+// AIPlatformBeta returns a regional aiplatform v1beta1 client. v1beta1
 // exposes surfaces that are not yet in v1 -- most notably
 // PublishersModelsService.List for Model Garden.
-func AIPlatformBetaService(ctx context.Context, account, region string) (*aiplatformbeta.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+func (c *Clients) AIPlatformBeta(ctx context.Context, region string) (*aiplatformbeta.Service, error) {
+	var opts []option.ClientOption
 	if endpoint := aiplatformEndpointForRegion(region); endpoint != "" {
 		opts = append(opts, option.WithEndpoint(endpoint))
 	}
-	return aiplatformbeta.NewService(ctx, opts...)
+	return newService(ctx, c, aiplatformbeta.NewService, opts...)
 }
 
 // aiplatformEndpointForRegion returns the aiplatform endpoint override for a
@@ -852,112 +609,69 @@ func isAIPlatformMREPJurisdiction(region string) bool {
 	return region == "us"
 }
 
-// MLService returns a client for the legacy Cloud ML Engine API
+// ML returns a client for the legacy Cloud ML Engine API
 // (google.golang.org/api/ml/v1), which backs the `gcloud ai-platform`
 // surface. This is distinct from Vertex AI (`gcloud ai ...`), which uses
 // the newer aiplatform.googleapis.com API and is region-scoped.
-func MLService(ctx context.Context, account string) (*ml.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return ml.NewService(ctx, option.WithTokenSource(ts))
+func (c *Clients) ML(ctx context.Context) (*ml.Service, error) {
+	return newService(ctx, c, ml.NewService)
 }
 
-func PublicCAService(ctx context.Context, account string) (*publicca.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return publicca.NewService(ctx, option.WithTokenSource(ts))
+// PublicCA returns a client for the PublicCA API.
+func (c *Clients) PublicCA(ctx context.Context) (*publicca.Service, error) {
+	return newService(ctx, c, publicca.NewService)
 }
 
-func InfraManagerService(ctx context.Context, account string) (*config1.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return config1.NewService(ctx, option.WithTokenSource(ts))
+// InfraManager returns a client for the InfraManager API.
+func (c *Clients) InfraManager(ctx context.Context) (*config1.Service, error) {
+	return newService(ctx, c, config1.NewService)
 }
 
-func AgentRegistryService(ctx context.Context, account string) (*agentregistry.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return agentregistry.NewService(ctx, option.WithTokenSource(ts))
+// AgentRegistry returns a client for the AgentRegistry API.
+func (c *Clients) AgentRegistry(ctx context.Context) (*agentregistry.APIService, error) {
+	return newService(ctx, c, agentregistry.NewService)
 }
 
-// AgentIdentityService returns an agentidentity v1 client.
-func AgentIdentityService(ctx context.Context, account string) (*agentidentity.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return agentidentity.NewService(ctx, option.WithTokenSource(ts))
+// AgentIdentity returns an agentidentity v1 client.
+func (c *Clients) AgentIdentity(ctx context.Context) (*agentidentity.Service, error) {
+	return newService(ctx, c, agentidentity.NewService)
 }
 
-// AgentIdentityAlphaService returns an agentidentity v1alpha client. The
+// AgentIdentityAlpha returns an agentidentity v1alpha client. The
 // v1alpha surface carries the auth-provider authorization IAM methods that
 // v1 does not expose. A non-empty endpoint overrides the global base URL
 // (used for --endpoint-mode=regional).
-func AgentIdentityAlphaService(ctx context.Context, account, endpoint string) (*agentidentityalpha.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+func (c *Clients) AgentIdentityAlpha(ctx context.Context, endpoint string) (*agentidentityalpha.Service, error) {
+	var opts []option.ClientOption
 	if endpoint != "" {
 		opts = append(opts, option.WithEndpoint(endpoint))
 	}
-	return agentidentityalpha.NewService(ctx, opts...)
+	return newService(ctx, c, agentidentityalpha.NewService, opts...)
 }
 
-func CloudIdentityService(ctx context.Context, account string) (*cloudidentity.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudidentity.NewService(ctx, option.WithTokenSource(ts))
+// CloudIdentity returns a client for the CloudIdentity API.
+func (c *Clients) CloudIdentity(ctx context.Context) (*cloudidentity.Service, error) {
+	return newService(ctx, c, cloudidentity.NewService)
 }
 
-func NetworkConnectivityService(ctx context.Context, account string) (*networkconnectivity.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return networkconnectivity.NewService(ctx, option.WithTokenSource(ts))
+// NetworkConnectivity returns a client for the NetworkConnectivity API.
+func (c *Clients) NetworkConnectivity(ctx context.Context) (*networkconnectivity.Service, error) {
+	return newService(ctx, c, networkconnectivity.NewService)
 }
 
-func NetworkSecurityService(ctx context.Context, account string) (*networksecurity.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return networksecurity.NewService(ctx, option.WithTokenSource(ts))
+// NetworkSecurity returns a client for the NetworkSecurity API.
+func (c *Clients) NetworkSecurity(ctx context.Context) (*networksecurity.Service, error) {
+	return newService(ctx, c, networksecurity.NewService)
 }
 
-func NetworkSecurityBetaService(ctx context.Context, account string) (*networksecuritybeta.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return networksecuritybeta.NewService(ctx, option.WithTokenSource(ts))
+// NetworkSecurityBeta returns a client for the NetworkSecurityBeta API.
+func (c *Clients) NetworkSecurityBeta(ctx context.Context) (*networksecuritybeta.Service, error) {
+	return newService(ctx, c, networksecuritybeta.NewService)
 }
 
-// SecurityCenterService returns a Security Command Center V1 client. When
-// debugOut is non-nil each outgoing request is written to it as a curl
-// command (see internal/httplog) before being sent.
-func SecurityCenterService(ctx context.Context, account string, debugOut io.Writer) (*securitycenter.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts, err := withRequestLogging(ctx, debugOut, option.WithTokenSource(ts))
-	if err != nil {
-		return nil, err
-	}
-	return securitycenter.NewService(ctx, opts...)
+// SecurityCenter returns a Security Command Center V1 client.
+func (c *Clients) SecurityCenter(ctx context.Context) (*securitycenter.Service, error) {
+	return newService(ctx, c, securitycenter.NewService)
 }
 
 // withRequestLogging returns client options equivalent to opts, but with
@@ -988,374 +702,245 @@ func loggingHTTPClient(ctx context.Context, out io.Writer, opts ...option.Client
 	return &http.Client{Transport: trans}, nil
 }
 
-func SecurityPostureService(ctx context.Context, account string) (*securityposture.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return securityposture.NewService(ctx, option.WithTokenSource(ts))
+// SecurityPosture returns a client for the SecurityPosture API.
+func (c *Clients) SecurityPosture(ctx context.Context) (*securityposture.Service, error) {
+	return newService(ctx, c, securityposture.NewService)
 }
 
-func DeploymentManagerService(ctx context.Context, account string) (*deploymentmanager.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return deploymentmanager.NewService(ctx, option.WithTokenSource(ts))
+// DeploymentManager returns a client for the DeploymentManager API.
+func (c *Clients) DeploymentManager(ctx context.Context) (*deploymentmanager.Service, error) {
+	return newService(ctx, c, deploymentmanager.NewService)
 }
 
-func DeploymentManagerBetaService(ctx context.Context, account string) (*deploymentmanagerbeta.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return deploymentmanagerbeta.NewService(ctx, option.WithTokenSource(ts))
+// DeploymentManagerBeta returns a client for the DeploymentManagerBeta API.
+func (c *Clients) DeploymentManagerBeta(ctx context.Context) (*deploymentmanagerbeta.Service, error) {
+	return newService(ctx, c, deploymentmanagerbeta.NewService)
 }
 
-func CloudFunctionsV1Service(ctx context.Context, account string) (*cloudfunctionsv1.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudfunctionsv1.NewService(ctx, option.WithTokenSource(ts))
+// CloudFunctionsV1 returns a client for the CloudFunctionsV1 API.
+func (c *Clients) CloudFunctionsV1(ctx context.Context) (*cloudfunctionsv1.Service, error) {
+	return newService(ctx, c, cloudfunctionsv1.NewService)
 }
 
-func CloudFunctionsV2Service(ctx context.Context, account string) (*cloudfunctionsv2.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudfunctionsv2.NewService(ctx, option.WithTokenSource(ts))
+// CloudFunctionsV2 returns a client for the CloudFunctionsV2 API.
+func (c *Clients) CloudFunctionsV2(ctx context.Context) (*cloudfunctionsv2.Service, error) {
+	return newService(ctx, c, cloudfunctionsv2.NewService)
 }
 
-func AppEngineService(ctx context.Context, account string) (*appengine.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return appengine.NewService(ctx, option.WithTokenSource(ts))
+// AppEngine returns a client for the AppEngine API.
+func (c *Clients) AppEngine(ctx context.Context) (*appengine.APIService, error) {
+	return newService(ctx, c, appengine.NewService)
 }
 
-func LoggingService(ctx context.Context, account string) (*logging.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return logging.NewService(ctx, option.WithTokenSource(ts))
+// Logging returns a client for the Logging API.
+func (c *Clients) Logging(ctx context.Context) (*logging.Service, error) {
+	return newService(ctx, c, logging.NewService)
 }
 
-func SQLAdminService(ctx context.Context, account string) (*sqladmin.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return sqladmin.NewService(ctx, option.WithTokenSource(ts))
+// SQLAdmin returns a client for the SQLAdmin API.
+func (c *Clients) SQLAdmin(ctx context.Context) (*sqladmin.Service, error) {
+	return newService(ctx, c, sqladmin.NewService)
 }
 
-func StorageTransferService(ctx context.Context, account string) (*storagetransfer.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return storagetransfer.NewService(ctx, option.WithTokenSource(ts))
+// StorageTransfer returns a client for the StorageTransfer API.
+func (c *Clients) StorageTransfer(ctx context.Context) (*storagetransfer.Service, error) {
+	return newService(ctx, c, storagetransfer.NewService)
 }
 
-func ServiceManagementService(ctx context.Context, account string) (*servicemanagement.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return servicemanagement.NewService(ctx, option.WithTokenSource(ts))
+// ServiceManagement returns a client for the ServiceManagement API.
+func (c *Clients) ServiceManagement(ctx context.Context) (*servicemanagement.APIService, error) {
+	return newService(ctx, c, servicemanagement.NewService)
 }
 
-func VMMigrationService(ctx context.Context, account string) (*vmmigration.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return vmmigration.NewService(ctx, option.WithTokenSource(ts))
+// VMMigration returns a client for the VMMigration API.
+func (c *Clients) VMMigration(ctx context.Context) (*vmmigration.Service, error) {
+	return newService(ctx, c, vmmigration.NewService)
 }
 
-func SecureSourceManagerService(ctx context.Context, account string) (*securesourcemanager.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return securesourcemanager.NewService(ctx, option.WithTokenSource(ts))
+// SecureSourceManager returns a client for the SecureSourceManager API.
+func (c *Clients) SecureSourceManager(ctx context.Context) (*securesourcemanager.Service, error) {
+	return newService(ctx, c, securesourcemanager.NewService)
 }
 
-func DomainsService(ctx context.Context, account string) (*domains.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return domains.NewService(ctx, option.WithTokenSource(ts))
+// Domains returns a client for the Domains API.
+func (c *Clients) Domains(ctx context.Context) (*domains.Service, error) {
+	return newService(ctx, c, domains.NewService)
 }
 
-func FilestoreService(ctx context.Context, account string) (*filestore.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return filestore.NewService(ctx, option.WithTokenSource(ts))
+// Filestore returns a client for the Filestore API.
+func (c *Clients) Filestore(ctx context.Context) (*filestore.Service, error) {
+	return newService(ctx, c, filestore.NewService)
 }
 
-func WorkflowExecutionsService(ctx context.Context, account string) (*workflowexecutions.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return workflowexecutions.NewService(ctx, option.WithTokenSource(ts))
+// WorkflowExecutions returns a client for the WorkflowExecutions API.
+func (c *Clients) WorkflowExecutions(ctx context.Context) (*workflowexecutions.Service, error) {
+	return newService(ctx, c, workflowexecutions.NewService)
 }
 
-func WorkflowsService(ctx context.Context, account string) (*workflows.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return workflows.NewService(ctx, option.WithTokenSource(ts))
+// Workflows returns a client for the Workflows API.
+func (c *Clients) Workflows(ctx context.Context) (*workflows.Service, error) {
+	return newService(ctx, c, workflows.NewService)
 }
 
-func MonitoringV1Service(ctx context.Context, account string) (*monitoringv1.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return monitoringv1.NewService(ctx, option.WithTokenSource(ts))
+// MonitoringV1 returns a client for the MonitoringV1 API.
+func (c *Clients) MonitoringV1(ctx context.Context) (*monitoringv1.Service, error) {
+	return newService(ctx, c, monitoringv1.NewService)
 }
 
-func NetworkManagementService(ctx context.Context, account string) (*networkmanagement.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return networkmanagement.NewService(ctx, option.WithTokenSource(ts))
+// NetworkManagement returns a client for the NetworkManagement API.
+func (c *Clients) NetworkManagement(ctx context.Context) (*networkmanagement.Service, error) {
+	return newService(ctx, c, networkmanagement.NewService)
 }
 
-func CloudLocationFinderService(ctx context.Context, account string) (*cloudlocationfinder.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudlocationfinder.NewService(ctx, option.WithTokenSource(ts))
+// CloudLocationFinder returns a client for the CloudLocationFinder API.
+func (c *Clients) CloudLocationFinder(ctx context.Context) (*cloudlocationfinder.Service, error) {
+	return newService(ctx, c, cloudlocationfinder.NewService)
 }
 
-func DatastoreService(ctx context.Context, account string) (*datastore.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return datastore.NewService(ctx, option.WithTokenSource(ts))
+// Datastore returns a client for the Datastore API.
+func (c *Clients) Datastore(ctx context.Context) (*datastore.Service, error) {
+	return newService(ctx, c, datastore.NewService)
 }
 
-func NetAppService(ctx context.Context, account string) (*netapp.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return netapp.NewService(ctx, option.WithTokenSource(ts))
+// NetApp returns a client for the NetApp API.
+func (c *Clients) NetApp(ctx context.Context) (*netapp.Service, error) {
+	return newService(ctx, c, netapp.NewService)
 }
 
-func BigtableAdminService(ctx context.Context, account string) (*bigtableadmin.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return bigtableadmin.NewService(ctx, option.WithTokenSource(ts))
+// BigtableAdmin returns a client for the BigtableAdmin API.
+func (c *Clients) BigtableAdmin(ctx context.Context) (*bigtableadmin.Service, error) {
+	return newService(ctx, c, bigtableadmin.NewService)
 }
 
-func ComposerService(ctx context.Context, account string) (*composer.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return composer.NewService(ctx, option.WithTokenSource(ts))
+// Composer returns a client for the Composer API.
+func (c *Clients) Composer(ctx context.Context) (*composer.Service, error) {
+	return newService(ctx, c, composer.NewService)
 }
 
-// ComposerBetaService returns a Composer v1beta1 client. Environment
+// ComposerBeta returns a Composer v1beta1 client. Environment
 // hibernate/resume are only exposed on v1beta1 as of this build.
-func ComposerBetaService(ctx context.Context, account string) (*composerbeta.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return composerbeta.NewService(ctx, option.WithTokenSource(ts))
+func (c *Clients) ComposerBeta(ctx context.Context) (*composerbeta.Service, error) {
+	return newService(ctx, c, composerbeta.NewService)
 }
 
-func DataCatalogService(ctx context.Context, account string) (*datacatalog.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return datacatalog.NewService(ctx, option.WithTokenSource(ts))
+// DataCatalog returns a client for the DataCatalog API.
+func (c *Clients) DataCatalog(ctx context.Context) (*datacatalog.Service, error) {
+	return newService(ctx, c, datacatalog.NewService)
 }
 
-func CloudDeployService(ctx context.Context, account string) (*clouddeploy.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return clouddeploy.NewService(ctx, option.WithTokenSource(ts))
+// CloudDeploy returns a client for the CloudDeploy API.
+func (c *Clients) CloudDeploy(ctx context.Context) (*clouddeploy.Service, error) {
+	return newService(ctx, c, clouddeploy.NewService)
 }
 
-func DNSService(ctx context.Context, account string) (*dns.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return dns.NewService(ctx, option.WithTokenSource(ts))
+// DNS returns a client for the DNS API.
+func (c *Clients) DNS(ctx context.Context) (*dns.Service, error) {
+	return newService(ctx, c, dns.NewService)
 }
 
-// DNSServiceAt returns a Cloud DNS v1 client pointed at endpoint (a
+// DNSAt returns a Cloud DNS v1 client pointed at endpoint (a
 // regional endpoint base URL), or the global endpoint when endpoint is "".
-func DNSServiceAt(ctx context.Context, account, endpoint string) (*dns.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+func (c *Clients) DNSAt(ctx context.Context, endpoint string) (*dns.Service, error) {
+	var opts []option.ClientOption
 	if endpoint != "" {
 		opts = append(opts, option.WithEndpoint(endpoint))
 	}
-	return dns.NewService(ctx, opts...)
+	return newService(ctx, c, dns.NewService, opts...)
 }
 
-func ManagedIdentitiesService(ctx context.Context, account string) (*managedidentities.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return managedidentities.NewService(ctx, option.WithTokenSource(ts))
+// ManagedIdentities returns a client for the ManagedIdentities API.
+func (c *Clients) ManagedIdentities(ctx context.Context) (*managedidentities.Service, error) {
+	return newService(ctx, c, managedidentities.NewService)
 }
 
-func DataprocService(ctx context.Context, account, region string) (*dataproc.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+func (c *Clients) Dataproc(ctx context.Context, region string) (*dataproc.Service, error) {
+	var opts []option.ClientOption
 	if region != "" {
 		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-dataproc.googleapis.com/", region)))
 	}
-	return dataproc.NewService(ctx, opts...)
+	return newService(ctx, c, dataproc.NewService, opts...)
 }
 
-func IDSService(ctx context.Context, account string) (*ids.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return ids.NewService(ctx, option.WithTokenSource(ts))
+// IDS returns a client for the IDS API.
+func (c *Clients) IDS(ctx context.Context) (*ids.Service, error) {
+	return newService(ctx, c, ids.NewService)
 }
 
-func ReCaptchaEnterpriseService(ctx context.Context, account string) (*recaptchaenterprise.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return recaptchaenterprise.NewService(ctx, option.WithTokenSource(ts))
+// ReCaptchaEnterprise returns a client for the ReCaptchaEnterprise API.
+func (c *Clients) ReCaptchaEnterprise(ctx context.Context) (*recaptchaenterprise.Service, error) {
+	return newService(ctx, c, recaptchaenterprise.NewService)
 }
 
-func ApiHubService(ctx context.Context, account string) (*apihub.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return apihub.NewService(ctx, option.WithTokenSource(ts))
+// ApiHub returns a client for the ApiHub API.
+func (c *Clients) ApiHub(ctx context.Context) (*apihub.Service, error) {
+	return newService(ctx, c, apihub.NewService)
 }
 
-// PubSubLiteService returns a pubsublite client wired to the region-specific
+// PubSubLite returns a pubsublite client wired to the region-specific
 // endpoint. Pub/Sub Lite is a regional service: admin operations for a given
 // location must be routed through <region>-pubsublite.googleapis.com, where
 // the region is derived from the (regional or zonal) location the resource
 // lives in.
-func PubSubLiteService(ctx context.Context, account, region string) (*pubsublite.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+func (c *Clients) PubSubLite(ctx context.Context, region string) (*pubsublite.Service, error) {
+	var opts []option.ClientOption
 	if region != "" {
 		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-pubsublite.googleapis.com/", region)))
 	}
-	return pubsublite.NewService(ctx, opts...)
+	return newService(ctx, c, pubsublite.NewService, opts...)
 }
 
-func ParameterManagerService(ctx context.Context, account string) (*parametermanager.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return parametermanager.NewService(ctx, option.WithTokenSource(ts))
+// ParameterManager returns a client for the ParameterManager API.
+func (c *Clients) ParameterManager(ctx context.Context) (*parametermanager.Service, error) {
+	return newService(ctx, c, parametermanager.NewService)
 }
 
-// RunV1Service returns a Cloud Run v1 (Knative-style) client. Cloud Run's v1
+// RunV1 returns a Cloud Run v1 (Knative-style) client. Cloud Run's v1
 // surface is regional; pass an empty region for the multi-region default
 // endpoint or a region name (e.g. "us-central1") to route calls through
 // https://REGION-run.googleapis.com/.
-func RunV1Service(ctx context.Context, account, region string) (*runv1.APIService, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+func (c *Clients) RunV1(ctx context.Context, region string) (*runv1.APIService, error) {
+	var opts []option.ClientOption
 	if region != "" {
 		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-run.googleapis.com/", region)))
 	}
-	return runv1.NewService(ctx, opts...)
+	return newService(ctx, c, runv1.NewService, opts...)
 }
 
-// RunV2Service returns a Cloud Run v2 client. Cloud Run v2 supports both a
+// RunV2 returns a Cloud Run v2 client. Cloud Run v2 supports both a
 // global and per-region endpoint; pass a region to pin the call to
 // https://REGION-run.googleapis.com/ (recommended for regional resources).
-func RunV2Service(ctx context.Context, account, region string) (*runv2.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	opts := []option.ClientOption{option.WithTokenSource(ts)}
+func (c *Clients) RunV2(ctx context.Context, region string) (*runv2.Service, error) {
+	var opts []option.ClientOption
 	if region != "" {
 		opts = append(opts, option.WithEndpoint(fmt.Sprintf("https://%s-run.googleapis.com/", region)))
 	}
-	return runv2.NewService(ctx, opts...)
+	return newService(ctx, c, runv2.NewService, opts...)
 }
 
-// KMSService returns a Cloud KMS v1 client for key rings, keys, versions,
+// KMS returns a Cloud KMS v1 client for key rings, keys, versions,
 // EKM connections, import jobs, key handles, retired resources, and
 // single-tenant HSM management.
-func KMSService(ctx context.Context, account string) (*cloudkms.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return cloudkms.NewService(ctx, option.WithTokenSource(ts))
+func (c *Clients) KMS(ctx context.Context) (*cloudkms.Service, error) {
+	return newService(ctx, c, cloudkms.NewService)
 }
 
-// KMSInventoryService returns a KMS Inventory v1 client for listing keys and
+// KMSInventory returns a KMS Inventory v1 client for listing keys and
 // searching resources protected by a Cloud KMS key.
-func KMSInventoryService(ctx context.Context, account string) (*kmsinventory.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return kmsinventory.NewService(ctx, option.WithTokenSource(ts))
+func (c *Clients) KMSInventory(ctx context.Context) (*kmsinventory.Service, error) {
+	return newService(ctx, c, kmsinventory.NewService)
 }
 
-// SpannerService returns a Cloud Spanner v1 client.
-func SpannerService(ctx context.Context, account string) (*spanner.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	return spanner.NewService(ctx, option.WithTokenSource(ts))
+// Spanner returns a Cloud Spanner v1 client.
+func (c *Clients) Spanner(ctx context.Context) (*spanner.Service, error) {
+	return newService(ctx, c, spanner.NewService)
 }
 
 // PlatformTokenSource returns an OAuth token source with the cloud-platform
 // scope for callers that need to make raw HTTP requests against Google Cloud
 // endpoints not covered by a generated Go client (for example
 // eventarcpublishing.googleapis.com).
-func PlatformTokenSource(ctx context.Context, account string) (oauth2.TokenSource, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
+func (c *Clients) PlatformTokenSource(ctx context.Context) (oauth2.TokenSource, error) {
+	ts, err := c.Tokens.TokenSource(ctx, c.Account, cloudPlatformScope)
 	if err != nil {
 		return nil, fmt.Errorf("obtaining credentials: %w", err)
 	}
