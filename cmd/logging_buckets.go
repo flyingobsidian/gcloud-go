@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,44 +10,6 @@ import (
 )
 
 // --- gcloud logging buckets (#912) ---
-
-var loggingBucketsCmd = &cobra.Command{Use: "buckets", Short: "Manage log buckets"}
-
-var (
-	flagLogBucketDescription      string
-	flagLogBucketRetentionDays    int64
-	flagLogBucketRestrictedFields string
-	flagLogBucketCMEKKey          string
-	flagLogBucketEnableAnalytics  bool
-	flagLogBucketIndexes          []string
-)
-
-var (
-	loggingBucketsCreateCmd = &cobra.Command{
-		Use: "create BUCKET_ID", Short: "Create a log bucket",
-		Args: cobra.ExactArgs(1), RunE: runLogBucketCreate,
-	}
-	loggingBucketsDeleteCmd = &cobra.Command{
-		Use: "delete BUCKET_ID", Short: "Delete a log bucket",
-		Args: cobra.ExactArgs(1), RunE: runLogBucketDelete,
-	}
-	loggingBucketsDescribeCmd = &cobra.Command{
-		Use: "describe BUCKET_ID", Short: "Describe a log bucket",
-		Args: cobra.ExactArgs(1), RunE: runLogBucketDescribe,
-	}
-	loggingBucketsListCmd = &cobra.Command{
-		Use: "list", Short: "List log buckets",
-		Args: cobra.NoArgs, RunE: runLogBucketList,
-	}
-	loggingBucketsUpdateCmd = &cobra.Command{
-		Use: "update BUCKET_ID", Short: "Update a log bucket",
-		Args: cobra.ExactArgs(1), RunE: runLogBucketUpdate,
-	}
-	loggingBucketsUndeleteCmd = &cobra.Command{
-		Use: "undelete BUCKET_ID", Short: "Undelete a log bucket",
-		Args: cobra.ExactArgs(1), RunE: runLogBucketUndelete,
-	}
-)
 
 func parseBucketIndexes(vals []string) ([]*logging.IndexConfig, error) {
 	if len(vals) == 0 {
@@ -79,23 +40,23 @@ func parseBucketIndexes(vals []string) ([]*logging.IndexConfig, error) {
 	return out, nil
 }
 
-func bucketFromFlags(body *logging.LogBucket) error {
-	if flagLogBucketDescription != "" {
-		body.Description = flagLogBucketDescription
+func (g *loggingCmds) bucketFromFlags(body *logging.LogBucket) error {
+	if g.flagLogBucketDescription != "" {
+		body.Description = g.flagLogBucketDescription
 	}
-	if flagLogBucketRetentionDays > 0 {
-		body.RetentionDays = flagLogBucketRetentionDays
+	if g.flagLogBucketRetentionDays > 0 {
+		body.RetentionDays = g.flagLogBucketRetentionDays
 	}
-	if flagLogBucketRestrictedFields != "" {
-		body.RestrictedFields = splitCSV(flagLogBucketRestrictedFields)
+	if g.flagLogBucketRestrictedFields != "" {
+		body.RestrictedFields = splitCSV(g.flagLogBucketRestrictedFields)
 	}
-	if flagLogBucketCMEKKey != "" {
-		body.CmekSettings = &logging.CmekSettings{KmsKeyName: flagLogBucketCMEKKey}
+	if g.flagLogBucketCMEKKey != "" {
+		body.CmekSettings = &logging.CmekSettings{KmsKeyName: g.flagLogBucketCMEKKey}
 	}
-	if flagLogBucketEnableAnalytics {
+	if g.flagLogBucketEnableAnalytics {
 		body.AnalyticsEnabled = true
 	}
-	idx, err := parseBucketIndexes(flagLogBucketIndexes)
+	idx, err := parseBucketIndexes(g.flagLogBucketIndexes)
 	if err != nil {
 		return err
 	}
@@ -120,26 +81,26 @@ func splitCSV(s string) []string {
 	return out
 }
 
-func runLogBucketCreate(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogBucketCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
 	body := &logging.LogBucket{}
-	if flagLogConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagLogConfigFile, body); err != nil {
+	if g.flagLogConfigFile != "" {
+		if err := loadYAMLOrJSONInto(g.flagLogConfigFile, body); err != nil {
 			return err
 		}
 	}
-	if err := bucketFromFlags(body); err != nil {
+	if err := g.bucketFromFlags(body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
-	loc := loggingLocationParent(parent, loggingLocation())
+	loc := loggingLocationParent(parent, g.loggingLocation())
 	var got *logging.LogBucket
 	switch loggingScope(parent) {
 	case "projects":
@@ -156,17 +117,17 @@ func runLogBucketCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating log bucket: %w", err)
 	}
-	return emitFormatted(got, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagLogFormat)
 }
 
-func runLogBucketDelete(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogBucketDelete(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	name := loggingLocationChildName(parent, loggingLocation(), "buckets", args[0])
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	name := loggingLocationChildName(parent, g.loggingLocation(), "buckets", args[0])
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -185,18 +146,18 @@ func runLogBucketDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting log bucket: %w", err)
 	}
-	fmt.Printf("Deleted log bucket [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted log bucket [%s].\n", args[0])
 	return nil
 }
 
-func runLogBucketDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogBucketDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	name := loggingLocationChildName(parent, loggingLocation(), "buckets", args[0])
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	name := loggingLocationChildName(parent, g.loggingLocation(), "buckets", args[0])
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -216,17 +177,17 @@ func runLogBucketDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing log bucket: %w", err)
 	}
-	return emitFormatted(got, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagLogFormat)
 }
 
-func runLogBucketList(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogBucketList(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	loc := loggingLocationParent(parent, loggingLocation())
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	loc := loggingLocationParent(parent, g.loggingLocation())
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -240,8 +201,8 @@ func runLogBucketList(cmd *cobra.Command, args []string) error {
 		switch loggingScope(parent) {
 		case "projects":
 			call := svc.Projects.Locations.Buckets.List(loc).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -254,8 +215,8 @@ func runLogBucketList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "folders":
 			call := svc.Folders.Locations.Buckets.List(loc).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -268,8 +229,8 @@ func runLogBucketList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "organizations":
 			call := svc.Organizations.Locations.Buckets.List(loc).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -282,8 +243,8 @@ func runLogBucketList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "billingAccounts":
 			call := svc.BillingAccounts.Locations.Buckets.List(loc).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -303,12 +264,12 @@ func runLogBucketList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagLogFormat != "" {
-		return emitFormatted(all, flagLogFormat)
+	if g.flagLogFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagLogFormat)
 	}
-	printTableHeading(len(all), "%-40s %-10s %s\n", "NAME", "RETENTION", "STATE")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %-10s %s\n", "NAME", "RETENTION", "STATE")
 	for _, b := range all {
-		fmt.Printf("%-40s %-10s %s\n",
+		fmt.Fprintf(g.inv.stdout, "%-40s %-10s %s\n",
 			loggingBasename(b.Name),
 			strconv.FormatInt(b.RetentionDays, 10),
 			b.LifecycleState)
@@ -316,24 +277,24 @@ func runLogBucketList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runLogBucketUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogBucketUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	name := loggingLocationChildName(parent, loggingLocation(), "buckets", args[0])
+	name := loggingLocationChildName(parent, g.loggingLocation(), "buckets", args[0])
 	body := &logging.LogBucket{}
-	if flagLogConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagLogConfigFile, body); err != nil {
+	if g.flagLogConfigFile != "" {
+		if err := loadYAMLOrJSONInto(g.flagLogConfigFile, body); err != nil {
 			return err
 		}
 	}
-	if err := bucketFromFlags(body); err != nil {
+	if err := g.bucketFromFlags(body); err != nil {
 		return err
 	}
-	mask := loggingResolveMask(body)
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	mask := g.loggingResolveMask(body)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -353,17 +314,17 @@ func runLogBucketUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating log bucket: %w", err)
 	}
-	return emitFormatted(got, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagLogFormat)
 }
 
-func runLogBucketUndelete(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogBucketUndelete(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	name := loggingLocationChildName(parent, loggingLocation(), "buckets", args[0])
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	name := loggingLocationChildName(parent, g.loggingLocation(), "buckets", args[0])
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -383,27 +344,27 @@ func runLogBucketUndelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("undeleting log bucket: %w", err)
 	}
-	fmt.Printf("Undeleted log bucket [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Undeleted log bucket [%s].\n", args[0])
 	return nil
 }
 
-func init() {
-	all := []*cobra.Command{loggingBucketsCreateCmd, loggingBucketsDeleteCmd, loggingBucketsDescribeCmd,
-		loggingBucketsListCmd, loggingBucketsUpdateCmd, loggingBucketsUndeleteCmd}
-	addLogScopeFlags(all...)
-	addLogLocationFlag(all...)
-	addLogFormatFlag(loggingBucketsCreateCmd, loggingBucketsDescribeCmd, loggingBucketsListCmd, loggingBucketsUpdateCmd)
-	addLogPageSizeFlag(loggingBucketsListCmd)
-	for _, c := range []*cobra.Command{loggingBucketsCreateCmd, loggingBucketsUpdateCmd} {
-		c.Flags().StringVar(&flagLogBucketDescription, "description", "", "A textual description for the bucket")
-		c.Flags().Int64Var(&flagLogBucketRetentionDays, "retention-days", 0, "Retention period in days")
-		c.Flags().StringVar(&flagLogBucketRestrictedFields, "restricted-fields", "", "Comma-separated list of restricted field paths")
-		c.Flags().StringVar(&flagLogBucketCMEKKey, "cmek-kms-key-name", "", "CMEK KMS key name for this bucket")
-		c.Flags().BoolVar(&flagLogBucketEnableAnalytics, "enable-analytics", false, "Enable Log Analytics for this bucket")
-		c.Flags().StringSliceVar(&flagLogBucketIndexes, "index", nil, "Bucket index (fieldPath=X,type=Y); may repeat")
-		c.Flags().StringVar(&flagLogConfigFile, "config-file", "", "Path to a JSON/YAML file with the LogBucket body")
+func (g *loggingCmds) initLoggingBuckets() {
+	all := []*cobra.Command{g.loggingBucketsCreateCmd, g.loggingBucketsDeleteCmd, g.loggingBucketsDescribeCmd,
+		g.loggingBucketsListCmd, g.loggingBucketsUpdateCmd, g.loggingBucketsUndeleteCmd}
+	g.addLogScopeFlags(all...)
+	g.addLogLocationFlag(all...)
+	g.addLogFormatFlag(g.loggingBucketsCreateCmd, g.loggingBucketsDescribeCmd, g.loggingBucketsListCmd, g.loggingBucketsUpdateCmd)
+	g.addLogPageSizeFlag(g.loggingBucketsListCmd)
+	for _, c := range []*cobra.Command{g.loggingBucketsCreateCmd, g.loggingBucketsUpdateCmd} {
+		c.Flags().StringVar(&g.flagLogBucketDescription, "description", "", "A textual description for the bucket")
+		c.Flags().Int64Var(&g.flagLogBucketRetentionDays, "retention-days", 0, "Retention period in days")
+		c.Flags().StringVar(&g.flagLogBucketRestrictedFields, "restricted-fields", "", "Comma-separated list of restricted field paths")
+		c.Flags().StringVar(&g.flagLogBucketCMEKKey, "cmek-kms-key-name", "", "CMEK KMS key name for this bucket")
+		c.Flags().BoolVar(&g.flagLogBucketEnableAnalytics, "enable-analytics", false, "Enable Log Analytics for this bucket")
+		c.Flags().StringSliceVar(&g.flagLogBucketIndexes, "index", nil, "Bucket index (fieldPath=X,type=Y); may repeat")
+		c.Flags().StringVar(&g.flagLogConfigFile, "config-file", "", "Path to a JSON/YAML file with the LogBucket body")
 	}
-	loggingBucketsUpdateCmd.Flags().StringVar(&flagLogUpdateMask, "update-mask", "", "Comma-separated list of fields to update")
-	loggingBucketsCmd.AddCommand(all...)
-	loggingCmd.AddCommand(loggingBucketsCmd)
+	g.loggingBucketsUpdateCmd.Flags().StringVar(&g.flagLogUpdateMask, "update-mask", "", "Comma-separated list of fields to update")
+	g.loggingBucketsCmd.AddCommand(all...)
+	g.loggingCmd.AddCommand(g.loggingBucketsCmd)
 }

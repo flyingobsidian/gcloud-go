@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -595,17 +596,22 @@ func resolveRegion() (string, string, error) {
 // defers all other formatting to emitFormatted so there is a single
 // implementation of yaml/json/table/etc. across the codebase.
 func formatOutput(v any, format string) error {
+	return formatOutputTo(os.Stdout, v, format)
+}
+
+// formatOutputTo is formatOutput writing to w.
+func formatOutputTo(w io.Writer, v any, format string) error {
 	if isGetFormat(format) {
 		field := extractGetField(format)
 		if inst, ok := v.(*compute.Instance); ok {
-			fmt.Println(getInstanceField(inst, field))
+			fmt.Fprintln(w, getInstanceField(inst, field))
 			return nil
 		}
 	}
 	if format == "" {
 		format = "json"
 	}
-	return emitFormatted(v, format)
+	return emitFormattedTo(w, v, format)
 }
 
 func isTableFormat(format string) bool {

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,48 +9,31 @@ import (
 
 // --- gcloud logging operations (#917) ---
 
-var loggingOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Cloud Logging long-running operations"}
-
-var (
-	loggingOperationsCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a long-running operation",
-		Args: cobra.ExactArgs(1), RunE: runLogOperationCancel,
-	}
-	loggingOperationsDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a long-running operation",
-		Args: cobra.ExactArgs(1), RunE: runLogOperationDescribe,
-	}
-	loggingOperationsListCmd = &cobra.Command{
-		Use: "list", Short: "List long-running operations",
-		Args: cobra.NoArgs, RunE: runLogOperationList,
-	}
-)
-
-func opLocationParent() (string, error) {
-	parent, err := loggingParent()
+func (g *loggingCmds) opLocationParent() (string, error) {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return "", err
 	}
-	return loggingLocationParent(parent, loggingLocation()), nil
+	return loggingLocationParent(parent, g.loggingLocation()), nil
 }
 
-func opName(id string) (string, string, error) {
-	parent, err := loggingParent()
+func (g *loggingCmds) opName(id string) (string, string, error) {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return "", "", err
 	}
 	scope := loggingScope(parent)
-	name := loggingLocationChildName(parent, loggingLocation(), "operations", id)
+	name := loggingLocationChildName(parent, g.loggingLocation(), "operations", id)
 	return scope, name, nil
 }
 
-func runLogOperationCancel(cmd *cobra.Command, args []string) error {
-	scope, name, err := opName(args[0])
+func (g *loggingCmds) runLogOperationCancel(cmd *cobra.Command, args []string) error {
+	scope, name, err := g.opName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -71,17 +53,17 @@ func runLogOperationCancel(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runLogOperationDescribe(cmd *cobra.Command, args []string) error {
-	scope, name, err := opName(args[0])
+func (g *loggingCmds) runLogOperationDescribe(cmd *cobra.Command, args []string) error {
+	scope, name, err := g.opName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,17 +83,17 @@ func runLogOperationDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagLogFormat)
 }
 
-func runLogOperationList(cmd *cobra.Command, args []string) error {
-	parent, err := opLocationParent()
+func (g *loggingCmds) runLogOperationList(cmd *cobra.Command, args []string) error {
+	parent, err := g.opLocationParent()
 	if err != nil {
 		return err
 	}
 	scope := loggingScope(parent)
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -125,11 +107,11 @@ func runLogOperationList(cmd *cobra.Command, args []string) error {
 		switch scope {
 		case "projects":
 			call := svc.Projects.Locations.Operations.List(parent).Context(ctx)
-			if flagLogFilter != "" {
-				call = call.Filter(flagLogFilter)
+			if g.flagLogFilter != "" {
+				call = call.Filter(g.flagLogFilter)
 			}
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -141,11 +123,11 @@ func runLogOperationList(cmd *cobra.Command, args []string) error {
 			page, next = resp.Operations, resp.NextPageToken
 		case "folders":
 			call := svc.Folders.Locations.Operations.List(parent).Context(ctx)
-			if flagLogFilter != "" {
-				call = call.Filter(flagLogFilter)
+			if g.flagLogFilter != "" {
+				call = call.Filter(g.flagLogFilter)
 			}
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -157,11 +139,11 @@ func runLogOperationList(cmd *cobra.Command, args []string) error {
 			page, next = resp.Operations, resp.NextPageToken
 		case "organizations":
 			call := svc.Organizations.Locations.Operations.List(parent).Context(ctx)
-			if flagLogFilter != "" {
-				call = call.Filter(flagLogFilter)
+			if g.flagLogFilter != "" {
+				call = call.Filter(g.flagLogFilter)
 			}
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -173,11 +155,11 @@ func runLogOperationList(cmd *cobra.Command, args []string) error {
 			page, next = resp.Operations, resp.NextPageToken
 		case "billingAccounts":
 			call := svc.BillingAccounts.Locations.Operations.List(parent).Context(ctx)
-			if flagLogFilter != "" {
-				call = call.Filter(flagLogFilter)
+			if g.flagLogFilter != "" {
+				call = call.Filter(g.flagLogFilter)
 			}
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -196,23 +178,23 @@ func runLogOperationList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagLogFormat != "" {
-		return emitFormatted(all, flagLogFormat)
+	if g.flagLogFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagLogFormat)
 	}
-	printTableHeading(len(all), "%-60s %s\n", "NAME", "DONE")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-60s %s\n", "NAME", "DONE")
 	for _, o := range all {
-		fmt.Printf("%-60s %v\n", loggingBasename(o.Name), o.Done)
+		fmt.Fprintf(g.inv.stdout, "%-60s %v\n", loggingBasename(o.Name), o.Done)
 	}
 	return nil
 }
 
-func init() {
-	all := []*cobra.Command{loggingOperationsCancelCmd, loggingOperationsDescribeCmd, loggingOperationsListCmd}
-	addLogScopeFlags(all...)
-	addLogLocationFlag(all...)
-	addLogFormatFlag(loggingOperationsDescribeCmd, loggingOperationsListCmd)
-	addLogFilterFlag(loggingOperationsListCmd)
-	addLogPageSizeFlag(loggingOperationsListCmd)
-	loggingOperationsCmd.AddCommand(all...)
-	loggingCmd.AddCommand(loggingOperationsCmd)
+func (g *loggingCmds) initLoggingOperations() {
+	all := []*cobra.Command{g.loggingOperationsCancelCmd, g.loggingOperationsDescribeCmd, g.loggingOperationsListCmd}
+	g.addLogScopeFlags(all...)
+	g.addLogLocationFlag(all...)
+	g.addLogFormatFlag(g.loggingOperationsDescribeCmd, g.loggingOperationsListCmd)
+	g.addLogFilterFlag(g.loggingOperationsListCmd)
+	g.addLogPageSizeFlag(g.loggingOperationsListCmd)
+	g.loggingOperationsCmd.AddCommand(all...)
+	g.loggingCmd.AddCommand(g.loggingOperationsCmd)
 }

@@ -8,6 +8,32 @@ in the CLI, but `gcloud.Runner.Run` returns `ErrNotInProcess` for them.
 
 `cmd/projects.go` is the reference example.
 
+## Large groups: `tools/migrateglobals`
+
+For a large group, start with the rewriter rather than converting by hand:
+
+```sh
+cd tools/migrateglobals
+go run . -dir ../.. -files storage.go,storage_hmac.go,… \
+    -type storageCmds -root storageCmd -ctor newStorageCmd
+```
+
+It keeps the group's code where it is, but:
+
+- moves the command and flag variables onto a `storageCmds` struct and
+  generates `newStorageCmd(inv)`, which builds the commands and then runs the
+  former `init` functions (now methods) in file order, as Go did;
+- turns every function that uses those variables, global flags or process
+  state into a method, and applies the table below (`context.Background()`
+  becomes the command's `cmd.Context()`, or `inv.context()` where there is no
+  command);
+- prints references from outside the group (usually tests) to fix by hand.
+
+Run it with `-audit` to list helpers outside the group that the group calls
+and that still use process state; give those an `io.Writer` or `*invocation`
+form first. Then do steps 4 to 7 below. storage and logging were
+migrated this way.
+
 ## Steps
 
 1. **Commands are built by constructors.** Replace each `var xxxCmd = &cobra.Command{…}`

@@ -49,6 +49,7 @@ import (
 	cloudtasks "google.golang.org/api/cloudtasks/v2"
 	composer "google.golang.org/api/composer/v1"
 	composerbeta "google.golang.org/api/composer/v1beta1"
+	compute "google.golang.org/api/compute/v1"
 	config1 "google.golang.org/api/config/v1"
 	container "google.golang.org/api/container/v1"
 	datacatalog "google.golang.org/api/datacatalog/v1"
@@ -172,6 +173,11 @@ func (c *Clients) Redis(ctx context.Context) (*redis.Service, error) {
 // Dataplex returns a client for the Dataplex API.
 func (c *Clients) Dataplex(ctx context.Context) (*dataplex.Service, error) {
 	return newService(ctx, c, dataplex.NewService)
+}
+
+// Compute returns a client for the Compute Engine API.
+func (c *Clients) Compute(ctx context.Context) (*compute.Service, error) {
+	return newService(ctx, c, compute.NewService)
 }
 
 // OSLogin returns a client for the OSLogin API.
