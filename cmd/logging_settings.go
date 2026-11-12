@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -14,37 +13,18 @@ import (
 // or folder level (the underlying API only exposes UpdateSettings for those
 // two). Attempts to update a project or billing-account scope are rejected.
 
-var loggingSettingsCmd = &cobra.Command{Use: "settings", Short: "Manage Logs Router settings"}
-
-var (
-	flagLogSettingsKmsKey             string
-	flagLogSettingsStorageLocation    string
-	flagLogSettingsDisableDefaultSink bool
-)
-
-var (
-	loggingSettingsDescribeCmd = &cobra.Command{
-		Use: "describe", Short: "Describe Logs Router settings",
-		Args: cobra.NoArgs, RunE: runLogSettingsDescribe,
-	}
-	loggingSettingsUpdateCmd = &cobra.Command{
-		Use: "update", Short: "Update Logs Router settings",
-		Args: cobra.NoArgs, RunE: runLogSettingsUpdate,
-	}
-)
-
 func settingsResourceName(parent string) string {
 	return parent + "/settings"
 }
 
-func runLogSettingsDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogSettingsDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
 	name := settingsResourceName(parent)
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -64,11 +44,11 @@ func runLogSettingsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing settings: %w", err)
 	}
-	return emitFormatted(got, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagLogFormat)
 }
 
-func runLogSettingsUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogSettingsUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
@@ -78,24 +58,24 @@ func runLogSettingsUpdate(cmd *cobra.Command, args []string) error {
 	}
 	name := settingsResourceName(parent)
 	body := &logging.Settings{}
-	if flagLogConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagLogConfigFile, body); err != nil {
+	if g.flagLogConfigFile != "" {
+		if err := loadYAMLOrJSONInto(g.flagLogConfigFile, body); err != nil {
 			return err
 		}
 	}
-	if flagLogSettingsKmsKey != "" {
-		body.KmsKeyName = flagLogSettingsKmsKey
+	if g.flagLogSettingsKmsKey != "" {
+		body.KmsKeyName = g.flagLogSettingsKmsKey
 	}
-	if flagLogSettingsStorageLocation != "" {
-		body.StorageLocation = flagLogSettingsStorageLocation
+	if g.flagLogSettingsStorageLocation != "" {
+		body.StorageLocation = g.flagLogSettingsStorageLocation
 	}
 	if cmd.Flags().Changed("disable-default-sink") {
-		body.DisableDefaultSink = flagLogSettingsDisableDefaultSink
+		body.DisableDefaultSink = g.flagLogSettingsDisableDefaultSink
 		body.ForceSendFields = append(body.ForceSendFields, "DisableDefaultSink")
 	}
-	mask := loggingResolveMask(body)
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	mask := g.loggingResolveMask(body)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -109,18 +89,18 @@ func runLogSettingsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating settings: %w", err)
 	}
-	return emitFormatted(got, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagLogFormat)
 }
 
-func init() {
-	all := []*cobra.Command{loggingSettingsDescribeCmd, loggingSettingsUpdateCmd}
-	addLogScopeFlags(all...)
-	addLogFormatFlag(all...)
-	loggingSettingsUpdateCmd.Flags().StringVar(&flagLogSettingsKmsKey, "kms-key-name", "", "CMEK KMS key name for the Logs Router")
-	loggingSettingsUpdateCmd.Flags().StringVar(&flagLogSettingsStorageLocation, "storage-location", "", "Default storage location for _Default and _Required buckets")
-	loggingSettingsUpdateCmd.Flags().BoolVar(&flagLogSettingsDisableDefaultSink, "disable-default-sink", false, "Disable the _Default sink for newly-created projects and folders")
-	loggingSettingsUpdateCmd.Flags().StringVar(&flagLogConfigFile, "config-file", "", "Path to a JSON/YAML file with the Settings body")
-	loggingSettingsUpdateCmd.Flags().StringVar(&flagLogUpdateMask, "update-mask", "", "Comma-separated list of fields to update")
-	loggingSettingsCmd.AddCommand(all...)
-	loggingCmd.AddCommand(loggingSettingsCmd)
+func (g *loggingCmds) initLoggingSettings() {
+	all := []*cobra.Command{g.loggingSettingsDescribeCmd, g.loggingSettingsUpdateCmd}
+	g.addLogScopeFlags(all...)
+	g.addLogFormatFlag(all...)
+	g.loggingSettingsUpdateCmd.Flags().StringVar(&g.flagLogSettingsKmsKey, "kms-key-name", "", "CMEK KMS key name for the Logs Router")
+	g.loggingSettingsUpdateCmd.Flags().StringVar(&g.flagLogSettingsStorageLocation, "storage-location", "", "Default storage location for _Default and _Required buckets")
+	g.loggingSettingsUpdateCmd.Flags().BoolVar(&g.flagLogSettingsDisableDefaultSink, "disable-default-sink", false, "Disable the _Default sink for newly-created projects and folders")
+	g.loggingSettingsUpdateCmd.Flags().StringVar(&g.flagLogConfigFile, "config-file", "", "Path to a JSON/YAML file with the Settings body")
+	g.loggingSettingsUpdateCmd.Flags().StringVar(&g.flagLogUpdateMask, "update-mask", "", "Comma-separated list of fields to update")
+	g.loggingSettingsCmd.AddCommand(all...)
+	g.loggingCmd.AddCommand(g.loggingSettingsCmd)
 }

@@ -24,6 +24,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newOrganizationsCmd(inv),
 		newProjectsCmd(inv),
 		newResourceManagerCmd(inv),
+		newLoggingCmd(inv),
 		newSchedulerCmd(inv),
 		newStorageCmd(inv),
 		newWorkflowsCmd(inv),

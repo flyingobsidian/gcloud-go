@@ -12,7 +12,7 @@ import (
 )
 
 func loggingSubgroup(name string) *cobra.Command {
-	for _, c := range loggingCmd.Commands() {
+	for _, c := range newLoggingCmd(newOSInvocation()).Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -57,7 +57,7 @@ func TestLoggingSubgroups(t *testing.T) {
 
 func TestLoggingDataPlaneCommands(t *testing.T) {
 	for _, name := range []string{"copy", "read", "write", "tail"} {
-		if findSub(loggingCmd, name) == nil {
+		if findSub(newLoggingCmd(newOSInvocation()), name) == nil {
 			t.Errorf("logging %s missing", name)
 		}
 	}
@@ -170,6 +170,7 @@ func TestLoggingListEntriesError(t *testing.T) {
 }
 
 func TestLoggingReadFlags(t *testing.T) {
+	loggingReadCmd := findSub(newLoggingCmd(newOSInvocation()), "read")
 	for name, def := range map[string]string{"freshness": "1d", "order": "desc", "limit": "0", "config-file": ""} {
 		f := loggingReadCmd.Flags().Lookup(name)
 		if f == nil {

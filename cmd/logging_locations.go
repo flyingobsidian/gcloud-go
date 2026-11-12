@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -14,27 +13,14 @@ import (
 
 // locations subgroup
 
-var loggingLocationsCmd = &cobra.Command{Use: "locations", Short: "Manage Cloud Logging locations"}
-
-var (
-	loggingLocationsDescribeCmd = &cobra.Command{
-		Use: "describe LOCATION", Short: "Describe a Cloud Logging location",
-		Args: cobra.ExactArgs(1), RunE: runLogLocationDescribe,
-	}
-	loggingLocationsListCmd = &cobra.Command{
-		Use: "list", Short: "List Cloud Logging locations",
-		Args: cobra.NoArgs, RunE: runLogLocationList,
-	}
-)
-
-func runLogLocationDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogLocationDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
 	name := loggingChildName(parent, "locations", args[0])
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -54,16 +40,16 @@ func runLogLocationDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(got, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagLogFormat)
 }
 
-func runLogLocationList(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogLocationList(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -77,11 +63,11 @@ func runLogLocationList(cmd *cobra.Command, args []string) error {
 		switch loggingScope(parent) {
 		case "projects":
 			call := svc.Projects.Locations.List(parent).Context(ctx)
-			if flagLogFilter != "" {
-				call = call.Filter(flagLogFilter)
+			if g.flagLogFilter != "" {
+				call = call.Filter(g.flagLogFilter)
 			}
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -93,11 +79,11 @@ func runLogLocationList(cmd *cobra.Command, args []string) error {
 			page, next = resp.Locations, resp.NextPageToken
 		case "folders":
 			call := svc.Folders.Locations.List(parent).Context(ctx)
-			if flagLogFilter != "" {
-				call = call.Filter(flagLogFilter)
+			if g.flagLogFilter != "" {
+				call = call.Filter(g.flagLogFilter)
 			}
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -109,11 +95,11 @@ func runLogLocationList(cmd *cobra.Command, args []string) error {
 			page, next = resp.Locations, resp.NextPageToken
 		case "organizations":
 			call := svc.Organizations.Locations.List(parent).Context(ctx)
-			if flagLogFilter != "" {
-				call = call.Filter(flagLogFilter)
+			if g.flagLogFilter != "" {
+				call = call.Filter(g.flagLogFilter)
 			}
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -125,11 +111,11 @@ func runLogLocationList(cmd *cobra.Command, args []string) error {
 			page, next = resp.Locations, resp.NextPageToken
 		case "billingAccounts":
 			call := svc.BillingAccounts.Locations.List(parent).Context(ctx)
-			if flagLogFilter != "" {
-				call = call.Filter(flagLogFilter)
+			if g.flagLogFilter != "" {
+				call = call.Filter(g.flagLogFilter)
 			}
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -148,39 +134,26 @@ func runLogLocationList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagLogFormat != "" {
-		return emitFormatted(all, flagLogFormat)
+	if g.flagLogFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagLogFormat)
 	}
-	printTableHeading(len(all), "%-20s %s\n", "LOCATION_ID", "DISPLAY_NAME")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-20s %s\n", "LOCATION_ID", "DISPLAY_NAME")
 	for _, l := range all {
-		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-20s %s\n", l.LocationId, l.DisplayName)
 	}
 	return nil
 }
 
 // logs subgroup
 
-var loggingLogsCmd = &cobra.Command{Use: "logs", Short: "Manage logs"}
-
-var (
-	loggingLogsDeleteCmd = &cobra.Command{
-		Use: "delete LOG", Short: "Delete a log and all its entries",
-		Args: cobra.ExactArgs(1), RunE: runLogLogDelete,
-	}
-	loggingLogsListCmd = &cobra.Command{
-		Use: "list", Short: "List logs in a resource",
-		Args: cobra.NoArgs, RunE: runLogLogList,
-	}
-)
-
-func runLogLogDelete(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogLogDelete(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
 	name := loggingChildName(parent, "logs", args[0])
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -199,17 +172,17 @@ func runLogLogDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting log: %w", err)
 	}
-	fmt.Printf("Deleted log [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted log [%s].\n", args[0])
 	return nil
 }
 
-func runLogLogList(cmd *cobra.Command, args []string) error {
-	parent, err := loggingParent()
+func (g *loggingCmds) runLogLogList(cmd *cobra.Command, args []string) error {
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -223,8 +196,8 @@ func runLogLogList(cmd *cobra.Command, args []string) error {
 		switch loggingScope(parent) {
 		case "projects":
 			call := svc.Projects.Logs.List(parent).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -236,8 +209,8 @@ func runLogLogList(cmd *cobra.Command, args []string) error {
 			page, next = resp.LogNames, resp.NextPageToken
 		case "folders":
 			call := svc.Folders.Logs.List(parent).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -249,8 +222,8 @@ func runLogLogList(cmd *cobra.Command, args []string) error {
 			page, next = resp.LogNames, resp.NextPageToken
 		case "organizations":
 			call := svc.Organizations.Logs.List(parent).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -262,8 +235,8 @@ func runLogLogList(cmd *cobra.Command, args []string) error {
 			page, next = resp.LogNames, resp.NextPageToken
 		case "billingAccounts":
 			call := svc.BillingAccounts.Logs.List(parent).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -282,33 +255,20 @@ func runLogLogList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagLogFormat != "" {
-		return emitFormatted(all, flagLogFormat)
+	if g.flagLogFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagLogFormat)
 	}
 	for _, n := range all {
-		fmt.Println(n)
+		fmt.Fprintln(g.inv.stdout, n)
 	}
 	return nil
 }
 
 // resource-descriptors subgroup
 
-var loggingResourceDescriptorsCmd = &cobra.Command{Use: "resource-descriptors", Short: "Manage monitored resource descriptors"}
-
-var (
-	loggingResourceDescriptorsListCmd = &cobra.Command{
-		Use: "list", Short: "List monitored resource descriptors",
-		Args: cobra.NoArgs, RunE: runLogRDList,
-	}
-	loggingResourceDescriptorsDescribeCmd = &cobra.Command{
-		Use: "describe TYPE", Short: "Describe a monitored resource descriptor",
-		Args: cobra.ExactArgs(1), RunE: runLogRDDescribe,
-	}
-)
-
-func runLogRDList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+func (g *loggingCmds) runLogRDList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -316,8 +276,8 @@ func runLogRDList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.MonitoredResourceDescriptors.List().Context(ctx)
-		if flagLogPageSize > 0 {
-			call = call.PageSize(flagLogPageSize)
+		if g.flagLogPageSize > 0 {
+			call = call.PageSize(g.flagLogPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -332,20 +292,20 @@ func runLogRDList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagLogFormat != "" {
-		return emitFormatted(all, flagLogFormat)
+	if g.flagLogFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagLogFormat)
 	}
-	printTableHeading(len(all), "%-30s %s\n", "TYPE", "DISPLAY_NAME")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-30s %s\n", "TYPE", "DISPLAY_NAME")
 	for _, r := range all {
-		fmt.Printf("%-30s %s\n", r.Type, r.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-30s %s\n", r.Type, r.DisplayName)
 	}
 	return nil
 }
 
-func runLogRDDescribe(cmd *cobra.Command, args []string) error {
+func (g *loggingCmds) runLogRDDescribe(cmd *cobra.Command, args []string) error {
 	// The MRD API only exposes list, so we scan for a matching type.
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -361,7 +321,7 @@ func runLogRDDescribe(cmd *cobra.Command, args []string) error {
 		}
 		for _, r := range resp.ResourceDescriptors {
 			if r.Type == args[0] {
-				return emitFormatted(r, flagLogFormat)
+				return emitFormattedTo(g.inv.stdout, r, g.flagLogFormat)
 			}
 		}
 		if resp.NextPageToken == "" {
@@ -372,25 +332,25 @@ func runLogRDDescribe(cmd *cobra.Command, args []string) error {
 	return fmt.Errorf("no resource descriptor with type %q", args[0])
 }
 
-func init() {
+func (g *loggingCmds) initLoggingLocations() {
 	// locations
-	addLogScopeFlags(loggingLocationsDescribeCmd, loggingLocationsListCmd)
-	addLogFormatFlag(loggingLocationsDescribeCmd, loggingLocationsListCmd)
-	addLogFilterFlag(loggingLocationsListCmd)
-	addLogPageSizeFlag(loggingLocationsListCmd)
-	loggingLocationsCmd.AddCommand(loggingLocationsDescribeCmd, loggingLocationsListCmd)
-	loggingCmd.AddCommand(loggingLocationsCmd)
+	g.addLogScopeFlags(g.loggingLocationsDescribeCmd, g.loggingLocationsListCmd)
+	g.addLogFormatFlag(g.loggingLocationsDescribeCmd, g.loggingLocationsListCmd)
+	g.addLogFilterFlag(g.loggingLocationsListCmd)
+	g.addLogPageSizeFlag(g.loggingLocationsListCmd)
+	g.loggingLocationsCmd.AddCommand(g.loggingLocationsDescribeCmd, g.loggingLocationsListCmd)
+	g.loggingCmd.AddCommand(g.loggingLocationsCmd)
 
 	// logs
-	addLogScopeFlags(loggingLogsDeleteCmd, loggingLogsListCmd)
-	addLogFormatFlag(loggingLogsListCmd)
-	addLogPageSizeFlag(loggingLogsListCmd)
-	loggingLogsCmd.AddCommand(loggingLogsDeleteCmd, loggingLogsListCmd)
-	loggingCmd.AddCommand(loggingLogsCmd)
+	g.addLogScopeFlags(g.loggingLogsDeleteCmd, g.loggingLogsListCmd)
+	g.addLogFormatFlag(g.loggingLogsListCmd)
+	g.addLogPageSizeFlag(g.loggingLogsListCmd)
+	g.loggingLogsCmd.AddCommand(g.loggingLogsDeleteCmd, g.loggingLogsListCmd)
+	g.loggingCmd.AddCommand(g.loggingLogsCmd)
 
 	// resource-descriptors
-	addLogFormatFlag(loggingResourceDescriptorsListCmd, loggingResourceDescriptorsDescribeCmd)
-	addLogPageSizeFlag(loggingResourceDescriptorsListCmd)
-	loggingResourceDescriptorsCmd.AddCommand(loggingResourceDescriptorsListCmd, loggingResourceDescriptorsDescribeCmd)
-	loggingCmd.AddCommand(loggingResourceDescriptorsCmd)
+	g.addLogFormatFlag(g.loggingResourceDescriptorsListCmd, g.loggingResourceDescriptorsDescribeCmd)
+	g.addLogPageSizeFlag(g.loggingResourceDescriptorsListCmd)
+	g.loggingResourceDescriptorsCmd.AddCommand(g.loggingResourceDescriptorsListCmd, g.loggingResourceDescriptorsDescribeCmd)
+	g.loggingCmd.AddCommand(g.loggingResourceDescriptorsCmd)
 }

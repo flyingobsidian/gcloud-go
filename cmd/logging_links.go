@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,56 +9,30 @@ import (
 
 // --- gcloud logging links (#913) ---
 
-var loggingLinksCmd = &cobra.Command{Use: "links", Short: "Manage log bucket links"}
-
-var (
-	flagLogLinkBucket      string
-	flagLogLinkDescription string
-)
-
-var (
-	loggingLinksCreateCmd = &cobra.Command{
-		Use: "create LINK_ID", Short: "Create a link on a log bucket",
-		Args: cobra.ExactArgs(1), RunE: runLogLinkCreate,
-	}
-	loggingLinksDeleteCmd = &cobra.Command{
-		Use: "delete LINK_ID", Short: "Delete a bucket link",
-		Args: cobra.ExactArgs(1), RunE: runLogLinkDelete,
-	}
-	loggingLinksDescribeCmd = &cobra.Command{
-		Use: "describe LINK_ID", Short: "Describe a bucket link",
-		Args: cobra.ExactArgs(1), RunE: runLogLinkDescribe,
-	}
-	loggingLinksListCmd = &cobra.Command{
-		Use: "list", Short: "List bucket links",
-		Args: cobra.NoArgs, RunE: runLogLinkList,
-	}
-)
-
 func logLinkBucketParent(parent, location, bucket string) string {
 	return loggingLocationChildName(parent, location, "buckets", bucket)
 }
 
-func runLogLinkCreate(cmd *cobra.Command, args []string) error {
-	if flagLogLinkBucket == "" {
+func (g *loggingCmds) runLogLinkCreate(cmd *cobra.Command, args []string) error {
+	if g.flagLogLinkBucket == "" {
 		return fmt.Errorf("--bucket is required")
 	}
-	parent, err := loggingParent()
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
 	body := &logging.Link{}
-	if flagLogConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagLogConfigFile, body); err != nil {
+	if g.flagLogConfigFile != "" {
+		if err := loadYAMLOrJSONInto(g.flagLogConfigFile, body); err != nil {
 			return err
 		}
 	}
-	if flagLogLinkDescription != "" {
-		body.Description = flagLogLinkDescription
+	if g.flagLogLinkDescription != "" {
+		body.Description = g.flagLogLinkDescription
 	}
-	bp := logLinkBucketParent(parent, loggingLocation(), flagLogLinkBucket)
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	bp := logLinkBucketParent(parent, g.loggingLocation(), g.flagLogLinkBucket)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -79,21 +52,21 @@ func runLogLinkCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating bucket link: %w", err)
 	}
-	return emitFormatted(op, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, op, g.flagLogFormat)
 }
 
-func runLogLinkDelete(cmd *cobra.Command, args []string) error {
-	if flagLogLinkBucket == "" {
+func (g *loggingCmds) runLogLinkDelete(cmd *cobra.Command, args []string) error {
+	if g.flagLogLinkBucket == "" {
 		return fmt.Errorf("--bucket is required")
 	}
-	parent, err := loggingParent()
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	bp := logLinkBucketParent(parent, loggingLocation(), flagLogLinkBucket)
+	bp := logLinkBucketParent(parent, g.loggingLocation(), g.flagLogLinkBucket)
 	name := loggingChildName(bp, "links", args[0])
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -113,21 +86,21 @@ func runLogLinkDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting bucket link: %w", err)
 	}
-	return emitFormatted(op, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, op, g.flagLogFormat)
 }
 
-func runLogLinkDescribe(cmd *cobra.Command, args []string) error {
-	if flagLogLinkBucket == "" {
+func (g *loggingCmds) runLogLinkDescribe(cmd *cobra.Command, args []string) error {
+	if g.flagLogLinkBucket == "" {
 		return fmt.Errorf("--bucket is required")
 	}
-	parent, err := loggingParent()
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	bp := logLinkBucketParent(parent, loggingLocation(), flagLogLinkBucket)
+	bp := logLinkBucketParent(parent, g.loggingLocation(), g.flagLogLinkBucket)
 	name := loggingChildName(bp, "links", args[0])
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -147,20 +120,20 @@ func runLogLinkDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing bucket link: %w", err)
 	}
-	return emitFormatted(got, flagLogFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagLogFormat)
 }
 
-func runLogLinkList(cmd *cobra.Command, args []string) error {
-	if flagLogLinkBucket == "" {
+func (g *loggingCmds) runLogLinkList(cmd *cobra.Command, args []string) error {
+	if g.flagLogLinkBucket == "" {
 		return fmt.Errorf("--bucket is required")
 	}
-	parent, err := loggingParent()
+	parent, err := g.loggingParent()
 	if err != nil {
 		return err
 	}
-	bp := logLinkBucketParent(parent, loggingLocation(), flagLogLinkBucket)
-	ctx := context.Background()
-	svc, err := loggingClient(ctx)
+	bp := logLinkBucketParent(parent, g.loggingLocation(), g.flagLogLinkBucket)
+	ctx := cmd.Context()
+	svc, err := g.loggingClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -174,8 +147,8 @@ func runLogLinkList(cmd *cobra.Command, args []string) error {
 		switch loggingScope(parent) {
 		case "projects":
 			call := svc.Projects.Locations.Buckets.Links.List(bp).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -187,8 +160,8 @@ func runLogLinkList(cmd *cobra.Command, args []string) error {
 			page, next = resp.Links, resp.NextPageToken
 		case "folders":
 			call := svc.Folders.Locations.Buckets.Links.List(bp).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -200,8 +173,8 @@ func runLogLinkList(cmd *cobra.Command, args []string) error {
 			page, next = resp.Links, resp.NextPageToken
 		case "organizations":
 			call := svc.Organizations.Locations.Buckets.Links.List(bp).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -213,8 +186,8 @@ func runLogLinkList(cmd *cobra.Command, args []string) error {
 			page, next = resp.Links, resp.NextPageToken
 		case "billingAccounts":
 			call := svc.BillingAccounts.Locations.Buckets.Links.List(bp).Context(ctx)
-			if flagLogPageSize > 0 {
-				call = call.PageSize(flagLogPageSize)
+			if g.flagLogPageSize > 0 {
+				call = call.PageSize(g.flagLogPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -233,27 +206,27 @@ func runLogLinkList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagLogFormat != "" {
-		return emitFormatted(all, flagLogFormat)
+	if g.flagLogFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagLogFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, l := range all {
-		fmt.Printf("%-40s %s\n", loggingBasename(l.Name), l.LifecycleState)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", loggingBasename(l.Name), l.LifecycleState)
 	}
 	return nil
 }
 
-func init() {
-	all := []*cobra.Command{loggingLinksCreateCmd, loggingLinksDeleteCmd, loggingLinksDescribeCmd, loggingLinksListCmd}
-	addLogScopeFlags(all...)
-	addLogLocationFlag(all...)
-	addLogFormatFlag(all...)
-	addLogPageSizeFlag(loggingLinksListCmd)
+func (g *loggingCmds) initLoggingLinks() {
+	all := []*cobra.Command{g.loggingLinksCreateCmd, g.loggingLinksDeleteCmd, g.loggingLinksDescribeCmd, g.loggingLinksListCmd}
+	g.addLogScopeFlags(all...)
+	g.addLogLocationFlag(all...)
+	g.addLogFormatFlag(all...)
+	g.addLogPageSizeFlag(g.loggingLinksListCmd)
 	for _, c := range all {
-		c.Flags().StringVar(&flagLogLinkBucket, "bucket", "", "Bucket ID that owns the link (required)")
+		c.Flags().StringVar(&g.flagLogLinkBucket, "bucket", "", "Bucket ID that owns the link (required)")
 	}
-	loggingLinksCreateCmd.Flags().StringVar(&flagLogLinkDescription, "description", "", "A textual description for the link")
-	loggingLinksCreateCmd.Flags().StringVar(&flagLogConfigFile, "config-file", "", "Path to a JSON/YAML file with the Link body")
-	loggingLinksCmd.AddCommand(all...)
-	loggingCmd.AddCommand(loggingLinksCmd)
+	g.loggingLinksCreateCmd.Flags().StringVar(&g.flagLogLinkDescription, "description", "", "A textual description for the link")
+	g.loggingLinksCreateCmd.Flags().StringVar(&g.flagLogConfigFile, "config-file", "", "Path to a JSON/YAML file with the Link body")
+	g.loggingLinksCmd.AddCommand(all...)
+	g.loggingCmd.AddCommand(g.loggingLinksCmd)
 }
