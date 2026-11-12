@@ -125,8 +125,9 @@ func TestGetIamPolicyNoPipeline(t *testing.T) {
 }
 
 func TestProjectsCommandRegistered(t *testing.T) {
+	inv, _, _ := newTestInvocation(t, nil, "")
 	got := map[string]bool{}
-	for _, c := range projectsCmd.Commands() {
+	for _, c := range newProjectsCmd(inv).Commands() {
 		got[c.Name()] = true
 	}
 	want := []string{

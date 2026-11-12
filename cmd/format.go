@@ -204,10 +204,15 @@ func csvEscape(s string) string {
 // stdout. It prints nothing when rows is zero, matching gcloud-python's
 // TablePrinter, which omits the heading for an empty list.
 func printTableHeading(rows int, format string, a ...any) {
+	printTableHeadingTo(os.Stdout, rows, format, a...)
+}
+
+// printTableHeadingTo is printTableHeading writing to w.
+func printTableHeadingTo(w io.Writer, rows int, format string, a ...any) {
 	if rows == 0 {
 		return
 	}
-	fmt.Printf(format, a...)
+	fmt.Fprintf(w, format, a...)
 }
 
 // emitTable prints nothing, not even the heading, for zero rows, matching

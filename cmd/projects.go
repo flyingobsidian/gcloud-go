@@ -3,11 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/flyingobsidian/gcloud-go/internal/gfilter"
 	"github.com/spf13/cobra"
 	crm "google.golang.org/api/cloudresourcemanager/v3"
@@ -15,165 +15,213 @@ import (
 
 // --- gcloud projects (#375, #515) ---
 
-var projectsCmd = &cobra.Command{
-	Use:   "projects",
-	Short: "Manage Google Cloud projects",
-}
-
-var projectDescribeCmd = &cobra.Command{
-	Use:   "describe PROJECT_ID_OR_NUMBER",
-	Short: "Show metadata for a project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectDescribe,
-}
-
-var flagProjectDescribeFormat string
-
-var projectCreateCmd = &cobra.Command{
-	Use:   "create PROJECT_ID",
-	Short: "Create a new project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectCreate,
-}
-
-var projectDeleteCmd = &cobra.Command{
-	Use:   "delete PROJECT_ID_OR_NUMBER",
-	Short: "Delete a project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectDelete,
-}
-
-var projectUndeleteCmd = &cobra.Command{
-	Use:   "undelete PROJECT_ID_OR_NUMBER",
-	Short: "Undelete a project marked for deletion",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectUndelete,
-}
-
-var projectUpdateCmd = &cobra.Command{
-	Use:   "update PROJECT_ID_OR_NUMBER",
-	Short: "Update the name of a project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectUpdate,
-}
-
-var projectListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List projects accessible by the active account",
-	Args:  cobra.NoArgs,
-	RunE:  runProjectList,
-}
-
-var projectGetAncestorsCmd = &cobra.Command{
-	Use:   "get-ancestors PROJECT_ID_OR_NUMBER",
-	Short: "Get the ancestors for a project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectGetAncestors,
-}
-
-var projectGetIamPolicyCmd = &cobra.Command{
-	Use:   "get-iam-policy PROJECT_ID_OR_NUMBER",
-	Short: "Get IAM policy for a project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectGetIamPolicy,
-}
-
-var projectGetAncestorsIamPolicyCmd = &cobra.Command{
-	Use:   "get-ancestors-iam-policy PROJECT_ID_OR_NUMBER",
-	Short: "Get IAM policies for a project and its ancestors",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectGetAncestorsIamPolicy,
-}
-
-var projectSetIamPolicyCmd = &cobra.Command{
-	Use:   "set-iam-policy PROJECT_ID_OR_NUMBER POLICY_FILE",
-	Short: "Set IAM policy for a project",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runProjectSetIamPolicy,
-}
-
-var projectAddIamBindingCmd = &cobra.Command{
-	Use:   "add-iam-policy-binding PROJECT_ID_OR_NUMBER",
-	Short: "Add IAM policy binding for a project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectAddIamBinding,
-}
-
-var projectRemoveIamBindingCmd = &cobra.Command{
-	Use:   "remove-iam-policy-binding PROJECT_ID_OR_NUMBER",
-	Short: "Remove IAM policy binding for a project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runProjectRemoveIamBinding,
-}
-
-var (
-	flagProjectCreateName   string
-	flagProjectCreateFolder string
-	flagProjectCreateOrg    string
-	flagProjectCreateLabels map[string]string
-	flagProjectUpdateName   string
-	flagProjectListFolder   string
-	flagProjectListOrg      string
-	flagProjectListFilter   string
-	flagProjectListPageSize int64
-	flagProjectListLimit    int64
-	flagProjectListFormat   string
-	flagProjectListURI      bool
-	flagProjectListShowDel  bool
-	flagProjectIamMember    string
-	flagProjectIamRole      string
-	flagProjectIamCondExpr  string
-	flagProjectIamCondTitle string
-	flagProjectIamCondDesc  string
-	flagProjectIamAllCond   bool
-)
-
-func init() {
-	projectDescribeCmd.Flags().StringVar(&flagProjectDescribeFormat, "format", "", "Output format: yaml (default), json, csv(FIELDS), table(FIELDS), text(FIELDS), value(FIELDS), config(FIELDS), get(FIELD)")
-
-	projectCreateCmd.Flags().StringVar(&flagProjectCreateName, "name", "", "Display name for the new project (defaults to the project ID)")
-	projectCreateCmd.Flags().StringVar(&flagProjectCreateFolder, "folder", "", "Parent folder ID (mutually exclusive with --organization)")
-	projectCreateCmd.Flags().StringVar(&flagProjectCreateOrg, "organization", "", "Parent organization ID (mutually exclusive with --folder)")
-	projectCreateCmd.Flags().StringToStringVar(&flagProjectCreateLabels, "labels", nil, "Comma-separated key=value label pairs")
-
-	projectUpdateCmd.Flags().StringVar(&flagProjectUpdateName, "name", "", "New display name for the project (required)")
-	projectUpdateCmd.MarkFlagRequired("name")
-
-	projectListCmd.Flags().StringVar(&flagProjectListFolder, "folder", "", "List projects under this parent folder")
-	projectListCmd.Flags().StringVar(&flagProjectListOrg, "organization", "", "List projects under this parent organization")
-	projectListCmd.Flags().StringVar(&flagProjectListFilter, "filter", "", "Search query expression (e.g. state:ACTIVE)")
-	projectListCmd.Flags().Int64Var(&flagProjectListPageSize, "page-size", 0, "Page size for API pagination")
-	projectListCmd.Flags().Int64Var(&flagProjectListLimit, "limit", 0, "Maximum number of projects to list (0 = no limit)")
-	projectListCmd.Flags().StringVar(&flagProjectListFormat, "format", "", "Output format (json, yaml, or table)")
-	projectListCmd.Flags().BoolVar(&flagProjectListURI, "uri", false, "Print resource names only")
-	projectListCmd.Flags().BoolVar(&flagProjectListShowDel, "show-deleted", false, "Include deleted projects (only when listing under a parent)")
-
-	for _, c := range []*cobra.Command{projectAddIamBindingCmd, projectRemoveIamBindingCmd} {
-		c.Flags().StringVar(&flagProjectIamMember, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
-		c.Flags().StringVar(&flagProjectIamRole, "role", "", "IAM role to bind (e.g. roles/browser) (required)")
-		c.Flags().StringVar(&flagProjectIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding")
-		c.Flags().StringVar(&flagProjectIamCondTitle, "condition-title", "", "Title for a conditional binding")
-		c.Flags().StringVar(&flagProjectIamCondDesc, "condition-description", "", "Description for a conditional binding")
-		c.MarkFlagRequired("member")
-		c.MarkFlagRequired("role")
+func newProjectsCmd(inv *invocation) *cobra.Command {
+	c := &cobra.Command{
+		Use:   "projects",
+		Short: "Manage Google Cloud projects",
 	}
-	projectRemoveIamBindingCmd.Flags().BoolVar(&flagProjectIamAllCond, "all", false, "Remove the member from all bindings for the role, regardless of condition")
-
-	projectsCmd.AddCommand(
-		projectAddIamBindingCmd,
-		projectCreateCmd,
-		projectDeleteCmd,
-		projectDescribeCmd,
-		projectGetAncestorsCmd,
-		projectGetAncestorsIamPolicyCmd,
-		projectGetIamPolicyCmd,
-		projectListCmd,
-		projectRemoveIamBindingCmd,
-		projectSetIamPolicyCmd,
-		projectUndeleteCmd,
-		projectUpdateCmd,
+	c.AddCommand(
+		newProjectIamBindingCmd(inv, true),
+		newProjectCreateCmd(inv),
+		newProjectDeleteCmd(inv),
+		newProjectDescribeCmd(inv),
+		newProjectGetAncestorsCmd(inv),
+		newProjectGetAncestorsIamPolicyCmd(inv),
+		newProjectGetIamPolicyCmd(inv),
+		newProjectListCmd(inv),
+		newProjectIamBindingCmd(inv, false),
+		newProjectSetIamPolicyCmd(inv),
+		newProjectUndeleteCmd(inv),
+		newProjectUpdateCmd(inv),
 	)
-	rootCmd.AddCommand(projectsCmd)
+	return c
+}
+
+func newProjectDescribeCmd(inv *invocation) *cobra.Command {
+	var format string
+	c := &cobra.Command{
+		Use:   "describe PROJECT_ID_OR_NUMBER",
+		Short: "Show metadata for a project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectDescribe(c.Context(), inv, args[0], format)
+		},
+	}
+	c.Flags().StringVar(&format, "format", "", "Output format: yaml (default), json, csv(FIELDS), table(FIELDS), text(FIELDS), value(FIELDS), config(FIELDS), get(FIELD)")
+	return c
+}
+
+type projectCreateOptions struct {
+	name, folder, org string
+	labels            map[string]string
+}
+
+func newProjectCreateCmd(inv *invocation) *cobra.Command {
+	var o projectCreateOptions
+	c := &cobra.Command{
+		Use:   "create PROJECT_ID",
+		Short: "Create a new project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectCreate(c.Context(), inv, args[0], o)
+		},
+	}
+	c.Flags().StringVar(&o.name, "name", "", "Display name for the new project (defaults to the project ID)")
+	c.Flags().StringVar(&o.folder, "folder", "", "Parent folder ID (mutually exclusive with --organization)")
+	c.Flags().StringVar(&o.org, "organization", "", "Parent organization ID (mutually exclusive with --folder)")
+	c.Flags().StringToStringVar(&o.labels, "labels", nil, "Comma-separated key=value label pairs")
+	return c
+}
+
+func newProjectDeleteCmd(inv *invocation) *cobra.Command {
+	c := &cobra.Command{
+		Use:   "delete PROJECT_ID_OR_NUMBER",
+		Short: "Delete a project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectDelete(c.Context(), inv, args[0])
+		},
+	}
+	addProjectRecommendFlag(c)
+	return c
+}
+
+func newProjectUndeleteCmd(inv *invocation) *cobra.Command {
+	return &cobra.Command{
+		Use:   "undelete PROJECT_ID_OR_NUMBER",
+		Short: "Undelete a project marked for deletion",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectUndelete(c.Context(), inv, args[0])
+		},
+	}
+}
+
+func newProjectUpdateCmd(inv *invocation) *cobra.Command {
+	var name string
+	c := &cobra.Command{
+		Use:   "update PROJECT_ID_OR_NUMBER",
+		Short: "Update the name of a project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectUpdate(c.Context(), inv, args[0], name)
+		},
+	}
+	c.Flags().StringVar(&name, "name", "", "New display name for the project (required)")
+	c.MarkFlagRequired("name")
+	return c
+}
+
+type projectListOptions struct {
+	folder, org, filter, format string
+	pageSize, limit             int64
+	uri, showDeleted            bool
+}
+
+func newProjectListCmd(inv *invocation) *cobra.Command {
+	var o projectListOptions
+	c := &cobra.Command{
+		Use:   "list",
+		Short: "List projects accessible by the active account",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectList(c.Context(), inv, o)
+		},
+	}
+	c.Flags().StringVar(&o.folder, "folder", "", "List projects under this parent folder")
+	c.Flags().StringVar(&o.org, "organization", "", "List projects under this parent organization")
+	c.Flags().StringVar(&o.filter, "filter", "", "Search query expression (e.g. state:ACTIVE)")
+	c.Flags().Int64Var(&o.pageSize, "page-size", 0, "Page size for API pagination")
+	c.Flags().Int64Var(&o.limit, "limit", 0, "Maximum number of projects to list (0 = no limit)")
+	c.Flags().StringVar(&o.format, "format", "", "Output format (json, yaml, or table)")
+	c.Flags().BoolVar(&o.uri, "uri", false, "Print resource names only")
+	c.Flags().BoolVar(&o.showDeleted, "show-deleted", false, "Include deleted projects (only when listing under a parent)")
+	return c
+}
+
+func newProjectGetAncestorsCmd(inv *invocation) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get-ancestors PROJECT_ID_OR_NUMBER",
+		Short: "Get the ancestors for a project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectGetAncestors(c.Context(), inv, args[0])
+		},
+	}
+}
+
+func newProjectGetIamPolicyCmd(inv *invocation) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get-iam-policy PROJECT_ID_OR_NUMBER",
+		Short: "Get IAM policy for a project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectGetIamPolicy(c.Context(), inv, args[0])
+		},
+	}
+}
+
+func newProjectGetAncestorsIamPolicyCmd(inv *invocation) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get-ancestors-iam-policy PROJECT_ID_OR_NUMBER",
+		Short: "Get IAM policies for a project and its ancestors",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectGetAncestorsIamPolicy(c.Context(), inv, args[0])
+		},
+	}
+}
+
+func newProjectSetIamPolicyCmd(inv *invocation) *cobra.Command {
+	return &cobra.Command{
+		Use:   "set-iam-policy PROJECT_ID_OR_NUMBER POLICY_FILE",
+		Short: "Set IAM policy for a project",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectSetIamPolicy(c.Context(), inv, args[0], args[1])
+		},
+	}
+}
+
+// projectIamBindingOptions are the flags of add-iam-policy-binding and
+// remove-iam-policy-binding.
+type projectIamBindingOptions struct {
+	member, role                  string
+	condExpr, condTitle, condDesc string
+	allConditions                 bool
+}
+
+// newProjectIamBindingCmd returns add-iam-policy-binding when add is set,
+// else remove-iam-policy-binding.
+func newProjectIamBindingCmd(inv *invocation, add bool) *cobra.Command {
+	var o projectIamBindingOptions
+	c := &cobra.Command{
+		Use:   "add-iam-policy-binding PROJECT_ID_OR_NUMBER",
+		Short: "Add IAM policy binding for a project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runProjectAddIamBinding(c.Context(), inv, args[0], o)
+		},
+	}
+	if !add {
+		c.Use = "remove-iam-policy-binding PROJECT_ID_OR_NUMBER"
+		c.Short = "Remove IAM policy binding for a project"
+		c.RunE = func(c *cobra.Command, args []string) error {
+			return runProjectRemoveIamBinding(c.Context(), inv, args[0], o)
+		}
+	}
+	c.Flags().StringVar(&o.member, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
+	c.Flags().StringVar(&o.role, "role", "", "IAM role to bind (e.g. roles/browser) (required)")
+	c.Flags().StringVar(&o.condExpr, "condition-expression", "", "CEL expression for a conditional binding")
+	c.Flags().StringVar(&o.condTitle, "condition-title", "", "Title for a conditional binding")
+	c.Flags().StringVar(&o.condDesc, "condition-description", "", "Description for a conditional binding")
+	c.MarkFlagRequired("member")
+	c.MarkFlagRequired("role")
+	if !add {
+		c.Flags().BoolVar(&o.allConditions, "all", false, "Remove the member from all bindings for the role, regardless of condition")
+		addProjectRecommendFlag(c)
+	}
+	return c
 }
 
 // projectResourceName returns the fully qualified project name, accepting
@@ -198,33 +246,30 @@ func projectParent(folder, org string) (string, error) {
 	return "", nil
 }
 
-func runProjectDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runProjectDescribe(ctx context.Context, inv *invocation, id, format string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
-	project, err := svc.Projects.Get(projectResourceName(args[0])).Context(ctx).Do()
+	project, err := svc.Projects.Get(projectResourceName(id)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing project: %w", err)
 	}
-	return emitFormatted(project, flagProjectDescribeFormat)
+	return emitFormattedTo(inv.stdout, project, format)
 }
 
-func runProjectCreate(cmd *cobra.Command, args []string) error {
-	parent, err := projectParent(flagProjectCreateFolder, flagProjectCreateOrg)
+func runProjectCreate(ctx context.Context, inv *invocation, id string, o projectCreateOptions) error {
+	parent, err := projectParent(o.folder, o.org)
 	if err != nil {
 		return err
 	}
 
-	id := args[0]
-	displayName := flagProjectCreateName
+	displayName := o.name
 	if displayName == "" {
 		displayName = id
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -233,96 +278,91 @@ func runProjectCreate(cmd *cobra.Command, args []string) error {
 		ProjectId:   id,
 		DisplayName: displayName,
 		Parent:      parent,
-		Labels:      flagProjectCreateLabels,
+		Labels:      o.labels,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating project: %w", err)
 	}
-	fmt.Printf("Create project in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Create project in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runProjectDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runProjectDelete(ctx context.Context, inv *invocation, id string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Delete(projectResourceName(args[0])).Context(ctx).Do()
+	op, err := svc.Projects.Delete(projectResourceName(id)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting project: %w", err)
 	}
-	fmt.Printf("Delete project in progress (operation: %s).\n", op.Name)
-	fmt.Fprintf(os.Stderr, "You can undo this operation for a limited period by running:\n"+
-		"    gcloud projects undelete %s\n", strings.TrimPrefix(args[0], "projects/"))
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Delete project in progress (operation: %s).\n", op.Name)
+	fmt.Fprintf(inv.stderr, "You can undo this operation for a limited period by running:\n"+
+		"    gcloud projects undelete %s\n", strings.TrimPrefix(id, "projects/"))
+	return inv.yaml(op)
 }
 
-func runProjectUndelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runProjectUndelete(ctx context.Context, inv *invocation, id string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Undelete(projectResourceName(args[0]), &crm.UndeleteProjectRequest{}).Context(ctx).Do()
+	op, err := svc.Projects.Undelete(projectResourceName(id), &crm.UndeleteProjectRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("undeleting project: %w", err)
 	}
-	fmt.Printf("Undelete project in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Undelete project in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runProjectUpdate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runProjectUpdate(ctx context.Context, inv *invocation, id, name string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Patch(projectResourceName(args[0]), &crm.Project{
-		DisplayName: flagProjectUpdateName,
+	op, err := svc.Projects.Patch(projectResourceName(id), &crm.Project{
+		DisplayName: name,
 	}).UpdateMask("display_name").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating project: %w", err)
 	}
-	fmt.Printf("Update project in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Update project in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runProjectList(cmd *cobra.Command, args []string) error {
-	parent, err := projectParent(flagProjectListFolder, flagProjectListOrg)
+func runProjectList(ctx context.Context, inv *invocation, o projectListOptions) error {
+	parent, err := projectParent(o.folder, o.org)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
-	all, err := listProjects(ctx, svc, parent, flagProjectListFilter,
-		flagProjectListPageSize, flagProjectListLimit, flagProjectListShowDel)
+	all, err := listProjects(ctx, svc, parent, o.filter, o.pageSize, o.limit, o.showDeleted)
 	if err != nil {
 		return err
 	}
 
-	if flagProjectListURI {
+	if o.uri {
 		for _, p := range all {
-			fmt.Println(p.Name)
+			fmt.Fprintln(inv.stdout, p.Name)
 		}
 		return nil
 	}
 
-	switch flagProjectListFormat {
+	switch o.format {
 	case "json":
-		return printJSON(all)
+		return inv.printJSON(all)
 	case "yaml":
-		return yamlEncode(all)
+		return inv.yaml(all)
 	}
 
-	printTableHeading(len(all), "%-30s %-30s %-20s %s\n", "PROJECT_ID", "NAME", "PROJECT_NUMBER", "STATE")
+	printTableHeadingTo(inv.stdout, len(all), "%-30s %-30s %-20s %s\n", "PROJECT_ID", "NAME", "PROJECT_NUMBER", "STATE")
 	for _, p := range all {
-		fmt.Printf("%-30s %-30s %-20s %s\n", p.ProjectId, p.DisplayName, path.Base(p.Name), p.State)
+		fmt.Fprintf(inv.stdout, "%-30s %-30s %-20s %s\n", p.ProjectId, p.DisplayName, path.Base(p.Name), p.State)
 	}
 	return nil
 }
@@ -383,21 +423,20 @@ func listProjects(ctx context.Context, svc *crm.Service, parent, query string, p
 	}
 }
 
-func runProjectGetAncestors(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runProjectGetAncestors(ctx context.Context, inv *invocation, id string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
-	ancestors, err := projectAncestors(ctx, svc, args[0])
+	ancestors, err := projectAncestors(ctx, svc, id)
 	if err != nil {
 		return err
 	}
 
-	printTableHeading(len(ancestors), "%-40s %s\n", "ID", "TYPE")
+	printTableHeadingTo(inv.stdout, len(ancestors), "%-40s %s\n", "ID", "TYPE")
 	for _, a := range ancestors {
-		fmt.Printf("%-40s %s\n", a.id, a.kind)
+		fmt.Fprintf(inv.stdout, "%-40s %s\n", a.id, a.kind)
 	}
 	return nil
 }
@@ -439,38 +478,48 @@ func projectAncestors(ctx context.Context, svc *crm.Service, projectID string) (
 	return chain, nil
 }
 
-func runProjectGetIamPolicy(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runProjectGetIamPolicy(ctx context.Context, inv *invocation, id string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
-	policy, err := svc.Projects.GetIamPolicy(projectResourceName(args[0]), &crm.GetIamPolicyRequest{
+	policy, err := svc.Projects.GetIamPolicy(projectResourceName(id), &crm.GetIamPolicyRequest{
 		Options: &crm.GetPolicyOptions{RequestedPolicyVersion: 3},
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitWithPipeline(policy)
+	return inv.emitWithPipeline(policy)
 }
 
 // emitWithPipeline runs the standard gcloud output pipeline (--flatten →
 // --filter → --format) against v. When none of those global flags is set, it
 // falls back to the yaml dump that runProjectGetIamPolicy used before #1728.
+func (inv *invocation) emitWithPipeline(v any) error {
+	return emitPipeline(inv.stdout, v, inv.flags.flatten, inv.flags.filter, inv.flags.format)
+}
+
+// emitWithPipeline is invocation.emitWithPipeline for command groups not yet
+// migrated to invocation (#2070).
 func emitWithPipeline(v any) error {
+	return emitPipeline(os.Stdout, v, flagFlatten, flagFilter, flagFormat)
+}
+
+// emitPipeline writes v to w through --flatten, --filter and --format.
+func emitPipeline(w io.Writer, v any, flatten []string, filterExpr, format string) error {
 	// Fast path: no pipeline modifiers → keep the historical yaml dump so
 	// commands that don't opt into fancy output stay byte-identical.
-	if len(flagFlatten) == 0 && flagFilter == "" && flagFormat == "" {
-		return yamlEncode(v)
+	if len(flatten) == 0 && filterExpr == "" && format == "" {
+		return emitFormattedTo(w, v, "yaml")
 	}
 
-	records, err := flattenRecords(v, flagFlatten)
+	records, err := flattenRecords(v, flatten)
 	if err != nil {
 		return err
 	}
 
-	if flagFilter != "" {
-		filter, err := gfilter.Compile(flagFilter)
+	if filterExpr != "" {
+		filter, err := gfilter.Compile(filterExpr)
 		if err != nil {
 			return fmt.Errorf("invalid --filter expression: %w", err)
 		}
@@ -487,20 +536,19 @@ func emitWithPipeline(v any) error {
 	// table/csv/etc. render one row per record. Without --flatten we pass
 	// through the original single value so scalar top-level policies still
 	// render sensibly.
-	if len(flagFlatten) > 0 {
-		return emitFormatted(records, flagFormat)
+	if len(flatten) > 0 {
+		return emitFormattedTo(w, records, format)
 	}
-	return emitFormatted(v, flagFormat)
+	return emitFormattedTo(w, v, format)
 }
 
-func runProjectGetAncestorsIamPolicy(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runProjectGetAncestorsIamPolicy(ctx context.Context, inv *invocation, id string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
-	ancestors, err := projectAncestors(ctx, svc, args[0])
+	ancestors, err := projectAncestors(ctx, svc, id)
 	if err != nil {
 		return err
 	}
@@ -531,39 +579,37 @@ func runProjectGetAncestorsIamPolicy(cmd *cobra.Command, args []string) error {
 		}
 		results = append(results, ancestorPolicy{ID: a.id, Type: a.kind, Policy: policy})
 	}
-	return yamlEncode(results)
+	return inv.yaml(results)
 }
 
-func runProjectSetIamPolicy(cmd *cobra.Command, args []string) error {
-	policy, err := parsePolicyFile(args[1])
+func runProjectSetIamPolicy(ctx context.Context, inv *invocation, id, policyFile string) error {
+	policy, err := parsePolicyFile(policyFile)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 	policy.Version = 3
-	updated, err := svc.Projects.SetIamPolicy(projectResourceName(args[0]), &crm.SetIamPolicyRequest{
+	updated, err := svc.Projects.SetIamPolicy(projectResourceName(id), &crm.SetIamPolicyRequest{
 		Policy:     policy,
 		UpdateMask: "bindings,etag",
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for project [%s].\n", strings.TrimPrefix(args[0], "projects/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(inv.stderr, "Updated IAM policy for project [%s].\n", strings.TrimPrefix(id, "projects/"))
+	return inv.yaml(updated)
 }
 
-func runProjectAddIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runProjectAddIamBinding(ctx context.Context, inv *invocation, id string, o projectIamBindingOptions) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
-	resource := projectResourceName(args[0])
+	resource := projectResourceName(id)
 	policy, err := svc.Projects.GetIamPolicy(resource, &crm.GetIamPolicyRequest{
 		Options: &crm.GetPolicyOptions{RequestedPolicyVersion: 3},
 	}).Context(ctx).Do()
@@ -571,8 +617,7 @@ func runProjectAddIamBinding(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	addBindingToPolicy(policy, flagProjectIamRole, flagProjectIamMember,
-		rmBuildCondition(flagProjectIamCondExpr, flagProjectIamCondTitle, flagProjectIamCondDesc))
+	addBindingToPolicy(policy, o.role, o.member, rmBuildCondition(o.condExpr, o.condTitle, o.condDesc))
 	policy.Version = 3
 
 	updated, err := svc.Projects.SetIamPolicy(resource, &crm.SetIamPolicyRequest{
@@ -582,18 +627,17 @@ func runProjectAddIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for project [%s].\n", strings.TrimPrefix(args[0], "projects/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(inv.stderr, "Updated IAM policy for project [%s].\n", strings.TrimPrefix(id, "projects/"))
+	return inv.yaml(updated)
 }
 
-func runProjectRemoveIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runProjectRemoveIamBinding(ctx context.Context, inv *invocation, id string, o projectIamBindingOptions) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
-	resource := projectResourceName(args[0])
+	resource := projectResourceName(id)
 	policy, err := svc.Projects.GetIamPolicy(resource, &crm.GetIamPolicyRequest{
 		Options: &crm.GetPolicyOptions{RequestedPolicyVersion: 3},
 	}).Context(ctx).Do()
@@ -601,10 +645,9 @@ func runProjectRemoveIamBinding(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	if !removeBindingFromPolicy(policy, flagProjectIamRole, flagProjectIamMember,
-		rmBuildCondition(flagProjectIamCondExpr, flagProjectIamCondTitle, flagProjectIamCondDesc),
-		flagProjectIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagProjectIamRole, flagProjectIamMember)
+	if !removeBindingFromPolicy(policy, o.role, o.member,
+		rmBuildCondition(o.condExpr, o.condTitle, o.condDesc), o.allConditions) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", o.role, o.member)
 	}
 
 	updated, err := svc.Projects.SetIamPolicy(resource, &crm.SetIamPolicyRequest{
@@ -614,6 +657,6 @@ func runProjectRemoveIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for project [%s].\n", strings.TrimPrefix(args[0], "projects/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(inv.stderr, "Updated IAM policy for project [%s].\n", strings.TrimPrefix(id, "projects/"))
+	return inv.yaml(updated)
 }

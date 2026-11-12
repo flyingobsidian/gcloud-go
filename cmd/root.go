@@ -47,7 +47,8 @@ func IsInteractive() bool {
 var rootCmd = &cobra.Command{Use: "gcloud"}
 
 // newRootCmd returns the root command for inv, with the global flags bound
-// to inv.flags. With legacy set it also adopts the unmigrated command groups
+// to inv.flags and the migrated command groups (see migratedGroups). With
+// legacy set it also adopts the unmigrated command groups
 // registered on rootCmd and copies the global flags into the package
 // variables they read; that is only safe when the process runs a single
 // invocation, as the CLI does.
@@ -101,6 +102,7 @@ func newRootCmd(inv *invocation, legacy bool) *cobra.Command {
 
 	root.SetVersionTemplate(versionTemplate())
 
+	root.AddCommand(migratedGroups(inv)...)
 	if legacy {
 		root.PersistentPreRun = func(*cobra.Command, []string) { f.setLegacyGlobals() }
 		for _, c := range rootCmd.Commands() {

@@ -15,14 +15,13 @@ import (
 // accepted (and validated as gcloud's ArgBoolean) on both commands and
 // otherwise ignored.
 
-var flagProjectRecommend string
-
 func addProjectRecommendFlag(c *cobra.Command) {
-	c.Flags().StringVar(&flagProjectRecommend, "recommend", "false",
+	var recommend string
+	c.Flags().StringVar(&recommend, "recommend", "false",
 		"This flag has no effect. It previously added a change-risk warning from Active Assist, which has been retired.")
 	prev := c.PreRunE
 	c.PreRunE = func(cmd *cobra.Command, args []string) error {
-		if err := validateArgBoolean("recommend", flagProjectRecommend); err != nil {
+		if err := validateArgBoolean("recommend", recommend); err != nil {
 			return err
 		}
 		if prev != nil {
@@ -40,9 +39,4 @@ func validateArgBoolean(flag, v string) error {
 		return nil
 	}
 	return fmt.Errorf("argument --%s: Invalid flag value [%s], expected one of [true, yes, false, no]", flag, v)
-}
-
-func init() {
-	addProjectRecommendFlag(projectDeleteCmd)
-	addProjectRecommendFlag(projectRemoveIamBindingCmd)
 }

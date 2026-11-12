@@ -20,7 +20,9 @@ var ErrNotInProcess = errors.New("command cannot run in-process yet")
 // migratedGroups returns the command groups that keep all their state in
 // inv, built for inv. Only these can run in-process.
 func migratedGroups(inv *invocation) []*cobra.Command {
-	return nil
+	return []*cobra.Command{
+		newProjectsCmd(inv),
+	}
 }
 
 // InProcess describes one command run by RunInProcess.
@@ -76,9 +78,6 @@ func RunInProcess(ctx context.Context, p InProcess) error {
 	}
 
 	root := newRootCmd(inv, false)
-	for _, g := range migratedGroups(inv) {
-		root.AddCommand(g)
-	}
 	args := p.Args
 	if args == nil {
 		args = []string{}

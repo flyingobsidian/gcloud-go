@@ -11,6 +11,7 @@ import (
 	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/mattn/go-isatty"
+	"google.golang.org/api/option"
 )
 
 // invocation is the state of one gcloud-go command run: its standard
@@ -27,6 +28,10 @@ type invocation struct {
 	interactive bool
 
 	flags globalFlags
+
+	// clientOptions are applied to every Google API client; tests use them
+	// to talk to fake servers.
+	clientOptions []option.ClientOption
 
 	propsOnce sync.Once
 	props     *config.Properties
@@ -190,6 +195,7 @@ func (inv *invocation) clients() *gcp.Clients {
 		Tokens:   inv.tokens,
 		Account:  inv.flags.account,
 		DebugOut: inv.httpDebugWriter(),
+		Options:  inv.clientOptions,
 	}
 }
 
@@ -203,6 +209,11 @@ func (inv *invocation) confirm(text string, dflt bool) bool {
 // emit writes v to stdout in the --format output format.
 func (inv *invocation) emit(v any) error {
 	return emitFormattedTo(inv.stdout, v, inv.flags.format)
+}
+
+// yaml writes v to stdout as YAML.
+func (inv *invocation) yaml(v any) error {
+	return emitFormattedTo(inv.stdout, v, "yaml")
 }
 
 // printJSON writes v to stdout as indented JSON.

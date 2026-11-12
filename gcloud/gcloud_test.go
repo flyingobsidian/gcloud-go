@@ -93,3 +93,16 @@ func TestVersion(t *testing.T) {
 		t.Error("Version() is empty")
 	}
 }
+
+func TestRunMigratedGroupInProcess(t *testing.T) {
+	r := testRunner(t)
+	var stderr bytes.Buffer
+	err := r.Run(context.Background(), Invocation{Args: []string{"projects", "describe", "some-project"}, Stderr: &stderr})
+	if errors.Is(err, ErrNotInProcess) {
+		t.Fatal("projects describe was not run in-process")
+	}
+	var cerr *CommandError
+	if !errors.As(err, &cerr) || cerr.Command != "gcloud.projects.describe" {
+		t.Errorf("Run = %v, want a *CommandError from gcloud.projects.describe (there are no credentials)", err)
+	}
+}

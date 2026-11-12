@@ -4,7 +4,8 @@ import "testing"
 
 func TestProjectRecommendFlag(t *testing.T) {
 	for _, c := range []string{"delete", "remove-iam-policy-binding"} {
-		cmd := findSub(projectsCmd, c)
+		inv, _, _ := newTestInvocation(t, nil, "")
+		cmd := findSub(newProjectsCmd(inv), c)
 		if cmd == nil || cmd.Flags().Lookup("recommend") == nil {
 			t.Errorf("--recommend missing on projects %s", c)
 		}
