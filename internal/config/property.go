@@ -12,11 +12,11 @@ import (
 // environment variable, falling back to the active configuration file. It
 // reaches properties that Properties doesn't model, such as
 // workflows/location, and returns "" when the property is unset.
-func Property(section, key string) (string, error) {
-	if v := os.Getenv(propertyEnvVar(section, key)); v != "" {
+func (e Env) Property(section, key string) (string, error) {
+	if v := e.Getenv(propertyEnvVar(section, key)); v != "" {
 		return v, nil
 	}
-	path, err := activeConfigPath()
+	path, err := e.activeConfigPath()
 	if err != nil {
 		return "", err
 	}
@@ -29,20 +29,20 @@ func Property(section, key string) (string, error) {
 
 // SetProperty sets section/key in the active configuration file, leaving
 // every other property in the file untouched.
-func SetProperty(section, key, value string) error {
-	return editActiveConfig(section, key, func(f *iniFile) { f.set(section, key, value) })
+func (e Env) SetProperty(section, key, value string) error {
+	return e.editActiveConfig(section, key, func(f *iniFile) { f.set(section, key, value) })
 }
 
 // UnsetProperty removes section/key from the active configuration file,
 // leaving every other property in the file untouched.
-func UnsetProperty(section, key string) error {
-	return editActiveConfig(section, key, func(f *iniFile) { f.unset(section, key) })
+func (e Env) UnsetProperty(section, key string) error {
+	return e.editActiveConfig(section, key, func(f *iniFile) { f.unset(section, key) })
 }
 
 // FileProperties returns every property set in the active configuration
 // file, keyed by section and then key.
-func FileProperties() (map[string]map[string]string, error) {
-	path, err := activeConfigPath()
+func (e Env) FileProperties() (map[string]map[string]string, error) {
+	path, err := e.activeConfigPath()
 	if err != nil {
 		return nil, err
 	}
@@ -82,11 +82,11 @@ func ValidatePropertyName(section, key string) error {
 
 // editActiveConfig validates section/key, applies edit to the active
 // configuration file and writes it back.
-func editActiveConfig(section, key string, edit func(*iniFile)) error {
+func (e Env) editActiveConfig(section, key string, edit func(*iniFile)) error {
 	if err := ValidatePropertyName(section, key); err != nil {
 		return err
 	}
-	path, err := activeConfigPath()
+	path, err := e.activeConfigPath()
 	if err != nil {
 		return err
 	}
@@ -102,12 +102,12 @@ func editActiveConfig(section, key string, edit func(*iniFile)) error {
 }
 
 // activeConfigPath returns the path of the active configuration file.
-func activeConfigPath() (string, error) {
-	dir, err := ConfigDir()
+func (e Env) activeConfigPath() (string, error) {
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "configurations", "config_"+ActiveConfigName()), nil
+	return filepath.Join(dir, "configurations", "config_"+e.ActiveConfigName()), nil
 }
 
 // propertyEnvVar returns the environment variable gcloud reads for
