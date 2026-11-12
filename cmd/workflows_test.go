@@ -11,13 +11,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 	workflowexecutions "google.golang.org/api/workflowexecutions/v1"
 	workflows "google.golang.org/api/workflows/v1"
 )
 
-func workflowsSubgroup(name string) *cobra.Command {
-	for _, c := range workflowsCmd.Commands() {
+func workflowsSubgroup(t *testing.T, name string) *cobra.Command {
+	inv, _, _ := newTestInvocation(t, nil, "")
+	for _, c := range newWorkflowsCmd(inv).Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -26,13 +28,13 @@ func workflowsSubgroup(name string) *cobra.Command {
 }
 
 func TestWorkflowsHasExecutions(t *testing.T) {
-	if workflowsSubgroup("executions") == nil {
+	if workflowsSubgroup(t, "executions") == nil {
 		t.Fatal("workflows missing executions subgroup")
 	}
 }
 
 func TestWorkflowsExecutionsSubcommands(t *testing.T) {
-	g := workflowsSubgroup("executions")
+	g := workflowsSubgroup(t, "executions")
 	if g == nil {
 		t.Fatal("executions missing")
 	}
@@ -40,10 +42,8 @@ func TestWorkflowsExecutionsSubcommands(t *testing.T) {
 }
 
 func TestWorkflowsExecutionName(t *testing.T) {
-	flagWFLocation = "us-central1"
-	flagWFWorkflow = "wf1"
-	defer func() { flagWFLocation, flagWFWorkflow = "", "" }()
-	got, err := wfExecutionName("exec1", "my-proj")
+	f := &workflowsFlags{location: "us-central1", workflow: "wf1"}
+	got, err := wfExecutionName(f, "exec1", "my-proj")
 	if err != nil {
 		t.Fatalf("wfExecutionName error: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestWorkflowsExecutionName(t *testing.T) {
 		t.Errorf("wfExecutionName = %q, want %q", got, want)
 	}
 	pass := "projects/x/locations/y/workflows/z/executions/e"
-	got, err = wfExecutionName(pass, "ignored")
+	got, err = wfExecutionName(f, pass, "ignored")
 	if err != nil {
 		t.Fatalf("wfExecutionName pass-through error: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestWorkflowsExecutionName(t *testing.T) {
 }
 
 func TestWorkflowsRunFlags(t *testing.T) {
-	run := workflowsSubgroup("run")
+	run := workflowsSubgroup(t, "run")
 	if run == nil {
 		t.Fatal("workflows missing run")
 	}
@@ -96,13 +96,13 @@ func wfIsolateConfig(t *testing.T) string {
 }
 
 func TestWfResolveLocation(t *testing.T) {
-	defer func() { flagWFLocation = "" }()
+	location := ""
 	dir := wfIsolateConfig(t)
 
 	resolve := func(name, want string, wantWarning bool) {
 		t.Helper()
 		var buf bytes.Buffer
-		got, err := wfResolveLocation(&buf)
+		got, err := wfResolveLocation(&buf, config.OSEnv(), location)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -128,7 +128,7 @@ func TestWfResolveLocation(t *testing.T) {
 	t.Setenv("CLOUDSDK_WORKFLOWS_LOCATION", "asia-east1")
 	resolve("env", "asia-east1", false)
 
-	flagWFLocation = "europe-west2"
+	location = "europe-west2"
 	resolve("flag", "europe-west2", false)
 }
 
@@ -179,7 +179,6 @@ func TestWfWaitForExecutionErrors(t *testing.T) {
 }
 
 func TestWfListParent(t *testing.T) {
-	defer func() { flagWFLocation, flagWFWorkflow = "", "" }()
 	wfIsolateConfig(t)
 	cases := []struct {
 		name, location, workflowFlag string
@@ -195,9 +194,9 @@ func TestWfListParent(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			flagWFLocation, flagWFWorkflow = tc.location, tc.workflowFlag
+			f := &workflowsFlags{location: tc.location, workflow: tc.workflowFlag}
 			var buf bytes.Buffer
-			got, err := wfListParent(&buf, tc.args, "p")
+			got, err := wfListParent(&buf, config.OSEnv(), f, tc.args, "p")
 			if err != nil {
 				t.Fatalf("wfListParent: %v", err)
 			}
@@ -212,9 +211,8 @@ func TestWfListParent(t *testing.T) {
 }
 
 func TestWfListParentMissingWorkflow(t *testing.T) {
-	flagWFLocation, flagWFWorkflow = "europe-west2", ""
-	defer func() { flagWFLocation = "" }()
-	if _, err := wfListParent(&bytes.Buffer{}, nil, "p"); err == nil {
+	f := &workflowsFlags{location: "europe-west2"}
+	if _, err := wfListParent(&bytes.Buffer{}, config.OSEnv(), f, nil, "p"); err == nil {
 		t.Error("want error when no workflow is given")
 	}
 }
@@ -283,7 +281,7 @@ func TestWfListExecutionsError(t *testing.T) {
 }
 
 func TestWorkflowsExecutionsListArgs(t *testing.T) {
-	list := findSub(workflowsSubgroup("executions"), "list")
+	list := findSub(workflowsSubgroup(t, "executions"), "list")
 	if list == nil {
 		t.Fatal("executions list missing")
 	}
@@ -326,7 +324,7 @@ func TestWfExecutionsListDefaultTable(t *testing.T) {
 }
 
 func TestWorkflowsListFlags(t *testing.T) {
-	list := workflowsSubgroup("list")
+	list := workflowsSubgroup(t, "list")
 	if list == nil {
 		t.Fatal("workflows missing list")
 	}
