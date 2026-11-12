@@ -150,6 +150,22 @@ func (inv *invocation) project() (string, error) {
 	return project, nil
 }
 
+// region returns the project and the Compute Engine region from
+// CLOUDSDK_COMPUTE_REGION or the configuration, which may be empty. A missing
+// project is an error.
+func (inv *invocation) region() (string, string, error) {
+	props, err := inv.properties()
+	if err != nil {
+		return "", "", err
+	}
+	project := inv.resolve(inv.flags.project, "CLOUDSDK_CORE_PROJECT", props.Core.Project)
+	region := inv.resolve("", "CLOUDSDK_COMPUTE_REGION", props.Compute.Region)
+	if project == "" {
+		return "", "", fmt.Errorf("project is required")
+	}
+	return project, region, nil
+}
+
 // projectZone returns the project and Compute Engine zone the command
 // applies to. A missing project is an error; a missing zone is asked for if
 // the invocation is interactive.
