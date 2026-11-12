@@ -119,14 +119,14 @@ func versionTemplate() string {
 // invocation and must be called at most once per process.
 //
 // If the command fails because an API is not enabled and the user agrees to
-// enable it (see MaybePromptEnableAPI), the command is run once more.
+// enable it (see invocation.offerEnableAPI), the command is run once more.
 func Main(ctx context.Context, args []string) int {
 	inv := newOSInvocation()
 	root := newRootCmd(inv, true)
 	root.SetArgs(args)
 	executed, err := root.ExecuteContextC(ctx)
 	if err != nil {
-		if retry, _ := MaybePromptEnableAPI(err); retry {
+		if inv.offerEnableAPI(ctx, err) {
 			executed, err = root.ExecuteContextC(ctx)
 		}
 	}
