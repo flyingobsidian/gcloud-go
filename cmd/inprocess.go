@@ -91,6 +91,7 @@ func RunInProcess(ctx context.Context, p InProcess) error {
 		return ErrNotInProcess
 	}
 	root.SetArgs(args)
+	inv.ctx = ctx
 	executed, err := root.ExecuteContextC(ctx)
 	if err != nil {
 		return &CommandError{Command: commandDottedPath(executed), Err: err, text: inv.formatError(executed, err)}

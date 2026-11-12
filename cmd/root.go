@@ -126,6 +126,7 @@ func Main(ctx context.Context, args []string) int {
 	inv := newOSInvocation()
 	root := newRootCmd(inv, true)
 	root.SetArgs(args)
+	inv.ctx = ctx
 	executed, err := root.ExecuteContextC(ctx)
 	if err != nil {
 		if inv.offerEnableAPI(ctx, err) {

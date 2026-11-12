@@ -60,5 +60,6 @@ func newFakeAPIInvocation(t *testing.T, api http.Handler) (*invocation, *bytes.B
 func runInvocation(inv *invocation, args ...string) error {
 	root := newRootCmd(inv, false)
 	root.SetArgs(args)
-	return root.ExecuteContext(context.Background())
+	inv.ctx = context.Background()
+	return root.ExecuteContext(inv.ctx)
 }

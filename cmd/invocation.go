@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +29,10 @@ type invocation struct {
 	interactive bool
 
 	flags globalFlags
+
+	// ctx is the context the invocation runs under, for helpers that have
+	// no command to take it from. Main and RunInProcess set it.
+	ctx context.Context
 
 	// clientOptions are applied to every Google API client; tests use them
 	// to talk to fake servers.
@@ -204,6 +209,28 @@ func (inv *invocation) clients() *gcp.Clients {
 // interactive.
 func (inv *invocation) confirm(text string, dflt bool) bool {
 	return confirm(inv.stdin, inv.stderr, inv.interactive && !inv.flags.quiet, text, dflt)
+}
+
+// context returns the context the invocation runs under.
+func (inv *invocation) context() context.Context {
+	if inv.ctx == nil {
+		return context.Background()
+	}
+	return inv.ctx
+}
+
+// formatOutput is formatOutput writing to the invocation's stdout.
+func (inv *invocation) formatOutput(v any, format string) error {
+	return formatOutputTo(inv.stdout, v, format)
+}
+
+// promptContinue is promptContinue for the invocation: it uses --quiet and
+// the invocation's streams.
+func (inv *invocation) promptContinue(message, cancelString string) error {
+	if inv.flags.quiet || !inv.interactive {
+		return nil
+	}
+	return promptContinueIO(inv.stdin, inv.stderr, message, cancelString)
 }
 
 // emit writes v to stdout in the --format output format.
