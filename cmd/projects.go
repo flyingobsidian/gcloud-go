@@ -183,18 +183,39 @@ func newProjectSetIamPolicyCmd(inv *invocation) *cobra.Command {
 	}
 }
 
-// projectIamBindingOptions are the flags of add-iam-policy-binding and
+// iamBindingOptions are the flags of add-iam-policy-binding and
 // remove-iam-policy-binding.
-type projectIamBindingOptions struct {
+type iamBindingOptions struct {
 	member, role                  string
 	condExpr, condTitle, condDesc string
 	allConditions                 bool
 }
 
+// condition returns the binding condition given by the --condition-* flags,
+// or nil if none is set.
+func (o *iamBindingOptions) condition() *crm.Expr {
+	return rmBuildCondition(o.condExpr, o.condTitle, o.condDesc)
+}
+
+// addIamBindingFlags binds the add-/remove-iam-policy-binding flags of c to
+// o; remove adds --all.
+func addIamBindingFlags(c *cobra.Command, o *iamBindingOptions, remove bool) {
+	c.Flags().StringVar(&o.member, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
+	c.Flags().StringVar(&o.role, "role", "", "IAM role to bind (e.g. roles/browser) (required)")
+	c.Flags().StringVar(&o.condExpr, "condition-expression", "", "CEL expression for a conditional binding")
+	c.Flags().StringVar(&o.condTitle, "condition-title", "", "Title for a conditional binding")
+	c.Flags().StringVar(&o.condDesc, "condition-description", "", "Description for a conditional binding")
+	c.MarkFlagRequired("member")
+	c.MarkFlagRequired("role")
+	if remove {
+		c.Flags().BoolVar(&o.allConditions, "all", false, "Remove the member from all bindings for the role, regardless of condition")
+	}
+}
+
 // newProjectIamBindingCmd returns add-iam-policy-binding when add is set,
 // else remove-iam-policy-binding.
 func newProjectIamBindingCmd(inv *invocation, add bool) *cobra.Command {
-	var o projectIamBindingOptions
+	var o iamBindingOptions
 	c := &cobra.Command{
 		Use:   "add-iam-policy-binding PROJECT_ID_OR_NUMBER",
 		Short: "Add IAM policy binding for a project",
@@ -210,15 +231,8 @@ func newProjectIamBindingCmd(inv *invocation, add bool) *cobra.Command {
 			return runProjectRemoveIamBinding(c.Context(), inv, args[0], o)
 		}
 	}
-	c.Flags().StringVar(&o.member, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
-	c.Flags().StringVar(&o.role, "role", "", "IAM role to bind (e.g. roles/browser) (required)")
-	c.Flags().StringVar(&o.condExpr, "condition-expression", "", "CEL expression for a conditional binding")
-	c.Flags().StringVar(&o.condTitle, "condition-title", "", "Title for a conditional binding")
-	c.Flags().StringVar(&o.condDesc, "condition-description", "", "Description for a conditional binding")
-	c.MarkFlagRequired("member")
-	c.MarkFlagRequired("role")
+	addIamBindingFlags(c, &o, !add)
 	if !add {
-		c.Flags().BoolVar(&o.allConditions, "all", false, "Remove the member from all bindings for the role, regardless of condition")
 		addProjectRecommendFlag(c)
 	}
 	return c
@@ -603,7 +617,7 @@ func runProjectSetIamPolicy(ctx context.Context, inv *invocation, id, policyFile
 	return inv.yaml(updated)
 }
 
-func runProjectAddIamBinding(ctx context.Context, inv *invocation, id string, o projectIamBindingOptions) error {
+func runProjectAddIamBinding(ctx context.Context, inv *invocation, id string, o iamBindingOptions) error {
 	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
@@ -617,7 +631,7 @@ func runProjectAddIamBinding(ctx context.Context, inv *invocation, id string, o 
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	addBindingToPolicy(policy, o.role, o.member, rmBuildCondition(o.condExpr, o.condTitle, o.condDesc))
+	addBindingToPolicy(policy, o.role, o.member, o.condition())
 	policy.Version = 3
 
 	updated, err := svc.Projects.SetIamPolicy(resource, &crm.SetIamPolicyRequest{
@@ -631,7 +645,7 @@ func runProjectAddIamBinding(ctx context.Context, inv *invocation, id string, o 
 	return inv.yaml(updated)
 }
 
-func runProjectRemoveIamBinding(ctx context.Context, inv *invocation, id string, o projectIamBindingOptions) error {
+func runProjectRemoveIamBinding(ctx context.Context, inv *invocation, id string, o iamBindingOptions) error {
 	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
@@ -646,7 +660,7 @@ func runProjectRemoveIamBinding(ctx context.Context, inv *invocation, id string,
 	}
 
 	if !removeBindingFromPolicy(policy, o.role, o.member,
-		rmBuildCondition(o.condExpr, o.condTitle, o.condDesc), o.allConditions) {
+		o.condition(), o.allConditions) {
 		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", o.role, o.member)
 	}
 

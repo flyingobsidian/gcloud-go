@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -187,20 +188,20 @@ func TestParsePolicyFileYAML(t *testing.T) {
 	}
 }
 
-func TestBuildConditionEmpty(t *testing.T) {
-	flagOrgIamCondExpr, flagOrgIamCondTitle, flagOrgIamCondDesc = "", "", ""
-	if buildCondition() != nil {
+func TestIamBindingConditionEmpty(t *testing.T) {
+	var o iamBindingOptions
+	if o.condition() != nil {
 		t.Error("expected nil for empty flags")
 	}
 }
 
-func TestBuildConditionPopulated(t *testing.T) {
-	flagOrgIamCondExpr = "request.time > timestamp(\"2020-01-01T00:00:00Z\")"
-	flagOrgIamCondTitle = "after-2020"
-	flagOrgIamCondDesc = "Only after 2020"
-	t.Cleanup(func() { flagOrgIamCondExpr, flagOrgIamCondTitle, flagOrgIamCondDesc = "", "", "" })
-
-	c := buildCondition()
+func TestIamBindingConditionPopulated(t *testing.T) {
+	o := iamBindingOptions{
+		condExpr:  "request.time > timestamp(\"2020-01-01T00:00:00Z\")",
+		condTitle: "after-2020",
+		condDesc:  "Only after 2020",
+	}
+	c := o.condition()
 	if c == nil {
 		t.Fatal("expected non-nil condition")
 	}
@@ -218,12 +219,11 @@ func TestPrintOrgListEmpty(t *testing.T) {
 		{"yaml", ""},
 		{"", ""},
 	} {
-		got := captureStdout(t, func() {
-			if err := printOrgList(none, c.format); err != nil {
-				t.Errorf("printOrgList(%q) err = %v", c.format, err)
-			}
-		})
-		if got != c.want {
+		var buf bytes.Buffer
+		if err := printOrgList(&buf, none, c.format); err != nil {
+			t.Errorf("printOrgList(%q) err = %v", c.format, err)
+		}
+		if got := buf.String(); got != c.want {
 			t.Errorf("printOrgList(nil, %q) = %q, want %q", c.format, got, c.want)
 		}
 	}
@@ -231,11 +231,11 @@ func TestPrintOrgListEmpty(t *testing.T) {
 
 func TestPrintOrgListJSON(t *testing.T) {
 	orgs := []*crm.Organization{{Name: "organizations/123", DisplayName: "example.com"}}
-	got := captureStdout(t, func() {
-		if err := printOrgList(orgs, "json"); err != nil {
-			t.Errorf("printOrgList err = %v", err)
-		}
-	})
+	var buf bytes.Buffer
+	if err := printOrgList(&buf, orgs, "json"); err != nil {
+		t.Errorf("printOrgList err = %v", err)
+	}
+	got := buf.String()
 	want := "[\n  {\n    \"displayName\": \"example.com\",\n    \"name\": \"organizations/123\"\n  }\n]\n"
 	if got != want {
 		t.Errorf("printOrgList json = %q, want %q", got, want)
