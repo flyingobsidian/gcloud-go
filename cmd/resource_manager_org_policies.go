@@ -6,80 +6,78 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	orgpolicy "google.golang.org/api/orgpolicy/v2"
 	"gopkg.in/yaml.v3"
 )
 
-var orgPoliciesCmd = &cobra.Command{
-	Use:   "org-policies",
-	Short: "Manage Cloud Organization Policies",
+// orgPoliciesFlags holds the flag values of the commands built by newOrgPoliciesCmd.
+type orgPoliciesFlags struct {
+	orgPolicyProject      string
+	orgPolicyFolder       string
+	orgPolicyOrg          string
+	orgPolicyEffective    bool
+	orgPolicyListPageSize int64
+	orgPolicyListLimit    int64
 }
 
-var orgPolicyDescribeCmd = &cobra.Command{
-	Use:   "describe CONSTRAINT",
-	Short: "Show the policy for a constraint on a resource",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runOrgPolicyDescribe,
-}
+func newOrgPoliciesCmd(inv *invocation) *cobra.Command {
+	f := &orgPoliciesFlags{}
 
-var orgPolicyListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List organization policies applied to a resource",
-	Args:  cobra.NoArgs,
-	RunE:  runOrgPolicyList,
-}
+	orgPoliciesCmd := &cobra.Command{
+		Use:   "org-policies",
+		Short: "Manage Cloud Organization Policies",
+	}
 
-var orgPolicyDeleteCmd = &cobra.Command{
-	Use:   "delete CONSTRAINT",
-	Short: "Delete an organization policy",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runOrgPolicyDelete,
-}
+	orgPolicyDescribeCmd := &cobra.Command{
+		Use:   "describe CONSTRAINT",
+		Short: "Show the policy for a constraint on a resource",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgPolicyDescribe(c.Context(), inv, f, c, args)
+		},
+	}
 
-var orgPolicySetCmd = &cobra.Command{
-	Use:   "set-policy POLICY_FILE",
-	Short: "Set an organization policy from a JSON or YAML file",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runOrgPolicySet,
-}
+	orgPolicyListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List organization policies applied to a resource",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgPolicyList(c.Context(), inv, f, c, args)
+		},
+	}
 
-var orgPolicyEnableEnforceCmd = &cobra.Command{
-	Use:   "enable-enforce CONSTRAINT",
-	Short: "Set a boolean constraint's enforce value to true",
-	Args:  cobra.ExactArgs(1),
-	RunE:  makeOrgPolicyEnforce(true),
-}
+	orgPolicyDeleteCmd := &cobra.Command{
+		Use:   "delete CONSTRAINT",
+		Short: "Delete an organization policy",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgPolicyDelete(c.Context(), inv, f, c, args)
+		},
+	}
 
-var orgPolicyDisableEnforceCmd = &cobra.Command{
-	Use:   "disable-enforce CONSTRAINT",
-	Short: "Set a boolean constraint's enforce value to false",
-	Args:  cobra.ExactArgs(1),
-	RunE:  makeOrgPolicyEnforce(false),
-}
+	orgPolicySetCmd := &cobra.Command{
+		Use:   "set-policy POLICY_FILE",
+		Short: "Set an organization policy from a JSON or YAML file",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgPolicySet(c.Context(), inv, f, c, args)
+		},
+	}
 
-var (
-	flagOrgPolicyProject      string
-	flagOrgPolicyFolder       string
-	flagOrgPolicyOrg          string
-	flagOrgPolicyEffective    bool
-	flagOrgPolicyListPageSize int64
-	flagOrgPolicyListLimit    int64
-)
-
-func init() {
+	orgPolicyEnableEnforceCmd := newOrgPolicyEnforceCmd(inv, f, true)
+	orgPolicyDisableEnforceCmd := newOrgPolicyEnforceCmd(inv, f, false)
 	for _, c := range []*cobra.Command{
 		orgPolicyDescribeCmd, orgPolicyListCmd, orgPolicyDeleteCmd,
 		orgPolicyEnableEnforceCmd, orgPolicyDisableEnforceCmd,
 	} {
-		c.Flags().StringVar(&flagOrgPolicyProject, "project", "", "Project ID (mutually exclusive with --folder and --organization)")
-		c.Flags().StringVar(&flagOrgPolicyFolder, "folder", "", "Folder ID (mutually exclusive with --project and --organization)")
-		c.Flags().StringVar(&flagOrgPolicyOrg, "organization", "", "Organization ID (mutually exclusive with --project and --folder)")
+		c.Flags().StringVar(&f.orgPolicyProject, "project", "", "Project ID (mutually exclusive with --folder and --organization)")
+		c.Flags().StringVar(&f.orgPolicyFolder, "folder", "", "Folder ID (mutually exclusive with --project and --organization)")
+		c.Flags().StringVar(&f.orgPolicyOrg, "organization", "", "Organization ID (mutually exclusive with --project and --folder)")
 	}
-	orgPolicyDescribeCmd.Flags().BoolVar(&flagOrgPolicyEffective, "effective", false, "Return the effective policy (including inherited)")
-	orgPolicyListCmd.Flags().Int64Var(&flagOrgPolicyListPageSize, "page-size", 0, "Page size for API pagination")
-	orgPolicyListCmd.Flags().Int64Var(&flagOrgPolicyListLimit, "limit", 0, "Maximum number of policies to list (0 = no limit)")
+	orgPolicyDescribeCmd.Flags().BoolVar(&f.orgPolicyEffective, "effective", false, "Return the effective policy (including inherited)")
+	orgPolicyListCmd.Flags().Int64Var(&f.orgPolicyListPageSize, "page-size", 0, "Page size for API pagination")
+	orgPolicyListCmd.Flags().Int64Var(&f.orgPolicyListLimit, "limit", 0, "Maximum number of policies to list (0 = no limit)")
 
 	orgPoliciesCmd.AddCommand(
 		orgPolicyDescribeCmd,
@@ -89,7 +87,7 @@ func init() {
 		orgPolicyEnableEnforceCmd,
 		orgPolicyDisableEnforceCmd,
 	)
-	resourceManagerCmd.AddCommand(orgPoliciesCmd)
+	return orgPoliciesCmd
 }
 
 // resolveOrgPolicyResource returns the resource identifier (e.g.
@@ -133,29 +131,28 @@ func policyResourceName(resource, constraint string) string {
 	return resource + "/policies/" + constraint
 }
 
-func runOrgPolicyDescribe(cmd *cobra.Command, args []string) error {
-	resource, err := resolveOrgPolicyResource(flagOrgPolicyProject, flagOrgPolicyFolder, flagOrgPolicyOrg)
+func runOrgPolicyDescribe(ctx context.Context, inv *invocation, f *orgPoliciesFlags, cmd *cobra.Command, args []string) error {
+	resource, err := resolveOrgPolicyResource(f.orgPolicyProject, f.orgPolicyFolder, f.orgPolicyOrg)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OrgPolicyService(ctx, flagAccount)
+	svc, err := inv.clients().OrgPolicy(ctx)
 	if err != nil {
 		return err
 	}
 	name := policyResourceName(resource, args[0])
-	if flagOrgPolicyEffective {
+	if f.orgPolicyEffective {
 		policy, err := describeEffectivePolicy(ctx, svc, name)
 		if err != nil {
 			return err
 		}
-		return yamlEncode(policy)
+		return inv.yaml(policy)
 	}
 	policy, err := describePolicy(ctx, svc, name)
 	if err != nil {
 		return err
 	}
-	return yamlEncode(policy)
+	return inv.yaml(policy)
 }
 
 func describePolicy(ctx context.Context, svc *orgpolicy.Service, name string) (*orgpolicy.GoogleCloudOrgpolicyV2Policy, error) {
@@ -182,13 +179,12 @@ func describeEffectivePolicy(ctx context.Context, svc *orgpolicy.Service, name s
 	return nil, fmt.Errorf("unrecognized policy resource: %s", name)
 }
 
-func runOrgPolicyList(cmd *cobra.Command, args []string) error {
-	resource, err := resolveOrgPolicyResource(flagOrgPolicyProject, flagOrgPolicyFolder, flagOrgPolicyOrg)
+func runOrgPolicyList(ctx context.Context, inv *invocation, f *orgPoliciesFlags, cmd *cobra.Command, args []string) error {
+	resource, err := resolveOrgPolicyResource(f.orgPolicyProject, f.orgPolicyFolder, f.orgPolicyOrg)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OrgPolicyService(ctx, flagAccount)
+	svc, err := inv.clients().OrgPolicy(ctx)
 	if err != nil {
 		return err
 	}
@@ -196,13 +192,13 @@ func runOrgPolicyList(cmd *cobra.Command, args []string) error {
 	var all []*orgpolicy.GoogleCloudOrgpolicyV2Policy
 	pageToken := ""
 	for {
-		resp, err := listPoliciesPage(ctx, svc, resource, pageToken, flagOrgPolicyListPageSize)
+		resp, err := listPoliciesPage(ctx, svc, resource, pageToken, f.orgPolicyListPageSize)
 		if err != nil {
 			return fmt.Errorf("listing policies: %w", err)
 		}
 		all = append(all, resp.Policies...)
-		if flagOrgPolicyListLimit > 0 && int64(len(all)) >= flagOrgPolicyListLimit {
-			all = all[:flagOrgPolicyListLimit]
+		if f.orgPolicyListLimit > 0 && int64(len(all)) >= f.orgPolicyListLimit {
+			all = all[:f.orgPolicyListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -211,9 +207,9 @@ func runOrgPolicyList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	printTableHeading(len(all), "%-70s %s\n", "CONSTRAINT", "ETAG")
+	printTableHeadingTo(inv.stdout, len(all), "%-70s %s\n", "CONSTRAINT", "ETAG")
 	for _, p := range all {
-		fmt.Printf("%-70s %s\n", p.Name, p.Etag)
+		fmt.Fprintf(inv.stdout, "%-70s %s\n", p.Name, p.Etag)
 	}
 	return nil
 }
@@ -251,13 +247,12 @@ func listPoliciesPage(ctx context.Context, svc *orgpolicy.Service, parent, pageT
 	return nil, fmt.Errorf("unrecognized parent: %s", parent)
 }
 
-func runOrgPolicyDelete(cmd *cobra.Command, args []string) error {
-	resource, err := resolveOrgPolicyResource(flagOrgPolicyProject, flagOrgPolicyFolder, flagOrgPolicyOrg)
+func runOrgPolicyDelete(ctx context.Context, inv *invocation, f *orgPoliciesFlags, cmd *cobra.Command, args []string) error {
+	resource, err := resolveOrgPolicyResource(f.orgPolicyProject, f.orgPolicyFolder, f.orgPolicyOrg)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OrgPolicyService(ctx, flagAccount)
+	svc, err := inv.clients().OrgPolicy(ctx)
 	if err != nil {
 		return err
 	}
@@ -275,11 +270,11 @@ func runOrgPolicyDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Deleted policy [%s].\n", name)
+	fmt.Fprintf(inv.stderr, "Deleted policy [%s].\n", name)
 	return nil
 }
 
-func runOrgPolicySet(cmd *cobra.Command, args []string) error {
+func runOrgPolicySet(ctx context.Context, inv *invocation, f *orgPoliciesFlags, cmd *cobra.Command, args []string) error {
 	data, err := os.ReadFile(args[0])
 	if err != nil {
 		return fmt.Errorf("reading policy file: %w", err)
@@ -292,8 +287,7 @@ func runOrgPolicySet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("policy file must include a name field")
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.OrgPolicyService(ctx, flagAccount)
+	svc, err := inv.clients().OrgPolicy(ctx)
 	if err != nil {
 		return err
 	}
@@ -301,13 +295,13 @@ func runOrgPolicySet(cmd *cobra.Command, args []string) error {
 	// Try to update first; if the policy does not exist yet, create it.
 	updated, err := patchPolicy(ctx, svc, policy)
 	if err == nil {
-		return yamlEncode(updated)
+		return inv.yaml(updated)
 	}
 	created, cErr := createPolicy(ctx, svc, policy)
 	if cErr != nil {
 		return fmt.Errorf("setting policy: %w (update failed with: %v)", cErr, err)
 	}
-	return yamlEncode(created)
+	return inv.yaml(created)
 }
 
 func patchPolicy(ctx context.Context, svc *orgpolicy.Service, p *orgpolicy.GoogleCloudOrgpolicyV2Policy) (*orgpolicy.GoogleCloudOrgpolicyV2Policy, error) {
@@ -345,47 +339,58 @@ func parentForPolicyName(name string) string {
 	return name[:idx]
 }
 
-func makeOrgPolicyEnforce(enforce bool) func(*cobra.Command, []string) error {
-	return func(cmd *cobra.Command, args []string) error {
-		resource, err := resolveOrgPolicyResource(flagOrgPolicyProject, flagOrgPolicyFolder, flagOrgPolicyOrg)
-		if err != nil {
-			return err
-		}
-		ctx := context.Background()
-		svc, err := gcp.OrgPolicyService(ctx, flagAccount)
-		if err != nil {
-			return err
-		}
-		name := policyResourceName(resource, args[0])
-
-		existing, getErr := describePolicy(ctx, svc, name)
-		policy := &orgpolicy.GoogleCloudOrgpolicyV2Policy{Name: name}
-		if getErr == nil && existing != nil {
-			policy = existing
-		}
-		rule := &orgpolicy.GoogleCloudOrgpolicyV2PolicySpecPolicyRule{}
-		if enforce {
-			rule.Enforce = true
-			rule.ForceSendFields = []string{"Enforce"}
-		} else {
-			rule.Enforce = false
-			rule.ForceSendFields = []string{"Enforce"}
-		}
-		policy.Spec = &orgpolicy.GoogleCloudOrgpolicyV2PolicySpec{
-			Rules: []*orgpolicy.GoogleCloudOrgpolicyV2PolicySpecPolicyRule{rule},
-		}
-
-		if getErr == nil {
-			updated, err := patchPolicy(ctx, svc, policy)
-			if err != nil {
-				return fmt.Errorf("updating policy: %w", err)
-			}
-			return yamlEncode(updated)
-		}
-		created, err := createPolicy(ctx, svc, policy)
-		if err != nil {
-			return fmt.Errorf("creating policy: %w", err)
-		}
-		return yamlEncode(created)
+// newOrgPolicyEnforceCmd returns enable-enforce when enforce is set, else
+// disable-enforce.
+func newOrgPolicyEnforceCmd(inv *invocation, f *orgPoliciesFlags, enforce bool) *cobra.Command {
+	c := &cobra.Command{
+		Use:   "enable-enforce CONSTRAINT",
+		Short: "Set a boolean constraint's enforce value to true",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgPolicyEnforce(c.Context(), inv, f, args[0], enforce)
+		},
 	}
+	if !enforce {
+		c.Use = "disable-enforce CONSTRAINT"
+		c.Short = "Set a boolean constraint's enforce value to false"
+	}
+	return c
+}
+
+func runOrgPolicyEnforce(ctx context.Context, inv *invocation, f *orgPoliciesFlags, constraint string, enforce bool) error {
+	resource, err := resolveOrgPolicyResource(f.orgPolicyProject, f.orgPolicyFolder, f.orgPolicyOrg)
+	if err != nil {
+		return err
+	}
+	svc, err := inv.clients().OrgPolicy(ctx)
+	if err != nil {
+		return err
+	}
+	name := policyResourceName(resource, constraint)
+
+	existing, getErr := describePolicy(ctx, svc, name)
+	policy := &orgpolicy.GoogleCloudOrgpolicyV2Policy{Name: name}
+	if getErr == nil && existing != nil {
+		policy = existing
+	}
+	rule := &orgpolicy.GoogleCloudOrgpolicyV2PolicySpecPolicyRule{
+		Enforce:         enforce,
+		ForceSendFields: []string{"Enforce"},
+	}
+	policy.Spec = &orgpolicy.GoogleCloudOrgpolicyV2PolicySpec{
+		Rules: []*orgpolicy.GoogleCloudOrgpolicyV2PolicySpecPolicyRule{rule},
+	}
+
+	if getErr == nil {
+		updated, err := patchPolicy(ctx, svc, policy)
+		if err != nil {
+			return fmt.Errorf("updating policy: %w", err)
+		}
+		return inv.yaml(updated)
+	}
+	created, err := createPolicy(ctx, svc, policy)
+	if err != nil {
+		return fmt.Errorf("creating policy: %w", err)
+	}
+	return inv.yaml(created)
 }
