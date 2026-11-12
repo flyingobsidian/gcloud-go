@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -10,46 +9,26 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-var instancesAddTagsCmd = &cobra.Command{
-	Use:   "add-tags INSTANCE_NAME",
-	Short: "Add network tags to an instance",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runInstancesAddTags,
+func (s *computeCmds) initInstancesTags() {
+	s.instancesAddTagsCmd.Flags().StringSliceVar(&s.flagInstanceAddTags, "tags", nil, "Tags to add")
+	s.instancesAddTagsCmd.MarkFlagRequired("tags")
+
+	s.instancesRemoveTagsCmd.Flags().StringSliceVar(&s.flagInstanceRemoveTags, "tags", nil, "Tags to remove")
+	s.instancesRemoveTagsCmd.Flags().BoolVar(&s.flagRemoveAllTags, "all", false, "Remove all tags")
+
+	s.instancesCmd.AddCommand(s.instancesAddTagsCmd)
+	s.instancesCmd.AddCommand(s.instancesRemoveTagsCmd)
 }
 
-var instancesRemoveTagsCmd = &cobra.Command{
-	Use:   "remove-tags INSTANCE_NAME",
-	Short: "Remove network tags from an instance",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runInstancesRemoveTags,
-}
-
-var (
-	flagInstanceAddTags    []string
-	flagInstanceRemoveTags []string
-	flagRemoveAllTags      bool
-)
-
-func init() {
-	instancesAddTagsCmd.Flags().StringSliceVar(&flagInstanceAddTags, "tags", nil, "Tags to add")
-	instancesAddTagsCmd.MarkFlagRequired("tags")
-
-	instancesRemoveTagsCmd.Flags().StringSliceVar(&flagInstanceRemoveTags, "tags", nil, "Tags to remove")
-	instancesRemoveTagsCmd.Flags().BoolVar(&flagRemoveAllTags, "all", false, "Remove all tags")
-
-	instancesCmd.AddCommand(instancesAddTagsCmd)
-	instancesCmd.AddCommand(instancesRemoveTagsCmd)
-}
-
-func runInstancesAddTags(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runInstancesAddTags(cmd *cobra.Command, args []string) error {
 	instance := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -68,7 +47,7 @@ func runInstancesAddTags(cmd *cobra.Command, args []string) error {
 	for _, t := range tags.Items {
 		existing[t] = true
 	}
-	for _, t := range flagInstanceAddTags {
+	for _, t := range s.flagInstanceAddTags {
 		t = strings.TrimSpace(t)
 		if !existing[t] {
 			tags.Items = append(tags.Items, t)
@@ -83,23 +62,23 @@ func runInstancesAddTags(cmd *cobra.Command, args []string) error {
 	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 		return err
 	}
-	fmt.Printf("Updated tags for instance [%s].\n", instance)
+	fmt.Fprintf(s.inv.stdout, "Updated tags for instance [%s].\n", instance)
 	return nil
 }
 
-func runInstancesRemoveTags(cmd *cobra.Command, args []string) error {
-	if !flagRemoveAllTags && len(flagInstanceRemoveTags) == 0 {
+func (s *computeCmds) runInstancesRemoveTags(cmd *cobra.Command, args []string) error {
+	if !s.flagRemoveAllTags && len(s.flagInstanceRemoveTags) == 0 {
 		return fmt.Errorf("one of --tags or --all must be specified")
 	}
 
 	instance := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -114,11 +93,11 @@ func runInstancesRemoveTags(cmd *cobra.Command, args []string) error {
 		tags = &compute.Tags{}
 	}
 
-	if flagRemoveAllTags {
+	if s.flagRemoveAllTags {
 		tags.Items = nil
 	} else {
 		toRemove := make(map[string]bool)
-		for _, t := range flagInstanceRemoveTags {
+		for _, t := range s.flagInstanceRemoveTags {
 			toRemove[strings.TrimSpace(t)] = true
 		}
 		var filtered []string
@@ -138,6 +117,6 @@ func runInstancesRemoveTags(cmd *cobra.Command, args []string) error {
 	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 		return err
 	}
-	fmt.Printf("Updated tags for instance [%s].\n", instance)
+	fmt.Fprintf(s.inv.stdout, "Updated tags for instance [%s].\n", instance)
 	return nil
 }

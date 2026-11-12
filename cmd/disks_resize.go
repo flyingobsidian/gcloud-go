@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -23,37 +22,19 @@ import (
 //
 // SIZE is a whole number optionally suffixed with GB or TB (default GB).
 
-var (
-	flagDiskResizeSize   string
-	flagDiskResizeZone   string
-	flagDiskResizeRegion string
-	flagDiskResizeAsync  bool
-	flagDiskResizeFormat string
-)
-
-var disksResizeCmd = &cobra.Command{
-	Use:   "resize DISK_NAME [DISK_NAME ...]",
-	Short: "Resize (grow) one or more Compute Engine disks",
-	Long: "Resize one or more Compute Engine persistent disks. Disk size may " +
-		"only be increased; shrinking is not supported by the Compute API. " +
-		"This change is not reversible.",
-	Args: cobra.MinimumNArgs(1),
-	RunE: runDisksResize,
-}
-
-func init() {
-	disksResizeCmd.Flags().StringVar(&flagDiskResizeSize, "size", "",
+func (s *computeCmds) initDisksResize() {
+	s.disksResizeCmd.Flags().StringVar(&s.flagDiskResizeSize, "size", "",
 		"New size for the disks. Whole number + optional GB or TB suffix (default GB). (required)")
-	_ = disksResizeCmd.MarkFlagRequired("size")
-	disksResizeCmd.Flags().StringVar(&flagDiskResizeZone, "zone", "",
+	_ = s.disksResizeCmd.MarkFlagRequired("size")
+	s.disksResizeCmd.Flags().StringVar(&s.flagDiskResizeZone, "zone", "",
 		"Zone of the disks (mutually exclusive with --region)")
-	disksResizeCmd.Flags().StringVar(&flagDiskResizeRegion, "region", "",
+	s.disksResizeCmd.Flags().StringVar(&s.flagDiskResizeRegion, "region", "",
 		"Region of the disks (mutually exclusive with --zone)")
-	disksResizeCmd.Flags().BoolVar(&flagDiskResizeAsync, "async", false,
+	s.disksResizeCmd.Flags().BoolVar(&s.flagDiskResizeAsync, "async", false,
 		"Return immediately without waiting for the resize operation to complete")
-	disksResizeCmd.Flags().StringVar(&flagDiskResizeFormat, "format", "",
+	s.disksResizeCmd.Flags().StringVar(&s.flagDiskResizeFormat, "format", "",
 		"Output format (default yaml; use 'none' to suppress the resized-disk dump)")
-	disksCmd.AddCommand(disksResizeCmd)
+	s.disksCmd.AddCommand(s.disksResizeCmd)
 }
 
 // parseDiskSizeGB converts a gcloud disk-size string like "200", "200GB", or
@@ -84,78 +65,78 @@ func parseDiskSizeGB(size string) (int64, error) {
 	return n * mult, nil
 }
 
-func runDisksResize(cmd *cobra.Command, args []string) error {
-	if flagDiskResizeZone != "" && flagDiskResizeRegion != "" {
+func (s *computeCmds) runDisksResize(cmd *cobra.Command, args []string) error {
+	if s.flagDiskResizeZone != "" && s.flagDiskResizeRegion != "" {
 		return fmt.Errorf("--zone and --region are mutually exclusive")
 	}
 
-	sizeGB, err := parseDiskSizeGB(flagDiskResizeSize)
+	sizeGB, err := parseDiskSizeGB(s.flagDiskResizeSize)
 	if err != nil {
 		return err
 	}
 
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 
-	zone := flagDiskResizeZone
-	if zone == "" && flagDiskResizeRegion == "" {
+	zone := s.flagDiskResizeZone
+	if zone == "" && s.flagDiskResizeRegion == "" {
 		// Match gcloud-python fallback: honour compute/zone from config /
 		// environment.
-		zone = resolveZone()
+		zone = s.resolveZone()
 	}
-	if zone == "" && flagDiskResizeRegion == "" {
+	if zone == "" && s.flagDiskResizeRegion == "" {
 		return fmt.Errorf("one of --zone or --region is required")
 	}
 
-	if !flagQuiet {
-		fmt.Fprintln(os.Stderr, "This command increases disk size. This change is not reversible.")
-		fmt.Fprintln(os.Stderr, "For more information, see:")
-		fmt.Fprintln(os.Stderr, "https://cloud.google.com/sdk/gcloud/reference/compute/disks/resize")
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprint(os.Stderr, "Do you want to continue (Y/n)? ")
+	if !s.inv.flags.quiet {
+		fmt.Fprintln(s.inv.stderr, "This command increases disk size. This change is not reversible.")
+		fmt.Fprintln(s.inv.stderr, "For more information, see:")
+		fmt.Fprintln(s.inv.stderr, "https://cloud.google.com/sdk/gcloud/reference/compute/disks/resize")
+		fmt.Fprintln(s.inv.stderr)
+		fmt.Fprint(s.inv.stderr, "Do you want to continue (Y/n)? ")
 		var answer string
-		fmt.Scanln(&answer)
+		fmt.Fscanln(s.inv.stdin, &answer)
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "" && answer != "y" && answer != "yes" {
-			fmt.Fprintln(os.Stderr, "Aborted.")
+			fmt.Fprintln(s.inv.stderr, "Aborted.")
 			return nil
 		}
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
 
-	format := flagDiskResizeFormat
+	format := s.flagDiskResizeFormat
 	if format == "" {
 		format = "yaml"
 	}
 
 	for _, disk := range args {
-		if err := resizeOneDisk(ctx, svc, project, zone, flagDiskResizeRegion, disk, sizeGB, format); err != nil {
+		if err := s.resizeOneDisk(ctx, svc, project, zone, s.flagDiskResizeRegion, disk, sizeGB, format); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func resizeOneDisk(ctx context.Context, svc *compute.Service, project, zone, region, disk string, sizeGB int64, format string) error {
+func (s *computeCmds) resizeOneDisk(ctx context.Context, svc *compute.Service, project, zone, region, disk string, sizeGB int64, format string) error {
 	if zone != "" {
 		req := &compute.DisksResizeRequest{SizeGb: sizeGB}
 		op, err := svc.Disks.Resize(project, zone, disk, req).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("resizing disk %s: %w", disk, err)
 		}
-		if !flagDiskResizeAsync {
+		if !s.flagDiskResizeAsync {
 			if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 				return err
 			}
 		}
-		return emitResizedDisk(ctx, svc, project, zone, "", disk, format)
+		return s.emitResizedDisk(ctx, svc, project, zone, "", disk, format)
 	}
 
 	// regional disk
@@ -164,21 +145,21 @@ func resizeOneDisk(ctx context.Context, svc *compute.Service, project, zone, reg
 	if err != nil {
 		return fmt.Errorf("resizing regional disk %s: %w", disk, err)
 	}
-	if !flagDiskResizeAsync {
+	if !s.flagDiskResizeAsync {
 		if err := waitForRegionOp(ctx, svc, project, region, op.Name); err != nil {
 			return err
 		}
 	}
-	return emitResizedDisk(ctx, svc, project, "", region, disk, format)
+	return s.emitResizedDisk(ctx, svc, project, "", region, disk, format)
 }
 
-func emitResizedDisk(ctx context.Context, svc *compute.Service, project, zone, region, disk, format string) error {
+func (s *computeCmds) emitResizedDisk(ctx context.Context, svc *compute.Service, project, zone, region, disk, format string) error {
 	scope := "zones/" + zone
 	if zone == "" {
 		scope = "regions/" + region
 	}
 	self := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/%s/disks/%s", project, scope, path.Base(disk))
-	fmt.Fprintf(os.Stderr, "Updated [%s].\n", self)
+	fmt.Fprintf(s.inv.stderr, "Updated [%s].\n", self)
 
 	if strings.EqualFold(format, "none") {
 		return nil
@@ -195,5 +176,5 @@ func emitResizedDisk(ctx context.Context, svc *compute.Service, project, zone, r
 	if err != nil {
 		return fmt.Errorf("re-reading disk after resize: %w", err)
 	}
-	return emitFormatted(got, format)
+	return emitFormattedTo(s.inv.stdout, got, format)
 }

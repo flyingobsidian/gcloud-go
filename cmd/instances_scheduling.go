@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
@@ -11,138 +10,111 @@ import (
 
 // --- instances suspend ---
 
-var instancesSuspendCmd = &cobra.Command{
-	Use:   "suspend INSTANCE_NAME [INSTANCE_NAME ...]",
-	Short: "Suspend a Compute Engine instance",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runInstancesSuspend,
-}
-
 // --- instances resume ---
-
-var instancesResumeCmd = &cobra.Command{
-	Use:   "resume INSTANCE_NAME [INSTANCE_NAME ...]",
-	Short: "Resume a suspended Compute Engine instance",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runInstancesResume,
-}
 
 // --- instances set-scheduling ---
 
-var instancesSetSchedulingCmd = &cobra.Command{
-	Use:   "set-scheduling INSTANCE_NAME",
-	Short: "Set scheduling options for an instance",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runInstancesSetScheduling,
+func (s *computeCmds) initInstancesScheduling() {
+	s.instancesSuspendCmd.Flags().BoolVar(&s.flagAsync, "async", false, "Return immediately without waiting")
+	s.instancesResumeCmd.Flags().BoolVar(&s.flagAsync, "async", false, "Return immediately without waiting")
+
+	s.instancesSetSchedulingCmd.Flags().BoolVar(&s.flagRestartOnFailure, "restart-on-failure", false, "Restart on failure")
+	s.instancesSetSchedulingCmd.Flags().BoolVar(&s.flagNoRestartOnFailure, "no-restart-on-failure", false, "Do not restart on failure")
+	s.instancesSetSchedulingCmd.Flags().StringVar(&s.flagMaintenancePolicy, "maintenance-policy", "", "Maintenance policy: MIGRATE or TERMINATE")
+
+	s.instancesCmd.AddCommand(s.instancesSuspendCmd)
+	s.instancesCmd.AddCommand(s.instancesResumeCmd)
+	s.instancesCmd.AddCommand(s.instancesSetSchedulingCmd)
 }
 
-var (
-	flagRestartOnFailure   bool
-	flagNoRestartOnFailure bool
-	flagMaintenancePolicy  string
-)
-
-func init() {
-	instancesSuspendCmd.Flags().BoolVar(&flagAsync, "async", false, "Return immediately without waiting")
-	instancesResumeCmd.Flags().BoolVar(&flagAsync, "async", false, "Return immediately without waiting")
-
-	instancesSetSchedulingCmd.Flags().BoolVar(&flagRestartOnFailure, "restart-on-failure", false, "Restart on failure")
-	instancesSetSchedulingCmd.Flags().BoolVar(&flagNoRestartOnFailure, "no-restart-on-failure", false, "Do not restart on failure")
-	instancesSetSchedulingCmd.Flags().StringVar(&flagMaintenancePolicy, "maintenance-policy", "", "Maintenance policy: MIGRATE or TERMINATE")
-
-	instancesCmd.AddCommand(instancesSuspendCmd)
-	instancesCmd.AddCommand(instancesResumeCmd)
-	instancesCmd.AddCommand(instancesSetSchedulingCmd)
-}
-
-func runInstancesSuspend(cmd *cobra.Command, args []string) error {
-	project, zone, err := resolveProjectZone()
+func (s *computeCmds) runInstancesSuspend(cmd *cobra.Command, args []string) error {
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
 
 	for _, instance := range args {
-		fmt.Printf("Suspending instance [%s] in zone [%s]...\n", instance, zone)
+		fmt.Fprintf(s.inv.stdout, "Suspending instance [%s] in zone [%s]...\n", instance, zone)
 		op, err := svc.Instances.Suspend(project, zone, instance).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("suspending instance %s: %w", instance, err)
 		}
 
-		if flagAsync {
-			fmt.Printf("Suspend operation started: %s\n", op.Name)
+		if s.flagAsync {
+			fmt.Fprintf(s.inv.stdout, "Suspend operation started: %s\n", op.Name)
 			continue
 		}
 
 		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 			return err
 		}
-		fmt.Printf("Suspended instance [%s].\n", instance)
+		fmt.Fprintf(s.inv.stdout, "Suspended instance [%s].\n", instance)
 	}
 	return nil
 }
 
-func runInstancesResume(cmd *cobra.Command, args []string) error {
-	project, zone, err := resolveProjectZone()
+func (s *computeCmds) runInstancesResume(cmd *cobra.Command, args []string) error {
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
 
 	for _, instance := range args {
-		fmt.Printf("Resuming instance [%s] in zone [%s]...\n", instance, zone)
+		fmt.Fprintf(s.inv.stdout, "Resuming instance [%s] in zone [%s]...\n", instance, zone)
 		op, err := svc.Instances.Resume(project, zone, instance).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("resuming instance %s: %w", instance, err)
 		}
 
-		if flagAsync {
-			fmt.Printf("Resume operation started: %s\n", op.Name)
+		if s.flagAsync {
+			fmt.Fprintf(s.inv.stdout, "Resume operation started: %s\n", op.Name)
 			continue
 		}
 
 		if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 			return err
 		}
-		fmt.Printf("Resumed instance [%s].\n", instance)
+		fmt.Fprintf(s.inv.stdout, "Resumed instance [%s].\n", instance)
 	}
 	return nil
 }
 
-func runInstancesSetScheduling(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runInstancesSetScheduling(cmd *cobra.Command, args []string) error {
 	instance := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
 
 	scheduling := &compute.Scheduling{}
-	if flagRestartOnFailure {
+	if s.flagRestartOnFailure {
 		t := true
 		scheduling.AutomaticRestart = &t
 	}
-	if flagNoRestartOnFailure {
+	if s.flagNoRestartOnFailure {
 		f := false
 		scheduling.AutomaticRestart = &f
 	}
-	if flagMaintenancePolicy != "" {
-		scheduling.OnHostMaintenance = flagMaintenancePolicy
+	if s.flagMaintenancePolicy != "" {
+		scheduling.OnHostMaintenance = s.flagMaintenancePolicy
 	}
 
 	op, err := svc.Instances.SetScheduling(project, zone, instance, scheduling).Context(ctx).Do()
@@ -153,6 +125,6 @@ func runInstancesSetScheduling(cmd *cobra.Command, args []string) error {
 	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 		return err
 	}
-	fmt.Printf("Updated scheduling for instance [%s].\n", instance)
+	fmt.Fprintf(s.inv.stdout, "Updated scheduling for instance [%s].\n", instance)
 	return nil
 }

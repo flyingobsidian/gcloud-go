@@ -3,36 +3,28 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"os"
 
-	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
 	compute "google.golang.org/api/compute/v1"
 )
 
 // --- compute networks subnets list (#2002) ---
 
-var (
-	flagSubnetsListRegions []string
-	flagSubnetsListNetwork string
-	flagSubnetsListURI     bool
-)
-
-func init() {
+func (s *computeCmds) initComputeSubnetsList() {
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List subnetworks",
 		Args:  cobra.NoArgs,
-		RunE:  runSubnetsList,
+		RunE:  s.runSubnetsList,
 	}
-	list.Flags().StringSliceVar(&flagSubnetsListRegions, "regions", nil,
+	list.Flags().StringSliceVar(&s.flagSubnetsListRegions, "regions", nil,
 		"If regions are given, only subnetworks in those regions are shown")
-	list.Flags().StringVar(&flagSubnetsListNetwork, "network", "", "Only show subnetworks of a specific network")
-	list.Flags().BoolVar(&flagSubnetsListURI, "uri", false, "Print a list of resource URIs instead of the default output")
+	list.Flags().StringVar(&s.flagSubnetsListNetwork, "network", "", "Only show subnetworks of a specific network")
+	list.Flags().BoolVar(&s.flagSubnetsListURI, "uri", false, "Print a list of resource URIs instead of the default output")
 
 	subnets := &cobra.Command{Use: "subnets", Short: "List, create, and delete Compute Engine subnetworks"}
 	subnets.AddCommand(list)
-	networksCmd.AddCommand(subnets)
+	s.networksCmd.AddCommand(subnets)
 }
 
 var subnetsLister = computeLister[*compute.Subnetwork]{
@@ -95,21 +87,21 @@ func filterSubnetsByNetwork(subnets []*compute.Subnetwork, network string) []*co
 	return kept
 }
 
-func runSubnetsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *computeCmds) runSubnetsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
-	req := computeListRequest{regions: flagSubnetsListRegions, regionsSet: cmd.Flags().Changed("regions")}
+	req := computeListRequest{regions: s.flagSubnetsListRegions, regionsSet: cmd.Flags().Changed("regions")}
 	subnets, err := subnetsLister.list(ctx, svc, project, req)
 	if err != nil {
 		return err
 	}
-	return subnetsLister.emit(os.Stdout, os.Stderr, filterSubnetsByNetwork(subnets, flagSubnetsListNetwork),
-		flagFormat, flagSubnetsListURI)
+	return subnetsLister.emit(s.inv.stdout, s.inv.stderr, filterSubnetsByNetwork(subnets, s.flagSubnetsListNetwork),
+		s.inv.flags.format, s.flagSubnetsListURI)
 }

@@ -31,7 +31,7 @@ It keeps the group's code where it is, but:
 
 Run it with `-audit` to list helpers outside the group that the group calls
 and that still use process state; give those an `io.Writer` or `*invocation`
-form first. Then do steps 4 to 7 below. storage and logging were
+form first. Then do steps 4 to 7 below. storage, logging and compute were
 migrated this way.
 
 ## Steps

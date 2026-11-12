@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,115 +12,55 @@ import (
 
 // --- unmanaged create ---
 
-var unmanagedCreateCmd = &cobra.Command{
-	Use:   "create INSTANCE_GROUP",
-	Short: "Create an unmanaged instance group",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runUnmanagedCreate,
-}
-
-var flagUnmanagedDescription string
-
 // --- unmanaged delete ---
-
-var unmanagedDeleteCmd = &cobra.Command{
-	Use:   "delete INSTANCE_GROUP",
-	Short: "Delete an unmanaged instance group",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runUnmanagedDelete,
-}
 
 // --- unmanaged remove-instances ---
 
-var unmanagedRemoveInstancesCmd = &cobra.Command{
-	Use:   "remove-instances INSTANCE_GROUP",
-	Short: "Remove instances from an unmanaged instance group",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runUnmanagedRemoveInstances,
-}
-
-var flagRemoveInstances []string
-
 // --- unmanaged list ---
-
-var unmanagedListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List unmanaged instance groups",
-	Args:  cobra.NoArgs,
-	RunE:  runUnmanagedList,
-}
-
-var (
-	flagUnmanagedListFormat string
-	flagUnmanagedListURI    bool
-)
 
 // --- unmanaged describe ---
 
-var unmanagedDescribeCmd = &cobra.Command{
-	Use:   "describe INSTANCE_GROUP",
-	Short: "Describe an unmanaged instance group",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runUnmanagedDescribe,
-}
-
 // --- unmanaged set-named-ports ---
-
-var unmanagedSetNamedPortsCmd = &cobra.Command{
-	Use:   "set-named-ports INSTANCE_GROUP",
-	Short: "Set named ports for an instance group",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runUnmanagedSetNamedPorts,
-}
-
-var flagNamedPorts []string
 
 // --- unmanaged get-named-ports ---
 
-var unmanagedGetNamedPortsCmd = &cobra.Command{
-	Use:   "get-named-ports INSTANCE_GROUP",
-	Short: "Get named ports for an instance group",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runUnmanagedGetNamedPorts,
+func (s *computeCmds) initInstanceGroupsUnmanaged() {
+	s.unmanagedCreateCmd.Flags().StringVar(&s.flagUnmanagedDescription, "description", "", "Group description")
+
+	s.unmanagedRemoveInstancesCmd.Flags().StringSliceVar(&s.flagRemoveInstances, "instances", nil, "Instance names to remove")
+	s.unmanagedRemoveInstancesCmd.MarkFlagRequired("instances")
+
+	s.unmanagedListCmd.Flags().StringVar(&s.flagUnmanagedListFormat, "format", "", "Output format (e.g. json)")
+	s.unmanagedListCmd.Flags().BoolVar(&s.flagUnmanagedListURI, "uri", false, "Print resource URIs")
+
+	s.unmanagedSetNamedPortsCmd.Flags().StringSliceVar(&s.flagNamedPorts, "named-ports", nil, "Named ports (NAME:PORT,...)")
+	s.unmanagedSetNamedPortsCmd.MarkFlagRequired("named-ports")
+
+	s.unmanagedCmd.AddCommand(s.unmanagedCreateCmd)
+	s.unmanagedCmd.AddCommand(s.unmanagedDeleteCmd)
+	s.unmanagedCmd.AddCommand(s.unmanagedRemoveInstancesCmd)
+	s.unmanagedCmd.AddCommand(s.unmanagedListCmd)
+	s.unmanagedCmd.AddCommand(s.unmanagedDescribeCmd)
+	s.unmanagedCmd.AddCommand(s.unmanagedSetNamedPortsCmd)
+	s.unmanagedCmd.AddCommand(s.unmanagedGetNamedPortsCmd)
 }
 
-func init() {
-	unmanagedCreateCmd.Flags().StringVar(&flagUnmanagedDescription, "description", "", "Group description")
-
-	unmanagedRemoveInstancesCmd.Flags().StringSliceVar(&flagRemoveInstances, "instances", nil, "Instance names to remove")
-	unmanagedRemoveInstancesCmd.MarkFlagRequired("instances")
-
-	unmanagedListCmd.Flags().StringVar(&flagUnmanagedListFormat, "format", "", "Output format (e.g. json)")
-	unmanagedListCmd.Flags().BoolVar(&flagUnmanagedListURI, "uri", false, "Print resource URIs")
-
-	unmanagedSetNamedPortsCmd.Flags().StringSliceVar(&flagNamedPorts, "named-ports", nil, "Named ports (NAME:PORT,...)")
-	unmanagedSetNamedPortsCmd.MarkFlagRequired("named-ports")
-
-	unmanagedCmd.AddCommand(unmanagedCreateCmd)
-	unmanagedCmd.AddCommand(unmanagedDeleteCmd)
-	unmanagedCmd.AddCommand(unmanagedRemoveInstancesCmd)
-	unmanagedCmd.AddCommand(unmanagedListCmd)
-	unmanagedCmd.AddCommand(unmanagedDescribeCmd)
-	unmanagedCmd.AddCommand(unmanagedSetNamedPortsCmd)
-	unmanagedCmd.AddCommand(unmanagedGetNamedPortsCmd)
-}
-
-func runUnmanagedCreate(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runUnmanagedCreate(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
 
 	ig := &compute.InstanceGroup{
 		Name:        group,
-		Description: flagUnmanagedDescription,
+		Description: s.flagUnmanagedDescription,
 	}
 
 	op, err := svc.InstanceGroups.Insert(project, zone, ig).Context(ctx).Do()
@@ -132,19 +71,19 @@ func runUnmanagedCreate(cmd *cobra.Command, args []string) error {
 	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 		return err
 	}
-	fmt.Printf("Created instance group [%s].\n", group)
+	fmt.Fprintf(s.inv.stdout, "Created instance group [%s].\n", group)
 	return nil
 }
 
-func runUnmanagedDelete(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runUnmanagedDelete(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -157,25 +96,25 @@ func runUnmanagedDelete(cmd *cobra.Command, args []string) error {
 	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 		return err
 	}
-	fmt.Printf("Deleted instance group [%s].\n", group)
+	fmt.Fprintf(s.inv.stdout, "Deleted instance group [%s].\n", group)
 	return nil
 }
 
-func runUnmanagedRemoveInstances(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runUnmanagedRemoveInstances(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
 
 	var refs []*compute.InstanceReference
-	for _, inst := range flagRemoveInstances {
+	for _, inst := range s.flagRemoveInstances {
 		selfLink := fmt.Sprintf("projects/%s/zones/%s/instances/%s", project, zone, inst)
 		refs = append(refs, &compute.InstanceReference{Instance: selfLink})
 	}
@@ -189,18 +128,18 @@ func runUnmanagedRemoveInstances(cmd *cobra.Command, args []string) error {
 	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 		return err
 	}
-	fmt.Printf("Removed %d instance(s) from [%s].\n", len(flagRemoveInstances), group)
+	fmt.Fprintf(s.inv.stdout, "Removed %d instance(s) from [%s].\n", len(s.flagRemoveInstances), group)
 	return nil
 }
 
-func runUnmanagedList(cmd *cobra.Command, args []string) error {
-	project, zone, err := resolveProjectZone()
+func (s *computeCmds) runUnmanagedList(cmd *cobra.Command, args []string) error {
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -223,33 +162,33 @@ func runUnmanagedList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagUnmanagedListURI {
+	if s.flagUnmanagedListURI {
 		for _, g := range groups {
-			fmt.Println(g.SelfLink)
+			fmt.Fprintln(s.inv.stdout, g.SelfLink)
 		}
 		return nil
 	}
 
-	if flagUnmanagedListFormat == "json" {
-		return printJSON(groups)
+	if s.flagUnmanagedListFormat == "json" {
+		return s.inv.printJSON(groups)
 	}
 
-	printTableHeading(len(groups), "%-30s %-15s %-10s %-30s\n", "NAME", "ZONE", "SIZE", "DESCRIPTION")
+	printTableHeadingTo(s.inv.stdout, len(groups), "%-30s %-15s %-10s %-30s\n", "NAME", "ZONE", "SIZE", "DESCRIPTION")
 	for _, g := range groups {
-		fmt.Printf("%-30s %-15s %-10d %-30s\n", g.Name, zone, g.Size, g.Description)
+		fmt.Fprintf(s.inv.stdout, "%-30s %-15s %-10d %-30s\n", g.Name, zone, g.Size, g.Description)
 	}
 	return nil
 }
 
-func runUnmanagedDescribe(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runUnmanagedDescribe(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -259,24 +198,24 @@ func runUnmanagedDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing instance group: %w", err)
 	}
 
-	return formatOutput(ig, "")
+	return s.inv.formatOutput(ig, "")
 }
 
-func runUnmanagedSetNamedPorts(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runUnmanagedSetNamedPorts(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
 
 	var ports []*compute.NamedPort
-	for _, np := range flagNamedPorts {
+	for _, np := range s.flagNamedPorts {
 		name, portStr, ok := strings.Cut(np, ":")
 		if !ok {
 			return fmt.Errorf("invalid named port format %q, expected NAME:PORT", np)
@@ -297,19 +236,19 @@ func runUnmanagedSetNamedPorts(cmd *cobra.Command, args []string) error {
 	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 		return err
 	}
-	fmt.Printf("Set named ports on [%s].\n", group)
+	fmt.Fprintf(s.inv.stdout, "Set named ports on [%s].\n", group)
 	return nil
 }
 
-func runUnmanagedGetNamedPorts(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runUnmanagedGetNamedPorts(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -320,13 +259,13 @@ func runUnmanagedGetNamedPorts(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(ig.NamedPorts) == 0 {
-		fmt.Println("No named ports.")
+		fmt.Fprintln(s.inv.stdout, "No named ports.")
 		return nil
 	}
 
-	printTableHeading(len(ig.NamedPorts), "%-20s %s\n", "NAME", "PORT")
+	printTableHeadingTo(s.inv.stdout, len(ig.NamedPorts), "%-20s %s\n", "NAME", "PORT")
 	for _, np := range ig.NamedPorts {
-		fmt.Printf("%-20s %d\n", np.Name, np.Port)
+		fmt.Fprintf(s.inv.stdout, "%-20s %d\n", np.Name, np.Port)
 	}
 	return nil
 }

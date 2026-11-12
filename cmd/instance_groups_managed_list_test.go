@@ -132,27 +132,24 @@ func TestManagedListScope(t *testing.T) {
 }
 
 func TestManagedListScopeFromFlags(t *testing.T) {
-	defer func() {
-		flagManagedListZones, flagManagedListRegions, flagZone = nil, nil, ""
-		for _, name := range []string{"zones", "regions"} {
-			managedListCmd.Flags().Lookup(name).Changed = false
-		}
-	}()
+	inv, _, _ := newTestInvocation(t, nil, "")
+	s := newComputeCmds(inv)
+	managedListCmd := s.managedListCmd
 
-	if got := managedListScopeFromFlags(managedListCmd); got.zonalOnly || got.regionalOnly || len(got.zones)+len(got.regions) != 0 {
+	if got := s.managedListScopeFromFlags(managedListCmd); got.zonalOnly || got.regionalOnly || len(got.zones)+len(got.regions) != 0 {
 		t.Errorf("no flags: got %+v, want aggregate everything", got)
 	}
 
-	flagZone = "europe-west2-b"
-	if got := managedListScopeFromFlags(managedListCmd); !got.zonalOnly || len(got.zones) != 1 || got.zones[0] != "europe-west2-b" {
+	inv.flags.zone = "europe-west2-b"
+	if got := s.managedListScopeFromFlags(managedListCmd); !got.zonalOnly || len(got.zones) != 1 || got.zones[0] != "europe-west2-b" {
 		t.Errorf("--zone: got %+v", got)
 	}
-	flagZone = ""
+	inv.flags.zone = ""
 
 	if err := managedListCmd.Flags().Set("regions", "europe-west2,us-central1"); err != nil {
 		t.Fatal(err)
 	}
-	if got := managedListScopeFromFlags(managedListCmd); !got.regionalOnly || len(got.regions) != 2 {
+	if got := s.managedListScopeFromFlags(managedListCmd); !got.regionalOnly || len(got.regions) != 2 {
 		t.Errorf("--regions: got %+v", got)
 	}
 }

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"os"
@@ -11,45 +10,23 @@ import (
 	"strings"
 	"time"
 
-	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	ioslogin "github.com/flyingobsidian/gcloud-go/internal/oslogin"
 	"github.com/spf13/cobra"
 )
 
-var scpCmd = &cobra.Command{
-	Use:   "scp [[USER@]INSTANCE:]SRC [[[USER@]INSTANCE:]SRC ...] [[USER@]INSTANCE:]DEST",
-	Short: "Copy files to/from a Compute Engine instance via SCP",
-	Args:  cobra.MinimumNArgs(2),
-	RunE:  runSCP,
-}
+func (s *computeCmds) initScp() {
+	s.scpCmd.Flags().BoolVar(&s.flagSCPTunnelThroughIAP, "tunnel-through-iap", false, "Tunnel through Identity-Aware Proxy")
+	s.scpCmd.Flags().BoolVar(&s.flagSCPInternalIP, "internal-ip", false, "Connect using internal IP")
+	s.scpCmd.Flags().StringVar(&s.flagSCPKeyFile, "ssh-key-file", "", "SSH private key file")
+	s.scpCmd.Flags().BoolVar(&s.flagSCPRecurse, "recurse", false, "Upload directories recursively")
+	s.scpCmd.Flags().IntVar(&s.flagSCPPort, "port", 0, "SSH port on the remote host")
+	s.scpCmd.Flags().BoolVar(&s.flagSCPCompress, "compress", false, "Enable compression")
+	s.scpCmd.Flags().StringArrayVar(&s.flagSCPFlag, "scp-flag", nil, "Extra flags to pass to scp")
+	s.scpCmd.Flags().BoolVar(&s.flagSCPPlain, "plain", false, "Suppress managed SSH key setup")
+	s.scpCmd.Flags().StringVar(&s.flagSCPStrictHostKeyChecking, "strict-host-key-checking", "", "Override StrictHostKeyChecking (yes, no, ask)")
+	s.scpCmd.Flags().BoolVar(&s.flagSCPDryRun, "dry-run", false, "Print the scp command without running it")
 
-var (
-	flagSCPTunnelThroughIAP      bool
-	flagSCPInternalIP            bool
-	flagSCPKeyFile               string
-	flagSCPRecurse               bool
-	flagSCPPort                  int
-	flagSCPCompress              bool
-	flagSCPFlag                  []string
-	flagSCPPlain                 bool
-	flagSCPStrictHostKeyChecking string
-	flagSCPDryRun                bool
-)
-
-func init() {
-	scpCmd.Flags().BoolVar(&flagSCPTunnelThroughIAP, "tunnel-through-iap", false, "Tunnel through Identity-Aware Proxy")
-	scpCmd.Flags().BoolVar(&flagSCPInternalIP, "internal-ip", false, "Connect using internal IP")
-	scpCmd.Flags().StringVar(&flagSCPKeyFile, "ssh-key-file", "", "SSH private key file")
-	scpCmd.Flags().BoolVar(&flagSCPRecurse, "recurse", false, "Upload directories recursively")
-	scpCmd.Flags().IntVar(&flagSCPPort, "port", 0, "SSH port on the remote host")
-	scpCmd.Flags().BoolVar(&flagSCPCompress, "compress", false, "Enable compression")
-	scpCmd.Flags().StringArrayVar(&flagSCPFlag, "scp-flag", nil, "Extra flags to pass to scp")
-	scpCmd.Flags().BoolVar(&flagSCPPlain, "plain", false, "Suppress managed SSH key setup")
-	scpCmd.Flags().StringVar(&flagSCPStrictHostKeyChecking, "strict-host-key-checking", "", "Override StrictHostKeyChecking (yes, no, ask)")
-	scpCmd.Flags().BoolVar(&flagSCPDryRun, "dry-run", false, "Print the scp command without running it")
-
-	computeCmd.AddCommand(scpCmd)
+	s.computeCmd.AddCommand(s.scpCmd)
 }
 
 // scpTarget parses a SCP argument into optional user, instance, and path components.
@@ -107,8 +84,8 @@ func parseSCPArgs(args []string) ([]scpTarget, scpTarget, error) {
 	return srcs, dst, nil
 }
 
-func runSCP(cmd *cobra.Command, args []string) error {
-	if flagSCPTunnelThroughIAP && flagSCPInternalIP {
+func (s *computeCmds) runSCP(cmd *cobra.Command, args []string) error {
+	if s.flagSCPTunnelThroughIAP && s.flagSCPInternalIP {
 		return fmt.Errorf("--tunnel-through-iap and --internal-ip are mutually exclusive")
 	}
 	srcs, dst, err := parseSCPArgs(args)
@@ -123,13 +100,13 @@ func runSCP(cmd *cobra.Command, args []string) error {
 		remoteTarget = &srcs[0]
 	}
 
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -142,15 +119,15 @@ func runSCP(cmd *cobra.Command, args []string) error {
 	// Check OS Login and manage SSH keys (matching SSH command behavior).
 	proj, err := svc.Projects.Get(project).Context(ctx).Do()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: could not get project metadata: %v\n", err)
+		fmt.Fprintf(s.inv.stderr, "WARNING: could not get project metadata: %v\n", err)
 	}
 	useOSLogin := proj != nil && ioslogin.IsEnabled(inst, proj)
 
-	if !flagSCPPlain && flagSCPKeyFile == "" {
+	if !s.flagSCPPlain && s.flagSCPKeyFile == "" {
 		keyPath := googleSSHKeyPath()
 		keyGenerated := false
 		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-			keyPath, err = generateSSHKey(keyPath)
+			keyPath, err = s.generateSSHKey(keyPath)
 			if err != nil {
 				return fmt.Errorf("generating SSH key: %w", err)
 			}
@@ -159,15 +136,15 @@ func runSCP(cmd *cobra.Command, args []string) error {
 
 		if keyGenerated {
 			if useOSLogin {
-				email := resolveAccountEmail()
+				email := s.resolveAccountEmail()
 				if email != "" {
-					osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+					osLoginSvc, err := s.inv.clients().OSLogin(ctx)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+						fmt.Fprintf(s.inv.stderr, "WARNING: could not create OS Login service: %v\n", err)
 					} else {
 						posixUser, err := ioslogin.ImportSSHKey(ctx, osLoginSvc, email, keyPath+".pub", project)
 						if err != nil {
-							fmt.Fprintf(os.Stderr, "WARNING: could not import SSH key via OS Login: %v\n", err)
+							fmt.Fprintf(s.inv.stderr, "WARNING: could not import SSH key via OS Login: %v\n", err)
 						} else if posixUser != "" && remoteTarget.User == "" {
 							remoteTarget.User = posixUser
 						}
@@ -181,40 +158,40 @@ func runSCP(cmd *cobra.Command, args []string) error {
 					}
 				}
 				if sshUser != "" {
-					if err := pushSSHKeyToProject(ctx, svc, project, sshUser, keyPath+".pub"); err != nil {
-						fmt.Fprintf(os.Stderr, "WARNING: could not push SSH key to project metadata: %v\n", err)
+					if err := s.pushSSHKeyToProject(ctx, svc, project, sshUser, keyPath+".pub"); err != nil {
+						fmt.Fprintf(s.inv.stderr, "WARNING: could not push SSH key to project metadata: %v\n", err)
 					} else {
-						fmt.Fprintln(os.Stderr, "Waiting for SSH key to propagate.")
+						fmt.Fprintln(s.inv.stderr, "Waiting for SSH key to propagate.")
 						time.Sleep(5 * time.Second)
 					}
 				}
 			}
 		} else if useOSLogin && remoteTarget.User == "" {
-			email := resolveAccountEmail()
+			email := s.resolveAccountEmail()
 			if email != "" {
-				osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+				osLoginSvc, err := s.inv.clients().OSLogin(ctx)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+					fmt.Fprintf(s.inv.stderr, "WARNING: could not create OS Login service: %v\n", err)
 				} else {
 					posixUser, err := ioslogin.PosixUsername(ctx, osLoginSvc, email, project)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "WARNING: could not resolve OS Login username: %v\n", err)
+						fmt.Fprintf(s.inv.stderr, "WARNING: could not resolve OS Login username: %v\n", err)
 					} else {
 						remoteTarget.User = posixUser
 					}
 				}
 			}
 		}
-	} else if useOSLogin && remoteTarget.User == "" && !flagSCPPlain {
-		email := resolveAccountEmail()
+	} else if useOSLogin && remoteTarget.User == "" && !s.flagSCPPlain {
+		email := s.resolveAccountEmail()
 		if email != "" {
-			osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+			osLoginSvc, err := s.inv.clients().OSLogin(ctx)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+				fmt.Fprintf(s.inv.stderr, "WARNING: could not create OS Login service: %v\n", err)
 			} else {
 				posixUser, err := ioslogin.PosixUsername(ctx, osLoginSvc, email, project)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "WARNING: could not resolve OS Login username: %v\n", err)
+					fmt.Fprintf(s.inv.stderr, "WARNING: could not resolve OS Login username: %v\n", err)
 				} else {
 					remoteTarget.User = posixUser
 				}
@@ -226,15 +203,15 @@ func runSCP(cmd *cobra.Command, args []string) error {
 	var host string
 	var iapListener net.Listener
 
-	if flagSCPTunnelThroughIAP {
-		ln, err := startIAPTunnel(ctx, project, zone, remoteTarget.Instance)
+	if s.flagSCPTunnelThroughIAP {
+		ln, err := s.startIAPTunnel(ctx, project, zone, remoteTarget.Instance)
 		if err != nil {
 			return err
 		}
 		defer ln.Close()
 		iapListener = ln
 		host = "localhost"
-	} else if flagSCPInternalIP {
+	} else if s.flagSCPInternalIP {
 		host = getInternalIP(inst)
 		if host == "" {
 			return fmt.Errorf("instance %s has no internal IP", remoteTarget.Instance)
@@ -248,15 +225,15 @@ func runSCP(cmd *cobra.Command, args []string) error {
 
 	// Build SCP args.
 	scpArgs := []string{}
-	if flagSCPRecurse {
+	if s.flagSCPRecurse {
 		scpArgs = append(scpArgs, "-r")
 	}
 
-	if flagSCPPlain {
+	if s.flagSCPPlain {
 		// --plain: no managed key setup, just minimal args.
 	} else {
 		// Use gcloud's default SSH key unless overridden.
-		keyFile := flagSCPKeyFile
+		keyFile := s.flagSCPKeyFile
 		if keyFile == "" {
 			keyFile = googleSSHKeyPath()
 		}
@@ -280,15 +257,15 @@ func runSCP(cmd *cobra.Command, args []string) error {
 		scpArgs = append(scpArgs, "-o", "CheckHostIP=no")
 	}
 
-	if flagSCPStrictHostKeyChecking != "" {
-		scpArgs = append(scpArgs, "-o", "StrictHostKeyChecking="+flagSCPStrictHostKeyChecking)
+	if s.flagSCPStrictHostKeyChecking != "" {
+		scpArgs = append(scpArgs, "-o", "StrictHostKeyChecking="+s.flagSCPStrictHostKeyChecking)
 	}
 
-	if flagSCPCompress {
+	if s.flagSCPCompress {
 		scpArgs = append(scpArgs, "-C")
 	}
 
-	for _, f := range flagSCPFlag {
+	for _, f := range s.flagSCPFlag {
 		scpArgs = append(scpArgs, f)
 	}
 
@@ -297,15 +274,15 @@ func runSCP(cmd *cobra.Command, args []string) error {
 		scpArgs = append(scpArgs, "-P", strconv.Itoa(localPort))
 	}
 
-	if flagSCPPort != 0 && !flagSCPTunnelThroughIAP {
-		scpArgs = append(scpArgs, "-P", strconv.Itoa(flagSCPPort))
+	if s.flagSCPPort != 0 && !s.flagSCPTunnelThroughIAP {
+		scpArgs = append(scpArgs, "-P", strconv.Itoa(s.flagSCPPort))
 	}
 
 	// Build source and destination SCP arguments.
 	scpArgs = append(scpArgs, scpTargetArgs(srcs, dst, remoteTarget.User, host)...)
 
-	if flagSCPDryRun {
-		fmt.Println(shellJoin("scp", scpArgs))
+	if s.flagSCPDryRun {
+		fmt.Fprintln(s.inv.stdout, shellJoin("scp", scpArgs))
 		return nil
 	}
 
@@ -315,9 +292,9 @@ func runSCP(cmd *cobra.Command, args []string) error {
 	}
 
 	c := exec.CommandContext(ctx, scpBin, scpArgs...)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
+	c.Stdin = s.inv.stdin
+	c.Stdout = s.inv.stdout
+	c.Stderr = s.inv.stderr
 	return c.Run()
 }
 

@@ -126,7 +126,7 @@ func TestComputeListCmdFlags(t *testing.T) {
 		{"snapshots", []string{"uri"}, []string{"zones", "regions", "global"}},
 	}
 	for _, tc := range cases {
-		group, _, err := computeCmd.Find([]string{tc.group, "list"})
+		group, _, err := newComputeCmd(newOSInvocation()).Find([]string{tc.group, "list"})
 		if err != nil || group.Name() != "list" || group.RunE == nil {
 			t.Errorf("compute %s list not registered: %v", tc.group, err)
 			continue

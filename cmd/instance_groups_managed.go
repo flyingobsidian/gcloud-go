@@ -1,95 +1,55 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 	"strings"
 
-	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
 	compute "google.golang.org/api/compute/v1"
 )
 
-var managedCmd = &cobra.Command{
-	Use:   "managed",
-	Short: "Manage managed instance groups",
-}
-
 // --- managed list-instances ---
-
-var managedListInstancesCmd = &cobra.Command{
-	Use:   "list-instances INSTANCE_GROUP",
-	Short: "List instances in a managed instance group",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runManagedListInstances,
-}
-
-var (
-	flagManagedRegion     string
-	flagManagedListFormat string
-)
 
 // --- managed describe ---
 
-var managedDescribeCmd = &cobra.Command{
-	Use:   "describe INSTANCE_GROUP",
-	Short: "Describe a managed instance group",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runManagedDescribe,
-}
-
-var flagManagedDescribeRegion string
-
 // --- managed resize ---
 
-var managedResizeCmd = &cobra.Command{
-	Use:   "resize INSTANCE_GROUP",
-	Short: "Resize a managed instance group",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runManagedResize,
-}
-
-var (
-	flagManagedResizeRegion string
-	flagManagedResizeSize   int64
-)
-
-func init() {
+func (s *computeCmds) initInstanceGroupsManaged() {
 	// list-instances
-	managedListInstancesCmd.Flags().StringVar(&flagManagedRegion, "region", "", "Region of the managed instance group")
-	managedListInstancesCmd.Flags().StringVar(&flagManagedListFormat, "format", "", "Output format (e.g. json, 'csv(NAME,ZONE,STATUS)', 'get(NAME)')")
+	s.managedListInstancesCmd.Flags().StringVar(&s.flagManagedRegion, "region", "", "Region of the managed instance group")
+	s.managedListInstancesCmd.Flags().StringVar(&s.flagManagedListFormat, "format", "", "Output format (e.g. json, 'csv(NAME,ZONE,STATUS)', 'get(NAME)')")
 
 	// describe
-	managedDescribeCmd.Flags().StringVar(&flagManagedDescribeRegion, "region", "", "Region")
+	s.managedDescribeCmd.Flags().StringVar(&s.flagManagedDescribeRegion, "region", "", "Region")
 
 	// resize
-	managedResizeCmd.Flags().StringVar(&flagManagedResizeRegion, "region", "", "Region")
-	managedResizeCmd.Flags().Int64Var(&flagManagedResizeSize, "size", 0, "New target size")
-	managedResizeCmd.MarkFlagRequired("size")
+	s.managedResizeCmd.Flags().StringVar(&s.flagManagedResizeRegion, "region", "", "Region")
+	s.managedResizeCmd.Flags().Int64Var(&s.flagManagedResizeSize, "size", 0, "New target size")
+	s.managedResizeCmd.MarkFlagRequired("size")
 
-	managedCmd.AddCommand(managedListInstancesCmd)
-	managedCmd.AddCommand(managedDescribeCmd)
-	managedCmd.AddCommand(managedResizeCmd)
-	instanceGroupsCmd.AddCommand(managedCmd)
+	s.managedCmd.AddCommand(s.managedListInstancesCmd)
+	s.managedCmd.AddCommand(s.managedDescribeCmd)
+	s.managedCmd.AddCommand(s.managedResizeCmd)
+	s.instanceGroupsCmd.AddCommand(s.managedCmd)
 }
 
-func runManagedListInstances(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runManagedListInstances(cmd *cobra.Command, args []string) error {
 	group := args[0]
 	// Resolve only the project here. The zone is resolved later, on the zonal
 	// path, so that supplying --region does not trigger a zone prompt/requirement.
-	props, err := loadProps()
+	props, err := s.loadProps()
 	if err != nil {
 		return err
 	}
-	project := resolveProjectOnly(props)
+	project := s.resolveProjectOnly(props)
 	if project == "" {
 		return fmt.Errorf("project is required; set via --project flag, CLOUDSDK_CORE_PROJECT env, or config")
 	}
-	region := flagManagedRegion
+	region := s.flagManagedRegion
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -114,11 +74,11 @@ func runManagedListInstances(cmd *cobra.Command, args []string) error {
 			pageToken = resp.NextPageToken
 		}
 
-		return formatManagedInstances(allInstances, flagManagedListFormat, true)
+		return s.formatManagedInstances(allInstances, s.flagManagedListFormat, true)
 	}
 
 	// Zonal MIG fallback.
-	_, zone, err := resolveProjectZone()
+	_, zone, err := s.inv.projectZone()
 	if err != nil {
 		return fmt.Errorf("either --region or --zone is required")
 	}
@@ -141,21 +101,21 @@ func runManagedListInstances(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	return formatManagedInstances(allInstances, flagManagedListFormat, false)
+	return s.formatManagedInstances(allInstances, s.flagManagedListFormat, false)
 }
 
 // formatManagedInstances renders managed instances per --format. It supports
 // json, get(FIELD) and csv(FIELDS); otherwise it prints the default table.
 // showZone includes the ZONE column in the default table (regional listings
 // span zones; zonal listings do not).
-func formatManagedInstances(instances []*compute.ManagedInstance, format string, showZone bool) error {
+func (s *computeCmds) formatManagedInstances(instances []*compute.ManagedInstance, format string, showZone bool) error {
 	switch {
 	case format == "json":
-		return printJSON(instances)
+		return s.inv.printJSON(instances)
 	case isGetFormat(format):
 		field := extractGetField(format)
 		for _, mi := range instances {
-			fmt.Println(managedInstanceField(mi, field))
+			fmt.Fprintln(s.inv.stdout, managedInstanceField(mi, field))
 		}
 		return nil
 	case isCsvFormat(format):
@@ -165,30 +125,30 @@ func formatManagedInstances(instances []*compute.ManagedInstance, format string,
 		for i, f := range fields {
 			headings[i] = strings.ToLower(f)
 		}
-		fmt.Println(strings.Join(headings, ","))
+		fmt.Fprintln(s.inv.stdout, strings.Join(headings, ","))
 		for _, mi := range instances {
 			vals := make([]string, 0, len(fields))
 			for _, f := range fields {
 				vals = append(vals, managedInstanceField(mi, f))
 			}
-			fmt.Println(strings.Join(vals, ","))
+			fmt.Fprintln(s.inv.stdout, strings.Join(vals, ","))
 		}
 		return nil
 	}
 
 	if showZone {
-		printTableHeading(len(instances), "%-40s %-10s %-15s %-20s %-15s\n", "NAME", "ZONE", "STATUS", "ACTION", "HEALTH")
+		printTableHeadingTo(s.inv.stdout, len(instances), "%-40s %-10s %-15s %-20s %-15s\n", "NAME", "ZONE", "STATUS", "ACTION", "HEALTH")
 		for _, mi := range instances {
-			fmt.Printf("%-40s %-10s %-15s %-20s %-15s\n",
+			fmt.Fprintf(s.inv.stdout, "%-40s %-10s %-15s %-20s %-15s\n",
 				managedInstanceField(mi, "NAME"), managedInstanceField(mi, "ZONE"),
 				managedInstanceField(mi, "STATUS"), managedInstanceField(mi, "ACTION"),
 				managedInstanceField(mi, "HEALTH"))
 		}
 		return nil
 	}
-	printTableHeading(len(instances), "%-40s %-15s %-20s %-15s\n", "NAME", "STATUS", "ACTION", "HEALTH")
+	printTableHeadingTo(s.inv.stdout, len(instances), "%-40s %-15s %-20s %-15s\n", "NAME", "STATUS", "ACTION", "HEALTH")
 	for _, mi := range instances {
-		fmt.Printf("%-40s %-15s %-20s %-15s\n",
+		fmt.Fprintf(s.inv.stdout, "%-40s %-15s %-20s %-15s\n",
 			managedInstanceField(mi, "NAME"), managedInstanceField(mi, "STATUS"),
 			managedInstanceField(mi, "ACTION"), managedInstanceField(mi, "HEALTH"))
 	}
@@ -219,16 +179,16 @@ func managedInstanceField(mi *compute.ManagedInstance, field string) string {
 	return ""
 }
 
-func runManagedDescribe(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runManagedDescribe(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, _, err := resolveProjectZone()
+	project, _, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
-	region := flagManagedDescribeRegion
+	region := s.flagManagedDescribeRegion
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -238,10 +198,10 @@ func runManagedDescribe(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("describing managed instance group: %w", err)
 		}
-		return formatOutput(mig, "")
+		return s.inv.formatOutput(mig, "")
 	}
 
-	_, zone, err := resolveProjectZone()
+	_, zone, err := s.inv.projectZone()
 	if err != nil {
 		return fmt.Errorf("either --region or --zone is required")
 	}
@@ -250,42 +210,42 @@ func runManagedDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing managed instance group: %w", err)
 	}
-	return formatOutput(mig, "")
+	return s.inv.formatOutput(mig, "")
 }
 
-func runManagedResize(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runManagedResize(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, _, err := resolveProjectZone()
+	project, _, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
-	region := flagManagedResizeRegion
+	region := s.flagManagedResizeRegion
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
 
 	if region != "" {
-		op, err := svc.RegionInstanceGroupManagers.Resize(project, region, group, flagManagedResizeSize).Context(ctx).Do()
+		op, err := svc.RegionInstanceGroupManagers.Resize(project, region, group, s.flagManagedResizeSize).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("resizing managed instance group: %w", err)
 		}
-		fmt.Printf("Resize operation started: %s\n", op.Name)
+		fmt.Fprintf(s.inv.stdout, "Resize operation started: %s\n", op.Name)
 		return nil
 	}
 
-	_, zone, err := resolveProjectZone()
+	_, zone, err := s.inv.projectZone()
 	if err != nil {
 		return fmt.Errorf("either --region or --zone is required")
 	}
 
-	op, err := svc.InstanceGroupManagers.Resize(project, zone, group, flagManagedResizeSize).Context(ctx).Do()
+	op, err := svc.InstanceGroupManagers.Resize(project, zone, group, s.flagManagedResizeSize).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("resizing managed instance group: %w", err)
 	}
-	fmt.Printf("Resize operation started: %s\n", op.Name)
+	fmt.Fprintf(s.inv.stdout, "Resize operation started: %s\n", op.Name)
 	return nil
 }
 

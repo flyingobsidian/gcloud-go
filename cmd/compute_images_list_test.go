@@ -82,18 +82,16 @@ func TestComputeImagesDefaultTable(t *testing.T) {
 }
 
 func TestComputeImagesListFlags(t *testing.T) {
-	list, _, err := computeCmd.Find([]string{"images", "list"})
+	inv, _, _ := newTestInvocation(t, nil, "")
+	s := newComputeCmds(inv)
+	list, _, err := s.computeCmd.Find([]string{"images", "list"})
 	if err != nil || list.RunE == nil {
 		t.Fatalf("compute images list not registered: %v", err)
 	}
 	if err := list.ParseFlags([]string{"--no-standard-images"}); err != nil {
 		t.Fatalf("--no-standard-images rejected: %v", err)
 	}
-	defer func() {
-		flagImagesListNoStandard = false
-		list.Flags().Lookup("no-standard-images").Changed = false
-	}()
-	if !flagImagesListNoStandard {
+	if !s.flagImagesListNoStandard {
 		t.Error("--no-standard-images not set")
 	}
 }

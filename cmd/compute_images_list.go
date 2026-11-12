@@ -3,11 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
-	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
 	compute "google.golang.org/api/compute/v1"
 )
@@ -28,35 +26,27 @@ var computePublicImageProjects = []string{
 // added by --preview-images. It is currently empty in gcloud too.
 var computePreviewImageProjects []string
 
-var (
-	flagImagesListStandard      bool
-	flagImagesListNoStandard    bool
-	flagImagesListShowDeprecate bool
-	flagImagesListPreview       bool
-	flagImagesListURI           bool
-)
-
-func init() {
+func (s *computeCmds) initComputeImagesList() {
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List Compute Engine images",
 		Args:  cobra.NoArgs,
-		RunE:  runComputeImagesList,
+		RunE:  s.runComputeImagesList,
 	}
-	list.Flags().BoolVar(&flagImagesListStandard, "standard-images", true,
+	list.Flags().BoolVar(&s.flagImagesListStandard, "standard-images", true,
 		"List images from public image projects (default)")
-	list.Flags().BoolVar(&flagImagesListNoStandard, "no-standard-images", false,
+	list.Flags().BoolVar(&s.flagImagesListNoStandard, "no-standard-images", false,
 		"List only the project's own images, not those of public image projects")
-	list.Flags().BoolVar(&flagImagesListShowDeprecate, "show-deprecated", false, "If provided, deprecated images are shown")
-	list.Flags().BoolVar(&flagImagesListPreview, "preview-images", false, "Show images that are in limited preview")
-	list.Flags().BoolVar(&flagImagesListPreview, "show-preview-images", false, "Show images that are in limited preview")
+	list.Flags().BoolVar(&s.flagImagesListShowDeprecate, "show-deprecated", false, "If provided, deprecated images are shown")
+	list.Flags().BoolVar(&s.flagImagesListPreview, "preview-images", false, "Show images that are in limited preview")
+	list.Flags().BoolVar(&s.flagImagesListPreview, "show-preview-images", false, "Show images that are in limited preview")
 	_ = list.Flags().MarkHidden("show-preview-images")
-	list.Flags().BoolVar(&flagImagesListURI, "uri", false, "Print a list of resource URIs instead of the default output")
+	list.Flags().BoolVar(&s.flagImagesListURI, "uri", false, "Print a list of resource URIs instead of the default output")
 
 	group := &cobra.Command{Use: "images", Short: "Manage disk images"}
 	group.AddCommand(list)
 	registerStubCommand(group, "describe", "Not yet implemented")
-	computeCmd.AddCommand(group)
+	s.computeCmd.AddCommand(group)
 }
 
 // computeImageProjects returns the projects `images list` reads: the
@@ -137,13 +127,13 @@ func listComputeImages(ctx context.Context, projects []string, showDeprecated bo
 	return all, nil
 }
 
-func runComputeImagesList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *computeCmds) runComputeImagesList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -155,11 +145,11 @@ func runComputeImagesList(cmd *cobra.Command, args []string) error {
 		})
 		return out, err
 	}
-	standard := flagImagesListStandard && !flagImagesListNoStandard
-	projects := computeImageProjects(project, standard, flagImagesListPreview)
-	images, err := listComputeImages(ctx, projects, flagImagesListShowDeprecate, list)
+	standard := s.flagImagesListStandard && !s.flagImagesListNoStandard
+	projects := computeImageProjects(project, standard, s.flagImagesListPreview)
+	images, err := listComputeImages(ctx, projects, s.flagImagesListShowDeprecate, list)
 	if err != nil {
 		return err
 	}
-	return imagesLister.emit(os.Stdout, os.Stderr, images, flagFormat, flagImagesListURI)
+	return imagesLister.emit(s.inv.stdout, s.inv.stderr, images, s.inv.flags.format, s.flagImagesListURI)
 }
