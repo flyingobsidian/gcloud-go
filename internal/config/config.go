@@ -42,11 +42,11 @@ type RegionProperty struct {
 }
 
 // ConfigDir returns the gcloud configuration directory.
-func ConfigDir() (string, error) {
-	if d := os.Getenv("CLOUDSDK_CONFIG"); d != "" {
+func (e Env) ConfigDir() (string, error) {
+	if d := e.Getenv("CLOUDSDK_CONFIG"); d != "" {
 		return d, nil
 	}
-	home, err := os.UserHomeDir()
+	home, err := e.HomeDir()
 	if err != nil {
 		return "", fmt.Errorf("determining home directory: %w", err)
 	}
@@ -55,20 +55,20 @@ func ConfigDir() (string, error) {
 
 // Load reads the active gcloud configuration (INI format).
 // It reads configurations/config_default (or the active named configuration).
-func Load() (*Properties, error) {
-	dir, err := ConfigDir()
+func (e Env) Load() (*Properties, error) {
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return nil, err
 	}
 
-	configName := ActiveConfigName()
+	configName := e.ActiveConfigName()
 	path := filepath.Join(dir, "configurations", "config_"+configName)
 	return loadINI(path)
 }
 
 // LoadNamed reads a specific named configuration.
-func LoadNamed(name string) (*Properties, error) {
-	dir, err := ConfigDir()
+func (e Env) LoadNamed(name string) (*Properties, error) {
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return nil, err
 	}
@@ -76,10 +76,10 @@ func LoadNamed(name string) (*Properties, error) {
 	return loadINI(path)
 }
 
-// Save writes properties in gcloud's INI format to the active configuration.
+// Save writes p in gcloud's INI format to the active configuration.
 // Sections and keys that Properties doesn't model are preserved.
-func (p *Properties) Save() error {
-	dir, err := ConfigDir()
+func (e Env) Save(p *Properties) error {
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return err
 	}
@@ -89,17 +89,17 @@ func (p *Properties) Save() error {
 		return fmt.Errorf("creating configurations directory: %w", err)
 	}
 
-	configName := ActiveConfigName()
+	configName := e.ActiveConfigName()
 	path := filepath.Join(configsDir, "config_"+configName)
 	return saveINI(path, p)
 }
 
 // ActiveConfigName returns the name of the active configuration.
-func ActiveConfigName() string {
-	if name := os.Getenv("CLOUDSDK_ACTIVE_CONFIG_NAME"); name != "" {
+func (e Env) ActiveConfigName() string {
+	if name := e.Getenv("CLOUDSDK_ACTIVE_CONFIG_NAME"); name != "" {
 		return name
 	}
-	dir, err := ConfigDir()
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return "default"
 	}
@@ -113,8 +113,8 @@ func ActiveConfigName() string {
 }
 
 // CreateConfiguration creates a new named configuration.
-func CreateConfiguration(name string) error {
-	dir, err := ConfigDir()
+func (e Env) CreateConfiguration(name string) error {
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return err
 	}
@@ -134,8 +134,8 @@ func CreateConfiguration(name string) error {
 }
 
 // ActivateConfiguration sets the active configuration by name.
-func ActivateConfiguration(name string) error {
-	dir, err := ConfigDir()
+func (e Env) ActivateConfiguration(name string) error {
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return err
 	}
@@ -149,8 +149,8 @@ func ActivateConfiguration(name string) error {
 }
 
 // ListConfigurations returns the names of all configurations.
-func ListConfigurations() ([]string, error) {
-	dir, err := ConfigDir()
+func (e Env) ListConfigurations() ([]string, error) {
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return nil, err
 	}
@@ -177,11 +177,11 @@ func ListConfigurations() ([]string, error) {
 }
 
 // DeleteConfiguration removes a named configuration.
-func DeleteConfiguration(name string) error {
+func (e Env) DeleteConfiguration(name string) error {
 	if name == "default" {
 		return fmt.Errorf("cannot delete the default configuration")
 	}
-	dir, err := ConfigDir()
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return err
 	}
@@ -196,7 +196,7 @@ func DeleteConfiguration(name string) error {
 	}
 
 	// If this was the active config, reset to default.
-	if ActiveConfigName() == name {
+	if e.ActiveConfigName() == name {
 		if err := os.WriteFile(filepath.Join(dir, "active_config"), []byte("default\n"), 0600); err != nil {
 			return fmt.Errorf("resetting active config to default: %w", err)
 		}
@@ -257,11 +257,11 @@ func (p *Properties) fields() []propertyField {
 }
 
 // Resolve returns the effective value for a setting, preferring flag > env > config.
-func Resolve(flag, envVar, configVal string) string {
+func (e Env) Resolve(flag, envVar, configVal string) string {
 	if flag != "" {
 		return flag
 	}
-	if v := os.Getenv(envVar); v != "" {
+	if v := e.Getenv(envVar); v != "" {
 		return v
 	}
 	return configVal

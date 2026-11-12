@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-func componentReposPath() (string, error) {
-	dir, err := ConfigDir()
+func (e Env) componentReposPath() (string, error) {
+	dir, err := e.ConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -18,8 +18,8 @@ func componentReposPath() (string, error) {
 
 // LoadAdditionalRepositories returns the persisted list of Trusted Tester
 // component repository URLs, in the order they were added. Missing file → nil.
-func LoadAdditionalRepositories() ([]string, error) {
-	path, err := componentReposPath()
+func (e Env) LoadAdditionalRepositories() ([]string, error) {
+	path, err := e.componentReposPath()
 	if err != nil {
 		return nil, err
 	}
@@ -45,8 +45,8 @@ func LoadAdditionalRepositories() ([]string, error) {
 }
 
 // SaveAdditionalRepositories persists the list of repository URLs.
-func SaveAdditionalRepositories(repos []string) error {
-	path, err := componentReposPath()
+func (e Env) SaveAdditionalRepositories(repos []string) error {
+	path, err := e.componentReposPath()
 	if err != nil {
 		return err
 	}
