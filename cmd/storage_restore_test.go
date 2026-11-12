@@ -4,7 +4,7 @@ import "testing"
 
 func TestStorageHasRestore(t *testing.T) {
 	found := false
-	for _, c := range storageCmd.Commands() {
+	for _, c := range newStorageCmd(newOSInvocation()).Commands() {
 		if c.Name() == "restore" {
 			found = true
 			if c.RunE == nil {

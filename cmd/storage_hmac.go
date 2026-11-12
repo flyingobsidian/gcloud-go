@@ -1,106 +1,73 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	storage "google.golang.org/api/storage/v1"
 )
 
 // --- gcloud storage hmac (#1238) ---
 
-var storageHmacCmd = &cobra.Command{Use: "hmac", Short: "Manage HMAC keys for service accounts"}
-
-var (
-	flagStHmacFormat         string
-	flagStHmacServiceAccount string
-	flagStHmacState          string
-)
-
-var (
-	storageHmacCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create an HMAC key for a service account (loads request from --service-account)",
-		Args: cobra.NoArgs, RunE: runStHmacCreate,
-	}
-	storageHmacDeleteCmd = &cobra.Command{
-		Use: "delete ACCESS_ID", Short: "Delete an HMAC key",
-		Args: cobra.ExactArgs(1), RunE: runStHmacDelete,
-	}
-	storageHmacDescribeCmd = &cobra.Command{
-		Use: "describe ACCESS_ID", Short: "Describe an HMAC key",
-		Args: cobra.ExactArgs(1), RunE: runStHmacDescribe,
-	}
-	storageHmacListCmd = &cobra.Command{
-		Use: "list", Short: "List HMAC keys in the current project",
-		Args: cobra.NoArgs, RunE: runStHmacList,
-	}
-	storageHmacUpdateCmd = &cobra.Command{
-		Use: "update ACCESS_ID", Short: "Update an HMAC key state (ACTIVE or INACTIVE)",
-		Args: cobra.ExactArgs(1), RunE: runStHmacUpdate,
-	}
-)
-
-func init() {
+func (s *storageCmds) initStorageHmac() {
 	all := []*cobra.Command{
-		storageHmacCreateCmd, storageHmacDeleteCmd, storageHmacDescribeCmd,
-		storageHmacListCmd, storageHmacUpdateCmd,
+		s.storageHmacCreateCmd, s.storageHmacDeleteCmd, s.storageHmacDescribeCmd,
+		s.storageHmacListCmd, s.storageHmacUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagStHmacFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagStHmacFormat, "format", "", "Output format")
 	}
-	storageHmacCreateCmd.Flags().StringVar(&flagStHmacServiceAccount, "service-account", "", "Service account email to create the key for (required)")
-	_ = storageHmacCreateCmd.MarkFlagRequired("service-account")
-	storageHmacListCmd.Flags().StringVar(&flagStHmacServiceAccount, "service-account", "", "Restrict list to a service account")
-	storageHmacUpdateCmd.Flags().StringVar(&flagStHmacState, "state", "", "New state: ACTIVE or INACTIVE (required)")
-	_ = storageHmacUpdateCmd.MarkFlagRequired("state")
+	s.storageHmacCreateCmd.Flags().StringVar(&s.flagStHmacServiceAccount, "service-account", "", "Service account email to create the key for (required)")
+	_ = s.storageHmacCreateCmd.MarkFlagRequired("service-account")
+	s.storageHmacListCmd.Flags().StringVar(&s.flagStHmacServiceAccount, "service-account", "", "Restrict list to a service account")
+	s.storageHmacUpdateCmd.Flags().StringVar(&s.flagStHmacState, "state", "", "New state: ACTIVE or INACTIVE (required)")
+	_ = s.storageHmacUpdateCmd.MarkFlagRequired("state")
 
-	storageHmacCmd.AddCommand(all...)
-	storageCmd.AddCommand(storageHmacCmd)
+	s.storageHmacCmd.AddCommand(all...)
+	s.storageCmd.AddCommand(s.storageHmacCmd)
 }
 
-func runStHmacCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *storageCmds) runStHmacCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.HmacKeys.Create(project, flagStHmacServiceAccount).Context(ctx).Do()
+	got, err := svc.Projects.HmacKeys.Create(project, s.flagStHmacServiceAccount).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating HMAC key: %w", err)
 	}
-	return emitFormatted(got, flagStHmacFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagStHmacFormat)
 }
 
-func runStHmacDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *storageCmds) runStHmacDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
 	if err := svc.Projects.HmacKeys.Delete(project, args[0]).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting HMAC key: %w", err)
 	}
-	fmt.Printf("Deleted HMAC key [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted HMAC key [%s].\n", args[0])
 	return nil
 }
 
-func runStHmacDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *storageCmds) runStHmacDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,16 +75,16 @@ func runStHmacDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing HMAC key: %w", err)
 	}
-	return emitFormatted(got, flagStHmacFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagStHmacFormat)
 }
 
-func runStHmacList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *storageCmds) runStHmacList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
@@ -125,8 +92,8 @@ func runStHmacList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.HmacKeys.List(project).Context(ctx)
-		if flagStHmacServiceAccount != "" {
-			call = call.ServiceAccountEmail(flagStHmacServiceAccount)
+		if s.flagStHmacServiceAccount != "" {
+			call = call.ServiceAccountEmail(s.flagStHmacServiceAccount)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -141,23 +108,23 @@ func runStHmacList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagStHmacFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagStHmacFormat)
 }
 
-func runStHmacUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *storageCmds) runStHmacUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.HmacKeys.Update(project, args[0], &storage.HmacKeyMetadata{State: flagStHmacState}).Context(ctx).Do()
+	got, err := svc.Projects.HmacKeys.Update(project, args[0], &storage.HmacKeyMetadata{State: s.flagStHmacState}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating HMAC key: %w", err)
 	}
-	fmt.Printf("Updated HMAC key [%s].\n", args[0])
-	return emitFormatted(got, flagStHmacFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated HMAC key [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagStHmacFormat)
 }

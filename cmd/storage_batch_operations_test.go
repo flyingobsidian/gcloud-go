@@ -7,7 +7,7 @@ import (
 )
 
 func storageSubgroup(name string) *cobra.Command {
-	for _, c := range storageCmd.Commands() {
+	for _, c := range newStorageCmd(newOSInvocation()).Commands() {
 		if c.Name() == name {
 			return c
 		}

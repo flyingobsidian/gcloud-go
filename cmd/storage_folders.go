@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	storage "google.golang.org/api/storage/v1"
 )
@@ -13,113 +11,80 @@ import (
 //
 // Manages hierarchical-namespace folders inside a bucket.
 
-var storageFoldersCmd = &cobra.Command{Use: "folders", Short: "Manage hierarchical-namespace folders"}
-
-var (
-	flagStFolBucket   string
-	flagStFolFormat   string
-	flagStFolPrefix   string
-	flagStFolPageSize int64
-	flagStFolDest     string
-)
-
-var (
-	storageFoldersCreateCmd = &cobra.Command{
-		Use: "create FOLDER", Short: "Create a folder in a bucket",
-		Args: cobra.ExactArgs(1), RunE: runStFolCreate,
-	}
-	storageFoldersDeleteCmd = &cobra.Command{
-		Use: "delete FOLDER", Short: "Delete a folder in a bucket",
-		Args: cobra.ExactArgs(1), RunE: runStFolDelete,
-	}
-	storageFoldersDescribeCmd = &cobra.Command{
-		Use: "describe FOLDER", Short: "Describe a folder in a bucket",
-		Args: cobra.ExactArgs(1), RunE: runStFolDescribe,
-	}
-	storageFoldersListCmd = &cobra.Command{
-		Use: "list", Short: "List folders in a bucket",
-		Args: cobra.NoArgs, RunE: runStFolList,
-	}
-	storageFoldersRenameCmd = &cobra.Command{
-		Use: "rename SOURCE_FOLDER", Short: "Rename a folder within a bucket",
-		Args: cobra.ExactArgs(1), RunE: runStFolRename,
-	}
-)
-
-func init() {
+func (s *storageCmds) initStorageFolders() {
 	all := []*cobra.Command{
-		storageFoldersCreateCmd, storageFoldersDeleteCmd, storageFoldersDescribeCmd,
-		storageFoldersListCmd, storageFoldersRenameCmd,
+		s.storageFoldersCreateCmd, s.storageFoldersDeleteCmd, s.storageFoldersDescribeCmd,
+		s.storageFoldersListCmd, s.storageFoldersRenameCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagStFolBucket, "bucket", "", "Bucket that owns the folder (required)")
+		c.Flags().StringVar(&s.flagStFolBucket, "bucket", "", "Bucket that owns the folder (required)")
 		_ = c.MarkFlagRequired("bucket")
-		c.Flags().StringVar(&flagStFolFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagStFolFormat, "format", "", "Output format")
 	}
-	storageFoldersListCmd.Flags().StringVar(&flagStFolPrefix, "prefix", "", "Only list folders with this prefix")
-	storageFoldersListCmd.Flags().Int64Var(&flagStFolPageSize, "page-size", 0, "Maximum results per page")
-	storageFoldersRenameCmd.Flags().StringVar(&flagStFolDest, "destination-folder", "", "New folder name within the same bucket (required)")
-	_ = storageFoldersRenameCmd.MarkFlagRequired("destination-folder")
+	s.storageFoldersListCmd.Flags().StringVar(&s.flagStFolPrefix, "prefix", "", "Only list folders with this prefix")
+	s.storageFoldersListCmd.Flags().Int64Var(&s.flagStFolPageSize, "page-size", 0, "Maximum results per page")
+	s.storageFoldersRenameCmd.Flags().StringVar(&s.flagStFolDest, "destination-folder", "", "New folder name within the same bucket (required)")
+	_ = s.storageFoldersRenameCmd.MarkFlagRequired("destination-folder")
 
-	storageFoldersCmd.AddCommand(all...)
-	storageCmd.AddCommand(storageFoldersCmd)
+	s.storageFoldersCmd.AddCommand(all...)
+	s.storageCmd.AddCommand(s.storageFoldersCmd)
 }
 
-func runStFolCreate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+func (s *storageCmds) runStFolCreate(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Folders.Insert(flagStFolBucket, &storage.Folder{Name: args[0]}).Context(ctx).Do()
+	got, err := svc.Folders.Insert(s.flagStFolBucket, &storage.Folder{Name: args[0]}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating folder: %w", err)
 	}
-	fmt.Printf("Created folder [%s] in bucket [%s].\n", args[0], flagStFolBucket)
-	return emitFormatted(got, flagStFolFormat)
+	fmt.Fprintf(s.inv.stdout, "Created folder [%s] in bucket [%s].\n", args[0], s.flagStFolBucket)
+	return emitFormattedTo(s.inv.stdout, got, s.flagStFolFormat)
 }
 
-func runStFolDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+func (s *storageCmds) runStFolDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
-	if err := svc.Folders.Delete(flagStFolBucket, args[0]).Context(ctx).Do(); err != nil {
+	if err := svc.Folders.Delete(s.flagStFolBucket, args[0]).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting folder: %w", err)
 	}
-	fmt.Printf("Deleted folder [%s] in bucket [%s].\n", args[0], flagStFolBucket)
+	fmt.Fprintf(s.inv.stdout, "Deleted folder [%s] in bucket [%s].\n", args[0], s.flagStFolBucket)
 	return nil
 }
 
-func runStFolDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+func (s *storageCmds) runStFolDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Folders.Get(flagStFolBucket, args[0]).Context(ctx).Do()
+	got, err := svc.Folders.Get(s.flagStFolBucket, args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing folder: %w", err)
 	}
-	return emitFormatted(got, flagStFolFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagStFolFormat)
 }
 
-func runStFolList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+func (s *storageCmds) runStFolList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*storage.Folder
 	pageToken := ""
 	for {
-		call := svc.Folders.List(flagStFolBucket).Context(ctx)
-		if flagStFolPrefix != "" {
-			call = call.Prefix(flagStFolPrefix)
+		call := svc.Folders.List(s.flagStFolBucket).Context(ctx)
+		if s.flagStFolPrefix != "" {
+			call = call.Prefix(s.flagStFolPrefix)
 		}
-		if flagStFolPageSize > 0 {
-			call = call.PageSize(flagStFolPageSize)
+		if s.flagStFolPageSize > 0 {
+			call = call.PageSize(s.flagStFolPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -134,19 +99,19 @@ func runStFolList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagStFolFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagStFolFormat)
 }
 
-func runStFolRename(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.StorageService(ctx, flagAccount)
+func (s *storageCmds) runStFolRename(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Folders.Rename(flagStFolBucket, args[0], flagStFolDest).Context(ctx).Do()
+	op, err := svc.Folders.Rename(s.flagStFolBucket, args[0], s.flagStFolDest).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("renaming folder: %w", err)
 	}
-	fmt.Printf("Rename folder [%s] -> [%s] initiated (operation: %s).\n", args[0], flagStFolDest, op.Name)
-	return emitFormatted(op, flagStFolFormat)
+	fmt.Fprintf(s.inv.stdout, "Rename folder [%s] -> [%s] initiated (operation: %s).\n", args[0], s.flagStFolDest, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagStFolFormat)
 }
