@@ -5,15 +5,18 @@ import (
 	crm "google.golang.org/api/cloudresourcemanager/v3"
 )
 
-// --- gcloud resource-manager (#281) ---
+func newResourceManagerCmd(inv *invocation) *cobra.Command {
 
-var resourceManagerCmd = &cobra.Command{
-	Use:   "resource-manager",
-	Short: "Manage Cloud Resource Manager resources",
-}
+	resourceManagerCmd := &cobra.Command{
+		Use:   "resource-manager",
+		Short: "Manage Cloud Resource Manager resources",
+	}
 
-func init() {
-	rootCmd.AddCommand(resourceManagerCmd)
+	resourceManagerCmd.AddCommand(newCapabilitiesCmd(inv))
+	resourceManagerCmd.AddCommand(newFoldersCmd(inv))
+	resourceManagerCmd.AddCommand(newOrgPoliciesCmd(inv))
+	resourceManagerCmd.AddCommand(newTagsCmd(inv))
+	return resourceManagerCmd
 }
 
 // rmBuildCondition returns a *crm.Expr from the given condition components,

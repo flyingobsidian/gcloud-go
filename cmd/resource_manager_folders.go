@@ -3,149 +3,171 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	crm "google.golang.org/api/cloudresourcemanager/v3"
 )
 
-var foldersCmd = &cobra.Command{
-	Use:   "folders",
-	Short: "Manage Cloud Folders",
+// foldersFlags holds the flag values of the commands built by newFoldersCmd.
+type foldersFlags struct {
+	folderCreateFolder    string
+	folderCreateOrg       string
+	folderDisplayName     string
+	folderListFolder      string
+	folderListOrg         string
+	folderListShowDeleted bool
+	folderListPageSize    int64
+	folderListLimit       int64
+	folderListFormat      string
+	folderListURI         bool
+	folderMoveFolder      string
+	folderMoveOrg         string
+	folderUpdateName      string
+	folderIamMember       string
+	folderIamRole         string
+	folderIamCondExpr     string
+	folderIamCondTitle    string
+	folderIamCondDesc     string
+	folderIamAllCond      bool
 }
 
-var folderCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a folder",
-	Args:  cobra.NoArgs,
-	RunE:  runFolderCreate,
-}
+func newFoldersCmd(inv *invocation) *cobra.Command {
+	f := &foldersFlags{}
 
-var folderDeleteCmd = &cobra.Command{
-	Use:   "delete FOLDER_ID",
-	Short: "Delete a folder",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFolderDelete,
-}
+	foldersCmd := &cobra.Command{
+		Use:   "folders",
+		Short: "Manage Cloud Folders",
+	}
 
-var folderDescribeCmd = &cobra.Command{
-	Use:   "describe FOLDER_ID",
-	Short: "Show metadata for a folder",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFolderDescribe,
-}
+	folderCreateCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a folder",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderCreate(c.Context(), inv, f, c, args)
+		},
+	}
 
-var folderListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List folders under a given parent",
-	Args:  cobra.NoArgs,
-	RunE:  runFolderList,
-}
+	folderDeleteCmd := &cobra.Command{
+		Use:   "delete FOLDER_ID",
+		Short: "Delete a folder",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderDelete(c.Context(), inv, f, c, args)
+		},
+	}
 
-var folderMoveCmd = &cobra.Command{
-	Use:   "move FOLDER_ID",
-	Short: "Move a folder to a new parent",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFolderMove,
-}
+	folderDescribeCmd := &cobra.Command{
+		Use:   "describe FOLDER_ID",
+		Short: "Show metadata for a folder",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderDescribe(c.Context(), inv, f, c, args)
+		},
+	}
 
-var folderUndeleteCmd = &cobra.Command{
-	Use:   "undelete FOLDER_ID",
-	Short: "Undelete a folder marked for deletion",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFolderUndelete,
-}
+	folderListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List folders under a given parent",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderList(c.Context(), inv, f, c, args)
+		},
+	}
 
-var folderUpdateCmd = &cobra.Command{
-	Use:   "update FOLDER_ID",
-	Short: "Update a folder's display name",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFolderUpdate,
-}
+	folderMoveCmd := &cobra.Command{
+		Use:   "move FOLDER_ID",
+		Short: "Move a folder to a new parent",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderMove(c.Context(), inv, f, c, args)
+		},
+	}
 
-var folderGetIamPolicyCmd = &cobra.Command{
-	Use:   "get-iam-policy FOLDER_ID",
-	Short: "Get IAM policy for a folder",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFolderGetIamPolicy,
-}
+	folderUndeleteCmd := &cobra.Command{
+		Use:   "undelete FOLDER_ID",
+		Short: "Undelete a folder marked for deletion",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderUndelete(c.Context(), inv, f, c, args)
+		},
+	}
 
-var folderSetIamPolicyCmd = &cobra.Command{
-	Use:   "set-iam-policy FOLDER_ID POLICY_FILE",
-	Short: "Set IAM policy for a folder",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runFolderSetIamPolicy,
-}
+	folderUpdateCmd := &cobra.Command{
+		Use:   "update FOLDER_ID",
+		Short: "Update a folder's display name",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderUpdate(c.Context(), inv, f, c, args)
+		},
+	}
 
-var folderAddIamBindingCmd = &cobra.Command{
-	Use:   "add-iam-policy-binding FOLDER_ID",
-	Short: "Add IAM policy binding for a folder",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFolderAddIamBinding,
-}
+	folderGetIamPolicyCmd := &cobra.Command{
+		Use:   "get-iam-policy FOLDER_ID",
+		Short: "Get IAM policy for a folder",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderGetIamPolicy(c.Context(), inv, f, c, args)
+		},
+	}
 
-var folderRemoveIamBindingCmd = &cobra.Command{
-	Use:   "remove-iam-policy-binding FOLDER_ID",
-	Short: "Remove IAM policy binding for a folder",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFolderRemoveIamBinding,
-}
+	folderSetIamPolicyCmd := &cobra.Command{
+		Use:   "set-iam-policy FOLDER_ID POLICY_FILE",
+		Short: "Set IAM policy for a folder",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderSetIamPolicy(c.Context(), inv, f, c, args)
+		},
+	}
 
-var (
-	flagFolderCreateFolder    string
-	flagFolderCreateOrg       string
-	flagFolderDisplayName     string
-	flagFolderListFolder      string
-	flagFolderListOrg         string
-	flagFolderListShowDeleted bool
-	flagFolderListPageSize    int64
-	flagFolderListLimit       int64
-	flagFolderListFormat      string
-	flagFolderListURI         bool
-	flagFolderMoveFolder      string
-	flagFolderMoveOrg         string
-	flagFolderUpdateName      string
-	flagFolderIamMember       string
-	flagFolderIamRole         string
-	flagFolderIamCondExpr     string
-	flagFolderIamCondTitle    string
-	flagFolderIamCondDesc     string
-	flagFolderIamAllCond      bool
-)
+	folderAddIamBindingCmd := &cobra.Command{
+		Use:   "add-iam-policy-binding FOLDER_ID",
+		Short: "Add IAM policy binding for a folder",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderAddIamBinding(c.Context(), inv, f, c, args)
+		},
+	}
 
-func init() {
-	folderCreateCmd.Flags().StringVar(&flagFolderCreateFolder, "folder", "", "Parent folder ID (mutually exclusive with --organization)")
-	folderCreateCmd.Flags().StringVar(&flagFolderCreateOrg, "organization", "", "Parent organization ID (mutually exclusive with --folder)")
-	folderCreateCmd.Flags().StringVar(&flagFolderDisplayName, "display-name", "", "Display name for the new folder (required)")
+	folderRemoveIamBindingCmd := &cobra.Command{
+		Use:   "remove-iam-policy-binding FOLDER_ID",
+		Short: "Remove IAM policy binding for a folder",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runFolderRemoveIamBinding(c.Context(), inv, f, c, args)
+		},
+	}
+	folderCreateCmd.Flags().StringVar(&f.folderCreateFolder, "folder", "", "Parent folder ID (mutually exclusive with --organization)")
+	folderCreateCmd.Flags().StringVar(&f.folderCreateOrg, "organization", "", "Parent organization ID (mutually exclusive with --folder)")
+	folderCreateCmd.Flags().StringVar(&f.folderDisplayName, "display-name", "", "Display name for the new folder (required)")
 	folderCreateCmd.MarkFlagRequired("display-name")
 
-	folderListCmd.Flags().StringVar(&flagFolderListFolder, "folder", "", "List folders under this parent folder")
-	folderListCmd.Flags().StringVar(&flagFolderListOrg, "organization", "", "List folders under this parent organization")
-	folderListCmd.Flags().BoolVar(&flagFolderListShowDeleted, "show-deleted", false, "Include deleted folders in the list")
-	folderListCmd.Flags().Int64Var(&flagFolderListPageSize, "page-size", 0, "Page size for API pagination")
-	folderListCmd.Flags().Int64Var(&flagFolderListLimit, "limit", 0, "Maximum number of folders to list (0 = no limit)")
-	folderListCmd.Flags().StringVar(&flagFolderListFormat, "format", "", "Output format (json, yaml, or table)")
-	folderListCmd.Flags().BoolVar(&flagFolderListURI, "uri", false, "Print resource names only")
+	folderListCmd.Flags().StringVar(&f.folderListFolder, "folder", "", "List folders under this parent folder")
+	folderListCmd.Flags().StringVar(&f.folderListOrg, "organization", "", "List folders under this parent organization")
+	folderListCmd.Flags().BoolVar(&f.folderListShowDeleted, "show-deleted", false, "Include deleted folders in the list")
+	folderListCmd.Flags().Int64Var(&f.folderListPageSize, "page-size", 0, "Page size for API pagination")
+	folderListCmd.Flags().Int64Var(&f.folderListLimit, "limit", 0, "Maximum number of folders to list (0 = no limit)")
+	folderListCmd.Flags().StringVar(&f.folderListFormat, "format", "", "Output format (json, yaml, or table)")
+	folderListCmd.Flags().BoolVar(&f.folderListURI, "uri", false, "Print resource names only")
 
-	folderMoveCmd.Flags().StringVar(&flagFolderMoveFolder, "folder", "", "Destination parent folder ID (mutually exclusive with --organization)")
-	folderMoveCmd.Flags().StringVar(&flagFolderMoveOrg, "organization", "", "Destination parent organization ID (mutually exclusive with --folder)")
+	folderMoveCmd.Flags().StringVar(&f.folderMoveFolder, "folder", "", "Destination parent folder ID (mutually exclusive with --organization)")
+	folderMoveCmd.Flags().StringVar(&f.folderMoveOrg, "organization", "", "Destination parent organization ID (mutually exclusive with --folder)")
 
-	folderUpdateCmd.Flags().StringVar(&flagFolderUpdateName, "display-name", "", "New display name for the folder (required)")
+	folderUpdateCmd.Flags().StringVar(&f.folderUpdateName, "display-name", "", "New display name for the folder (required)")
 	folderUpdateCmd.MarkFlagRequired("display-name")
 
 	for _, c := range []*cobra.Command{folderAddIamBindingCmd, folderRemoveIamBindingCmd} {
-		c.Flags().StringVar(&flagFolderIamMember, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
-		c.Flags().StringVar(&flagFolderIamRole, "role", "", "IAM role to bind (e.g. roles/browser) (required)")
-		c.Flags().StringVar(&flagFolderIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding")
-		c.Flags().StringVar(&flagFolderIamCondTitle, "condition-title", "", "Title for a conditional binding")
-		c.Flags().StringVar(&flagFolderIamCondDesc, "condition-description", "", "Description for a conditional binding")
+		c.Flags().StringVar(&f.folderIamMember, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
+		c.Flags().StringVar(&f.folderIamRole, "role", "", "IAM role to bind (e.g. roles/browser) (required)")
+		c.Flags().StringVar(&f.folderIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding")
+		c.Flags().StringVar(&f.folderIamCondTitle, "condition-title", "", "Title for a conditional binding")
+		c.Flags().StringVar(&f.folderIamCondDesc, "condition-description", "", "Description for a conditional binding")
 		c.MarkFlagRequired("member")
 		c.MarkFlagRequired("role")
 	}
-	folderRemoveIamBindingCmd.Flags().BoolVar(&flagFolderIamAllCond, "all", false, "Remove the member from all bindings for the role, regardless of condition")
+	folderRemoveIamBindingCmd.Flags().BoolVar(&f.folderIamAllCond, "all", false, "Remove the member from all bindings for the role, regardless of condition")
 
 	foldersCmd.AddCommand(
 		folderCreateCmd,
@@ -160,7 +182,7 @@ func init() {
 		folderAddIamBindingCmd,
 		folderRemoveIamBindingCmd,
 	)
-	resourceManagerCmd.AddCommand(foldersCmd)
+	return foldersCmd
 }
 
 // folderResourceName returns the full resource name for a folder, accepting
@@ -185,32 +207,30 @@ func resolveParent(folder, org string) (string, error) {
 	return "", fmt.Errorf("one of --folder or --organization is required")
 }
 
-func runFolderCreate(cmd *cobra.Command, args []string) error {
-	parent, err := resolveParent(flagFolderCreateFolder, flagFolderCreateOrg)
+func runFolderCreate(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	parent, err := resolveParent(f.folderCreateFolder, f.folderCreateOrg)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
 	op, err := svc.Folders.Create(&crm.Folder{
-		DisplayName: flagFolderDisplayName,
+		DisplayName: f.folderDisplayName,
 		Parent:      parent,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating folder: %w", err)
 	}
-	fmt.Printf("Create folder in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Create folder in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runFolderDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runFolderDelete(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -218,13 +238,12 @@ func runFolderDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting folder: %w", err)
 	}
-	fmt.Printf("Delete folder in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Delete folder in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runFolderDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runFolderDescribe(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -232,17 +251,16 @@ func runFolderDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing folder: %w", err)
 	}
-	return yamlEncode(folder)
+	return inv.yaml(folder)
 }
 
-func runFolderList(cmd *cobra.Command, args []string) error {
-	parent, err := resolveParent(flagFolderListFolder, flagFolderListOrg)
+func runFolderList(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	parent, err := resolveParent(f.folderListFolder, f.folderListOrg)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -250,9 +268,9 @@ func runFolderList(cmd *cobra.Command, args []string) error {
 	var all []*crm.Folder
 	pageToken := ""
 	for {
-		call := svc.Folders.List().Parent(parent).ShowDeleted(flagFolderListShowDeleted).Context(ctx)
-		if flagFolderListPageSize > 0 {
-			call = call.PageSize(flagFolderListPageSize)
+		call := svc.Folders.List().Parent(parent).ShowDeleted(f.folderListShowDeleted).Context(ctx)
+		if f.folderListPageSize > 0 {
+			call = call.PageSize(f.folderListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -262,8 +280,8 @@ func runFolderList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing folders: %w", err)
 		}
 		all = append(all, resp.Folders...)
-		if flagFolderListLimit > 0 && int64(len(all)) >= flagFolderListLimit {
-			all = all[:flagFolderListLimit]
+		if f.folderListLimit > 0 && int64(len(all)) >= f.folderListLimit {
+			all = all[:f.folderListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -272,35 +290,34 @@ func runFolderList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagFolderListURI {
+	if f.folderListURI {
 		for _, f := range all {
-			fmt.Println(f.Name)
+			fmt.Fprintln(inv.stdout, f.Name)
 		}
 		return nil
 	}
 
-	switch flagFolderListFormat {
+	switch f.folderListFormat {
 	case "json":
-		return printJSON(all)
+		return inv.printJSON(all)
 	case "yaml":
-		return yamlEncode(all)
+		return inv.yaml(all)
 	}
 
-	printTableHeading(len(all), "%-30s %-15s %-20s %s\n", "DISPLAY_NAME", "ID", "PARENT", "STATE")
+	printTableHeadingTo(inv.stdout, len(all), "%-30s %-15s %-20s %s\n", "DISPLAY_NAME", "ID", "PARENT", "STATE")
 	for _, f := range all {
-		fmt.Printf("%-30s %-15s %-20s %s\n", f.DisplayName, path.Base(f.Name), f.Parent, f.State)
+		fmt.Fprintf(inv.stdout, "%-30s %-15s %-20s %s\n", f.DisplayName, path.Base(f.Name), f.Parent, f.State)
 	}
 	return nil
 }
 
-func runFolderMove(cmd *cobra.Command, args []string) error {
-	dest, err := resolveParent(flagFolderMoveFolder, flagFolderMoveOrg)
+func runFolderMove(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	dest, err := resolveParent(f.folderMoveFolder, f.folderMoveOrg)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -311,13 +328,12 @@ func runFolderMove(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("moving folder: %w", err)
 	}
-	fmt.Printf("Move folder in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Move folder in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runFolderUndelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runFolderUndelete(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -325,29 +341,27 @@ func runFolderUndelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("undeleting folder: %w", err)
 	}
-	fmt.Printf("Undelete folder in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Undelete folder in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runFolderUpdate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runFolderUpdate(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Folders.Patch(folderResourceName(args[0]), &crm.Folder{
-		DisplayName: flagFolderUpdateName,
+		DisplayName: f.folderUpdateName,
 	}).UpdateMask("display_name").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating folder: %w", err)
 	}
-	fmt.Printf("Update folder in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Update folder in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runFolderGetIamPolicy(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runFolderGetIamPolicy(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -357,16 +371,15 @@ func runFolderGetIamPolicy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return yamlEncode(policy)
+	return inv.yaml(policy)
 }
 
-func runFolderSetIamPolicy(cmd *cobra.Command, args []string) error {
+func runFolderSetIamPolicy(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
 	policy, err := parsePolicyFile(args[1])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -377,13 +390,12 @@ func runFolderSetIamPolicy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for folder [%s].\n", strings.TrimPrefix(folderResourceName(args[0]), "folders/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(inv.stderr, "Updated IAM policy for folder [%s].\n", strings.TrimPrefix(folderResourceName(args[0]), "folders/"))
+	return inv.yaml(updated)
 }
 
-func runFolderAddIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runFolderAddIamBinding(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -396,8 +408,8 @@ func runFolderAddIamBinding(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	addBindingToPolicy(policy, flagFolderIamRole, flagFolderIamMember,
-		rmBuildCondition(flagFolderIamCondExpr, flagFolderIamCondTitle, flagFolderIamCondDesc))
+	addBindingToPolicy(policy, f.folderIamRole, f.folderIamMember,
+		rmBuildCondition(f.folderIamCondExpr, f.folderIamCondTitle, f.folderIamCondDesc))
 	policy.Version = 3
 
 	updated, err := svc.Folders.SetIamPolicy(resource, &crm.SetIamPolicyRequest{
@@ -407,13 +419,12 @@ func runFolderAddIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for folder [%s].\n", strings.TrimPrefix(resource, "folders/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(inv.stderr, "Updated IAM policy for folder [%s].\n", strings.TrimPrefix(resource, "folders/"))
+	return inv.yaml(updated)
 }
 
-func runFolderRemoveIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runFolderRemoveIamBinding(ctx context.Context, inv *invocation, f *foldersFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -426,10 +437,10 @@ func runFolderRemoveIamBinding(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	if !removeBindingFromPolicy(policy, flagFolderIamRole, flagFolderIamMember,
-		rmBuildCondition(flagFolderIamCondExpr, flagFolderIamCondTitle, flagFolderIamCondDesc),
-		flagFolderIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagFolderIamRole, flagFolderIamMember)
+	if !removeBindingFromPolicy(policy, f.folderIamRole, f.folderIamMember,
+		rmBuildCondition(f.folderIamCondExpr, f.folderIamCondTitle, f.folderIamCondDesc),
+		f.folderIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", f.folderIamRole, f.folderIamMember)
 	}
 
 	updated, err := svc.Folders.SetIamPolicy(resource, &crm.SetIamPolicyRequest{
@@ -439,6 +450,6 @@ func runFolderRemoveIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for folder [%s].\n", strings.TrimPrefix(resource, "folders/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(inv.stderr, "Updated IAM policy for folder [%s].\n", strings.TrimPrefix(resource, "folders/"))
+	return inv.yaml(updated)
 }
