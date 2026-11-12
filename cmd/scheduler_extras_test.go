@@ -6,8 +6,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func schedulerSubgroup(name string) *cobra.Command {
-	for _, c := range schedulerCmd.Commands() {
+func schedulerSubgroup(t *testing.T, name string) *cobra.Command {
+	inv, _, _ := newTestInvocation(t, nil, "")
+	for _, c := range newSchedulerCmd(inv).Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -16,7 +17,7 @@ func schedulerSubgroup(name string) *cobra.Command {
 }
 
 func TestSchedulerCmekConfigSubcommands(t *testing.T) {
-	g := schedulerSubgroup("cmek-config")
+	g := schedulerSubgroup(t, "cmek-config")
 	if g == nil {
 		t.Fatal("scheduler cmek-config missing")
 	}
@@ -24,7 +25,7 @@ func TestSchedulerCmekConfigSubcommands(t *testing.T) {
 }
 
 func TestSchedulerLocationsSubcommands(t *testing.T) {
-	g := schedulerSubgroup("locations")
+	g := schedulerSubgroup(t, "locations")
 	if g == nil {
 		t.Fatal("scheduler locations missing")
 	}
@@ -32,7 +33,7 @@ func TestSchedulerLocationsSubcommands(t *testing.T) {
 }
 
 func TestSchedulerOperationsSubcommands(t *testing.T) {
-	g := schedulerSubgroup("operations")
+	g := schedulerSubgroup(t, "operations")
 	if g == nil {
 		t.Fatal("scheduler operations missing")
 	}

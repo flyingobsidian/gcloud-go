@@ -6,136 +6,129 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 	"google.golang.org/api/googleapi"
 )
 
-var schedulerCmd = &cobra.Command{
-	Use:   "scheduler",
-	Short: "Manage Cloud Scheduler",
+// schedulerJobFlags holds the flag values of the `scheduler jobs` commands.
+// Like gcloud-go before the migration (#2067), the commands share one set of
+// variables, so the last binding of a flag sets its starting value.
+type schedulerJobFlags struct {
+	location        string
+	listURI         bool
+	schedule        string
+	timeZone        string
+	description     string
+	attemptDeadline string
+	uri             string
+	httpMethod      string
+	headers         map[string]string
+	body            string
+	topic           string
+	messageBody     string
+	attributes      map[string]string
 }
 
-var schedulerJobsCmd = &cobra.Command{
-	Use:   "jobs",
-	Short: "Manage Cloud Scheduler jobs",
+func newSchedulerCmd(inv *invocation) *cobra.Command {
+	schedulerCmd := &cobra.Command{
+		Use:   "scheduler",
+		Short: "Manage Cloud Scheduler",
+	}
+	schedulerCmd.AddCommand(newSchedulerJobsCmd(inv))
+	// cmek-config, locations, operations subgroups are implemented in
+	// scheduler_extras.go.
+	addSchedulerExtras(inv, schedulerCmd)
+	return schedulerCmd
 }
 
-var schedulerJobsDescribeCmd = &cobra.Command{
-	Use:   "describe JOB_ID",
-	Short: "Describe a Cloud Scheduler job",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSchedulerJobsDescribe,
-}
+func newSchedulerJobsCmd(inv *invocation) *cobra.Command {
+	f := &schedulerJobFlags{}
+	run := func(fn func(context.Context, *invocation, *schedulerJobFlags, string) error) func(*cobra.Command, []string) error {
+		return func(c *cobra.Command, args []string) error {
+			return fn(c.Context(), inv, f, args[0])
+		}
+	}
 
-var schedulerJobsPauseCmd = &cobra.Command{
-	Use:   "pause JOB_ID",
-	Short: "Pause a Cloud Scheduler job",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSchedulerJobsPause,
-}
+	schedulerJobsCmd := &cobra.Command{
+		Use:   "jobs",
+		Short: "Manage Cloud Scheduler jobs",
+	}
+	schedulerJobsDescribeCmd := &cobra.Command{
+		Use:   "describe JOB_ID",
+		Short: "Describe a Cloud Scheduler job",
+		Args:  cobra.ExactArgs(1),
+		RunE:  run(runSchedulerJobsDescribe),
+	}
+	schedulerJobsPauseCmd := &cobra.Command{
+		Use:   "pause JOB_ID",
+		Short: "Pause a Cloud Scheduler job",
+		Args:  cobra.ExactArgs(1),
+		RunE:  run(runSchedulerJobsPause),
+	}
+	schedulerJobsResumeCmd := &cobra.Command{
+		Use:   "resume JOB_ID",
+		Short: "Resume a Cloud Scheduler job",
+		Args:  cobra.ExactArgs(1),
+		RunE:  run(runSchedulerJobsResume),
+	}
+	schedulerJobsRunCmd := &cobra.Command{
+		Use:   "run JOB_ID",
+		Short: "Trigger a Cloud Scheduler job to run immediately",
+		Args:  cobra.ExactArgs(1),
+		RunE:  run(runSchedulerJobsRun),
+	}
+	schedulerJobsListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List Cloud Scheduler jobs",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runSchedulerJobsList(c.Context(), inv, f)
+		},
+	}
+	schedulerJobsCreateCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a Cloud Scheduler job",
+	}
+	schedulerJobsCreateHTTPCmd := &cobra.Command{
+		Use:   "http JOB_ID",
+		Short: "Create an HTTP scheduler job",
+		Args:  cobra.ExactArgs(1),
+		RunE:  run(runSchedulerJobsCreateHTTP),
+	}
+	schedulerJobsCreatePubsubCmd := &cobra.Command{
+		Use:   "pubsub JOB_ID",
+		Short: "Create a Pub/Sub scheduler job",
+		Args:  cobra.ExactArgs(1),
+		RunE:  run(runSchedulerJobsCreatePubsub),
+	}
+	schedulerJobsDeleteCmd := &cobra.Command{
+		Use:   "delete JOB_ID",
+		Short: "Delete a Cloud Scheduler job",
+		Args:  cobra.ExactArgs(1),
+		RunE:  run(runSchedulerJobsDelete),
+	}
+	schedulerJobsUpdateCmd := &cobra.Command{
+		Use:   "update",
+		Short: "Update a Cloud Scheduler job",
+	}
+	schedulerJobsUpdateHTTPCmd := &cobra.Command{
+		Use:   "http JOB_ID",
+		Short: "Update an HTTP scheduler job",
+		Args:  cobra.ExactArgs(1),
+		RunE:  run(runSchedulerJobsUpdateHTTP),
+	}
+	schedulerJobsUpdatePubsubCmd := &cobra.Command{
+		Use:   "pubsub JOB_ID",
+		Short: "Update a Pub/Sub scheduler job",
+		Args:  cobra.ExactArgs(1),
+		RunE:  run(runSchedulerJobsUpdatePubsub),
+	}
 
-var schedulerJobsResumeCmd = &cobra.Command{
-	Use:   "resume JOB_ID",
-	Short: "Resume a Cloud Scheduler job",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSchedulerJobsResume,
-}
-
-var schedulerJobsRunCmd = &cobra.Command{
-	Use:   "run JOB_ID",
-	Short: "Trigger a Cloud Scheduler job to run immediately",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSchedulerJobsRun,
-}
-
-// --- scheduler jobs list (#197) ---
-
-var schedulerJobsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Cloud Scheduler jobs",
-	Args:  cobra.NoArgs,
-	RunE:  runSchedulerJobsList,
-}
-
-var (
-	flagSchedulerListURI bool
-)
-
-// --- scheduler jobs create (#198) ---
-
-var schedulerJobsCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a Cloud Scheduler job",
-}
-
-var schedulerJobsCreateHTTPCmd = &cobra.Command{
-	Use:   "http JOB_ID",
-	Short: "Create an HTTP scheduler job",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSchedulerJobsCreateHTTP,
-}
-
-var schedulerJobsCreatePubsubCmd = &cobra.Command{
-	Use:   "pubsub JOB_ID",
-	Short: "Create a Pub/Sub scheduler job",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSchedulerJobsCreatePubsub,
-}
-
-var (
-	flagSchedSchedule        string
-	flagSchedTimeZone        string
-	flagSchedDescription     string
-	flagSchedAttemptDeadline string
-	flagSchedURI             string
-	flagSchedHTTPMethod      string
-	flagSchedHeaders         map[string]string
-	flagSchedBody            string
-	flagSchedTopic           string
-	flagSchedMessageBody     string
-	flagSchedAttributes      map[string]string
-)
-
-// --- scheduler jobs delete (#199) ---
-
-var schedulerJobsDeleteCmd = &cobra.Command{
-	Use:   "delete JOB_ID",
-	Short: "Delete a Cloud Scheduler job",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSchedulerJobsDelete,
-}
-
-// --- scheduler jobs update (#200) ---
-
-var schedulerJobsUpdateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update a Cloud Scheduler job",
-}
-
-var schedulerJobsUpdateHTTPCmd = &cobra.Command{
-	Use:   "http JOB_ID",
-	Short: "Update an HTTP scheduler job",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSchedulerJobsUpdateHTTP,
-}
-
-var schedulerJobsUpdatePubsubCmd = &cobra.Command{
-	Use:   "pubsub JOB_ID",
-	Short: "Update a Pub/Sub scheduler job",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSchedulerJobsUpdatePubsub,
-}
-
-var flagSchedulerLocation string
-
-func init() {
 	for _, c := range []*cobra.Command{
 		schedulerJobsDescribeCmd,
 		schedulerJobsPauseCmd,
@@ -144,47 +137,47 @@ func init() {
 		schedulerJobsListCmd,
 		schedulerJobsDeleteCmd,
 	} {
-		c.Flags().StringVar(&flagSchedulerLocation, "location", "", "Location of the job")
+		c.Flags().StringVar(&f.location, "location", "", "Location of the job")
 	}
 
-	schedulerJobsListCmd.Flags().BoolVar(&flagSchedulerListURI, "uri", false, "Print resource names")
+	schedulerJobsListCmd.Flags().BoolVar(&f.listURI, "uri", false, "Print resource names")
 
 	// create common flags
 	for _, c := range []*cobra.Command{schedulerJobsCreateHTTPCmd, schedulerJobsCreatePubsubCmd} {
-		c.Flags().StringVar(&flagSchedulerLocation, "location", "", "Location")
-		c.Flags().StringVar(&flagSchedSchedule, "schedule", "", "Cron schedule expression (required)")
+		c.Flags().StringVar(&f.location, "location", "", "Location")
+		c.Flags().StringVar(&f.schedule, "schedule", "", "Cron schedule expression (required)")
 		c.MarkFlagRequired("schedule")
-		c.Flags().StringVar(&flagSchedTimeZone, "time-zone", "Etc/UTC", "Time zone")
-		c.Flags().StringVar(&flagSchedDescription, "description", "", "Description")
-		c.Flags().StringVar(&flagSchedAttemptDeadline, "attempt-deadline", "", "Attempt deadline duration")
+		c.Flags().StringVar(&f.timeZone, "time-zone", "Etc/UTC", "Time zone")
+		c.Flags().StringVar(&f.description, "description", "", "Description")
+		c.Flags().StringVar(&f.attemptDeadline, "attempt-deadline", "", "Attempt deadline duration")
 	}
-	schedulerJobsCreateHTTPCmd.Flags().StringVar(&flagSchedURI, "uri", "", "HTTP target URI (required)")
+	schedulerJobsCreateHTTPCmd.Flags().StringVar(&f.uri, "uri", "", "HTTP target URI (required)")
 	schedulerJobsCreateHTTPCmd.MarkFlagRequired("uri")
-	schedulerJobsCreateHTTPCmd.Flags().StringVar(&flagSchedHTTPMethod, "http-method", "POST", "HTTP method")
-	schedulerJobsCreateHTTPCmd.Flags().StringToStringVar(&flagSchedHeaders, "headers", nil, "HTTP headers (key=value)")
-	schedulerJobsCreateHTTPCmd.Flags().StringVar(&flagSchedBody, "body", "", "HTTP body")
-	schedulerJobsCreatePubsubCmd.Flags().StringVar(&flagSchedTopic, "topic", "", "Pub/Sub topic (required)")
+	schedulerJobsCreateHTTPCmd.Flags().StringVar(&f.httpMethod, "http-method", "POST", "HTTP method")
+	schedulerJobsCreateHTTPCmd.Flags().StringToStringVar(&f.headers, "headers", nil, "HTTP headers (key=value)")
+	schedulerJobsCreateHTTPCmd.Flags().StringVar(&f.body, "body", "", "HTTP body")
+	schedulerJobsCreatePubsubCmd.Flags().StringVar(&f.topic, "topic", "", "Pub/Sub topic (required)")
 	schedulerJobsCreatePubsubCmd.MarkFlagRequired("topic")
-	schedulerJobsCreatePubsubCmd.Flags().StringVar(&flagSchedMessageBody, "message-body", "", "Message body")
-	schedulerJobsCreatePubsubCmd.Flags().StringToStringVar(&flagSchedAttributes, "attributes", nil, "Message attributes")
+	schedulerJobsCreatePubsubCmd.Flags().StringVar(&f.messageBody, "message-body", "", "Message body")
+	schedulerJobsCreatePubsubCmd.Flags().StringToStringVar(&f.attributes, "attributes", nil, "Message attributes")
 	schedulerJobsCreateCmd.AddCommand(schedulerJobsCreateHTTPCmd)
 	schedulerJobsCreateCmd.AddCommand(schedulerJobsCreatePubsubCmd)
 
 	// update flags
 	for _, c := range []*cobra.Command{schedulerJobsUpdateHTTPCmd, schedulerJobsUpdatePubsubCmd} {
-		c.Flags().StringVar(&flagSchedulerLocation, "location", "", "Location")
-		c.Flags().StringVar(&flagSchedSchedule, "schedule", "", "Cron schedule expression")
-		c.Flags().StringVar(&flagSchedTimeZone, "time-zone", "", "Time zone")
-		c.Flags().StringVar(&flagSchedDescription, "description", "", "Description")
-		c.Flags().StringVar(&flagSchedAttemptDeadline, "attempt-deadline", "", "Attempt deadline duration")
+		c.Flags().StringVar(&f.location, "location", "", "Location")
+		c.Flags().StringVar(&f.schedule, "schedule", "", "Cron schedule expression")
+		c.Flags().StringVar(&f.timeZone, "time-zone", "", "Time zone")
+		c.Flags().StringVar(&f.description, "description", "", "Description")
+		c.Flags().StringVar(&f.attemptDeadline, "attempt-deadline", "", "Attempt deadline duration")
 	}
-	schedulerJobsUpdateHTTPCmd.Flags().StringVar(&flagSchedURI, "uri", "", "HTTP target URI")
-	schedulerJobsUpdateHTTPCmd.Flags().StringVar(&flagSchedHTTPMethod, "http-method", "", "HTTP method")
-	schedulerJobsUpdateHTTPCmd.Flags().StringToStringVar(&flagSchedHeaders, "headers", nil, "HTTP headers")
-	schedulerJobsUpdateHTTPCmd.Flags().StringVar(&flagSchedBody, "body", "", "HTTP body")
-	schedulerJobsUpdatePubsubCmd.Flags().StringVar(&flagSchedTopic, "topic", "", "Pub/Sub topic")
-	schedulerJobsUpdatePubsubCmd.Flags().StringVar(&flagSchedMessageBody, "message-body", "", "Message body")
-	schedulerJobsUpdatePubsubCmd.Flags().StringToStringVar(&flagSchedAttributes, "attributes", nil, "Message attributes")
+	schedulerJobsUpdateHTTPCmd.Flags().StringVar(&f.uri, "uri", "", "HTTP target URI")
+	schedulerJobsUpdateHTTPCmd.Flags().StringVar(&f.httpMethod, "http-method", "", "HTTP method")
+	schedulerJobsUpdateHTTPCmd.Flags().StringToStringVar(&f.headers, "headers", nil, "HTTP headers")
+	schedulerJobsUpdateHTTPCmd.Flags().StringVar(&f.body, "body", "", "HTTP body")
+	schedulerJobsUpdatePubsubCmd.Flags().StringVar(&f.topic, "topic", "", "Pub/Sub topic")
+	schedulerJobsUpdatePubsubCmd.Flags().StringVar(&f.messageBody, "message-body", "", "Message body")
+	schedulerJobsUpdatePubsubCmd.Flags().StringToStringVar(&f.attributes, "attributes", nil, "Message attributes")
 	schedulerJobsUpdateCmd.AddCommand(schedulerJobsUpdateHTTPCmd)
 	schedulerJobsUpdateCmd.AddCommand(schedulerJobsUpdatePubsubCmd)
 
@@ -196,11 +189,7 @@ func init() {
 	schedulerJobsCmd.AddCommand(schedulerJobsCreateCmd)
 	schedulerJobsCmd.AddCommand(schedulerJobsDeleteCmd)
 	schedulerJobsCmd.AddCommand(schedulerJobsUpdateCmd)
-	schedulerCmd.AddCommand(schedulerJobsCmd)
-
-	// cmek-config, locations, operations subgroups are implemented in
-	// scheduler_extras.go.
-	rootCmd.AddCommand(schedulerCmd)
+	return schedulerJobsCmd
 }
 
 func schedulerJobName(project, location, jobID string) string {
@@ -210,19 +199,18 @@ func schedulerJobName(project, location, jobID string) string {
 // resolveSchedulerLocation returns the project and the location from
 // --location, falling back like gcloud to the location of the project's App
 // Engine app.
-func resolveSchedulerLocation() (string, string, error) {
-	project, err := resolveProject()
+func resolveSchedulerLocation(ctx context.Context, inv *invocation, location string) (string, string, error) {
+	project, err := inv.project()
 	if err != nil {
 		return "", "", err
 	}
-	if flagSchedulerLocation != "" {
-		return project, flagSchedulerLocation, nil
+	if location != "" {
+		return project, location, nil
 	}
-	ctx := context.Background()
-	location, err := schedulerAppLocation(ctx, os.Stderr,
-		func(ctx context.Context) bool { return appEngineAppExists(ctx, project) },
+	location, err = schedulerAppLocation(ctx, inv.stderr,
+		func(ctx context.Context) bool { return appEngineAppExists(ctx, inv, project) },
 		func(ctx context.Context) ([]*cloudscheduler.Location, error) {
-			svc, err := gcp.SchedulerService(ctx, flagAccount)
+			svc, err := inv.clients().Scheduler(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -281,8 +269,8 @@ func schedulerAppLocation(ctx context.Context, w io.Writer,
 // appEngineAppExists reports whether project has an App Engine app. Like
 // gcloud, any failure to fetch the app (including missing permission) counts
 // as no app.
-func appEngineAppExists(ctx context.Context, project string) bool {
-	svc, err := gcp.AppEngineService(ctx, flagAccount)
+func appEngineAppExists(ctx context.Context, inv *invocation, project string) bool {
+	svc, err := inv.clients().AppEngine(ctx)
 	if err != nil {
 		return false
 	}
@@ -290,102 +278,97 @@ func appEngineAppExists(ctx context.Context, project string) bool {
 	return err == nil
 }
 
-func runSchedulerJobsDescribe(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsDescribe(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 
-	job, err := svc.Projects.Locations.Jobs.Get(schedulerJobName(project, location, args[0])).Context(ctx).Do()
+	job, err := svc.Projects.Locations.Jobs.Get(schedulerJobName(project, location, jobID)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing scheduler job: %w", err)
 	}
 
-	return formatOutput(job, "")
+	return emitFormattedTo(inv.stdout, job, "json")
 }
 
-func runSchedulerJobsPause(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsPause(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 
-	name := schedulerJobName(project, location, args[0])
+	name := schedulerJobName(project, location, jobID)
 	_, err = svc.Projects.Locations.Jobs.Pause(name, &cloudscheduler.PauseJobRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("pausing scheduler job: %w", err)
 	}
 
-	fmt.Printf("Paused job [%s].\n", args[0])
+	fmt.Fprintf(inv.stdout, "Paused job [%s].\n", jobID)
 	return nil
 }
 
-func runSchedulerJobsResume(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsResume(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 
-	name := schedulerJobName(project, location, args[0])
+	name := schedulerJobName(project, location, jobID)
 	_, err = svc.Projects.Locations.Jobs.Resume(name, &cloudscheduler.ResumeJobRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("resuming scheduler job: %w", err)
 	}
 
-	fmt.Printf("Resumed job [%s].\n", args[0])
+	fmt.Fprintf(inv.stdout, "Resumed job [%s].\n", jobID)
 	return nil
 }
 
-func runSchedulerJobsRun(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsRun(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 
-	name := schedulerJobName(project, location, args[0])
+	name := schedulerJobName(project, location, jobID)
 	_, err = svc.Projects.Locations.Jobs.Run(name, &cloudscheduler.RunJobRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("running scheduler job: %w", err)
 	}
 
-	fmt.Printf("Triggered job [%s].\n", args[0])
+	fmt.Fprintf(inv.stdout, "Triggered job [%s].\n", jobID)
 	return nil
 }
 
 // --- scheduler jobs list (#197) ---
 
-func runSchedulerJobsList(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsList(ctx context.Context, inv *invocation, f *schedulerJobFlags) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
@@ -409,20 +392,20 @@ func runSchedulerJobsList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagSchedulerListURI {
+	if f.listURI {
 		for _, job := range allJobs {
-			fmt.Println(job.Name)
+			fmt.Fprintln(inv.stdout, job.Name)
 		}
 		return nil
 	}
 
-	if flagFormat != "" {
+	if inv.flags.format != "" {
 		if allJobs == nil {
 			allJobs = []*cloudscheduler.Job{}
 		}
-		return emitFormatted(allJobs, flagFormat)
+		return inv.emit(allJobs)
 	}
-	return emitSchedulerJobsTable(os.Stdout, os.Stderr, allJobs)
+	return emitSchedulerJobsTable(inv.stdout, inv.stderr, allJobs)
 }
 
 // schedulerJobsTableHeaders are the columns of gcloud's default
@@ -475,169 +458,163 @@ func emitSchedulerJobsTable(w, errW io.Writer, jobs []*cloudscheduler.Job) error
 
 // --- scheduler jobs create http (#198) ---
 
-func runSchedulerJobsCreateHTTP(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsCreateHTTP(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 
 	job := &cloudscheduler.Job{
-		Schedule: flagSchedSchedule,
-		TimeZone: flagSchedTimeZone,
+		Schedule: f.schedule,
+		TimeZone: f.timeZone,
 		HttpTarget: &cloudscheduler.HttpTarget{
-			Uri:        flagSchedURI,
-			HttpMethod: strings.ToUpper(flagSchedHTTPMethod),
+			Uri:        f.uri,
+			HttpMethod: strings.ToUpper(f.httpMethod),
 		},
 	}
-	if flagSchedDescription != "" {
-		job.Description = flagSchedDescription
+	if f.description != "" {
+		job.Description = f.description
 	}
-	if flagSchedAttemptDeadline != "" {
-		job.AttemptDeadline = flagSchedAttemptDeadline
+	if f.attemptDeadline != "" {
+		job.AttemptDeadline = f.attemptDeadline
 	}
-	if len(flagSchedHeaders) > 0 {
-		job.HttpTarget.Headers = flagSchedHeaders
+	if len(f.headers) > 0 {
+		job.HttpTarget.Headers = f.headers
 	}
-	if flagSchedBody != "" {
-		job.HttpTarget.Body = flagSchedBody
+	if f.body != "" {
+		job.HttpTarget.Body = f.body
 	}
 
 	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
-	job.Name = fmt.Sprintf("%s/jobs/%s", parent, args[0])
+	job.Name = fmt.Sprintf("%s/jobs/%s", parent, jobID)
 	result, err := svc.Projects.Locations.Jobs.Create(parent, job).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating scheduler job: %w", err)
 	}
 
-	fmt.Printf("Created scheduler job [%s].\n", path.Base(result.Name))
+	fmt.Fprintf(inv.stdout, "Created scheduler job [%s].\n", path.Base(result.Name))
 	return nil
 }
 
 // --- scheduler jobs create pubsub (#198) ---
 
-func runSchedulerJobsCreatePubsub(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsCreatePubsub(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 
 	job := &cloudscheduler.Job{
-		Schedule: flagSchedSchedule,
-		TimeZone: flagSchedTimeZone,
+		Schedule: f.schedule,
+		TimeZone: f.timeZone,
 		PubsubTarget: &cloudscheduler.PubsubTarget{
-			TopicName: flagSchedTopic,
+			TopicName: f.topic,
 		},
 	}
-	if flagSchedDescription != "" {
-		job.Description = flagSchedDescription
+	if f.description != "" {
+		job.Description = f.description
 	}
-	if flagSchedAttemptDeadline != "" {
-		job.AttemptDeadline = flagSchedAttemptDeadline
+	if f.attemptDeadline != "" {
+		job.AttemptDeadline = f.attemptDeadline
 	}
-	if flagSchedMessageBody != "" {
-		job.PubsubTarget.Data = flagSchedMessageBody
+	if f.messageBody != "" {
+		job.PubsubTarget.Data = f.messageBody
 	}
-	if len(flagSchedAttributes) > 0 {
-		job.PubsubTarget.Attributes = flagSchedAttributes
+	if len(f.attributes) > 0 {
+		job.PubsubTarget.Attributes = f.attributes
 	}
 
 	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
-	job.Name = fmt.Sprintf("%s/jobs/%s", parent, args[0])
+	job.Name = fmt.Sprintf("%s/jobs/%s", parent, jobID)
 	result, err := svc.Projects.Locations.Jobs.Create(parent, job).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating scheduler job: %w", err)
 	}
 
-	fmt.Printf("Created scheduler job [%s].\n", path.Base(result.Name))
+	fmt.Fprintf(inv.stdout, "Created scheduler job [%s].\n", path.Base(result.Name))
 	return nil
 }
 
 // --- scheduler jobs delete (#199) ---
 
-func runSchedulerJobsDelete(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsDelete(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	if !flagQuiet {
-		fmt.Printf("You are about to delete scheduler job [%s].\n", args[0])
-		fmt.Print("Do you want to continue (Y/n)? ")
-		var answer string
-		fmt.Scanln(&answer)
+	if !inv.flags.quiet {
+		fmt.Fprintf(inv.stdout, "You are about to delete scheduler job [%s].\n", jobID)
+		answer := inv.ask("Do you want to continue (Y/n)? ")
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "" && answer != "y" && answer != "yes" {
-			fmt.Println("Aborted.")
+			fmt.Fprintln(inv.stdout, "Aborted.")
 			return nil
 		}
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 
-	name := schedulerJobName(project, location, args[0])
+	name := schedulerJobName(project, location, jobID)
 	if _, err := svc.Projects.Locations.Jobs.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting scheduler job: %w", err)
 	}
 
-	fmt.Printf("Deleted scheduler job [%s].\n", args[0])
+	fmt.Fprintf(inv.stdout, "Deleted scheduler job [%s].\n", jobID)
 	return nil
 }
 
 // --- scheduler jobs update http (#200) ---
 
-func runSchedulerJobsUpdateHTTP(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsUpdateHTTP(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 
-	name := schedulerJobName(project, location, args[0])
+	name := schedulerJobName(project, location, jobID)
 	job, err := svc.Projects.Locations.Jobs.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting scheduler job: %w", err)
 	}
 
 	var updateMask []string
-	if flagSchedSchedule != "" {
-		job.Schedule = flagSchedSchedule
+	if f.schedule != "" {
+		job.Schedule = f.schedule
 		updateMask = append(updateMask, "schedule")
 	}
-	if flagSchedTimeZone != "" {
-		job.TimeZone = flagSchedTimeZone
+	if f.timeZone != "" {
+		job.TimeZone = f.timeZone
 		updateMask = append(updateMask, "time_zone")
 	}
-	if flagSchedDescription != "" {
-		job.Description = flagSchedDescription
+	if f.description != "" {
+		job.Description = f.description
 		updateMask = append(updateMask, "description")
 	}
-	if flagSchedURI != "" && job.HttpTarget != nil {
-		job.HttpTarget.Uri = flagSchedURI
+	if f.uri != "" && job.HttpTarget != nil {
+		job.HttpTarget.Uri = f.uri
 		updateMask = append(updateMask, "http_target.uri")
 	}
-	if flagSchedHTTPMethod != "" && job.HttpTarget != nil {
-		job.HttpTarget.HttpMethod = strings.ToUpper(flagSchedHTTPMethod)
+	if f.httpMethod != "" && job.HttpTarget != nil {
+		job.HttpTarget.HttpMethod = strings.ToUpper(f.httpMethod)
 		updateMask = append(updateMask, "http_target.http_method")
 	}
 
@@ -650,45 +627,44 @@ func runSchedulerJobsUpdateHTTP(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("updating scheduler job: %w", err)
 	}
 
-	fmt.Printf("Updated scheduler job [%s].\n", path.Base(result.Name))
+	fmt.Fprintf(inv.stdout, "Updated scheduler job [%s].\n", path.Base(result.Name))
 	return nil
 }
 
 // --- scheduler jobs update pubsub (#200) ---
 
-func runSchedulerJobsUpdatePubsub(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveSchedulerLocation()
+func runSchedulerJobsUpdatePubsub(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
+	project, location, err := resolveSchedulerLocation(ctx, inv, f.location)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 
-	name := schedulerJobName(project, location, args[0])
+	name := schedulerJobName(project, location, jobID)
 	job, err := svc.Projects.Locations.Jobs.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting scheduler job: %w", err)
 	}
 
 	var updateMask []string
-	if flagSchedSchedule != "" {
-		job.Schedule = flagSchedSchedule
+	if f.schedule != "" {
+		job.Schedule = f.schedule
 		updateMask = append(updateMask, "schedule")
 	}
-	if flagSchedTimeZone != "" {
-		job.TimeZone = flagSchedTimeZone
+	if f.timeZone != "" {
+		job.TimeZone = f.timeZone
 		updateMask = append(updateMask, "time_zone")
 	}
-	if flagSchedDescription != "" {
-		job.Description = flagSchedDescription
+	if f.description != "" {
+		job.Description = f.description
 		updateMask = append(updateMask, "description")
 	}
-	if flagSchedTopic != "" && job.PubsubTarget != nil {
-		job.PubsubTarget.TopicName = flagSchedTopic
+	if f.topic != "" && job.PubsubTarget != nil {
+		job.PubsubTarget.TopicName = f.topic
 		updateMask = append(updateMask, "pubsub_target.topic_name")
 	}
 
@@ -701,6 +677,6 @@ func runSchedulerJobsUpdatePubsub(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("updating scheduler job: %w", err)
 	}
 
-	fmt.Printf("Updated scheduler job [%s].\n", path.Base(result.Name))
+	fmt.Fprintf(inv.stdout, "Updated scheduler job [%s].\n", path.Base(result.Name))
 	return nil
 }
