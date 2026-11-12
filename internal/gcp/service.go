@@ -22,6 +22,9 @@ type Clients struct {
 	// DebugOut, if not nil, receives every outgoing request as a curl
 	// command (see internal/httplog), as for --log-http.
 	DebugOut io.Writer
+	// Options are applied to every client after all others, e.g. to point
+	// clients at a test server.
+	Options []option.ClientOption
 }
 
 // newService builds a generated API client with ctor, authenticated as c's
@@ -36,5 +39,6 @@ func newService[T any](ctx context.Context, c *Clients, ctor func(context.Contex
 	if err != nil {
 		return zero, err
 	}
-	return ctor(ctx, append(opts, extra...)...)
+	opts = append(opts, extra...)
+	return ctor(ctx, append(opts, c.Options...)...)
 }
