@@ -48,7 +48,7 @@ func TestParseDiskSizeGB(t *testing.T) {
 // subcommand must exist under `compute disks` and accept a `--size` flag.
 func TestComputeDisksResizeRegistered(t *testing.T) {
 	var compute *cobra.Command
-	for _, c := range rootCmd.Commands() {
+	for _, c := range newRootCmd(newOSInvocation(), true).Commands() {
 		if c.Name() == "compute" {
 			compute = c
 			break

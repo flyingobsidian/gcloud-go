@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 
-	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
 	compute "google.golang.org/api/compute/v1"
 )
@@ -121,8 +119,8 @@ func (l computeLister[T]) emit(w, errW io.Writer, items []T, format string, uri 
 }
 
 // newComputeListCmd builds the `list` command for l, with the scope flags of
-// the scopes l supports.
-func newComputeListCmd[T any](short string, l computeLister[T]) *cobra.Command {
+// the scopes l supports, for inv.
+func newComputeListCmd[T any](inv *invocation, short string, l computeLister[T]) *cobra.Command {
 	var req computeListRequest
 	var uri bool
 	cmd := &cobra.Command{
@@ -152,12 +150,12 @@ func newComputeListCmd[T any](short string, l computeLister[T]) *cobra.Command {
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		req.zonesSet = cmd.Flags().Changed("zones")
 		req.regionsSet = cmd.Flags().Changed("regions")
-		project, err := resolveProject()
+		project, err := inv.project()
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
-		svc, err := icompute.NewService(ctx, flagAccount)
+		ctx := cmd.Context()
+		svc, err := inv.clients().Compute(ctx)
 		if err != nil {
 			return err
 		}
@@ -165,7 +163,7 @@ func newComputeListCmd[T any](short string, l computeLister[T]) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return l.emit(os.Stdout, os.Stderr, items, flagFormat, uri)
+		return l.emit(inv.stdout, inv.stderr, items, inv.flags.format, uri)
 	}
 	return cmd
 }

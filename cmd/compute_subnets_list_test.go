@@ -55,7 +55,7 @@ func TestSubnetsDefaultTable(t *testing.T) {
 }
 
 func TestSubnetsListRegistered(t *testing.T) {
-	list, _, err := computeCmd.Find([]string{"networks", "subnets", "list"})
+	list, _, err := newComputeCmd(newOSInvocation()).Find([]string{"networks", "subnets", "list"})
 	if err != nil || list.RunE == nil || list.Name() != "list" {
 		t.Fatalf("compute networks subnets list not registered: %v", err)
 	}

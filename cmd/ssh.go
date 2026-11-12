@@ -13,68 +13,42 @@ import (
 	"time"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
-	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
-	"github.com/flyingobsidian/gcloud-go/internal/config"
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/flyingobsidian/gcloud-go/internal/iap"
 	ioslogin "github.com/flyingobsidian/gcloud-go/internal/oslogin"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
 )
 
-var sshCmd = &cobra.Command{
-	Use:   "ssh [USER@]INSTANCE [-- REMOTE_COMMAND]",
-	Short: "SSH into a Compute Engine instance",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runSSH,
+func (s *computeCmds) initSsh() {
+	s.sshCmd.Flags().BoolVar(&s.flagSSHTunnelThroughIAP, "tunnel-through-iap", false, "Tunnel through Identity-Aware Proxy")
+	s.sshCmd.Flags().BoolVar(&s.flagSSHInternalIP, "internal-ip", false, "Connect using internal IP")
+	s.sshCmd.Flags().StringVar(&s.flagSSHKeyFile, "ssh-key-file", "", "SSH private key file")
+	s.sshCmd.Flags().StringVar(&s.flagSSHCommand, "command", "", "Command to run on the instance")
+	s.sshCmd.Flags().StringArrayVar(&s.flagSSHFlag, "ssh-flag", nil, "Extra flags to pass to ssh")
+	s.sshCmd.Flags().BoolVar(&s.flagSSHDryRun, "dry-run", false, "Print the ssh command without running it")
+	s.sshCmd.Flags().BoolVar(&s.flagSSHPlain, "plain", false, "Suppress managed SSH key setup")
+	s.sshCmd.Flags().StringVar(&s.flagSSHStrictHostKeyChecking, "strict-host-key-checking", "", "Override StrictHostKeyChecking (yes, no, ask)")
+	s.sshCmd.Flags().StringVar(&s.flagSSHKeyExpiration, "ssh-key-expiration", "", "Absolute expiration time for SSH key (RFC 3339)")
+	s.sshCmd.Flags().StringVar(&s.flagSSHKeyExpireAfter, "ssh-key-expire-after", "", "Duration after which SSH key expires (e.g. 30m, 1h)")
+	s.sshCmd.Flags().BoolVar(&s.flagSSHTroubleshoot, "troubleshoot", false, "Run SSH troubleshooting diagnostics")
+	s.sshCmd.Flags().BoolVar(&s.flagSSHForceKeyOverwrite, "force-key-file-overwrite", false, "Overwrite existing SSH key file")
+	s.sshCmd.Flags().StringVar(&s.flagSSHContainer, "container", "", "Name of container to SSH into")
+
+	s.computeCmd.AddCommand(s.sshCmd)
 }
 
-var (
-	flagSSHTunnelThroughIAP      bool
-	flagSSHInternalIP            bool
-	flagSSHKeyFile               string
-	flagSSHCommand               string
-	flagSSHFlag                  []string
-	flagSSHDryRun                bool
-	flagSSHPlain                 bool
-	flagSSHStrictHostKeyChecking string
-	flagSSHKeyExpiration         string
-	flagSSHKeyExpireAfter        string
-	flagSSHTroubleshoot          bool
-	flagSSHForceKeyOverwrite     bool
-	flagSSHContainer             string
-)
-
-func init() {
-	sshCmd.Flags().BoolVar(&flagSSHTunnelThroughIAP, "tunnel-through-iap", false, "Tunnel through Identity-Aware Proxy")
-	sshCmd.Flags().BoolVar(&flagSSHInternalIP, "internal-ip", false, "Connect using internal IP")
-	sshCmd.Flags().StringVar(&flagSSHKeyFile, "ssh-key-file", "", "SSH private key file")
-	sshCmd.Flags().StringVar(&flagSSHCommand, "command", "", "Command to run on the instance")
-	sshCmd.Flags().StringArrayVar(&flagSSHFlag, "ssh-flag", nil, "Extra flags to pass to ssh")
-	sshCmd.Flags().BoolVar(&flagSSHDryRun, "dry-run", false, "Print the ssh command without running it")
-	sshCmd.Flags().BoolVar(&flagSSHPlain, "plain", false, "Suppress managed SSH key setup")
-	sshCmd.Flags().StringVar(&flagSSHStrictHostKeyChecking, "strict-host-key-checking", "", "Override StrictHostKeyChecking (yes, no, ask)")
-	sshCmd.Flags().StringVar(&flagSSHKeyExpiration, "ssh-key-expiration", "", "Absolute expiration time for SSH key (RFC 3339)")
-	sshCmd.Flags().StringVar(&flagSSHKeyExpireAfter, "ssh-key-expire-after", "", "Duration after which SSH key expires (e.g. 30m, 1h)")
-	sshCmd.Flags().BoolVar(&flagSSHTroubleshoot, "troubleshoot", false, "Run SSH troubleshooting diagnostics")
-	sshCmd.Flags().BoolVar(&flagSSHForceKeyOverwrite, "force-key-file-overwrite", false, "Overwrite existing SSH key file")
-	sshCmd.Flags().StringVar(&flagSSHContainer, "container", "", "Name of container to SSH into")
-
-	computeCmd.AddCommand(sshCmd)
-}
-
-func runSSH(cmd *cobra.Command, args []string) error {
-	if flagSSHTunnelThroughIAP && flagSSHInternalIP {
+func (s *computeCmds) runSSH(cmd *cobra.Command, args []string) error {
+	if s.flagSSHTunnelThroughIAP && s.flagSSHInternalIP {
 		return fmt.Errorf("--tunnel-through-iap and --internal-ip are mutually exclusive")
 	}
 	user, instance := parseUserInstance(args[0])
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -93,11 +67,11 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	useOSLogin := ioslogin.IsEnabled(inst, proj)
 
 	// Ensure SSH key exists (unless --plain or --ssh-key-file is set).
-	if !flagSSHPlain && flagSSHKeyFile == "" {
+	if !s.flagSSHPlain && s.flagSSHKeyFile == "" {
 		keyPath := googleSSHKeyPath()
 		keyGenerated := false
 		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-			keyPath, err = generateSSHKey(keyPath)
+			keyPath, err = s.generateSSHKey(keyPath)
 			if err != nil {
 				return fmt.Errorf("generating SSH key: %w", err)
 			}
@@ -107,15 +81,15 @@ func runSSH(cmd *cobra.Command, args []string) error {
 		if keyGenerated {
 			if useOSLogin {
 				// Push key via OS Login API and resolve POSIX username.
-				email := resolveAccountEmail()
+				email := s.resolveAccountEmail()
 				if email != "" {
-					osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+					osLoginSvc, err := s.inv.clients().OSLogin(ctx)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+						fmt.Fprintf(s.inv.stderr, "WARNING: could not create OS Login service: %v\n", err)
 					} else {
 						posixUser, err := ioslogin.ImportSSHKey(ctx, osLoginSvc, email, keyPath+".pub", project)
 						if err != nil {
-							fmt.Fprintf(os.Stderr, "WARNING: could not import SSH key via OS Login: %v\n", err)
+							fmt.Fprintf(s.inv.stderr, "WARNING: could not import SSH key via OS Login: %v\n", err)
 						} else if posixUser != "" && user == "" {
 							user = posixUser
 						}
@@ -130,42 +104,42 @@ func runSSH(cmd *cobra.Command, args []string) error {
 					}
 				}
 				if sshUser != "" {
-					if err := pushSSHKeyToProject(ctx, svc, project, sshUser, keyPath+".pub"); err != nil {
-						fmt.Fprintf(os.Stderr, "WARNING: could not push SSH key to project metadata: %v\n", err)
+					if err := s.pushSSHKeyToProject(ctx, svc, project, sshUser, keyPath+".pub"); err != nil {
+						fmt.Fprintf(s.inv.stderr, "WARNING: could not push SSH key to project metadata: %v\n", err)
 					} else {
-						fmt.Fprintln(os.Stderr, "Waiting for SSH key to propagate.")
+						fmt.Fprintln(s.inv.stderr, "Waiting for SSH key to propagate.")
 						time.Sleep(5 * time.Second)
 					}
 				}
 			}
 		} else if useOSLogin && user == "" {
 			// Key already exists, but we still need the POSIX username for OS Login.
-			email := resolveAccountEmail()
+			email := s.resolveAccountEmail()
 			if email != "" {
-				osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+				osLoginSvc, err := s.inv.clients().OSLogin(ctx)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+					fmt.Fprintf(s.inv.stderr, "WARNING: could not create OS Login service: %v\n", err)
 				} else {
 					posixUser, err := ioslogin.PosixUsername(ctx, osLoginSvc, email, project)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "WARNING: could not resolve OS Login username: %v\n", err)
+						fmt.Fprintf(s.inv.stderr, "WARNING: could not resolve OS Login username: %v\n", err)
 					} else {
 						user = posixUser
 					}
 				}
 			}
 		}
-	} else if useOSLogin && user == "" && !flagSSHPlain {
+	} else if useOSLogin && user == "" && !s.flagSSHPlain {
 		// Custom key file provided but no user; resolve POSIX username via OS Login.
-		email := resolveAccountEmail()
+		email := s.resolveAccountEmail()
 		if email != "" {
-			osLoginSvc, err := gcp.OSLoginService(ctx, flagAccount)
+			osLoginSvc, err := s.inv.clients().OSLogin(ctx)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "WARNING: could not create OS Login service: %v\n", err)
+				fmt.Fprintf(s.inv.stderr, "WARNING: could not create OS Login service: %v\n", err)
 			} else {
 				posixUser, err := ioslogin.PosixUsername(ctx, osLoginSvc, email, project)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "WARNING: could not resolve OS Login username: %v\n", err)
+					fmt.Fprintf(s.inv.stderr, "WARNING: could not resolve OS Login username: %v\n", err)
 				} else {
 					user = posixUser
 				}
@@ -177,15 +151,15 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	var host string
 	var iapListener net.Listener
 
-	if flagSSHTunnelThroughIAP {
-		ln, err := startIAPTunnel(ctx, project, zone, instance)
+	if s.flagSSHTunnelThroughIAP {
+		ln, err := s.startIAPTunnel(ctx, project, zone, instance)
 		if err != nil {
 			return err
 		}
 		defer ln.Close()
 		iapListener = ln
 		host = "localhost"
-	} else if flagSSHInternalIP {
+	} else if s.flagSSHInternalIP {
 		host = getInternalIP(inst)
 		if host == "" {
 			return fmt.Errorf("instance %s has no internal IP", instance)
@@ -199,17 +173,17 @@ func runSSH(cmd *cobra.Command, args []string) error {
 
 	// Build SSH args.
 	var sshArgs []string
-	if flagSSHPlain {
+	if s.flagSSHPlain {
 		sshArgs = []string{}
 	} else {
-		sshArgs = buildSSHOpts(flagSSHKeyFile, host)
+		sshArgs = buildSSHOpts(s.flagSSHKeyFile, host)
 	}
 
-	if flagSSHStrictHostKeyChecking != "" {
-		sshArgs = append(sshArgs, "-o", "StrictHostKeyChecking="+flagSSHStrictHostKeyChecking)
+	if s.flagSSHStrictHostKeyChecking != "" {
+		sshArgs = append(sshArgs, "-o", "StrictHostKeyChecking="+s.flagSSHStrictHostKeyChecking)
 	}
 
-	for _, f := range flagSSHFlag {
+	for _, f := range s.flagSSHFlag {
 		sshArgs = append(sshArgs, f)
 	}
 
@@ -226,40 +200,40 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	sshArgs = append(sshArgs, target)
 
 	// Container support: wrap command in docker exec.
-	if flagSSHContainer != "" {
-		containerCmd := fmt.Sprintf("docker exec -it %s", flagSSHContainer)
-		if flagSSHCommand != "" {
-			containerCmd += " " + flagSSHCommand
+	if s.flagSSHContainer != "" {
+		containerCmd := fmt.Sprintf("docker exec -it %s", s.flagSSHContainer)
+		if s.flagSSHCommand != "" {
+			containerCmd += " " + s.flagSSHCommand
 		} else {
 			containerCmd += " /bin/sh"
 		}
 		sshArgs = append(sshArgs, "--", containerCmd)
-	} else if flagSSHCommand != "" {
-		sshArgs = append(sshArgs, "--", flagSSHCommand)
+	} else if s.flagSSHCommand != "" {
+		sshArgs = append(sshArgs, "--", s.flagSSHCommand)
 	} else if dashIdx := cmd.ArgsLenAtDash(); dashIdx >= 0 {
 		sshArgs = append(sshArgs, "--")
 		sshArgs = append(sshArgs, args[dashIdx:]...)
 	}
 
-	if flagSSHTroubleshoot {
-		fmt.Println("=== SSH Troubleshooting ===")
-		fmt.Printf("Instance: %s (zone: %s)\n", instance, zone)
-		fmt.Printf("Host: %s\n", host)
-		fmt.Printf("Status: %s\n", inst.Status)
+	if s.flagSSHTroubleshoot {
+		fmt.Fprintln(s.inv.stdout, "=== SSH Troubleshooting ===")
+		fmt.Fprintf(s.inv.stdout, "Instance: %s (zone: %s)\n", instance, zone)
+		fmt.Fprintf(s.inv.stdout, "Host: %s\n", host)
+		fmt.Fprintf(s.inv.stdout, "Status: %s\n", inst.Status)
 		if inst.Status != "RUNNING" {
-			fmt.Println("WARNING: Instance is not running!")
+			fmt.Fprintln(s.inv.stdout, "WARNING: Instance is not running!")
 		}
-		fmt.Printf("IAP tunnel: %v\n", flagSSHTunnelThroughIAP)
-		fmt.Printf("Internal IP: %v\n", flagSSHInternalIP)
-		fmt.Println("===========================")
+		fmt.Fprintf(s.inv.stdout, "IAP tunnel: %v\n", s.flagSSHTunnelThroughIAP)
+		fmt.Fprintf(s.inv.stdout, "Internal IP: %v\n", s.flagSSHInternalIP)
+		fmt.Fprintln(s.inv.stdout, "===========================")
 	}
 
-	if flagSSHDryRun {
-		fmt.Println(shellJoin("ssh", sshArgs))
+	if s.flagSSHDryRun {
+		fmt.Fprintln(s.inv.stdout, shellJoin("ssh", sshArgs))
 		return nil
 	}
 
-	return execSSH(ctx, sshArgs)
+	return s.execSSH(ctx, sshArgs)
 }
 
 func parseUserInstance(arg string) (user, instance string) {
@@ -351,8 +325,8 @@ func knownHostsHasHost(host string) bool {
 	return false
 }
 
-func startIAPTunnel(ctx context.Context, project, zone, instance string) (net.Listener, error) {
-	ts, err := auth.TokenSource(ctx, flagAccount,
+func (s *computeCmds) startIAPTunnel(ctx context.Context, project, zone, instance string) (net.Listener, error) {
+	ts, err := auth.TokenSource(ctx, s.inv.flags.account,
 		"https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return nil, fmt.Errorf("obtaining token source: %w", err)
@@ -371,16 +345,16 @@ func startIAPTunnel(ctx context.Context, project, zone, instance string) (net.Li
 	return ln, nil
 }
 
-func execSSH(ctx context.Context, args []string) error {
+func (s *computeCmds) execSSH(ctx context.Context, args []string) error {
 	sshBin, err := exec.LookPath("ssh")
 	if err != nil {
 		return fmt.Errorf("ssh not found in PATH: %w", err)
 	}
 
 	c := exec.CommandContext(ctx, sshBin, args...)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
+	c.Stdin = s.inv.stdin
+	c.Stdout = s.inv.stdout
+	c.Stderr = s.inv.stderr
 	return c.Run()
 }
 
@@ -412,7 +386,7 @@ func osUser() (string, error) {
 
 // generateSSHKey creates an SSH keypair. It tries the preferred path first,
 // falling back to /tmp/gcloud-go/ if the directory can't be created.
-func generateSSHKey(preferredPath string) (string, error) {
+func (s *computeCmds) generateSSHKey(preferredPath string) (string, error) {
 	keyPath := preferredPath
 	dir := filepath.Dir(keyPath)
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -424,13 +398,13 @@ func generateSSHKey(preferredPath string) (string, error) {
 		keyPath = filepath.Join(tmpDir, "google_compute_engine")
 	}
 
-	fmt.Fprintf(os.Stderr, "WARNING: The SSH key file for gcloud does not exist.\n")
-	fmt.Fprintf(os.Stderr, "WARNING: SSH keygen will be executed to generate a key.\n")
+	fmt.Fprintf(s.inv.stderr, "WARNING: The SSH key file for gcloud does not exist.\n")
+	fmt.Fprintf(s.inv.stderr, "WARNING: SSH keygen will be executed to generate a key.\n")
 
 	cmd := exec.Command("ssh-keygen", "-t", "rsa", "-b", "3072", "-f", keyPath, "-N", "", "-q")
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdin = s.inv.stdin
+	cmd.Stdout = s.inv.stdout
+	cmd.Stderr = s.inv.stderr
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("running ssh-keygen: %w", err)
 	}
@@ -439,11 +413,11 @@ func generateSSHKey(preferredPath string) (string, error) {
 }
 
 // resolveAccountEmail returns the active GCP account email from the flag or config.
-func resolveAccountEmail() string {
-	if flagAccount != "" {
-		return flagAccount
+func (s *computeCmds) resolveAccountEmail() string {
+	if s.inv.flags.account != "" {
+		return s.inv.flags.account
 	}
-	props, err := config.Load()
+	props, err := s.inv.properties()
 	if err != nil {
 		return ""
 	}
@@ -451,7 +425,7 @@ func resolveAccountEmail() string {
 }
 
 // pushSSHKeyToProject adds the public key to the project's SSH metadata.
-func pushSSHKeyToProject(ctx context.Context, svc *compute.Service, project, sshUser, pubKeyPath string) error {
+func (s *computeCmds) pushSSHKeyToProject(ctx context.Context, svc *compute.Service, project, sshUser, pubKeyPath string) error {
 	pubKey, err := os.ReadFile(pubKeyPath)
 	if err != nil {
 		return fmt.Errorf("reading public key: %w", err)
@@ -490,12 +464,12 @@ func pushSSHKeyToProject(ctx context.Context, svc *compute.Service, project, ssh
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Updating project ssh metadata...\n")
+	fmt.Fprintf(s.inv.stderr, "Updating project ssh metadata...\n")
 	_, err = svc.Projects.SetCommonInstanceMetadata(project, proj.CommonInstanceMetadata).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating project metadata: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updating project ssh metadata...done.\n")
+	fmt.Fprintf(s.inv.stderr, "Updating project ssh metadata...done.\n")
 	return nil
 }
 

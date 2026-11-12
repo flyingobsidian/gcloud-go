@@ -191,7 +191,7 @@ func main() {
 								}
 							}
 						}
-						if isCmd || init == nil || mutated[obj] {
+						if isCmd || mutated[obj] {
 							if len(vs.Values) > 0 && len(vs.Values) != len(vs.Names) {
 								log.Fatalf("multi-value var spec for %s", name.Name)
 							}
@@ -369,6 +369,10 @@ func main() {
 		if keep[o.Name()] {
 			delete(needs, o)
 		}
+		if fd := funcs[o]; fd != nil && fd.Type.TypeParams != nil {
+			fmt.Printf("GENERIC %s left as a function: give it an *invocation by hand\n", o.Name())
+			delete(needs, o)
+		}
 	}
 
 	// 3. Report outside references.
@@ -402,11 +406,6 @@ func main() {
 	report(pkg, false)
 	if tpkg != nil {
 		report(tpkg, true)
-	}
-	for o, fd := range funcs {
-		if needs[o] && fd.Type.TypeParams != nil {
-			fmt.Printf("GENERIC %s\n", o.Name())
-		}
 	}
 	fmt.Printf("moved vars: %d, methods: %d, inits: %d\n", len(moved), len(needs), len(initFuncs))
 	if *dryRun {
@@ -504,7 +503,7 @@ func main() {
 				switch fun := n.Fun.(type) {
 				case *ast.Ident:
 					o := info.Uses[fun]
-					if o == nil || o.Parent() != scope || needs[o] || funcs[o] != nil {
+					if o == nil || o.Parent() != scope || needs[o] {
 						break
 					}
 					r, ok := cmdCalls[fun.Name]
@@ -777,8 +776,13 @@ type %[1]s struct {
 
 // %[3]s returns the %[4]q command group for inv.
 func %[3]s(inv *invocation) *cobra.Command {
+	return %[3]ss(inv).%[6]s
+}
+
+// %[3]ss builds the %[4]q command group for inv and returns its state.
+func %[3]ss(inv *invocation) *%[1]s {
 	%[7]s := &%[1]s{inv: inv}
-%[5]s	return %[7]s.%[6]s
+%[5]s	return %[7]s
 }
 `, *typeName, fields.String(), *ctorName, strings.TrimSuffix(*rootVar, "Cmd"), ctor.String(), *rootVar, R)
 	if rootFile == "" {

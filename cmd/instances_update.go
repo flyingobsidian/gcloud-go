@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -10,38 +9,24 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-var instancesUpdateCmd = &cobra.Command{
-	Use:   "update INSTANCE_NAME",
-	Short: "Update a Compute Engine instance",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runInstancesUpdate,
+func (s *computeCmds) initInstancesUpdate() {
+	s.instancesUpdateCmd.Flags().StringToStringVar(&s.flagUpdateLabels, "update-labels", nil, "Labels to add or update")
+	s.instancesUpdateCmd.Flags().StringVar(&s.flagUpdateRemoveLabels, "remove-labels", "", "Comma-separated label keys to remove")
+	s.instancesUpdateCmd.Flags().BoolVar(&s.flagDeletionProtection, "deletion-protection", false, "Enable deletion protection")
+	s.instancesUpdateCmd.Flags().BoolVar(&s.flagNoDeletionProtection, "no-deletion-protection", false, "Disable deletion protection")
+
+	s.instancesCmd.AddCommand(s.instancesUpdateCmd)
 }
 
-var (
-	flagUpdateLabels         map[string]string
-	flagUpdateRemoveLabels   string
-	flagDeletionProtection   bool
-	flagNoDeletionProtection bool
-)
-
-func init() {
-	instancesUpdateCmd.Flags().StringToStringVar(&flagUpdateLabels, "update-labels", nil, "Labels to add or update")
-	instancesUpdateCmd.Flags().StringVar(&flagUpdateRemoveLabels, "remove-labels", "", "Comma-separated label keys to remove")
-	instancesUpdateCmd.Flags().BoolVar(&flagDeletionProtection, "deletion-protection", false, "Enable deletion protection")
-	instancesUpdateCmd.Flags().BoolVar(&flagNoDeletionProtection, "no-deletion-protection", false, "Disable deletion protection")
-
-	instancesCmd.AddCommand(instancesUpdateCmd)
-}
-
-func runInstancesUpdate(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runInstancesUpdate(cmd *cobra.Command, args []string) error {
 	instance := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -52,16 +37,16 @@ func runInstancesUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Handle labels.
-	if len(flagUpdateLabels) > 0 || flagUpdateRemoveLabels != "" {
+	if len(s.flagUpdateLabels) > 0 || s.flagUpdateRemoveLabels != "" {
 		labels := inst.Labels
 		if labels == nil {
 			labels = make(map[string]string)
 		}
-		for k, v := range flagUpdateLabels {
+		for k, v := range s.flagUpdateLabels {
 			labels[k] = v
 		}
-		if flagUpdateRemoveLabels != "" {
-			for _, k := range strings.Split(flagUpdateRemoveLabels, ",") {
+		if s.flagUpdateRemoveLabels != "" {
+			for _, k := range strings.Split(s.flagUpdateRemoveLabels, ",") {
 				delete(labels, strings.TrimSpace(k))
 			}
 		}
@@ -79,9 +64,9 @@ func runInstancesUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Handle deletion protection.
-	if flagDeletionProtection || flagNoDeletionProtection {
-		inst.DeletionProtection = flagDeletionProtection
-		op, err := svc.Instances.SetDeletionProtection(project, zone, instance).DeletionProtection(flagDeletionProtection).Context(ctx).Do()
+	if s.flagDeletionProtection || s.flagNoDeletionProtection {
+		inst.DeletionProtection = s.flagDeletionProtection
+		op, err := svc.Instances.SetDeletionProtection(project, zone, instance).DeletionProtection(s.flagDeletionProtection).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("setting deletion protection: %w", err)
 		}
@@ -90,6 +75,6 @@ func runInstancesUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("Updated instance [%s].\n", instance)
+	fmt.Fprintf(s.inv.stdout, "Updated instance [%s].\n", instance)
 	return nil
 }

@@ -53,11 +53,11 @@ func TestUnmanagedListInstancesFilterAndCSV(t *testing.T) {
 	}
 
 	filtered := filterUnmanagedInstances(items, "SOME_VM_NAME")
-	out := captureStdout(t, func() {
-		if err := formatUnmanagedInstances(filtered, "csv(NAME)"); err != nil {
-			t.Fatalf("formatUnmanagedInstances: %v", err)
-		}
-	})
+	inv, stdout, _ := newTestInvocation(t, nil, "")
+	if err := newComputeCmds(inv).formatUnmanagedInstances(filtered, "csv(NAME)"); err != nil {
+		t.Fatalf("formatUnmanagedInstances: %v", err)
+	}
+	out := stdout.String()
 
 	if out != "name\nSOME_VM_NAME\n" {
 		t.Errorf("output = %q, want %q", out, "name\nSOME_VM_NAME\n")

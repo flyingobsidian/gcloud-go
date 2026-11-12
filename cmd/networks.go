@@ -1,49 +1,29 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
 )
 
-var networksCmd = &cobra.Command{
-	Use:   "networks",
-	Short: "Manage VPC networks",
+func (s *computeCmds) initNetworks() {
+	s.networksListCmd.Flags().StringVar(&s.flagNetworksListFormat, "format", "", "Output format (e.g. json)")
+	s.networksListCmd.Flags().StringVar(&s.flagNetworksListFilter, "filter", "", "Filter expression")
+	s.networksListCmd.Flags().BoolVar(&s.flagNetworksListURI, "uri", false, "Print resource URIs")
+
+	s.networksCmd.AddCommand(s.networksListCmd)
+	s.computeCmd.AddCommand(s.networksCmd)
 }
 
-var networksListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Compute Engine networks",
-	Args:  cobra.NoArgs,
-	RunE:  runNetworksList,
-}
-
-var (
-	flagNetworksListFormat string
-	flagNetworksListFilter string
-	flagNetworksListURI    bool
-)
-
-func init() {
-	networksListCmd.Flags().StringVar(&flagNetworksListFormat, "format", "", "Output format (e.g. json)")
-	networksListCmd.Flags().StringVar(&flagNetworksListFilter, "filter", "", "Filter expression")
-	networksListCmd.Flags().BoolVar(&flagNetworksListURI, "uri", false, "Print resource URIs")
-
-	networksCmd.AddCommand(networksListCmd)
-	computeCmd.AddCommand(networksCmd)
-}
-
-func runNetworksList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *computeCmds) runNetworksList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -52,8 +32,8 @@ func runNetworksList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Networks.List(project).Context(ctx)
-		if flagNetworksListFilter != "" {
-			call = call.Filter(flagNetworksListFilter)
+		if s.flagNetworksListFilter != "" {
+			call = call.Filter(s.flagNetworksListFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -69,24 +49,24 @@ func runNetworksList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagNetworksListURI {
+	if s.flagNetworksListURI {
 		for _, n := range allNetworks {
-			fmt.Println(n.SelfLink)
+			fmt.Fprintln(s.inv.stdout, n.SelfLink)
 		}
 		return nil
 	}
 
-	if flagNetworksListFormat == "json" {
-		return printJSON(allNetworks)
+	if s.flagNetworksListFormat == "json" {
+		return s.inv.printJSON(allNetworks)
 	}
 
 	// Default table format matching gcloud-python:
 	// NAME, SUBNET_MODE, BGP_ROUTING_MODE, IPV4_RANGE, GATEWAY_IPV4
-	printTableHeading(len(allNetworks), "%-30s %-15s %-20s %-18s %-15s\n", "NAME", "SUBNET_MODE", "BGP_ROUTING_MODE", "IPV4_RANGE", "GATEWAY_IPV4")
+	printTableHeadingTo(s.inv.stdout, len(allNetworks), "%-30s %-15s %-20s %-18s %-15s\n", "NAME", "SUBNET_MODE", "BGP_ROUTING_MODE", "IPV4_RANGE", "GATEWAY_IPV4")
 	for _, n := range allNetworks {
 		subnetMode := networkSubnetMode(n)
 		bgpMode := networkBGPRoutingMode(n)
-		fmt.Printf("%-30s %-15s %-20s %-18s %-15s\n", n.Name, subnetMode, bgpMode, n.IPv4Range, n.GatewayIPv4)
+		fmt.Fprintf(s.inv.stdout, "%-30s %-15s %-20s %-18s %-15s\n", n.Name, subnetMode, bgpMode, n.IPv4Range, n.GatewayIPv4)
 	}
 	return nil
 }

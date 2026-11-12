@@ -18,26 +18,26 @@ import (
 // Each command mirrors its gcloud-python counterpart's scopes and default
 // table (surface/compute/<group>/list.py and the group's flags.py).
 
-func init() {
+func (s *computeCmds) initComputeLists() {
 	for _, g := range []struct {
 		name, short string
 		list        *cobra.Command
 	}{
-		{"instance-templates", "Manage instance templates", newComputeListCmd("List Compute Engine instance templates", instanceTemplatesLister)},
-		{"snapshots", "Manage disk snapshots", newComputeListCmd("List Compute Engine snapshots", snapshotsLister)},
-		{"firewall-rules", "Manage VPC firewall rules", newComputeListCmd("List Compute Engine firewall rules", firewallRulesLister)},
-		{"routers", "Manage Cloud Routers", newComputeListCmd("List Compute Engine routers", routersLister)},
-		{"backend-services", "Manage backend services", newComputeListCmd("List backend services", backendServicesLister)},
-		{"health-checks", "Manage health checks", newComputeListCmd("List health checks", healthChecksLister)},
-		{"url-maps", "Manage URL maps", newComputeListCmd("List URL maps", urlMapsLister)},
-		{"ssl-certificates", "Manage SSL certificates", newComputeListCmd("List Compute Engine SSL certificates", sslCertificatesLister)},
+		{"instance-templates", "Manage instance templates", newComputeListCmd(s.inv, "List Compute Engine instance templates", instanceTemplatesLister)},
+		{"snapshots", "Manage disk snapshots", newComputeListCmd(s.inv, "List Compute Engine snapshots", snapshotsLister)},
+		{"firewall-rules", "Manage VPC firewall rules", newComputeListCmd(s.inv, "List Compute Engine firewall rules", firewallRulesLister)},
+		{"routers", "Manage Cloud Routers", newComputeListCmd(s.inv, "List Compute Engine routers", routersLister)},
+		{"backend-services", "Manage backend services", newComputeListCmd(s.inv, "List backend services", backendServicesLister)},
+		{"health-checks", "Manage health checks", newComputeListCmd(s.inv, "List health checks", healthChecksLister)},
+		{"url-maps", "Manage URL maps", newComputeListCmd(s.inv, "List URL maps", urlMapsLister)},
+		{"ssl-certificates", "Manage SSL certificates", newComputeListCmd(s.inv, "List Compute Engine SSL certificates", sslCertificatesLister)},
 	} {
 		group := &cobra.Command{Use: g.name, Short: g.short}
 		group.AddCommand(g.list)
 		registerStubCommand(group, "describe", "Not yet implemented")
-		computeCmd.AddCommand(group)
+		s.computeCmd.AddCommand(group)
 	}
-	disksCmd.AddCommand(newComputeListCmd("List Compute Engine disks", disksLister))
+	s.disksCmd.AddCommand(newComputeListCmd(s.inv, "List Compute Engine disks", disksLister))
 }
 
 // --- default-table transforms, after api_lib/compute/transforms.py ---

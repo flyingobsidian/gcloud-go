@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -10,51 +9,26 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-var instancesAddMetadataCmd = &cobra.Command{
-	Use:   "add-metadata INSTANCE_NAME",
-	Short: "Add or update metadata for an instance",
-	Long: `Add or update instance metadata. Existing keys are overwritten.
+func (s *computeCmds) initInstancesMetadata() {
+	s.instancesAddMetadataCmd.Flags().StringToStringVar(&s.flagAddMetadataKV, "metadata", nil, "Metadata key=value pairs to add")
+	s.instancesAddMetadataCmd.MarkFlagRequired("metadata")
 
-Examples:
-  gcloud compute instances add-metadata my-instance --metadata=key1=value1,key2=value2 --zone=us-central1-a`,
-	Args: cobra.ExactArgs(1),
-	RunE: runInstancesAddMetadata,
+	s.instancesRemoveMetadataCmd.Flags().StringVar(&s.flagRemoveMetadataKeys, "keys", "", "Comma-separated list of metadata keys to remove")
+	s.instancesRemoveMetadataCmd.Flags().BoolVar(&s.flagRemoveMetadataAll, "all", false, "Remove all metadata")
+
+	s.instancesCmd.AddCommand(s.instancesAddMetadataCmd)
+	s.instancesCmd.AddCommand(s.instancesRemoveMetadataCmd)
 }
 
-var instancesRemoveMetadataCmd = &cobra.Command{
-	Use:   "remove-metadata INSTANCE_NAME",
-	Short: "Remove metadata from an instance",
-	Long: `Remove instance metadata by key.
-
-Examples:
-  gcloud compute instances remove-metadata my-instance --keys=key1,key2 --zone=us-central1-a
-  gcloud compute instances remove-metadata my-instance --all --zone=us-central1-a`,
-	Args: cobra.ExactArgs(1),
-	RunE: runInstancesRemoveMetadata,
-}
-
-var flagAddMetadataKV map[string]string
-
-func init() {
-	instancesAddMetadataCmd.Flags().StringToStringVar(&flagAddMetadataKV, "metadata", nil, "Metadata key=value pairs to add")
-	instancesAddMetadataCmd.MarkFlagRequired("metadata")
-
-	instancesRemoveMetadataCmd.Flags().StringVar(&flagRemoveMetadataKeys, "keys", "", "Comma-separated list of metadata keys to remove")
-	instancesRemoveMetadataCmd.Flags().BoolVar(&flagRemoveMetadataAll, "all", false, "Remove all metadata")
-
-	instancesCmd.AddCommand(instancesAddMetadataCmd)
-	instancesCmd.AddCommand(instancesRemoveMetadataCmd)
-}
-
-func runInstancesAddMetadata(cmd *cobra.Command, args []string) error {
+func (s *computeCmds) runInstancesAddMetadata(cmd *cobra.Command, args []string) error {
 	instance := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -70,7 +44,7 @@ func runInstancesAddMetadata(cmd *cobra.Command, args []string) error {
 	}
 
 	// Update or add keys.
-	for k, v := range flagAddMetadataKV {
+	for k, v := range s.flagAddMetadataKV {
 		val := v
 		found := false
 		for _, item := range metadata.Items {
@@ -93,23 +67,23 @@ func runInstancesAddMetadata(cmd *cobra.Command, args []string) error {
 	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 		return err
 	}
-	fmt.Printf("Updated metadata for instance [%s].\n", instance)
+	fmt.Fprintf(s.inv.stdout, "Updated metadata for instance [%s].\n", instance)
 	return nil
 }
 
-func runInstancesRemoveMetadata(cmd *cobra.Command, args []string) error {
-	if !flagRemoveMetadataAll && flagRemoveMetadataKeys == "" {
+func (s *computeCmds) runInstancesRemoveMetadata(cmd *cobra.Command, args []string) error {
+	if !s.flagRemoveMetadataAll && s.flagRemoveMetadataKeys == "" {
 		return fmt.Errorf("one of --keys or --all must be specified")
 	}
 
 	instance := args[0]
-	project, zone, err := resolveProjectZone()
+	project, zone, err := s.inv.projectZone()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
@@ -124,11 +98,11 @@ func runInstancesRemoveMetadata(cmd *cobra.Command, args []string) error {
 		metadata = &compute.Metadata{}
 	}
 
-	if flagRemoveMetadataAll {
+	if s.flagRemoveMetadataAll {
 		metadata.Items = nil
 	} else {
 		keysToRemove := make(map[string]bool)
-		for _, k := range strings.Split(flagRemoveMetadataKeys, ",") {
+		for _, k := range strings.Split(s.flagRemoveMetadataKeys, ",") {
 			keysToRemove[strings.TrimSpace(k)] = true
 		}
 		var filtered []*compute.MetadataItems
@@ -148,6 +122,6 @@ func runInstancesRemoveMetadata(cmd *cobra.Command, args []string) error {
 	if err := icompute.WaitForZoneOp(ctx, svc, project, zone, op.Name); err != nil {
 		return err
 	}
-	fmt.Printf("Updated metadata for instance [%s].\n", instance)
+	fmt.Fprintf(s.inv.stdout, "Updated metadata for instance [%s].\n", instance)
 	return nil
 }

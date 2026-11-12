@@ -3,34 +3,27 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"sort"
 	"strconv"
 	"strings"
 
-	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
 	"github.com/spf13/cobra"
 	compute "google.golang.org/api/compute/v1"
 )
 
 // --- managed list (#1990) ---
 
-var (
-	flagManagedListZones   []string
-	flagManagedListRegions []string
-)
-
 // managedListFormat is gcloud's default table for `instance-groups managed
 // list`, over the rows built by managedListTableRows.
 const managedListFormat = "table(name,location,scope,baseInstanceName,size,targetSize,instanceTemplate,autoscaled)"
 
-func init() {
-	managedListCmd.Flags().StringSliceVar(&flagManagedListZones, "zones", nil,
+func (s *computeCmds) initInstanceGroupsManagedList() {
+	s.managedListCmd.Flags().StringSliceVar(&s.flagManagedListZones, "zones", nil,
 		"Only show zonal MIGs; if zones are given, only MIGs in those zones")
-	managedListCmd.Flags().StringSliceVar(&flagManagedListRegions, "regions", nil,
+	s.managedListCmd.Flags().StringSliceVar(&s.flagManagedListRegions, "regions", nil,
 		"Only show regional MIGs; if regions are given, only MIGs in those regions")
-	managedListCmd.MarkFlagsMutuallyExclusive("zones", "regions")
+	s.managedListCmd.MarkFlagsMutuallyExclusive("zones", "regions")
 }
 
 // managedListScope describes which MIGs `managed list` shows, from the
@@ -45,14 +38,14 @@ type managedListScope struct {
 
 // managedListScopeFromFlags builds the scope from --zones/--regions. An
 // explicit --zone (a gcloud-go global flag) is treated as --zones=ZONE.
-func managedListScopeFromFlags(cmd *cobra.Command) managedListScope {
+func (s *computeCmds) managedListScopeFromFlags(cmd *cobra.Command) managedListScope {
 	switch {
 	case cmd.Flags().Changed("zones"):
-		return managedListScope{zonalOnly: true, zones: flagManagedListZones}
+		return managedListScope{zonalOnly: true, zones: s.flagManagedListZones}
 	case cmd.Flags().Changed("regions"):
-		return managedListScope{regionalOnly: true, regions: flagManagedListRegions}
-	case flagZone != "":
-		return managedListScope{zonalOnly: true, zones: []string{flagZone}}
+		return managedListScope{regionalOnly: true, regions: s.flagManagedListRegions}
+	case s.inv.flags.zone != "":
+		return managedListScope{zonalOnly: true, zones: []string{s.inv.flags.zone}}
 	}
 	return managedListScope{}
 }
@@ -68,24 +61,24 @@ func (s managedListScope) keep(mig *compute.InstanceGroupManager) bool {
 	return true
 }
 
-func runManagedList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *computeCmds) runManagedList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := icompute.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Compute(ctx)
 	if err != nil {
 		return err
 	}
 
-	migs, err := fetchManagedListMIGs(ctx, svc, project, managedListScopeFromFlags(cmd))
+	migs, err := fetchManagedListMIGs(ctx, svc, project, s.managedListScopeFromFlags(cmd))
 	if err != nil {
 		return err
 	}
-	if flagManagedListURI {
+	if s.flagManagedListURI {
 		for _, m := range migs {
-			fmt.Println(m.SelfLink)
+			fmt.Fprintln(s.inv.stdout, m.SelfLink)
 		}
 		return nil
 	}
@@ -106,18 +99,18 @@ func runManagedList(cmd *cobra.Command, args []string) error {
 	}
 
 	switch {
-	case flagFormat != "":
-		err = emitFormatted(records, flagFormat)
+	case s.inv.flags.format != "":
+		err = emitFormattedTo(s.inv.stdout, records, s.inv.flags.format)
 	case len(records) == 0:
-		fmt.Fprintln(os.Stderr, "Listed 0 items.")
+		fmt.Fprintln(s.inv.stderr, "Listed 0 items.")
 	default:
-		err = emitFormatted(managedListTableRows(records), managedListFormat)
+		err = emitFormattedTo(s.inv.stdout, managedListTableRows(records), managedListFormat)
 	}
 	if err != nil {
 		return err
 	}
 	if hadErrors {
-		fmt.Fprintln(os.Stderr, "(*) - there are errors in your autoscaling setup, please describe the resource to see details")
+		fmt.Fprintln(s.inv.stderr, "(*) - there are errors in your autoscaling setup, please describe the resource to see details")
 	}
 	return nil
 }
