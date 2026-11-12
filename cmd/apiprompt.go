@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -21,9 +22,10 @@ import (
 // disabled" error emitted by Service Usage on the first request against a
 // project + API pair, prompts the caller, and — on confirmation — enables
 // the API and reruns the failing command. gcloud-go plumbs the equivalent
-// flow through main.go: after the command fails, MaybePromptEnableAPI is
-// consulted; if it returns retry=true, main re-invokes Execute() with the
-// same argv so the operation runs again against the now-enabled API.
+// flow through Main: after the command fails, invocation.offerEnableAPI is
+// consulted; if it returns true, Main runs the same command again against
+// the now-enabled API. Only the CLI does this: an embedder must not change
+// project settings as a side effect.
 //
 // The prompt is suppressed when stdin is not a terminal or when --quiet is
 // set, matching Python's behaviour. Failures during the enable request or
@@ -87,24 +89,27 @@ func apiNotEnabledService(err error) string {
 	return ""
 }
 
-// promptYesNo asks the user for confirmation on stderr with the given text
-// and default. It respects --quiet (returns dflt without prompting) and
-// non-interactive stdin (also returns dflt). The prompt matches Python
-// gcloud's `(y/N)?` style, so `(y/N)` when the default is No and `(Y/n)`
-// when the default is Yes.
+// promptYesNo is invocation.confirm for command groups not yet migrated to
+// invocation (#2070): it uses --quiet and the process's standard streams.
 func promptYesNo(text string, dflt bool) bool {
-	if flagQuiet {
-		return dflt
-	}
-	if !IsInteractive() {
+	return confirm(os.Stdin, os.Stderr, IsInteractive() && !flagQuiet, text, dflt)
+}
+
+// confirm asks the user for confirmation on w with the given text and
+// default, reading the answer from r. When ask is false (--quiet, or stdin
+// is not a terminal) it returns dflt without prompting. The prompt matches
+// Python gcloud's `(y/N)?` style, so `(y/N)` when the default is No and
+// `(Y/n)` when the default is Yes.
+func confirm(r io.Reader, w io.Writer, ask bool, text string, dflt bool) bool {
+	if !ask {
 		return dflt
 	}
 	hint := "(y/N)?"
 	if dflt {
 		hint = "(Y/n)?"
 	}
-	fmt.Fprintf(os.Stderr, "%s %s ", text, hint)
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Fprintf(w, "%s %s ", text, hint)
+	line, err := bufio.NewReader(r).ReadString('\n')
 	if err != nil {
 		return dflt
 	}
@@ -119,8 +124,8 @@ func promptYesNo(text string, dflt bool) bool {
 // polls the returned operation until it completes or the context is
 // cancelled. The initial 45s deadline reflects the Python client's
 // behaviour of blocking until the enable propagates.
-func enableAPIAndWait(ctx context.Context, project, service, account string) error {
-	svc, err := gcp.ServiceUsageService(ctx, account)
+func enableAPIAndWait(ctx context.Context, clients *gcp.Clients, project, service string) error {
+	svc, err := clients.ServiceUsage(ctx)
 	if err != nil {
 		return fmt.Errorf("service usage client: %w", err)
 	}
@@ -154,32 +159,31 @@ func enableAPIAndWait(ctx context.Context, project, service, account string) err
 	return nil
 }
 
-// MaybePromptEnableAPI inspects err for a Service Usage "API not enabled"
-// signal, prompts the user (respecting --quiet and interactive tty), and
-// enables the API on the current project. It returns retry=true when the
-// caller should re-invoke the failing command; returned err is either nil
-// (retry) or the original err (so the caller preserves existing output for
-// the "no", non-interactive, or enable-failed paths).
-func MaybePromptEnableAPI(origErr error) (retry bool, err error) {
-	service := apiNotEnabledService(origErr)
+// offerEnableAPI inspects err for a Service Usage "API not enabled" signal,
+// asks the user (respecting --quiet and interactive tty) and enables the API
+// on the current project. It returns true when the caller should run the
+// failing command again; on false the caller reports err as usual (the
+// "no", non-interactive and enable-failed paths).
+func (inv *invocation) offerEnableAPI(ctx context.Context, err error) bool {
+	service := apiNotEnabledService(err)
 	if service == "" {
-		return false, origErr
+		return false
 	}
-	project, perr := resolveProject()
+	project, perr := inv.projectOrEmpty()
 	if perr != nil || project == "" {
-		return false, origErr
+		return false
 	}
 	msg := fmt.Sprintf("API [%s] not enabled on project [%s]. Would you like to enable and retry (this will take a few minutes)?",
 		service, project)
-	if !promptYesNo(msg, false) {
-		return false, origErr
+	if !inv.confirm(msg, false) {
+		return false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	if enErr := enableAPIAndWait(ctx, project, service, flagAccount); enErr != nil {
-		fmt.Fprintf(os.Stderr, "Enable failed: %v\n", enErr)
-		return false, origErr
+	if enErr := enableAPIAndWait(ctx, inv.clients(), project, service); enErr != nil {
+		fmt.Fprintf(inv.stderr, "Enable failed: %v\n", enErr)
+		return false
 	}
-	fmt.Fprintf(os.Stderr, "Enabled [%s] on project [%s]; retrying command.\n", service, project)
-	return true, nil
+	fmt.Fprintf(inv.stderr, "Enabled [%s] on project [%s]; retrying command.\n", service, project)
+	return true
 }

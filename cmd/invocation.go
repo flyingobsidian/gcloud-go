@@ -192,3 +192,20 @@ func (inv *invocation) clients() *gcp.Clients {
 		DebugOut: inv.httpDebugWriter(),
 	}
 }
+
+// confirm asks the user a yes/no question on stderr and returns the answer,
+// or dflt without asking when --quiet is set or the invocation is not
+// interactive.
+func (inv *invocation) confirm(text string, dflt bool) bool {
+	return confirm(inv.stdin, inv.stderr, inv.interactive && !inv.flags.quiet, text, dflt)
+}
+
+// emit writes v to stdout in the --format output format.
+func (inv *invocation) emit(v any) error {
+	return emitFormattedTo(inv.stdout, v, inv.flags.format)
+}
+
+// printJSON writes v to stdout as indented JSON.
+func (inv *invocation) printJSON(v any) error {
+	return emitJSON(inv.stdout, v)
+}
