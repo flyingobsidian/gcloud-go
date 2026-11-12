@@ -3,206 +3,226 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	crm "google.golang.org/api/cloudresourcemanager/v3"
 )
 
-var tagsCmd = &cobra.Command{
-	Use:   "tags",
-	Short: "Create and manipulate tag keys, values, and bindings",
+// tagsFlags holds the flag values of the commands built by newTagsCmd.
+type tagsFlags struct {
+	tagKeyParent            string
+	tagKeyDescription       string
+	tagKeyListParent        string
+	tagKeyListPageSize      int64
+	tagKeyListLimit         int64
+	tagKeyListFormat        string
+	tagValueParent          string
+	tagValueDescription     string
+	tagValueListParent      string
+	tagValueListPageSize    int64
+	tagValueListLimit       int64
+	tagValueListFormat      string
+	tagBindingParent        string
+	tagBindingTagValue      string
+	tagBindingTagValueNS    string
+	tagBindingLocation      string
+	tagBindingListParent    string
+	tagBindingListEffective bool
+	tagBindingListLocation  string
+	tagBindingListPageSize  int64
+	tagBindingListLimit     int64
+	tagBindingListFormat    string
 }
 
-// --- tag keys ---
+func newTagsCmd(inv *invocation) *cobra.Command {
+	f := &tagsFlags{}
 
-var tagKeysCmd = &cobra.Command{
-	Use:   "keys",
-	Short: "Manage tag keys",
-}
+	tagsCmd := &cobra.Command{
+		Use:   "tags",
+		Short: "Create and manipulate tag keys, values, and bindings",
+	}
 
-var tagKeyCreateCmd = &cobra.Command{
-	Use:   "create SHORT_NAME",
-	Short: "Create a tag key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTagKeyCreate,
-}
+	tagKeysCmd := &cobra.Command{
+		Use:   "keys",
+		Short: "Manage tag keys",
+	}
 
-var tagKeyDeleteCmd = &cobra.Command{
-	Use:   "delete TAG_KEY",
-	Short: "Delete a tag key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTagKeyDelete,
-}
+	tagKeyCreateCmd := &cobra.Command{
+		Use:   "create SHORT_NAME",
+		Short: "Create a tag key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagKeyCreate(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagKeyDescribeCmd = &cobra.Command{
-	Use:   "describe TAG_KEY",
-	Short: "Describe a tag key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTagKeyDescribe,
-}
+	tagKeyDeleteCmd := &cobra.Command{
+		Use:   "delete TAG_KEY",
+		Short: "Delete a tag key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagKeyDelete(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagKeyListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List tag keys under a parent",
-	Args:  cobra.NoArgs,
-	RunE:  runTagKeyList,
-}
+	tagKeyDescribeCmd := &cobra.Command{
+		Use:   "describe TAG_KEY",
+		Short: "Describe a tag key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagKeyDescribe(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagKeyUpdateCmd = &cobra.Command{
-	Use:   "update TAG_KEY",
-	Short: "Update a tag key's description",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTagKeyUpdate,
-}
+	tagKeyListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List tag keys under a parent",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagKeyList(c.Context(), inv, f, c, args)
+		},
+	}
 
-// --- tag values ---
+	tagKeyUpdateCmd := &cobra.Command{
+		Use:   "update TAG_KEY",
+		Short: "Update a tag key's description",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagKeyUpdate(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagValuesCmd = &cobra.Command{
-	Use:   "values",
-	Short: "Manage tag values",
-}
+	tagValuesCmd := &cobra.Command{
+		Use:   "values",
+		Short: "Manage tag values",
+	}
 
-var tagValueCreateCmd = &cobra.Command{
-	Use:   "create SHORT_NAME",
-	Short: "Create a tag value",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTagValueCreate,
-}
+	tagValueCreateCmd := &cobra.Command{
+		Use:   "create SHORT_NAME",
+		Short: "Create a tag value",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagValueCreate(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagValueDeleteCmd = &cobra.Command{
-	Use:   "delete TAG_VALUE",
-	Short: "Delete a tag value",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTagValueDelete,
-}
+	tagValueDeleteCmd := &cobra.Command{
+		Use:   "delete TAG_VALUE",
+		Short: "Delete a tag value",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagValueDelete(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagValueDescribeCmd = &cobra.Command{
-	Use:   "describe TAG_VALUE",
-	Short: "Describe a tag value",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTagValueDescribe,
-}
+	tagValueDescribeCmd := &cobra.Command{
+		Use:   "describe TAG_VALUE",
+		Short: "Describe a tag value",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagValueDescribe(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagValueListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List tag values under a parent tag key",
-	Args:  cobra.NoArgs,
-	RunE:  runTagValueList,
-}
+	tagValueListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List tag values under a parent tag key",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagValueList(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagValueUpdateCmd = &cobra.Command{
-	Use:   "update TAG_VALUE",
-	Short: "Update a tag value's description",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTagValueUpdate,
-}
+	tagValueUpdateCmd := &cobra.Command{
+		Use:   "update TAG_VALUE",
+		Short: "Update a tag value's description",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagValueUpdate(c.Context(), inv, f, c, args)
+		},
+	}
 
-// --- tag bindings ---
+	tagBindingsCmd := &cobra.Command{
+		Use:   "bindings",
+		Short: "Manage tag bindings",
+	}
 
-var tagBindingsCmd = &cobra.Command{
-	Use:   "bindings",
-	Short: "Manage tag bindings",
-}
+	tagBindingCreateCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a tag binding",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagBindingCreate(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagBindingCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a tag binding",
-	Args:  cobra.NoArgs,
-	RunE:  runTagBindingCreate,
-}
+	tagBindingDeleteCmd := &cobra.Command{
+		Use:   "delete BINDING_NAME",
+		Short: "Delete a tag binding",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagBindingDelete(c.Context(), inv, f, c, args)
+		},
+	}
 
-var tagBindingDeleteCmd = &cobra.Command{
-	Use:   "delete BINDING_NAME",
-	Short: "Delete a tag binding",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runTagBindingDelete,
-}
-
-var tagBindingListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List tag bindings on a resource",
-	Args:  cobra.NoArgs,
-	RunE:  runTagBindingList,
-}
-
-var (
-	flagTagKeyParent       string
-	flagTagKeyDescription  string
-	flagTagKeyListParent   string
-	flagTagKeyListPageSize int64
-	flagTagKeyListLimit    int64
-	flagTagKeyListFormat   string
-
-	flagTagValueParent       string
-	flagTagValueDescription  string
-	flagTagValueListParent   string
-	flagTagValueListPageSize int64
-	flagTagValueListLimit    int64
-	flagTagValueListFormat   string
-
-	flagTagBindingParent        string
-	flagTagBindingTagValue      string
-	flagTagBindingTagValueNS    string
-	flagTagBindingLocation      string
-	flagTagBindingListParent    string
-	flagTagBindingListEffective bool
-	flagTagBindingListLocation  string
-	flagTagBindingListPageSize  int64
-	flagTagBindingListLimit     int64
-	flagTagBindingListFormat    string
-)
-
-func init() {
-	tagKeyCreateCmd.Flags().StringVar(&flagTagKeyParent, "parent", "", "Parent (e.g. organizations/123 or projects/my-project) (required)")
-	tagKeyCreateCmd.Flags().StringVar(&flagTagKeyDescription, "description", "", "Description for the tag key")
+	tagBindingListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List tag bindings on a resource",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runTagBindingList(c.Context(), inv, f, c, args)
+		},
+	}
+	tagKeyCreateCmd.Flags().StringVar(&f.tagKeyParent, "parent", "", "Parent (e.g. organizations/123 or projects/my-project) (required)")
+	tagKeyCreateCmd.Flags().StringVar(&f.tagKeyDescription, "description", "", "Description for the tag key")
 	tagKeyCreateCmd.MarkFlagRequired("parent")
 
-	tagKeyListCmd.Flags().StringVar(&flagTagKeyListParent, "parent", "", "Parent to list tag keys under (required)")
-	tagKeyListCmd.Flags().Int64Var(&flagTagKeyListPageSize, "page-size", 0, "Page size for API pagination")
-	tagKeyListCmd.Flags().Int64Var(&flagTagKeyListLimit, "limit", 0, "Maximum number of tag keys to list (0 = no limit)")
-	tagKeyListCmd.Flags().StringVar(&flagTagKeyListFormat, "format", "", "Output format (json, yaml, or table)")
+	tagKeyListCmd.Flags().StringVar(&f.tagKeyListParent, "parent", "", "Parent to list tag keys under (required)")
+	tagKeyListCmd.Flags().Int64Var(&f.tagKeyListPageSize, "page-size", 0, "Page size for API pagination")
+	tagKeyListCmd.Flags().Int64Var(&f.tagKeyListLimit, "limit", 0, "Maximum number of tag keys to list (0 = no limit)")
+	tagKeyListCmd.Flags().StringVar(&f.tagKeyListFormat, "format", "", "Output format (json, yaml, or table)")
 	tagKeyListCmd.MarkFlagRequired("parent")
 
-	tagKeyUpdateCmd.Flags().StringVar(&flagTagKeyDescription, "description", "", "New description for the tag key (required)")
+	tagKeyUpdateCmd.Flags().StringVar(&f.tagKeyDescription, "description", "", "New description for the tag key (required)")
 	tagKeyUpdateCmd.MarkFlagRequired("description")
 
 	tagKeysCmd.AddCommand(tagKeyCreateCmd, tagKeyDeleteCmd, tagKeyDescribeCmd, tagKeyListCmd, tagKeyUpdateCmd)
 
-	tagValueCreateCmd.Flags().StringVar(&flagTagValueParent, "parent", "", "Parent tag key (e.g. tagKeys/123) (required)")
-	tagValueCreateCmd.Flags().StringVar(&flagTagValueDescription, "description", "", "Description for the tag value")
+	tagValueCreateCmd.Flags().StringVar(&f.tagValueParent, "parent", "", "Parent tag key (e.g. tagKeys/123) (required)")
+	tagValueCreateCmd.Flags().StringVar(&f.tagValueDescription, "description", "", "Description for the tag value")
 	tagValueCreateCmd.MarkFlagRequired("parent")
 
-	tagValueListCmd.Flags().StringVar(&flagTagValueListParent, "parent", "", "Parent tag key to list values under (required)")
-	tagValueListCmd.Flags().Int64Var(&flagTagValueListPageSize, "page-size", 0, "Page size for API pagination")
-	tagValueListCmd.Flags().Int64Var(&flagTagValueListLimit, "limit", 0, "Maximum number of tag values to list (0 = no limit)")
-	tagValueListCmd.Flags().StringVar(&flagTagValueListFormat, "format", "", "Output format (json, yaml, or table)")
+	tagValueListCmd.Flags().StringVar(&f.tagValueListParent, "parent", "", "Parent tag key to list values under (required)")
+	tagValueListCmd.Flags().Int64Var(&f.tagValueListPageSize, "page-size", 0, "Page size for API pagination")
+	tagValueListCmd.Flags().Int64Var(&f.tagValueListLimit, "limit", 0, "Maximum number of tag values to list (0 = no limit)")
+	tagValueListCmd.Flags().StringVar(&f.tagValueListFormat, "format", "", "Output format (json, yaml, or table)")
 	tagValueListCmd.MarkFlagRequired("parent")
 
-	tagValueUpdateCmd.Flags().StringVar(&flagTagValueDescription, "description", "", "New description for the tag value (required)")
+	tagValueUpdateCmd.Flags().StringVar(&f.tagValueDescription, "description", "", "New description for the tag value (required)")
 	tagValueUpdateCmd.MarkFlagRequired("description")
 
 	tagValuesCmd.AddCommand(tagValueCreateCmd, tagValueDeleteCmd, tagValueDescribeCmd, tagValueListCmd, tagValueUpdateCmd)
 
-	tagBindingCreateCmd.Flags().StringVar(&flagTagBindingParent, "parent", "", "Full resource name that the tag will be bound to, e.g. //cloudresourcemanager.googleapis.com/projects/123 (required)")
-	tagBindingCreateCmd.Flags().StringVar(&flagTagBindingTagValue, "tag-value", "", "Tag value resource name (e.g. tagValues/456)")
-	tagBindingCreateCmd.Flags().StringVar(&flagTagBindingTagValueNS, "tag-value-namespaced-name", "", "Tag value namespaced name (e.g. 12345/env/prod)")
-	tagBindingCreateCmd.Flags().StringVar(&flagTagBindingLocation, "location", "", "Location for the binding (leave empty for global)")
+	tagBindingCreateCmd.Flags().StringVar(&f.tagBindingParent, "parent", "", "Full resource name that the tag will be bound to, e.g. //cloudresourcemanager.googleapis.com/projects/123 (required)")
+	tagBindingCreateCmd.Flags().StringVar(&f.tagBindingTagValue, "tag-value", "", "Tag value resource name (e.g. tagValues/456)")
+	tagBindingCreateCmd.Flags().StringVar(&f.tagBindingTagValueNS, "tag-value-namespaced-name", "", "Tag value namespaced name (e.g. 12345/env/prod)")
+	tagBindingCreateCmd.Flags().StringVar(&f.tagBindingLocation, "location", "", "Location for the binding (leave empty for global)")
 	tagBindingCreateCmd.MarkFlagRequired("parent")
 
-	tagBindingListCmd.Flags().StringVar(&flagTagBindingListParent, "parent", "", "Full resource name to list bindings for (required)")
-	tagBindingListCmd.Flags().BoolVar(&flagTagBindingListEffective, "effective", false, "List effective tags (including inherited)")
-	tagBindingListCmd.Flags().StringVar(&flagTagBindingListLocation, "location", "", "Location scope for the listing")
-	tagBindingListCmd.Flags().Int64Var(&flagTagBindingListPageSize, "page-size", 0, "Page size for API pagination")
-	tagBindingListCmd.Flags().Int64Var(&flagTagBindingListLimit, "limit", 0, "Maximum number of bindings to list (0 = no limit)")
-	tagBindingListCmd.Flags().StringVar(&flagTagBindingListFormat, "format", "", "Output format (json, yaml, or table)")
+	tagBindingListCmd.Flags().StringVar(&f.tagBindingListParent, "parent", "", "Full resource name to list bindings for (required)")
+	tagBindingListCmd.Flags().BoolVar(&f.tagBindingListEffective, "effective", false, "List effective tags (including inherited)")
+	tagBindingListCmd.Flags().StringVar(&f.tagBindingListLocation, "location", "", "Location scope for the listing")
+	tagBindingListCmd.Flags().Int64Var(&f.tagBindingListPageSize, "page-size", 0, "Page size for API pagination")
+	tagBindingListCmd.Flags().Int64Var(&f.tagBindingListLimit, "limit", 0, "Maximum number of bindings to list (0 = no limit)")
+	tagBindingListCmd.Flags().StringVar(&f.tagBindingListFormat, "format", "", "Output format (json, yaml, or table)")
 	tagBindingListCmd.MarkFlagRequired("parent")
 
 	tagBindingsCmd.AddCommand(tagBindingCreateCmd, tagBindingDeleteCmd, tagBindingListCmd)
 
 	tagsCmd.AddCommand(tagKeysCmd, tagValuesCmd, tagBindingsCmd)
-	resourceManagerCmd.AddCommand(tagsCmd)
+	return tagsCmd
 }
 
 // tagKeyResourceName normalizes a tag key identifier ("tagKeys/123" or "123").
@@ -226,27 +246,25 @@ func regionalCRMEndpoint(location string) string {
 	return fmt.Sprintf("https://%s-cloudresourcemanager.googleapis.com/", location)
 }
 
-func runTagKeyCreate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagKeyCreate(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.TagKeys.Create(&crm.TagKey{
-		Parent:      flagTagKeyParent,
+		Parent:      f.tagKeyParent,
 		ShortName:   args[0],
-		Description: flagTagKeyDescription,
+		Description: f.tagKeyDescription,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating tag key: %w", err)
 	}
-	fmt.Printf("Create tag key in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Create tag key in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runTagKeyDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagKeyDelete(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -254,13 +272,12 @@ func runTagKeyDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting tag key: %w", err)
 	}
-	fmt.Printf("Delete tag key in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Delete tag key in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runTagKeyDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagKeyDescribe(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -271,13 +288,13 @@ func runTagKeyDescribe(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("describing tag key: %w", err)
 		}
-		return yamlEncode(key)
+		return inv.yaml(key)
 	}
 	key, err := svc.TagKeys.GetNamespaced().Name(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing tag key: %w", err)
 	}
-	return yamlEncode(key)
+	return inv.yaml(key)
 }
 
 // isAllDigits reports whether s is non-empty and contains only ASCII digits.
@@ -293,9 +310,8 @@ func isAllDigits(s string) bool {
 	return true
 }
 
-func runTagKeyList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagKeyList(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -303,9 +319,9 @@ func runTagKeyList(cmd *cobra.Command, args []string) error {
 	var all []*crm.TagKey
 	pageToken := ""
 	for {
-		call := svc.TagKeys.List().Parent(flagTagKeyListParent).Context(ctx)
-		if flagTagKeyListPageSize > 0 {
-			call = call.PageSize(flagTagKeyListPageSize)
+		call := svc.TagKeys.List().Parent(f.tagKeyListParent).Context(ctx)
+		if f.tagKeyListPageSize > 0 {
+			call = call.PageSize(f.tagKeyListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -315,8 +331,8 @@ func runTagKeyList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing tag keys: %w", err)
 		}
 		all = append(all, resp.TagKeys...)
-		if flagTagKeyListLimit > 0 && int64(len(all)) >= flagTagKeyListLimit {
-			all = all[:flagTagKeyListLimit]
+		if f.tagKeyListLimit > 0 && int64(len(all)) >= f.tagKeyListLimit {
+			all = all[:f.tagKeyListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -325,54 +341,51 @@ func runTagKeyList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	return printListResults(all, flagTagKeyListFormat, func() { printTagKeyTable(all) })
+	return inv.printListResults(all, f.tagKeyListFormat, func() { printTagKeyTable(inv.stdout, all) })
 }
 
-// printTagKeyTable writes the default `tags keys list` table.
-func printTagKeyTable(all []*crm.TagKey) {
-	printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "SHORT_NAME", "NAMESPACED_NAME")
+// printTagKeyTable writes the default `tags keys list` table to w.
+func printTagKeyTable(w io.Writer, all []*crm.TagKey) {
+	printTableHeadingTo(w, len(all), "%-40s %-30s %s\n", "NAME", "SHORT_NAME", "NAMESPACED_NAME")
 	for _, k := range all {
-		fmt.Printf("%-40s %-30s %s\n", k.Name, k.ShortName, k.NamespacedName)
+		fmt.Fprintf(w, "%-40s %-30s %s\n", k.Name, k.ShortName, k.NamespacedName)
 	}
 }
 
-func runTagKeyUpdate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagKeyUpdate(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.TagKeys.Patch(tagKeyResourceName(args[0]), &crm.TagKey{
-		Description: flagTagKeyDescription,
+		Description: f.tagKeyDescription,
 	}).UpdateMask("description").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating tag key: %w", err)
 	}
-	fmt.Printf("Update tag key in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Update tag key in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runTagValueCreate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagValueCreate(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.TagValues.Create(&crm.TagValue{
-		Parent:      tagKeyResourceName(flagTagValueParent),
+		Parent:      tagKeyResourceName(f.tagValueParent),
 		ShortName:   args[0],
-		Description: flagTagValueDescription,
+		Description: f.tagValueDescription,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating tag value: %w", err)
 	}
-	fmt.Printf("Create tag value in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Create tag value in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runTagValueDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagValueDelete(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -380,13 +393,12 @@ func runTagValueDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting tag value: %w", err)
 	}
-	fmt.Printf("Delete tag value in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Delete tag value in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runTagValueDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagValueDescribe(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -396,18 +408,17 @@ func runTagValueDescribe(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("describing tag value: %w", err)
 		}
-		return yamlEncode(value)
+		return inv.yaml(value)
 	}
 	value, err := svc.TagValues.GetNamespaced().Name(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing tag value: %w", err)
 	}
-	return yamlEncode(value)
+	return inv.yaml(value)
 }
 
-func runTagValueList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagValueList(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -415,9 +426,9 @@ func runTagValueList(cmd *cobra.Command, args []string) error {
 	var all []*crm.TagValue
 	pageToken := ""
 	for {
-		call := svc.TagValues.List().Parent(tagKeyResourceName(flagTagValueListParent)).Context(ctx)
-		if flagTagValueListPageSize > 0 {
-			call = call.PageSize(flagTagValueListPageSize)
+		call := svc.TagValues.List().Parent(tagKeyResourceName(f.tagValueListParent)).Context(ctx)
+		if f.tagValueListPageSize > 0 {
+			call = call.PageSize(f.tagValueListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -427,8 +438,8 @@ func runTagValueList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing tag values: %w", err)
 		}
 		all = append(all, resp.TagValues...)
-		if flagTagValueListLimit > 0 && int64(len(all)) >= flagTagValueListLimit {
-			all = all[:flagTagValueListLimit]
+		if f.tagValueListLimit > 0 && int64(len(all)) >= f.tagValueListLimit {
+			all = all[:f.tagValueListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -437,34 +448,33 @@ func runTagValueList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	return printListResults(all, flagTagValueListFormat, func() {
-		printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "SHORT_NAME", "NAMESPACED_NAME")
+	return inv.printListResults(all, f.tagValueListFormat, func() {
+		printTableHeadingTo(inv.stdout, len(all), "%-40s %-30s %s\n", "NAME", "SHORT_NAME", "NAMESPACED_NAME")
 		for _, v := range all {
-			fmt.Printf("%-40s %-30s %s\n", v.Name, v.ShortName, v.NamespacedName)
+			fmt.Fprintf(inv.stdout, "%-40s %-30s %s\n", v.Name, v.ShortName, v.NamespacedName)
 		}
 	})
 }
 
-func runTagValueUpdate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runTagValueUpdate(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.TagValues.Patch(tagValueResourceName(args[0]), &crm.TagValue{
-		Description: flagTagValueDescription,
+		Description: f.tagValueDescription,
 	}).UpdateMask("description").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating tag value: %w", err)
 	}
-	fmt.Printf("Update tag value in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Update tag value in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
 // bindingSvc returns a CRM service configured for the given location, either
 // the global endpoint or the regional one.
-func bindingSvc(ctx context.Context, location string) (*crm.Service, error) {
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func bindingSvc(ctx context.Context, inv *invocation, location string) (*crm.Service, error) {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -474,35 +484,33 @@ func bindingSvc(ctx context.Context, location string) (*crm.Service, error) {
 	return svc, nil
 }
 
-func runTagBindingCreate(cmd *cobra.Command, args []string) error {
-	if flagTagBindingTagValue == "" && flagTagBindingTagValueNS == "" {
+func runTagBindingCreate(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	if f.tagBindingTagValue == "" && f.tagBindingTagValueNS == "" {
 		return fmt.Errorf("one of --tag-value or --tag-value-namespaced-name is required")
 	}
-	if flagTagBindingTagValue != "" && flagTagBindingTagValueNS != "" {
+	if f.tagBindingTagValue != "" && f.tagBindingTagValueNS != "" {
 		return fmt.Errorf("specify only one of --tag-value or --tag-value-namespaced-name")
 	}
-	ctx := context.Background()
-	svc, err := bindingSvc(ctx, flagTagBindingLocation)
+	svc, err := bindingSvc(ctx, inv, f.tagBindingLocation)
 	if err != nil {
 		return err
 	}
-	binding := &crm.TagBinding{Parent: flagTagBindingParent}
-	if flagTagBindingTagValue != "" {
-		binding.TagValue = tagValueResourceName(flagTagBindingTagValue)
+	binding := &crm.TagBinding{Parent: f.tagBindingParent}
+	if f.tagBindingTagValue != "" {
+		binding.TagValue = tagValueResourceName(f.tagBindingTagValue)
 	} else {
-		binding.TagValueNamespacedName = flagTagBindingTagValueNS
+		binding.TagValueNamespacedName = f.tagBindingTagValueNS
 	}
 	op, err := svc.TagBindings.Create(binding).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating tag binding: %w", err)
 	}
-	fmt.Printf("Create tag binding in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Create tag binding in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runTagBindingDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := bindingSvc(ctx, flagTagBindingLocation)
+func runTagBindingDelete(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := bindingSvc(ctx, inv, f.tagBindingLocation)
 	if err != nil {
 		return err
 	}
@@ -510,28 +518,27 @@ func runTagBindingDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting tag binding: %w", err)
 	}
-	fmt.Printf("Delete tag binding in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Delete tag binding in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }
 
-func runTagBindingList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := bindingSvc(ctx, flagTagBindingListLocation)
+func runTagBindingList(ctx context.Context, inv *invocation, f *tagsFlags, cmd *cobra.Command, args []string) error {
+	svc, err := bindingSvc(ctx, inv, f.tagBindingListLocation)
 	if err != nil {
 		return err
 	}
 
-	parent := flagTagBindingListParent
-	if flagTagBindingListEffective {
-		return listEffectiveTags(ctx, svc, parent)
+	parent := f.tagBindingListParent
+	if f.tagBindingListEffective {
+		return listEffectiveTags(ctx, inv, f, svc, parent)
 	}
 
 	var all []*crm.TagBinding
 	pageToken := ""
 	for {
 		call := svc.TagBindings.List().Parent(parent).Context(ctx)
-		if flagTagBindingListPageSize > 0 {
-			call = call.PageSize(flagTagBindingListPageSize)
+		if f.tagBindingListPageSize > 0 {
+			call = call.PageSize(f.tagBindingListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -541,8 +548,8 @@ func runTagBindingList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing tag bindings: %w", err)
 		}
 		all = append(all, resp.TagBindings...)
-		if flagTagBindingListLimit > 0 && int64(len(all)) >= flagTagBindingListLimit {
-			all = all[:flagTagBindingListLimit]
+		if f.tagBindingListLimit > 0 && int64(len(all)) >= f.tagBindingListLimit {
+			all = all[:f.tagBindingListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -551,21 +558,21 @@ func runTagBindingList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	return printListResults(all, flagTagBindingListFormat, func() {
-		printTableHeading(len(all), "%-60s %-25s %s\n", "NAME", "TAG_VALUE", "NAMESPACED_NAME")
+	return inv.printListResults(all, f.tagBindingListFormat, func() {
+		printTableHeadingTo(inv.stdout, len(all), "%-60s %-25s %s\n", "NAME", "TAG_VALUE", "NAMESPACED_NAME")
 		for _, b := range all {
-			fmt.Printf("%-60s %-25s %s\n", b.Name, b.TagValue, b.TagValueNamespacedName)
+			fmt.Fprintf(inv.stdout, "%-60s %-25s %s\n", b.Name, b.TagValue, b.TagValueNamespacedName)
 		}
 	})
 }
 
-func listEffectiveTags(ctx context.Context, svc *crm.Service, parent string) error {
+func listEffectiveTags(ctx context.Context, inv *invocation, f *tagsFlags, svc *crm.Service, parent string) error {
 	var all []*crm.EffectiveTag
 	pageToken := ""
 	for {
 		call := svc.EffectiveTags.List().Parent(parent).Context(ctx)
-		if flagTagBindingListPageSize > 0 {
-			call = call.PageSize(flagTagBindingListPageSize)
+		if f.tagBindingListPageSize > 0 {
+			call = call.PageSize(f.tagBindingListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -575,8 +582,8 @@ func listEffectiveTags(ctx context.Context, svc *crm.Service, parent string) err
 			return fmt.Errorf("listing effective tags: %w", err)
 		}
 		all = append(all, resp.EffectiveTags...)
-		if flagTagBindingListLimit > 0 && int64(len(all)) >= flagTagBindingListLimit {
-			all = all[:flagTagBindingListLimit]
+		if f.tagBindingListLimit > 0 && int64(len(all)) >= f.tagBindingListLimit {
+			all = all[:f.tagBindingListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -585,16 +592,29 @@ func listEffectiveTags(ctx context.Context, svc *crm.Service, parent string) err
 		pageToken = resp.NextPageToken
 	}
 
-	return printListResults(all, flagTagBindingListFormat, func() {
-		printTableHeading(len(all), "%-40s %-25s %s\n", "NAMESPACED_TAG_KEY", "TAG_VALUE", "INHERITED")
+	return inv.printListResults(all, f.tagBindingListFormat, func() {
+		printTableHeadingTo(inv.stdout, len(all), "%-40s %-25s %s\n", "NAMESPACED_TAG_KEY", "TAG_VALUE", "INHERITED")
 		for _, t := range all {
-			fmt.Printf("%-40s %-25s %v\n", t.NamespacedTagKey, t.TagValue, t.Inherited)
+			fmt.Fprintf(inv.stdout, "%-40s %-25s %v\n", t.NamespacedTagKey, t.TagValue, t.Inherited)
 		}
 	})
 }
 
-// printListResults writes results in the requested format, falling back to
-// tableFn for the default table view.
+// printListResults writes results to stdout in the requested format,
+// falling back to tableFn for the default table view.
+func (inv *invocation) printListResults(v any, format string, tableFn func()) error {
+	switch format {
+	case "json":
+		return inv.printJSON(v)
+	case "yaml":
+		return inv.yaml(v)
+	}
+	tableFn()
+	return nil
+}
+
+// printListResults is the legacy form of inv.printListResults that writes to
+// the process stdout, for groups not yet migrated (#2070).
 func printListResults(v any, format string, tableFn func()) error {
 	switch format {
 	case "json":

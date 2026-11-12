@@ -4,43 +4,49 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	crm "google.golang.org/api/cloudresourcemanager/v3"
 )
 
-var capabilitiesCmd = &cobra.Command{
-	Use:   "capabilities",
-	Short: "Manage Cloud Folder Capabilities",
+// capabilitiesFlags holds the flag values of the commands built by newCapabilitiesCmd.
+type capabilitiesFlags struct {
+	capabilityEnable bool
 }
 
-var capabilityDescribeCmd = &cobra.Command{
-	Use:   "describe CAPABILITY_NAME",
-	Short: "Show whether a folder capability is enabled",
-	Long:  "Show whether a folder capability is enabled.\n\nCapability names take the form folders/{folder_id}/capabilities/{capability_name},\ne.g. folders/123/capabilities/app-management.",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runCapabilityDescribe,
-}
+func newCapabilitiesCmd(inv *invocation) *cobra.Command {
+	f := &capabilitiesFlags{}
 
-var capabilityUpdateCmd = &cobra.Command{
-	Use:   "update CAPABILITY_NAME",
-	Short: "Update a folder capability",
-	Long:  "Set the value field of a folder capability. Use --enable to set the\ncapability to true and --no-enable to set it to false.",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runCapabilityUpdate,
-}
+	capabilitiesCmd := &cobra.Command{
+		Use:   "capabilities",
+		Short: "Manage Cloud Folder Capabilities",
+	}
 
-var flagCapabilityEnable bool
+	capabilityDescribeCmd := &cobra.Command{
+		Use:   "describe CAPABILITY_NAME",
+		Short: "Show whether a folder capability is enabled",
+		Long:  "Show whether a folder capability is enabled.\n\nCapability names take the form folders/{folder_id}/capabilities/{capability_name},\ne.g. folders/123/capabilities/app-management.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runCapabilityDescribe(c.Context(), inv, f, c, args)
+		},
+	}
 
-func init() {
-	capabilityUpdateCmd.Flags().BoolVar(&flagCapabilityEnable, "enable", true, "Enable (true) or disable (false via --no-enable) the capability")
+	capabilityUpdateCmd := &cobra.Command{
+		Use:   "update CAPABILITY_NAME",
+		Short: "Update a folder capability",
+		Long:  "Set the value field of a folder capability. Use --enable to set the\ncapability to true and --no-enable to set it to false.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runCapabilityUpdate(c.Context(), inv, f, c, args)
+		},
+	}
+	capabilityUpdateCmd.Flags().BoolVar(&f.capabilityEnable, "enable", true, "Enable (true) or disable (false via --no-enable) the capability")
 	capabilitiesCmd.AddCommand(capabilityDescribeCmd, capabilityUpdateCmd)
-	resourceManagerCmd.AddCommand(capabilitiesCmd)
+	return capabilitiesCmd
 }
 
-func runCapabilityDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runCapabilityDescribe(ctx context.Context, inv *invocation, f *capabilitiesFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -48,24 +54,23 @@ func runCapabilityDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing capability: %w", err)
 	}
-	return yamlEncode(cap)
+	return inv.yaml(cap)
 }
 
-func runCapabilityUpdate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runCapabilityUpdate(ctx context.Context, inv *invocation, f *capabilitiesFlags, cmd *cobra.Command, args []string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 	c := &crm.Capability{
 		Name:            args[0],
-		Value:           flagCapabilityEnable,
+		Value:           f.capabilityEnable,
 		ForceSendFields: []string{"Value"},
 	}
 	op, err := svc.Folders.Capabilities.Patch(args[0], c).UpdateMask("value").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating capability: %w", err)
 	}
-	fmt.Printf("Update capability in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(inv.stdout, "Update capability in progress (operation: %s).\n", op.Name)
+	return inv.yaml(op)
 }

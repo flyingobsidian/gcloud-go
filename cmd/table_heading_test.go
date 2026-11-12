@@ -34,7 +34,7 @@ func TestPrintTableHeadingNonEmpty(t *testing.T) {
 func TestPrintListResultsDefaultTableEmpty(t *testing.T) {
 	var all []*crm.TagKey
 	out := captureStdout(t, func() {
-		if err := printListResults(all, "", func() { printTagKeyTable(all) }); err != nil {
+		if err := printListResults(all, "", func() { printTagKeyTable(os.Stdout, all) }); err != nil {
 			t.Fatalf("printListResults: %v", err)
 		}
 	})
@@ -46,7 +46,7 @@ func TestPrintListResultsDefaultTableEmpty(t *testing.T) {
 func TestPrintListResultsDefaultTableRows(t *testing.T) {
 	all := []*crm.TagKey{{Name: "tagKeys/123", ShortName: "env", NamespacedName: "123/env"}}
 	out := captureStdout(t, func() {
-		if err := printListResults(all, "", func() { printTagKeyTable(all) }); err != nil {
+		if err := printListResults(all, "", func() { printTagKeyTable(os.Stdout, all) }); err != nil {
 			t.Fatalf("printListResults: %v", err)
 		}
 	})
@@ -65,7 +65,7 @@ func TestPrintListResultsDefaultTableRows(t *testing.T) {
 func TestPrintListResultsEmptyJSON(t *testing.T) {
 	var all []*crm.TagKey
 	out := captureStdout(t, func() {
-		if err := printListResults(all, "json", func() { printTagKeyTable(all) }); err != nil {
+		if err := printListResults(all, "json", func() { printTagKeyTable(os.Stdout, all) }); err != nil {
 			t.Fatalf("printListResults: %v", err)
 		}
 	})
