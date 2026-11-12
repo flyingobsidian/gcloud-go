@@ -23,9 +23,15 @@ type CredentialStore struct {
 	dbPath     string
 }
 
-// NewStore creates a credential store using the gcloud config directory.
+// NewStore creates a credential store using the gcloud config directory of
+// the process environment. Prefer NewStoreFor.
 func NewStore() (*CredentialStore, error) {
-	dir, err := config.ConfigDir()
+	return NewStoreFor(config.OSEnv())
+}
+
+// NewStoreFor creates a credential store using env's gcloud config directory.
+func NewStoreFor(env config.Env) (*CredentialStore, error) {
+	dir, err := env.ConfigDir()
 	if err != nil {
 		return nil, err
 	}
