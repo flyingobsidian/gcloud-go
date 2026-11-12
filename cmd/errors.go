@@ -22,7 +22,16 @@ import (
 // any other error, we fall back to the error's own message.
 //
 // If cmd is nil, the parenthesised command path is "gcloud".
+//
+// It describes the credentials of the process environment and the legacy
+// --account global; invocation.formatError describes an invocation's.
 func FormatCLIError(cmd *cobra.Command, err error) string {
+	return formatCLIError(cmd, err, authContextMessage())
+}
+
+// formatCLIError is FormatCLIError with the trailing authentication sentence
+// (see authContextMessage) given as authContext; "" omits it.
+func formatCLIError(cmd *cobra.Command, err error, authContext string) string {
 	var status, message string
 
 	var apiErr *googleapi.Error
@@ -46,9 +55,9 @@ func FormatCLIError(cmd *cobra.Command, err error) string {
 	b.WriteString(message)
 	b.WriteByte('.')
 
-	if ctx := authContextMessage(); ctx != "" {
+	if authContext != "" {
 		b.WriteByte(' ')
-		b.WriteString(ctx)
+		b.WriteString(authContext)
 	}
 	return b.String()
 }
@@ -103,17 +112,23 @@ func httpStatusName(code int) string {
 // self.CredentialInfo(). Returns "" when no authentication context can be
 // determined.
 func authContextMessage() string {
-	if f := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); f != "" {
-		account := activeAccount()
+	return authContext(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"), activeAccount())
+}
+
+// authContext returns the authentication sentence for credentials read from
+// the file credFile (when not "") as account, or for the stored credentials
+// of account.
+func authContext(credFile, account string) string {
+	if credFile != "" {
 		if account == "" {
 			account = "the service account"
 		}
 		return fmt.Sprintf(
 			"This command is authenticated as %s using the credentials in %s, specified by the [auth/credential_file_override] property.",
-			account, f,
+			account, credFile,
 		)
 	}
-	if account := activeAccount(); account != "" {
+	if account != "" {
 		return fmt.Sprintf(
 			"This command is authenticated as %s which is the active account specified by the [core/account] property.",
 			account,
@@ -134,4 +149,16 @@ func activeAccount() string {
 		return ""
 	}
 	return props.Core.Account
+}
+
+// formatError is FormatCLIError for an error from a command run by inv: the
+// authentication sentence describes inv's account and environment.
+func (inv *invocation) formatError(cmd *cobra.Command, err error) string {
+	account := inv.flags.account
+	if account == "" {
+		if props, perr := inv.properties(); perr == nil {
+			account = props.Core.Account
+		}
+	}
+	return formatCLIError(cmd, err, authContext(inv.env.Getenv("GOOGLE_APPLICATION_CREDENTIALS"), account))
 }

@@ -24,6 +24,10 @@ jobs:
             go:
               - 'cmd/**/*.go'
               - 'internal/**/*.go'
+              - 'gcloud/**/*.go'
+              - 'main.go'
+              - 'go.mod'
+              - 'go.sum'
             sh:
               - '**/*.sh'
 

@@ -137,7 +137,7 @@ func Main(ctx context.Context, args []string) int {
 	if errors.As(err, &exitErr) {
 		return exitErr.ExitCode()
 	}
-	fmt.Fprintln(inv.stderr, FormatCLIError(executed, err))
+	fmt.Fprintln(inv.stderr, inv.formatError(executed, err))
 	return 1
 }
 
