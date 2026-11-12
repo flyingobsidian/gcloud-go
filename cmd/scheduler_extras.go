@@ -6,113 +6,107 @@ import (
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudscheduler "google.golang.org/api/cloudscheduler/v1"
 )
 
-// --- cmek-config ---
-
-var schedulerCmekConfigCmd = &cobra.Command{
-	Use:   "cmek-config",
-	Short: "Manage Customer-Managed Encryption Key configuration for Cloud Scheduler",
+// schedulerExtrasFlags holds the flag values of the cmek-config, locations
+// and operations commands.
+type schedulerExtrasFlags struct {
+	cmekLocation string
+	cmekKey      string
+	cmekClear    bool
+	cmekFormat   string
+	locFormat    string
+	opLocation   string
+	opFormat     string
 }
 
-var (
-	schedCmekDescribeCmd = &cobra.Command{
+// addSchedulerExtras adds the cmek-config, locations and operations
+// subgroups to schedulerCmd.
+func addSchedulerExtras(inv *invocation, schedulerCmd *cobra.Command) {
+	f := &schedulerExtrasFlags{}
+	run := func(fn func(context.Context, *invocation, *schedulerExtrasFlags, []string) error) func(*cobra.Command, []string) error {
+		return func(c *cobra.Command, args []string) error {
+			return fn(c.Context(), inv, f, args)
+		}
+	}
+
+	// --- cmek-config ---
+	schedulerCmekConfigCmd := &cobra.Command{
+		Use:   "cmek-config",
+		Short: "Manage Customer-Managed Encryption Key configuration for Cloud Scheduler",
+	}
+	schedCmekDescribeCmd := &cobra.Command{
 		Use: "describe", Short: "Describe the CMEK config for a location",
-		Args: cobra.NoArgs, RunE: runSchedCmekDescribe,
+		Args: cobra.NoArgs, RunE: run(runSchedCmekDescribe),
 	}
-	schedCmekUpdateCmd = &cobra.Command{
+	schedCmekUpdateCmd := &cobra.Command{
 		Use: "update", Short: "Update or clear the CMEK config (--kms-key or --clear)",
-		Args: cobra.NoArgs, RunE: runSchedCmekUpdate,
+		Args: cobra.NoArgs, RunE: run(runSchedCmekUpdate),
 	}
-)
 
-var (
-	flagSchedCmekLocation string
-	flagSchedCmekKey      string
-	flagSchedCmekClear    bool
-	flagSchedCmekFormat   string
-)
-
-// --- locations ---
-
-var schedulerLocationsCmd = &cobra.Command{
-	Use:   "locations",
-	Short: "Explore Cloud Scheduler locations",
-}
-
-var (
-	schedLocDescribeCmd = &cobra.Command{
+	// --- locations ---
+	schedulerLocationsCmd := &cobra.Command{
+		Use:   "locations",
+		Short: "Explore Cloud Scheduler locations",
+	}
+	schedLocDescribeCmd := &cobra.Command{
 		Use: "describe LOCATION", Short: "Describe a Cloud Scheduler location",
-		Args: cobra.ExactArgs(1), RunE: runSchedLocDescribe,
+		Args: cobra.ExactArgs(1), RunE: run(runSchedLocDescribe),
 	}
-	schedLocListCmd = &cobra.Command{
+	schedLocListCmd := &cobra.Command{
 		Use: "list", Short: "List Cloud Scheduler locations for the project",
-		Args: cobra.NoArgs, RunE: runSchedLocList,
+		Args: cobra.NoArgs, RunE: run(runSchedLocList),
 	}
-)
 
-var flagSchedLocFormat string
-
-// --- operations ---
-
-var schedulerOperationsCmd = &cobra.Command{
-	Use:   "operations",
-	Short: "Manage Cloud Scheduler operations",
-}
-
-var (
-	schedOpCancelCmd = &cobra.Command{
+	// --- operations ---
+	schedulerOperationsCmd := &cobra.Command{
+		Use:   "operations",
+		Short: "Manage Cloud Scheduler operations",
+	}
+	schedOpCancelCmd := &cobra.Command{
 		Use: "cancel OPERATION", Short: "Cancel a scheduler operation",
-		Args: cobra.ExactArgs(1), RunE: runSchedOpCancel,
+		Args: cobra.ExactArgs(1), RunE: run(runSchedOpCancel),
 	}
-	schedOpDeleteCmd = &cobra.Command{
+	schedOpDeleteCmd := &cobra.Command{
 		Use: "delete OPERATION", Short: "Delete a scheduler operation",
-		Args: cobra.ExactArgs(1), RunE: runSchedOpDelete,
+		Args: cobra.ExactArgs(1), RunE: run(runSchedOpDelete),
 	}
-	schedOpDescribeCmd = &cobra.Command{
+	schedOpDescribeCmd := &cobra.Command{
 		Use: "describe OPERATION", Short: "Describe a scheduler operation",
-		Args: cobra.ExactArgs(1), RunE: runSchedOpDescribe,
+		Args: cobra.ExactArgs(1), RunE: run(runSchedOpDescribe),
 	}
-	schedOpListCmd = &cobra.Command{
+	schedOpListCmd := &cobra.Command{
 		Use: "list", Short: "List scheduler operations in a location",
-		Args: cobra.NoArgs, RunE: runSchedOpList,
+		Args: cobra.NoArgs, RunE: run(runSchedOpList),
 	}
-)
 
-var (
-	flagSchedOpLocation string
-	flagSchedOpFormat   string
-)
-
-func init() {
 	// cmek-config
 	for _, c := range []*cobra.Command{schedCmekDescribeCmd, schedCmekUpdateCmd} {
-		c.Flags().StringVar(&flagSchedCmekLocation, "location", "", "Location whose CMEK config to inspect/update (required)")
+		c.Flags().StringVar(&f.cmekLocation, "location", "", "Location whose CMEK config to inspect/update (required)")
 		_ = c.MarkFlagRequired("location")
 	}
-	schedCmekDescribeCmd.Flags().StringVar(&flagSchedCmekFormat, "format", "", "Output format")
-	schedCmekUpdateCmd.Flags().StringVar(&flagSchedCmekKey, "kms-key", "",
+	schedCmekDescribeCmd.Flags().StringVar(&f.cmekFormat, "format", "", "Output format")
+	schedCmekUpdateCmd.Flags().StringVar(&f.cmekKey, "kms-key", "",
 		"Fully qualified KMS CryptoKey resource name to encrypt Scheduler payloads (mutually exclusive with --clear)")
-	schedCmekUpdateCmd.Flags().BoolVar(&flagSchedCmekClear, "clear", false, "Clear the CMEK config")
+	schedCmekUpdateCmd.Flags().BoolVar(&f.cmekClear, "clear", false, "Clear the CMEK config")
 	schedulerCmekConfigCmd.AddCommand(schedCmekDescribeCmd, schedCmekUpdateCmd)
 	schedulerCmd.AddCommand(schedulerCmekConfigCmd)
 
 	// locations
-	schedLocDescribeCmd.Flags().StringVar(&flagSchedLocFormat, "format", "", "Output format")
-	schedLocListCmd.Flags().StringVar(&flagSchedLocFormat, "format", "", "Output format")
+	schedLocDescribeCmd.Flags().StringVar(&f.locFormat, "format", "", "Output format")
+	schedLocListCmd.Flags().StringVar(&f.locFormat, "format", "", "Output format")
 	schedulerLocationsCmd.AddCommand(schedLocDescribeCmd, schedLocListCmd)
 	schedulerCmd.AddCommand(schedulerLocationsCmd)
 
 	// operations
 	for _, c := range []*cobra.Command{schedOpCancelCmd, schedOpDeleteCmd, schedOpDescribeCmd, schedOpListCmd} {
-		c.Flags().StringVar(&flagSchedOpLocation, "location", "", "Location containing the operation (required)")
+		c.Flags().StringVar(&f.opLocation, "location", "", "Location containing the operation (required)")
 		_ = c.MarkFlagRequired("location")
 	}
-	schedOpDescribeCmd.Flags().StringVar(&flagSchedOpFormat, "format", "", "Output format")
-	schedOpListCmd.Flags().StringVar(&flagSchedOpFormat, "format", "", "Output format")
+	schedOpDescribeCmd.Flags().StringVar(&f.opFormat, "format", "", "Output format")
+	schedOpListCmd.Flags().StringVar(&f.opFormat, "format", "", "Output format")
 	schedulerOperationsCmd.AddCommand(schedOpCancelCmd, schedOpDeleteCmd, schedOpDescribeCmd, schedOpListCmd)
 	schedulerCmd.AddCommand(schedulerOperationsCmd)
 }
@@ -121,58 +115,55 @@ func schedCmekConfigName(project, location string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/cmekConfig", project, location)
 }
 
-func runSchedCmekDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func runSchedCmekDescribe(ctx context.Context, inv *invocation, f *schedulerExtrasFlags, args []string) error {
+	project, err := inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
-	cfg, err := svc.Projects.Locations.GetCmekConfig(schedCmekConfigName(project, flagSchedCmekLocation)).Context(ctx).Do()
+	cfg, err := svc.Projects.Locations.GetCmekConfig(schedCmekConfigName(project, f.cmekLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing CMEK config: %w", err)
 	}
-	return emitFormatted(cfg, flagSchedCmekFormat)
+	return emitFormattedTo(inv.stdout, cfg, f.cmekFormat)
 }
 
-func runSchedCmekUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func runSchedCmekUpdate(ctx context.Context, inv *invocation, f *schedulerExtrasFlags, args []string) error {
+	project, err := inv.project()
 	if err != nil {
 		return err
 	}
-	if flagSchedCmekKey == "" && !flagSchedCmekClear {
+	if f.cmekKey == "" && !f.cmekClear {
 		return fmt.Errorf("either --kms-key or --clear is required")
 	}
-	if flagSchedCmekKey != "" && flagSchedCmekClear {
+	if f.cmekKey != "" && f.cmekClear {
 		return fmt.Errorf("--kms-key and --clear are mutually exclusive")
 	}
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
 	cfg := &cloudscheduler.CmekConfig{}
-	if flagSchedCmekKey != "" {
-		cfg.KmsKeyName = flagSchedCmekKey
+	if f.cmekKey != "" {
+		cfg.KmsKeyName = f.cmekKey
 	}
-	op, err := svc.Projects.Locations.UpdateCmekConfig(schedCmekConfigName(project, flagSchedCmekLocation), cfg).
+	op, err := svc.Projects.Locations.UpdateCmekConfig(schedCmekConfigName(project, f.cmekLocation), cfg).
 		UpdateMask("kmsKeyName").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating CMEK config: %w", err)
 	}
-	return emitFormatted(op, "")
+	return emitFormattedTo(inv.stdout, op, "")
 }
 
-func runSchedLocDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func runSchedLocDescribe(ctx context.Context, inv *invocation, f *schedulerExtrasFlags, args []string) error {
+	project, err := inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
@@ -180,16 +171,15 @@ func runSchedLocDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(loc, flagSchedLocFormat)
+	return emitFormattedTo(inv.stdout, loc, f.locFormat)
 }
 
-func runSchedLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func runSchedLocList(ctx context.Context, inv *invocation, f *schedulerExtrasFlags, args []string) error {
+	project, err := inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
@@ -197,12 +187,12 @@ func runSchedLocList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing locations: %w", err)
 	}
-	if flagSchedLocFormat != "" {
-		return emitFormatted(resp.Locations, flagSchedLocFormat)
+	if f.locFormat != "" {
+		return emitFormattedTo(inv.stdout, resp.Locations, f.locFormat)
 	}
-	printTableHeading(len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeadingTo(inv.stdout, len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
-		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
+		fmt.Fprintf(inv.stdout, "%-20s %s\n", l.LocationId, l.DisplayName)
 	}
 	return nil
 }
@@ -214,77 +204,73 @@ func schedOpName(id, project, location string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/operations/%s", project, location, id)
 }
 
-func runSchedOpCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func runSchedOpCancel(ctx context.Context, inv *invocation, f *schedulerExtrasFlags, args []string) error {
+	project, err := inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Operations.Cancel(schedOpName(args[0], project, flagSchedOpLocation), &cloudscheduler.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Operations.Cancel(schedOpName(args[0], project, f.opLocation), &cloudscheduler.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runSchedOpDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func runSchedOpDelete(ctx context.Context, inv *invocation, f *schedulerExtrasFlags, args []string) error {
+	project, err := inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Operations.Delete(schedOpName(args[0], project, flagSchedOpLocation)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Operations.Delete(schedOpName(args[0], project, f.opLocation)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runSchedOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func runSchedOpDescribe(ctx context.Context, inv *invocation, f *schedulerExtrasFlags, args []string) error {
+	project, err := inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Operations.Get(schedOpName(args[0], project, flagSchedOpLocation)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Operations.Get(schedOpName(args[0], project, f.opLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagSchedOpFormat)
+	return emitFormattedTo(inv.stdout, op, f.opFormat)
 }
 
-func runSchedOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func runSchedOpList(ctx context.Context, inv *invocation, f *schedulerExtrasFlags, args []string) error {
+	project, err := inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SchedulerService(ctx, flagAccount)
+	svc, err := inv.clients().Scheduler(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Operations.List(fmt.Sprintf("projects/%s/locations/%s", project, flagSchedOpLocation)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Operations.List(fmt.Sprintf("projects/%s/locations/%s", project, f.opLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	if flagSchedOpFormat != "" {
-		return emitFormatted(resp.Operations, flagSchedOpFormat)
+	if f.opFormat != "" {
+		return emitFormattedTo(inv.stdout, resp.Operations, f.opFormat)
 	}
-	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(inv.stdout, len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
-		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(inv.stdout, "%-40s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }
