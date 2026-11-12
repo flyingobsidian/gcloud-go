@@ -10,8 +10,9 @@ import (
 )
 
 // fakeCRM serves the Cloud Resource Manager v3 calls used by projects list,
-// describe and get-ancestors. Every project has the ID it is asked for and
-// sits in folder 10, which is in organization 20.
+// describe and get-ancestors, and organizations list and describe. Every
+// project has the ID it is asked for and sits in folder 10, which is in
+// organization 20; every organization has the ID it is asked for.
 func fakeCRM(t *testing.T) http.Handler {
 	t.Helper()
 	write := func(w http.ResponseWriter, v any) {
@@ -32,6 +33,13 @@ func fakeCRM(t *testing.T) http.Handler {
 		case strings.HasPrefix(p, "/v3/projects/"):
 			id := strings.TrimPrefix(p, "/v3/projects/")
 			write(w, map[string]any{"name": "projects/" + id, "projectId": id, "parent": "folders/10"})
+		case p == "/v3/organizations:search":
+			write(w, map[string]any{"organizations": []map[string]any{
+				{"name": "organizations/20", "displayName": "example.com", "directoryCustomerId": "C01"},
+			}})
+		case strings.HasPrefix(p, "/v3/organizations/"):
+			id := strings.TrimPrefix(p, "/v3/organizations/")
+			write(w, map[string]any{"name": "organizations/" + id, "displayName": "org-" + id})
 		case p == "/v3/folders/10":
 			write(w, map[string]any{"name": "folders/10", "parent": "organizations/20"})
 		default:

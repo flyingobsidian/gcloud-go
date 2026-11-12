@@ -3,11 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	crm "google.golang.org/api/cloudresourcemanager/v3"
 	"gopkg.in/yaml.v3"
@@ -15,92 +15,100 @@ import (
 
 // --- gcloud organizations (#279) ---
 
-var organizationsCmd = &cobra.Command{
-	Use:   "organizations",
-	Short: "Manage Google Cloud organizations",
-}
-
-var orgDescribeCmd = &cobra.Command{
-	Use:   "describe ORGANIZATION_ID",
-	Short: "Show metadata for an organization",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runOrgDescribe,
-}
-
-var orgListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List organizations accessible by the active account",
-	Args:  cobra.NoArgs,
-	RunE:  runOrgList,
-}
-
-var orgGetIamPolicyCmd = &cobra.Command{
-	Use:   "get-iam-policy ORGANIZATION_ID",
-	Short: "Get IAM policy for an organization",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runOrgGetIamPolicy,
-}
-
-var orgSetIamPolicyCmd = &cobra.Command{
-	Use:   "set-iam-policy ORGANIZATION_ID POLICY_FILE",
-	Short: "Set IAM policy for an organization",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runOrgSetIamPolicy,
-}
-
-var orgAddIamBindingCmd = &cobra.Command{
-	Use:   "add-iam-policy-binding ORGANIZATION_ID",
-	Short: "Add IAM policy binding for an organization",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runOrgAddIamBinding,
-}
-
-var orgRemoveIamBindingCmd = &cobra.Command{
-	Use:   "remove-iam-policy-binding ORGANIZATION_ID",
-	Short: "Remove IAM policy binding for an organization",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runOrgRemoveIamBinding,
-}
-
-var (
-	flagOrgListFilter   string
-	flagOrgListPageSize int64
-	flagOrgListLimit    int64
-	flagOrgListFormat   string
-	flagOrgListURI      bool
-	flagOrgIamMember    string
-	flagOrgIamRole      string
-	flagOrgIamCondExpr  string
-	flagOrgIamCondTitle string
-	flagOrgIamCondDesc  string
-	flagOrgIamAllCond   bool
-)
-
-func init() {
-	orgListCmd.Flags().StringVar(&flagOrgListFilter, "filter", "", "Filter expression (e.g. domain:example.com)")
-	orgListCmd.Flags().Int64Var(&flagOrgListPageSize, "page-size", 0, "Page size for API pagination")
-	orgListCmd.Flags().Int64Var(&flagOrgListLimit, "limit", 0, "Maximum number of organizations to list (0 = no limit)")
-	orgListCmd.Flags().StringVar(&flagOrgListFormat, "format", "", "Output format (json, yaml, or table)")
-	orgListCmd.Flags().BoolVar(&flagOrgListURI, "uri", false, "Print resource names only")
-
-	for _, c := range []*cobra.Command{orgAddIamBindingCmd, orgRemoveIamBindingCmd} {
-		c.Flags().StringVar(&flagOrgIamMember, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
-		c.Flags().StringVar(&flagOrgIamRole, "role", "", "IAM role to bind (e.g. roles/browser) (required)")
-		c.Flags().StringVar(&flagOrgIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding")
-		c.Flags().StringVar(&flagOrgIamCondTitle, "condition-title", "", "Title for a conditional binding")
-		c.Flags().StringVar(&flagOrgIamCondDesc, "condition-description", "", "Description for a conditional binding")
-		c.MarkFlagRequired("member")
-		c.MarkFlagRequired("role")
+func newOrganizationsCmd(inv *invocation) *cobra.Command {
+	c := &cobra.Command{
+		Use:   "organizations",
+		Short: "Manage Google Cloud organizations",
 	}
-	orgRemoveIamBindingCmd.Flags().BoolVar(&flagOrgIamAllCond, "all", false, "Remove the member from all bindings for the role, regardless of condition")
+	c.AddCommand(
+		newOrgDescribeCmd(inv),
+		newOrgListCmd(inv),
+		newOrgGetIamPolicyCmd(inv),
+		newOrgSetIamPolicyCmd(inv),
+		newOrgIamBindingCmd(inv, true),
+		newOrgIamBindingCmd(inv, false),
+	)
+	return c
+}
 
-	organizationsCmd.AddCommand(orgDescribeCmd)
-	organizationsCmd.AddCommand(orgListCmd)
-	organizationsCmd.AddCommand(orgGetIamPolicyCmd)
-	organizationsCmd.AddCommand(orgSetIamPolicyCmd)
-	organizationsCmd.AddCommand(orgAddIamBindingCmd)
-	organizationsCmd.AddCommand(orgRemoveIamBindingCmd)
-	rootCmd.AddCommand(organizationsCmd)
+func newOrgDescribeCmd(inv *invocation) *cobra.Command {
+	return &cobra.Command{
+		Use:   "describe ORGANIZATION_ID",
+		Short: "Show metadata for an organization",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgDescribe(c.Context(), inv, args[0])
+		},
+	}
+}
+
+type orgListOptions struct {
+	filter, format  string
+	pageSize, limit int64
+	uri             bool
+}
+
+func newOrgListCmd(inv *invocation) *cobra.Command {
+	var o orgListOptions
+	c := &cobra.Command{
+		Use:   "list",
+		Short: "List organizations accessible by the active account",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgList(c.Context(), inv, o)
+		},
+	}
+	c.Flags().StringVar(&o.filter, "filter", "", "Filter expression (e.g. domain:example.com)")
+	c.Flags().Int64Var(&o.pageSize, "page-size", 0, "Page size for API pagination")
+	c.Flags().Int64Var(&o.limit, "limit", 0, "Maximum number of organizations to list (0 = no limit)")
+	c.Flags().StringVar(&o.format, "format", "", "Output format (json, yaml, or table)")
+	c.Flags().BoolVar(&o.uri, "uri", false, "Print resource names only")
+	return c
+}
+
+func newOrgGetIamPolicyCmd(inv *invocation) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get-iam-policy ORGANIZATION_ID",
+		Short: "Get IAM policy for an organization",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgGetIamPolicy(c.Context(), inv, args[0])
+		},
+	}
+}
+
+func newOrgSetIamPolicyCmd(inv *invocation) *cobra.Command {
+	return &cobra.Command{
+		Use:   "set-iam-policy ORGANIZATION_ID POLICY_FILE",
+		Short: "Set IAM policy for an organization",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgSetIamPolicy(c.Context(), inv, args[0], args[1])
+		},
+	}
+}
+
+// newOrgIamBindingCmd returns add-iam-policy-binding when add is set, else
+// remove-iam-policy-binding.
+func newOrgIamBindingCmd(inv *invocation, add bool) *cobra.Command {
+	var o iamBindingOptions
+	c := &cobra.Command{
+		Use:   "add-iam-policy-binding ORGANIZATION_ID",
+		Short: "Add IAM policy binding for an organization",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runOrgAddIamBinding(c.Context(), inv, args[0], o)
+		},
+	}
+	if !add {
+		c.Use = "remove-iam-policy-binding ORGANIZATION_ID"
+		c.Short = "Remove IAM policy binding for an organization"
+		c.RunE = func(c *cobra.Command, args []string) error {
+			return runOrgRemoveIamBinding(c.Context(), inv, args[0], o)
+		}
+	}
+	addIamBindingFlags(c, &o, !add)
+	return c
 }
 
 // orgResourceName returns the full resource name for an organization,
@@ -110,23 +118,21 @@ func orgResourceName(orgID string) string {
 	return "organizations/" + orgID
 }
 
-func runOrgDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runOrgDescribe(ctx context.Context, inv *invocation, id string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
-	org, err := svc.Organizations.Get(orgResourceName(args[0])).Context(ctx).Do()
+	org, err := svc.Organizations.Get(orgResourceName(id)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing organization: %w", err)
 	}
-	return yamlEncode(org)
+	return inv.yaml(org)
 }
 
-func runOrgList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runOrgList(ctx context.Context, inv *invocation, o orgListOptions) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -135,11 +141,11 @@ func runOrgList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Organizations.Search().Context(ctx)
-		if flagOrgListFilter != "" {
-			call = call.Query(flagOrgListFilter)
+		if o.filter != "" {
+			call = call.Query(o.filter)
 		}
-		if flagOrgListPageSize > 0 {
-			call = call.PageSize(flagOrgListPageSize)
+		if o.pageSize > 0 {
+			call = call.PageSize(o.pageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -149,8 +155,8 @@ func runOrgList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing organizations: %w", err)
 		}
 		all = append(all, resp.Organizations...)
-		if flagOrgListLimit > 0 && int64(len(all)) >= flagOrgListLimit {
-			all = all[:flagOrgListLimit]
+		if o.limit > 0 && int64(len(all)) >= o.limit {
+			all = all[:o.limit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -159,39 +165,38 @@ func runOrgList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagOrgListURI {
-		for _, o := range all {
-			fmt.Println(o.Name)
+	if o.uri {
+		for _, org := range all {
+			fmt.Fprintln(inv.stdout, org.Name)
 		}
 		return nil
 	}
 
-	return printOrgList(all, flagOrgListFormat)
+	return printOrgList(inv.stdout, all, o.format)
 }
 
 // printOrgList writes orgs in the requested format. An empty result prints
 // [] for json and nothing otherwise, matching gcloud-python.
-func printOrgList(orgs []*crm.Organization, format string) error {
+func printOrgList(w io.Writer, orgs []*crm.Organization, format string) error {
 	switch format {
 	case "json":
-		return printJSON(orgs)
+		return emitJSON(w, orgs)
 	case "yaml":
-		return yamlEncode(orgs)
+		return emitFormattedTo(w, orgs, "yaml")
 	}
 
 	if len(orgs) == 0 {
 		return nil
 	}
-	printTableHeading(len(orgs), "%-40s %-20s %s\n", "DISPLAY_NAME", "ID", "DIRECTORY_CUSTOMER_ID")
+	printTableHeadingTo(w, len(orgs), "%-40s %-20s %s\n", "DISPLAY_NAME", "ID", "DIRECTORY_CUSTOMER_ID")
 	for _, o := range orgs {
-		fmt.Printf("%-40s %-20s %s\n", o.DisplayName, path.Base(o.Name), o.DirectoryCustomerId)
+		fmt.Fprintf(w, "%-40s %-20s %s\n", o.DisplayName, path.Base(o.Name), o.DirectoryCustomerId)
 	}
 	return nil
 }
 
-func runOrgGetIamPolicy(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runOrgGetIamPolicy(ctx context.Context, inv *invocation, id string) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -199,11 +204,11 @@ func runOrgGetIamPolicy(cmd *cobra.Command, args []string) error {
 	req := &crm.GetIamPolicyRequest{
 		Options: &crm.GetPolicyOptions{RequestedPolicyVersion: 3},
 	}
-	policy, err := svc.Organizations.GetIamPolicy(orgResourceName(args[0]), req).Context(ctx).Do()
+	policy, err := svc.Organizations.GetIamPolicy(orgResourceName(id), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return yamlEncode(policy)
+	return inv.yaml(policy)
 }
 
 // parsePolicyFile reads and decodes an IAM policy from JSON or YAML on disk.
@@ -220,14 +225,13 @@ func parsePolicyFile(pathname string) (*crm.Policy, error) {
 	return policy, nil
 }
 
-func runOrgSetIamPolicy(cmd *cobra.Command, args []string) error {
-	policy, err := parsePolicyFile(args[1])
+func runOrgSetIamPolicy(ctx context.Context, inv *invocation, id, policyFile string) error {
+	policy, err := parsePolicyFile(policyFile)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -236,25 +240,12 @@ func runOrgSetIamPolicy(cmd *cobra.Command, args []string) error {
 		Policy:     policy,
 		UpdateMask: "bindings,etag",
 	}
-	updated, err := svc.Organizations.SetIamPolicy(orgResourceName(args[0]), req).Context(ctx).Do()
+	updated, err := svc.Organizations.SetIamPolicy(orgResourceName(id), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for organization [%s].\n", strings.TrimPrefix(orgResourceName(args[0]), "organizations/"))
-	return yamlEncode(updated)
-}
-
-// buildCondition returns a *crm.Expr from the --condition-* flags, or nil if
-// no condition flags were set.
-func buildCondition() *crm.Expr {
-	if flagOrgIamCondExpr == "" && flagOrgIamCondTitle == "" && flagOrgIamCondDesc == "" {
-		return nil
-	}
-	return &crm.Expr{
-		Expression:  flagOrgIamCondExpr,
-		Title:       flagOrgIamCondTitle,
-		Description: flagOrgIamCondDesc,
-	}
+	fmt.Fprintf(inv.stderr, "Updated IAM policy for organization [%s].\n", strings.TrimPrefix(orgResourceName(id), "organizations/"))
+	return inv.yaml(updated)
 }
 
 // conditionsEqual reports whether two condition expressions describe the same
@@ -323,21 +314,20 @@ func removeBindingFromPolicy(policy *crm.Policy, role, member string, condition 
 	return changed
 }
 
-func runOrgAddIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runOrgAddIamBinding(ctx context.Context, inv *invocation, id string, o iamBindingOptions) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
-	resource := orgResourceName(args[0])
+	resource := orgResourceName(id)
 	getReq := &crm.GetIamPolicyRequest{Options: &crm.GetPolicyOptions{RequestedPolicyVersion: 3}}
 	policy, err := svc.Organizations.GetIamPolicy(resource, getReq).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	addBindingToPolicy(policy, flagOrgIamRole, flagOrgIamMember, buildCondition())
+	addBindingToPolicy(policy, o.role, o.member, o.condition())
 	policy.Version = 3
 
 	updated, err := svc.Organizations.SetIamPolicy(resource, &crm.SetIamPolicyRequest{
@@ -347,26 +337,25 @@ func runOrgAddIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for organization [%s].\n", strings.TrimPrefix(resource, "organizations/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(inv.stderr, "Updated IAM policy for organization [%s].\n", strings.TrimPrefix(resource, "organizations/"))
+	return inv.yaml(updated)
 }
 
-func runOrgRemoveIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+func runOrgRemoveIamBinding(ctx context.Context, inv *invocation, id string, o iamBindingOptions) error {
+	svc, err := inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
-	resource := orgResourceName(args[0])
+	resource := orgResourceName(id)
 	getReq := &crm.GetIamPolicyRequest{Options: &crm.GetPolicyOptions{RequestedPolicyVersion: 3}}
 	policy, err := svc.Organizations.GetIamPolicy(resource, getReq).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	if !removeBindingFromPolicy(policy, flagOrgIamRole, flagOrgIamMember, buildCondition(), flagOrgIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagOrgIamRole, flagOrgIamMember)
+	if !removeBindingFromPolicy(policy, o.role, o.member, o.condition(), o.allConditions) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", o.role, o.member)
 	}
 
 	updated, err := svc.Organizations.SetIamPolicy(resource, &crm.SetIamPolicyRequest{
@@ -376,6 +365,6 @@ func runOrgRemoveIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for organization [%s].\n", strings.TrimPrefix(resource, "organizations/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(inv.stderr, "Updated IAM policy for organization [%s].\n", strings.TrimPrefix(resource, "organizations/"))
+	return inv.yaml(updated)
 }

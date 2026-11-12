@@ -21,6 +21,7 @@ var ErrNotInProcess = errors.New("command cannot run in-process yet")
 // inv, built for inv. Only these can run in-process.
 func migratedGroups(inv *invocation) []*cobra.Command {
 	return []*cobra.Command{
+		newOrganizationsCmd(inv),
 		newProjectsCmd(inv),
 	}
 }
