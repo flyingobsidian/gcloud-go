@@ -75,11 +75,10 @@ func TestSchedulerConcurrentInProcess(t *testing.T) {
 		wg.Go(func() {
 			inv, stdout, _ := newFakeAPIInvocation(t, fakeScheduler(t))
 			project := fmt.Sprintf("p%d", i)
-			if err := runInvocation(inv, "scheduler", "jobs", "describe", "job", "--project="+project, "--location=l1", "--format=yaml"); err != nil {
+			if err := runInvocation(inv, "scheduler", "jobs", "describe", "job", "--project="+project, "--location=l1", "--format=json"); err != nil {
 				t.Error(err)
 				return
 			}
-			// describe always prints JSON, whatever --format says.
 			var job struct{ Name string }
 			if err := json.Unmarshal(stdout.Bytes(), &job); err != nil {
 				t.Errorf("describe output is not JSON: %v\n%s", err, stdout.String())
@@ -91,4 +90,49 @@ func TestSchedulerConcurrentInProcess(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestSchedulerJobsDescribeDefaultsToYAML(t *testing.T) {
+	inv, stdout, _ := newFakeAPIInvocation(t, fakeScheduler(t))
+	if err := runInvocation(inv, "scheduler", "jobs", "describe", "job", "--project=p1", "--location=l1"); err != nil {
+		t.Fatal(err)
+	}
+	want := "name: projects/p1/locations/l1/jobs/job\nschedule: '*/5 * * * *'\nstate: PAUSED\n"
+	if got := stdout.String(); got != want {
+		t.Errorf("describe = %q, want %q", got, want)
+	}
+}
+
+// Guards #2081: create sends the --time-zone and --http-method defaults even
+// though update binds the same flags with empty defaults.
+func TestSchedulerJobsCreateDefaults(t *testing.T) {
+	var mu sync.Mutex
+	var got map[string]any
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/jobs") {
+			http.NotFound(w, r)
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Error(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(got)
+	})
+	inv, stdout, _ := newFakeAPIInvocation(t, api)
+	if err := runInvocation(inv, "scheduler", "jobs", "create", "http", "j1", "--project=p1", "--location=l1",
+		"--schedule=0 * * * *", "--uri=https://example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if got["timeZone"] != "Etc/UTC" {
+		t.Errorf("timeZone = %v, want Etc/UTC", got["timeZone"])
+	}
+	if target, _ := got["httpTarget"].(map[string]any); target["httpMethod"] != "POST" {
+		t.Errorf("httpTarget = %v, want httpMethod POST", got["httpTarget"])
+	}
+	if want := "Created scheduler job [j1].\n"; stdout.String() != want {
+		t.Errorf("stdout = %q, want %q", stdout.String(), want)
+	}
 }
