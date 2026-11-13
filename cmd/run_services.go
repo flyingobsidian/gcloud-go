@@ -1,16 +1,13 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	"golang.org/x/oauth2"
 	logging "google.golang.org/api/logging/v2"
@@ -21,202 +18,126 @@ import (
 //
 // Backed by run/v2 Projects.Locations.Services.
 
-var runServicesCmd = &cobra.Command{Use: "services", Short: "Manage Cloud Run services"}
-
-var (
-	flagRunServicesRegion     string
-	flagRunServicesFormat     string
-	flagRunServicesConfigFile string
-	flagRunServicesUpdateMask string
-	flagRunServicesPageSize   int64
-	flagRunServicesShowDel    bool
-	flagRunServicesLimit      int64
-
-	flagRunServicesIamMember   string
-	flagRunServicesIamRole     string
-	flagRunServicesIamCondExpr string
-	flagRunServicesIamCondT    string
-	flagRunServicesIamCondD    string
-	flagRunServicesIamAllCond  bool
-
-	flagRunServicesTrafficRevs   map[string]string
-	flagRunServicesTrafficLatest bool
-
-	flagRunServicesProxyPort int
-	flagRunServicesProxyBind string
-)
-
-var (
-	runServicesDeleteCmd = &cobra.Command{
-		Use: "delete SERVICE", Short: "Delete a Cloud Run service",
-		Args: cobra.ExactArgs(1), RunE: runSvcDelete,
-	}
-	runServicesDescribeCmd = &cobra.Command{
-		Use: "describe SERVICE", Short: "Describe a Cloud Run service",
-		Args: cobra.ExactArgs(1), RunE: runSvcDescribe,
-	}
-	runServicesListCmd = &cobra.Command{
-		Use: "list", Short: "List Cloud Run services",
-		Args: cobra.NoArgs, RunE: runSvcList,
-	}
-	runServicesReplaceCmd = &cobra.Command{
-		Use: "replace SERVICE", Short: "Replace a Cloud Run service from a config file",
-		Args: cobra.ExactArgs(1), RunE: runSvcReplace,
-	}
-	runServicesUpdateCmd = &cobra.Command{
-		Use: "update SERVICE", Short: "Update a Cloud Run service from a config file",
-		Args: cobra.ExactArgs(1), RunE: runSvcUpdate,
-	}
-	runServicesUpdateTrafficCmd = &cobra.Command{
-		Use: "update-traffic SERVICE", Short: "Update Cloud Run service traffic split",
-		Args: cobra.ExactArgs(1), RunE: runSvcUpdateTraffic,
-	}
-	runServicesLogsCmd = &cobra.Command{
-		Use: "logs SERVICE", Short: "Read Cloud Logging entries for a Cloud Run service",
-		Args: cobra.ExactArgs(1), RunE: runSvcLogs,
-	}
-	runServicesProxyCmd = &cobra.Command{
-		Use: "proxy SERVICE", Short: "Proxy authenticated local traffic to a Cloud Run service",
-		Args: cobra.ExactArgs(1), RunE: runSvcProxy,
-	}
-	runServicesGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy SERVICE", Short: "Get the IAM policy for a Cloud Run service",
-		Args: cobra.ExactArgs(1), RunE: runSvcGetIam,
-	}
-	runServicesSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy SERVICE POLICY_FILE", Short: "Set the IAM policy for a Cloud Run service",
-		Args: cobra.ExactArgs(2), RunE: runSvcSetIam,
-	}
-	runServicesAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding SERVICE", Short: "Add an IAM policy binding to a Cloud Run service",
-		Args: cobra.ExactArgs(1), RunE: runSvcAddIam,
-	}
-	runServicesRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding SERVICE", Short: "Remove an IAM policy binding from a Cloud Run service",
-		Args: cobra.ExactArgs(1), RunE: runSvcRemoveIam,
-	}
-)
-
-func init() {
+func (s *runCmds) initRunServices() {
 	all := []*cobra.Command{
-		runServicesDeleteCmd, runServicesDescribeCmd, runServicesListCmd,
-		runServicesReplaceCmd, runServicesUpdateCmd, runServicesUpdateTrafficCmd,
-		runServicesLogsCmd, runServicesProxyCmd, runServicesGetIamCmd,
-		runServicesSetIamCmd, runServicesAddIamCmd, runServicesRemoveIamCmd,
+		s.runServicesDeleteCmd, s.runServicesDescribeCmd, s.runServicesListCmd,
+		s.runServicesReplaceCmd, s.runServicesUpdateCmd, s.runServicesUpdateTrafficCmd,
+		s.runServicesLogsCmd, s.runServicesProxyCmd, s.runServicesGetIamCmd,
+		s.runServicesSetIamCmd, s.runServicesAddIamCmd, s.runServicesRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagRunServicesFormat, "format", "", "Output format")
-		if c == runServicesListCmd {
+		c.Flags().StringVar(&s.flagRunServicesFormat, "format", "", "Output format")
+		if c == s.runServicesListCmd {
 			// As in gcloud, list spans every region unless --region is given.
-			c.Flags().StringVar(&flagRunServicesRegion, "region", "", "Cloud Run region; default all regions")
+			c.Flags().StringVar(&s.flagRunServicesRegion, "region", "", "Cloud Run region; default all regions")
 			continue
 		}
-		c.Flags().StringVar(&flagRunServicesRegion, "region", "", "Cloud Run region (required)")
+		c.Flags().StringVar(&s.flagRunServicesRegion, "region", "", "Cloud Run region (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	for _, c := range []*cobra.Command{runServicesReplaceCmd, runServicesUpdateCmd} {
-		c.Flags().StringVar(&flagRunServicesConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.runServicesReplaceCmd, s.runServicesUpdateCmd} {
+		c.Flags().StringVar(&s.flagRunServicesConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Service body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	runServicesUpdateCmd.Flags().StringVar(&flagRunServicesUpdateMask, "update-mask", "",
+	s.runServicesUpdateCmd.Flags().StringVar(&s.flagRunServicesUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update; defaults to the populated top-level fields in --config-file")
 
-	runServicesListCmd.Flags().Int64Var(&flagRunServicesPageSize, "page-size", 0, "Maximum results per page")
-	runServicesListCmd.Flags().BoolVar(&flagRunServicesShowDel, "show-deleted", false, "Include deleted services")
+	s.runServicesListCmd.Flags().Int64Var(&s.flagRunServicesPageSize, "page-size", 0, "Maximum results per page")
+	s.runServicesListCmd.Flags().BoolVar(&s.flagRunServicesShowDel, "show-deleted", false, "Include deleted services")
 
-	runServicesUpdateTrafficCmd.Flags().StringToStringVar(&flagRunServicesTrafficRevs, "to-revisions", nil,
+	s.runServicesUpdateTrafficCmd.Flags().StringToStringVar(&s.flagRunServicesTrafficRevs, "to-revisions", nil,
 		"Revision-to-percent map, e.g. REV1=60,REV2=40")
-	runServicesUpdateTrafficCmd.Flags().BoolVar(&flagRunServicesTrafficLatest, "to-latest", false,
+	s.runServicesUpdateTrafficCmd.Flags().BoolVar(&s.flagRunServicesTrafficLatest, "to-latest", false,
 		"Route 100% of traffic to the latest ready revision")
 
-	runServicesLogsCmd.Flags().Int64Var(&flagRunServicesLimit, "limit", 100,
+	s.runServicesLogsCmd.Flags().Int64Var(&s.flagRunServicesLimit, "limit", 100,
 		"Maximum number of log entries to return")
 
-	runServicesProxyCmd.Flags().IntVar(&flagRunServicesProxyPort, "port", 8080,
+	s.runServicesProxyCmd.Flags().IntVar(&s.flagRunServicesProxyPort, "port", 8080,
 		"Local port to listen on")
-	runServicesProxyCmd.Flags().StringVar(&flagRunServicesProxyBind, "bind", "127.0.0.1",
+	s.runServicesProxyCmd.Flags().StringVar(&s.flagRunServicesProxyBind, "bind", "127.0.0.1",
 		"Local address to bind")
 
-	for _, c := range []*cobra.Command{runServicesAddIamCmd, runServicesRemoveIamCmd} {
-		runIamFlags(c, &flagRunServicesIamMember, &flagRunServicesIamRole,
-			&flagRunServicesIamCondExpr, &flagRunServicesIamCondT, &flagRunServicesIamCondD)
+	for _, c := range []*cobra.Command{s.runServicesAddIamCmd, s.runServicesRemoveIamCmd} {
+		runIamFlags(c, &s.flagRunServicesIamMember, &s.flagRunServicesIamRole,
+			&s.flagRunServicesIamCondExpr, &s.flagRunServicesIamCondT, &s.flagRunServicesIamCondD)
 	}
-	runServicesRemoveIamCmd.Flags().BoolVar(&flagRunServicesIamAllCond, "all", false,
+	s.runServicesRemoveIamCmd.Flags().BoolVar(&s.flagRunServicesIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	runServicesCmd.AddCommand(all...)
-	runCmd.AddCommand(runServicesCmd)
+	s.runServicesCmd.AddCommand(all...)
+	s.runCmd.AddCommand(s.runServicesCmd)
 }
 
-func runSvcName(project, service string) string {
-	return runResourceName(project, flagRunServicesRegion, "services", service)
+func (s *runCmds) runSvcName(project, service string) string {
+	return runResourceName(project, s.flagRunServicesRegion, "services", service)
 }
 
-func runSvcDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.Delete(runSvcName(project, args[0])).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Services.Delete(s.runSvcName(project, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting service: %w", err)
 	}
-	fmt.Printf("Delete request issued for service [%s].\n", args[0])
-	return emitFormatted(op, flagRunServicesFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for service [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunServicesFormat)
 }
 
-func runSvcDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Services.Get(runSvcName(project, args[0])).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Services.Get(s.runSvcName(project, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing service: %w", err)
 	}
-	return emitFormatted(got, flagRunServicesFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRunServicesFormat)
 }
 
-func runSvcList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if flagRunServicesRegion == "" {
-		v1, err := gcp.RunV1Service(ctx, flagAccount, "")
+	ctx := cmd.Context()
+	if s.flagRunServicesRegion == "" {
+		v1, err := s.inv.clients().RunV1(ctx, "")
 		if err != nil {
 			return err
 		}
-		all, err := runListAllServices(ctx, os.Stderr, v1, project)
+		all, err := runListAllServices(ctx, s.inv.stderr, v1, project)
 		if err != nil {
 			return err
 		}
-		return emitFormatted(all, flagRunServicesFormat)
+		return emitFormattedTo(s.inv.stdout, all, s.flagRunServicesFormat)
 	}
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
 	var all []*runv2.GoogleCloudRunV2Service
 	pageToken := ""
 	for {
-		call := svc.Projects.Locations.Services.List(runParent(project, flagRunServicesRegion)).Context(ctx)
-		if flagRunServicesPageSize > 0 {
-			call = call.PageSize(flagRunServicesPageSize)
+		call := svc.Projects.Locations.Services.List(runParent(project, s.flagRunServicesRegion)).Context(ctx)
+		if s.flagRunServicesPageSize > 0 {
+			call = call.PageSize(s.flagRunServicesPageSize)
 		}
-		if flagRunServicesShowDel {
+		if s.flagRunServicesShowDel {
 			call = call.ShowDeleted(true)
 		}
 		if pageToken != "" {
@@ -232,21 +153,21 @@ func runSvcList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagRunServicesFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagRunServicesFormat)
 }
 
-func runSvcReplace(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcReplace(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &runv2.GoogleCloudRunV2Service{}
-	if err := loadYAMLOrJSONInto(flagRunServicesConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagRunServicesConfigFile, body); err != nil {
 		return err
 	}
-	body.Name = runSvcName(project, args[0])
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	body.Name = s.runSvcName(project, args[0])
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
@@ -255,26 +176,26 @@ func runSvcReplace(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("replacing service: %w", err)
 	}
-	fmt.Printf("Replace request issued for service [%s].\n", args[0])
-	return emitFormatted(op, flagRunServicesFormat)
+	fmt.Fprintf(s.inv.stdout, "Replace request issued for service [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunServicesFormat)
 }
 
-func runSvcUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &runv2.GoogleCloudRunV2Service{}
-	if err := loadYAMLOrJSONInto(flagRunServicesConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagRunServicesConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagRunServicesUpdateMask
+	mask := s.flagRunServicesUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	body.Name = runSvcName(project, args[0])
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	body.Name = s.runSvcName(project, args[0])
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
@@ -286,35 +207,35 @@ func runSvcUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating service: %w", err)
 	}
-	fmt.Printf("Update request issued for service [%s].\n", args[0])
-	return emitFormatted(op, flagRunServicesFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for service [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunServicesFormat)
 }
 
-func runSvcUpdateTraffic(cmd *cobra.Command, args []string) error {
-	if len(flagRunServicesTrafficRevs) == 0 && !flagRunServicesTrafficLatest {
+func (s *runCmds) runSvcUpdateTraffic(cmd *cobra.Command, args []string) error {
+	if len(s.flagRunServicesTrafficRevs) == 0 && !s.flagRunServicesTrafficLatest {
 		return fmt.Errorf("one of --to-revisions or --to-latest is required")
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
-	name := runSvcName(project, args[0])
+	name := s.runSvcName(project, args[0])
 	current, err := svc.Projects.Locations.Services.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("loading service: %w", err)
 	}
 	var traffic []*runv2.GoogleCloudRunV2TrafficTarget
-	if flagRunServicesTrafficLatest {
+	if s.flagRunServicesTrafficLatest {
 		traffic = append(traffic, &runv2.GoogleCloudRunV2TrafficTarget{
 			Type: "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST", Percent: 100,
 		})
 	}
-	for rev, pctStr := range flagRunServicesTrafficRevs {
+	for rev, pctStr := range s.flagRunServicesTrafficRevs {
 		pct, err := parseTrafficPercent(pctStr)
 		if err != nil {
 			return err
@@ -334,25 +255,25 @@ func runSvcUpdateTraffic(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating traffic: %w", err)
 	}
-	fmt.Printf("Traffic update issued for service [%s].\n", args[0])
-	return emitFormatted(op, flagRunServicesFormat)
+	fmt.Fprintf(s.inv.stdout, "Traffic update issued for service [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunServicesFormat)
 }
 
-func runSvcLogs(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcLogs(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LoggingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Logging(ctx)
 	if err != nil {
 		return err
 	}
 	filter := fmt.Sprintf(
 		`resource.type="cloud_run_revision" AND resource.labels.service_name=%q AND resource.labels.location=%q`,
-		args[0], flagRunServicesRegion,
+		args[0], s.flagRunServicesRegion,
 	)
-	limit := flagRunServicesLimit
+	limit := s.flagRunServicesLimit
 	if limit <= 0 {
 		limit = 100
 	}
@@ -366,18 +287,18 @@ func runSvcLogs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing log entries: %w", err)
 	}
-	if flagRunServicesFormat != "" {
-		return emitFormatted(resp.Entries, flagRunServicesFormat)
+	if s.flagRunServicesFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Entries, s.flagRunServicesFormat)
 	}
-	printLogEntries(resp.Entries)
+	s.printLogEntries(resp.Entries)
 	return nil
 }
 
 // printLogEntries writes log entries as "TIMESTAMP SEVERITY MESSAGE" lines.
-func printLogEntries(entries []*logging.LogEntry) {
+func (s *runCmds) printLogEntries(entries []*logging.LogEntry) {
 	for _, e := range entries {
 		msg := logEntryMessage(e)
-		fmt.Printf("%s %s %s\n", e.Timestamp, e.Severity, msg)
+		fmt.Fprintf(s.inv.stdout, "%s %s %s\n", e.Timestamp, e.Severity, msg)
 	}
 }
 
@@ -406,17 +327,17 @@ func parseTrafficPercent(s string) (int64, error) {
 	return pct, nil
 }
 
-func runSvcProxy(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcProxy(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Services.Get(runSvcName(project, args[0])).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Services.Get(s.runSvcName(project, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing service: %w", err)
 	}
@@ -427,7 +348,7 @@ func runSvcProxy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("parsing service URI %q: %w", got.Uri, err)
 	}
-	ts, err := gcp.PlatformTokenSource(ctx, flagAccount)
+	ts, err := s.inv.clients().PlatformTokenSource(ctx)
 	if err != nil {
 		return err
 	}
@@ -450,8 +371,8 @@ func runSvcProxy(cmd *cobra.Command, args []string) error {
 		req.URL.Host = target.Host
 		req.URL.Scheme = target.Scheme
 	}
-	addr := fmt.Sprintf("%s:%d", flagRunServicesProxyBind, flagRunServicesProxyPort)
-	fmt.Printf("Proxying %s -> %s\n", "http://"+addr, got.Uri)
+	addr := fmt.Sprintf("%s:%d", s.flagRunServicesProxyBind, s.flagRunServicesProxyPort)
+	fmt.Fprintf(s.inv.stdout, "Proxying %s -> %s\n", "http://"+addr, got.Uri)
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           proxy,
@@ -481,26 +402,26 @@ func (t *authProxyTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return t.base.RoundTrip(clone)
 }
 
-func runSvcGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcGetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
-	policy, err := svc.Projects.Locations.Services.GetIamPolicy(runSvcName(project, args[0])).
+	policy, err := svc.Projects.Locations.Services.GetIamPolicy(s.runSvcName(project, args[0])).
 		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagRunServicesFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagRunServicesFormat)
 }
 
-func runSvcSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcSetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
@@ -509,75 +430,75 @@ func runSvcSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
-	updated, err := svc.Projects.Locations.Services.SetIamPolicy(runSvcName(project, args[0]),
+	updated, err := svc.Projects.Locations.Services.SetIamPolicy(s.runSvcName(project, args[0]),
 		&runv2.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	runIamUpdatedIam(fmt.Sprintf("service [%s]", args[0]))
-	return emitFormatted(updated, flagRunServicesFormat)
+	s.runIamUpdatedIam(fmt.Sprintf("service [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagRunServicesFormat)
 }
 
-func runSvcAddIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcAddIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
-	resource := runSvcName(project, args[0])
+	resource := s.runSvcName(project, args[0])
 	policy, err := svc.Projects.Locations.Services.GetIamPolicy(resource).
 		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	runIamAddBinding(policy, flagRunServicesIamRole, flagRunServicesIamMember,
-		runIamBuildCondition(flagRunServicesIamCondExpr, flagRunServicesIamCondT, flagRunServicesIamCondD))
+	runIamAddBinding(policy, s.flagRunServicesIamRole, s.flagRunServicesIamMember,
+		runIamBuildCondition(s.flagRunServicesIamCondExpr, s.flagRunServicesIamCondT, s.flagRunServicesIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Locations.Services.SetIamPolicy(resource,
 		&runv2.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	runIamUpdatedIam(fmt.Sprintf("service [%s]", args[0]))
-	return emitFormatted(updated, flagRunServicesFormat)
+	s.runIamUpdatedIam(fmt.Sprintf("service [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagRunServicesFormat)
 }
 
-func runSvcRemoveIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runSvcRemoveIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunServicesRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunServicesRegion)
 	if err != nil {
 		return err
 	}
-	resource := runSvcName(project, args[0])
+	resource := s.runSvcName(project, args[0])
 	policy, err := svc.Projects.Locations.Services.GetIamPolicy(resource).
 		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !runIamRemoveBinding(policy, flagRunServicesIamRole, flagRunServicesIamMember,
-		runIamBuildCondition(flagRunServicesIamCondExpr, flagRunServicesIamCondT, flagRunServicesIamCondD),
-		flagRunServicesIamAllCond) {
+	if !runIamRemoveBinding(policy, s.flagRunServicesIamRole, s.flagRunServicesIamMember,
+		runIamBuildCondition(s.flagRunServicesIamCondExpr, s.flagRunServicesIamCondT, s.flagRunServicesIamCondD),
+		s.flagRunServicesIamAllCond) {
 		return fmt.Errorf("policy binding not found for role [%s] and member [%s]",
-			flagRunServicesIamRole, flagRunServicesIamMember)
+			s.flagRunServicesIamRole, s.flagRunServicesIamMember)
 	}
 	updated, err := svc.Projects.Locations.Services.SetIamPolicy(resource,
 		&runv2.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	runIamUpdatedIam(fmt.Sprintf("service [%s]", args[0]))
-	return emitFormatted(updated, flagRunServicesFormat)
+	s.runIamUpdatedIam(fmt.Sprintf("service [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagRunServicesFormat)
 }

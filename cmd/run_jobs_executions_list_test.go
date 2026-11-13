@@ -142,8 +142,9 @@ func TestRunJobsSortAndLimit(t *testing.T) {
 }
 
 func TestRunJobsExecListFlags(t *testing.T) {
+	grp := newRunCmds(legacyTestInvocation())
 	for name, def := range map[string]string{"limit": "0", "page-size": "0", "job": "", "region": "", "format": ""} {
-		f := runJobsExecListCmd.Flags().Lookup(name)
+		f := grp.runJobsExecListCmd.Flags().Lookup(name)
 		if f == nil {
 			t.Errorf("--%s missing", name)
 			continue
@@ -152,10 +153,10 @@ func TestRunJobsExecListFlags(t *testing.T) {
 			t.Errorf("--%s default = %q, want %q", name, f.DefValue, def)
 		}
 	}
-	if len(runJobsExecListCmd.Flags().Lookup("job").Annotations[cobra.BashCompOneRequiredFlag]) > 0 {
+	if len(grp.runJobsExecListCmd.Flags().Lookup("job").Annotations[cobra.BashCompOneRequiredFlag]) > 0 {
 		t.Error("--job should be optional for list")
 	}
-	if len(runJobsExecDescribeCmd.Flags().Lookup("job").Annotations[cobra.BashCompOneRequiredFlag]) == 0 {
+	if len(grp.runJobsExecDescribeCmd.Flags().Lookup("job").Annotations[cobra.BashCompOneRequiredFlag]) == 0 {
 		t.Error("--job should stay required for describe")
 	}
 }

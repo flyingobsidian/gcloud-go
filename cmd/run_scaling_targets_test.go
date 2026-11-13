@@ -38,6 +38,7 @@ func TestParseRunUtilization(t *testing.T) {
 }
 
 func TestApplyRunScalingTargets(t *testing.T) {
+	grp := newRunCmds(legacyTestInvocation())
 	tmpl := &runv2.GoogleCloudRunV2RevisionTemplate{Scaling: &runv2.GoogleCloudRunV2RevisionScaling{ConcurrencyUtilization: 0.5}}
 	if err := applyRunScalingTargets(tmpl, "disabled", "default"); err != nil {
 		t.Fatal(err)
@@ -55,7 +56,7 @@ func TestApplyRunScalingTargets(t *testing.T) {
 	if sc.CpuUtilization != 0.7 || slices.Contains(sc.ForceSendFields, "CpuUtilization") {
 		t.Errorf("cpu 0.7: %+v", sc)
 	}
-	if runDeployCmd.Flags().Lookup("scaling-cpu-target") == nil || runDeployCmd.Flags().Lookup("scaling-concurrency-target") == nil {
+	if grp.runDeployCmd.Flags().Lookup("scaling-cpu-target") == nil || grp.runDeployCmd.Flags().Lookup("scaling-concurrency-target") == nil {
 		t.Error("scaling target flags missing on run deploy")
 	}
 }

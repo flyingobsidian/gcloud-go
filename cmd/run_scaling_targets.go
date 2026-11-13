@@ -18,15 +18,10 @@ import (
 // annotations and carries the same values in template.scaling
 // cpuUtilization / concurrencyUtilization.
 
-var (
-	flagRunDeployScalingCPUTarget         string
-	flagRunDeployScalingConcurrencyTarget string
-)
-
-func init() {
-	runDeployCmd.Flags().StringVar(&flagRunDeployScalingCPUTarget, "scaling-cpu-target", "",
+func (s *runCmds) initRunScalingTargets() {
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployScalingCPUTarget, "scaling-cpu-target", "",
 		`CPU utilization target threshold for scaling up new instances (0.1-0.90, "default" to unset, "disabled" to disable)`)
-	runDeployCmd.Flags().StringVar(&flagRunDeployScalingConcurrencyTarget, "scaling-concurrency-target", "",
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployScalingConcurrencyTarget, "scaling-concurrency-target", "",
 		`Concurrency utilization target threshold for scaling up new instances (0.1-0.95, "default" to unset, "disabled" to disable)`)
 }
 

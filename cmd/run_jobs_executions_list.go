@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	runv1 "google.golang.org/api/run/v1"
 )
@@ -129,21 +127,21 @@ func runJobsSortAndLimit(execs []*runv1.Execution, limit int64) []*runv1.Executi
 	return execs
 }
 
-func runJobsExecList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsExecList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV1Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV1(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	pageSize := flagRunJobsExecPageSize
+	pageSize := s.flagRunJobsExecPageSize
 	if pageSize <= 0 {
 		pageSize = runJobsExecDefaultPageSize
 	}
-	selector := runJobsExecLabelSelector(flagRunJobsExecJob)
+	selector := runJobsExecLabelSelector(s.flagRunJobsExecJob)
 	page := func(ctx context.Context, continueToken string) (*runv1.ListExecutionsResponse, error) {
 		call := svc.Namespaces.Executions.List("namespaces/" + project).Context(ctx).Limit(pageSize)
 		if selector != "" {
@@ -158,11 +156,11 @@ func runJobsExecList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing executions: %w", err)
 	}
-	execs := runJobsSortAndLimit(all, flagRunJobsExecLimit)
-	if flagRunJobsFormat == "" {
-		return emitRunJobsExecTable(os.Stdout, os.Stderr, execs, time.Local)
+	execs := runJobsSortAndLimit(all, s.flagRunJobsExecLimit)
+	if s.flagRunJobsFormat == "" {
+		return emitRunJobsExecTable(s.inv.stdout, s.inv.stderr, execs, time.Local)
 	}
-	return emitFormatted(execs, flagRunJobsFormat)
+	return emitFormattedTo(s.inv.stdout, execs, s.flagRunJobsFormat)
 }
 
 // Labels and annotations read by gcloud's default executions table.
