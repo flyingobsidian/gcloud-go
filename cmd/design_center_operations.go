@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -14,142 +13,109 @@ import (
 
 // --- gcloud design-center operations (#1534) ---
 
-var dcOpCmd = &cobra.Command{Use: "operations", Short: "Manage Design Center operations"}
-
-var (
-	flagDCOpLocation string
-	flagDCOpFormat   string
-	flagDCOpFilter   string
-	flagDCOpPageSize int64
-	flagDCOpTimeout  time.Duration
-)
-
-var (
-	dcOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a Design Center operation",
-		Args: cobra.ExactArgs(1), RunE: runDCOpCancel,
-	}
-	dcOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete a Design Center operation record",
-		Args: cobra.ExactArgs(1), RunE: runDCOpDelete,
-	}
-	dcOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Design Center operation",
-		Args: cobra.ExactArgs(1), RunE: runDCOpDescribe,
-	}
-	dcOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Design Center operations",
-		Args: cobra.NoArgs, RunE: runDCOpList,
-	}
-	dcOpWaitCmd = &cobra.Command{
-		Use: "wait OPERATION", Short: "Wait for a Design Center operation to finish",
-		Args: cobra.ExactArgs(1), RunE: runDCOpWait,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{dcOpCancelCmd, dcOpDeleteCmd, dcOpDescribeCmd, dcOpListCmd, dcOpWaitCmd}
+func (s *designCenterCmds) initDesignCenterOperations() {
+	all := []*cobra.Command{s.dcOpCancelCmd, s.dcOpDeleteCmd, s.dcOpDescribeCmd, s.dcOpListCmd, s.dcOpWaitCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDCOpLocation, "location", "", "Design Center location (required)")
+		c.Flags().StringVar(&s.flagDCOpLocation, "location", "", "Design Center location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagDCOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDCOpFormat, "format", "", "Output format")
 	}
-	dcOpListCmd.Flags().StringVar(&flagDCOpFilter, "filter", "", "Server-side filter expression")
-	dcOpListCmd.Flags().Int64Var(&flagDCOpPageSize, "page-size", 0, "Maximum results per page")
-	dcOpWaitCmd.Flags().DurationVar(&flagDCOpTimeout, "timeout", 30*time.Minute,
+	s.dcOpListCmd.Flags().StringVar(&s.flagDCOpFilter, "filter", "", "Server-side filter expression")
+	s.dcOpListCmd.Flags().Int64Var(&s.flagDCOpPageSize, "page-size", 0, "Maximum results per page")
+	s.dcOpWaitCmd.Flags().DurationVar(&s.flagDCOpTimeout, "timeout", 30*time.Minute,
 		"Maximum time to wait for the operation to finish")
 
-	dcOpCmd.AddCommand(all...)
-	designCenterCmd.AddCommand(dcOpCmd)
+	s.dcOpCmd.AddCommand(all...)
+	s.designCenterCmd.AddCommand(s.dcOpCmd)
 }
 
-func dcOpQualifiedName(id string) (string, error) {
+func (s *designCenterCmds) dcOpQualifiedName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s/operations/%s", dcLocationName(project, flagDCOpLocation), id), nil
+	return fmt.Sprintf("%s/operations/%s", dcLocationName(project, s.flagDCOpLocation), id), nil
 }
 
-func runDCOpCancel(cmd *cobra.Command, args []string) error {
-	name, err := dcOpQualifiedName(args[0])
+func (s *designCenterCmds) runDCOpCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.dcOpQualifiedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if err := designCenterRest.do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
+	ctx := cmd.Context()
+	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancel request issued for operation %s.\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancel request issued for operation %s.\n", args[0])
 	return nil
 }
 
-func runDCOpDelete(cmd *cobra.Command, args []string) error {
-	name, err := dcOpQualifiedName(args[0])
+func (s *designCenterCmds) runDCOpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.dcOpQualifiedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if err := designCenterRest.do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	ctx := cmd.Context()
+	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation %s.\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation %s.\n", args[0])
 	return nil
 }
 
-func runDCOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := dcOpQualifiedName(args[0])
+func (s *designCenterCmds) runDCOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.dcOpQualifiedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := designCenterRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagDCOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCOpFormat)
 }
 
-func runDCOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *designCenterCmds) runDCOpList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	base := url.Values{}
-	if flagDCOpFilter != "" {
-		base.Set("filter", flagDCOpFilter)
+	if s.flagDCOpFilter != "" {
+		base.Set("filter", s.flagDCOpFilter)
 	}
-	ctx := context.Background()
-	parent := fmt.Sprintf("%s/operations", dcLocationName(project, flagDCOpLocation))
-	items, err := designCenterRest.paginate(ctx, "/"+parent, base, "operations", flagDCOpPageSize)
+	ctx := cmd.Context()
+	parent := fmt.Sprintf("%s/operations", dcLocationName(project, s.flagDCOpLocation))
+	items, err := s.inv.rest(designCenterRest).paginate(ctx, "/"+parent, base, "operations", s.flagDCOpPageSize)
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	if flagDCOpFormat != "" {
-		return emitFormatted(items, flagDCOpFormat)
+	if s.flagDCOpFormat != "" {
+		return emitFormattedTo(s.inv.stdout, items, s.flagDCOpFormat)
 	}
-	printTableHeading(len(items), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(items), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range items {
 		name, _ := o["name"].(string)
 		done, _ := o["done"].(bool)
-		fmt.Printf("%-40s %v\n", path.Base(name), done)
+		fmt.Fprintf(s.inv.stdout, "%-40s %v\n", path.Base(name), done)
 	}
 	return nil
 }
 
-func runDCOpWait(cmd *cobra.Command, args []string) error {
-	name, err := dcOpQualifiedName(args[0])
+func (s *designCenterCmds) runDCOpWait(cmd *cobra.Command, args []string) error {
+	name, err := s.dcOpQualifiedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	op, err := designCenterRest.waitOperation(ctx, name, flagDCOpTimeout)
+	ctx := cmd.Context()
+	op, err := s.inv.rest(designCenterRest).waitOperation(ctx, name, s.flagDCOpTimeout)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Operation %s completed.\n", args[0])
-	return emitFormatted(op, flagDCOpFormat)
+	fmt.Fprintf(s.inv.stdout, "Operation %s completed.\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagDCOpFormat)
 }
