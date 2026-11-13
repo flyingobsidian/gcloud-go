@@ -80,6 +80,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newDesignCenterCmd(inv),
 		newParameterManagerCmd(inv),
 		newObservabilityCmd(inv),
+		newRecommenderCmd(inv),
 	}
 }
 
