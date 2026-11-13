@@ -37,6 +37,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newEssentialContactsCmd(inv),
 		newServiceHealthCmd(inv),
 		newAnthosCmd(inv),
+		newComplianceManagerCmd(inv),
 	}
 }
 
