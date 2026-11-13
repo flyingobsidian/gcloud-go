@@ -16,12 +16,6 @@ import (
 
 const mkPublicClusterMask = "gcpConfig.accessConfig.publicClusterConfig"
 
-var (
-	flagMKPublicCluster   bool
-	flagMKNoPublicCluster bool
-	flagMKAllowedRanges   []string
-)
-
 func mkSetPublicClusterConfig(cluster *managedkafka.Cluster, ranges []string) {
 	if cluster.GcpConfig == nil {
 		cluster.GcpConfig = &managedkafka.GcpConfig{}

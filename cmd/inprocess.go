@@ -124,6 +124,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newMemorystoreCmd(inv),
 		newApigeeCmd(inv),
 		newActiveDirectoryCmd(inv),
+		newManagedKafkaCmd(inv),
 	}
 }
 
