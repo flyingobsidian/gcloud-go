@@ -4,42 +4,23 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 )
 
 // --- gcloud access-context-manager supported-permissions (#1446) ---
 
-var acmSPCmd = &cobra.Command{Use: "supported-permissions", Short: "VPC-SC supported permissions"}
-
-var (
-	flagACMSPFormat   string
-	flagACMSPPageSize int64
-)
-
-var (
-	acmSPListCmd = &cobra.Command{
-		Use: "list", Short: "List VPC-SC supported permissions",
-		Args: cobra.NoArgs, RunE: runACMSPList,
+func (s *accessContextManagerCmds) initAcmSupportedPermissions() {
+	for _, c := range []*cobra.Command{s.acmSPListCmd, s.acmSPDescribeCmd} {
+		c.Flags().StringVar(&s.flagACMSPFormat, "format", "", "Output format")
 	}
-	acmSPDescribeCmd = &cobra.Command{
-		Use: "describe PERMISSION", Short: "Describe a VPC-SC supported permission",
-		Args: cobra.ExactArgs(1), RunE: runACMSPDescribe,
-	}
-)
+	s.acmSPListCmd.Flags().Int64Var(&s.flagACMSPPageSize, "page-size", 0, "Maximum results per page")
 
-func init() {
-	for _, c := range []*cobra.Command{acmSPListCmd, acmSPDescribeCmd} {
-		c.Flags().StringVar(&flagACMSPFormat, "format", "", "Output format")
-	}
-	acmSPListCmd.Flags().Int64Var(&flagACMSPPageSize, "page-size", 0, "Maximum results per page")
-
-	acmSPCmd.AddCommand(acmSPListCmd, acmSPDescribeCmd)
-	accessContextManagerCmd.AddCommand(acmSPCmd)
+	s.acmSPCmd.AddCommand(s.acmSPListCmd, s.acmSPDescribeCmd)
+	s.accessContextManagerCmd.AddCommand(s.acmSPCmd)
 }
 
-func acmSPListAll(ctx context.Context) ([]string, error) {
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) acmSPListAll(ctx context.Context) ([]string, error) {
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -47,8 +28,8 @@ func acmSPListAll(ctx context.Context) ([]string, error) {
 	pageToken := ""
 	for {
 		call := svc.Permissions.List().Context(ctx)
-		if flagACMSPPageSize > 0 {
-			call = call.PageSize(flagACMSPPageSize)
+		if s.flagACMSPPageSize > 0 {
+			call = call.PageSize(s.flagACMSPPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -66,24 +47,24 @@ func acmSPListAll(ctx context.Context) ([]string, error) {
 	return all, nil
 }
 
-func runACMSPList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	all, err := acmSPListAll(ctx)
+func (s *accessContextManagerCmds) runACMSPList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	all, err := s.acmSPListAll(ctx)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(all, flagACMSPFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagACMSPFormat)
 }
 
-func runACMSPDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	all, err := acmSPListAll(ctx)
+func (s *accessContextManagerCmds) runACMSPDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	all, err := s.acmSPListAll(ctx)
 	if err != nil {
 		return err
 	}
 	for _, p := range all {
 		if p == args[0] {
-			return emitFormatted(p, flagACMSPFormat)
+			return emitFormattedTo(s.inv.stdout, p, s.flagACMSPFormat)
 		}
 	}
 	return fmt.Errorf("supported permission %q not found", args[0])

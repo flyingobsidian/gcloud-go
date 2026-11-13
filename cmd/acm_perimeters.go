@@ -1,180 +1,115 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
 )
 
 // --- gcloud access-context-manager perimeters (#1444) ---
 
-var acmPMCmd = &cobra.Command{Use: "perimeters", Short: "Manage service perimeters"}
-
-var (
-	flagACMPMFormat     string
-	flagACMPMPolicy     string
-	flagACMPMConfigFile string
-	flagACMPMSourceFile string
-	flagACMPMPageSize   int64
-	flagACMPMEtag       string
-)
-
-var (
-	acmPMCreateCmd = &cobra.Command{
-		Use: "create NAME", Short: "Create a service perimeter",
-		Args: cobra.ExactArgs(1), RunE: runACMPMCreate,
-	}
-	acmPMDeleteCmd = &cobra.Command{
-		Use: "delete NAME", Short: "Delete a service perimeter",
-		Args: cobra.ExactArgs(1), RunE: runACMPMDelete,
-	}
-	acmPMDescribeCmd = &cobra.Command{
-		Use: "describe NAME", Short: "Describe a service perimeter",
-		Args: cobra.ExactArgs(1), RunE: runACMPMDescribe,
-	}
-	acmPMListCmd = &cobra.Command{
-		Use: "list", Short: "List service perimeters",
-		Args: cobra.NoArgs, RunE: runACMPMList,
-	}
-	acmPMUpdateCmd = &cobra.Command{
-		Use: "update NAME", Short: "Update a service perimeter",
-		Args: cobra.ExactArgs(1), RunE: runACMPMUpdate,
-	}
-	acmPMReplaceAllCmd = &cobra.Command{
-		Use: "replace-all", Short: "Replace all service perimeters in a policy",
-		Args: cobra.NoArgs, RunE: runACMPMReplaceAll,
-	}
-)
-
-var acmPMDryRunCmd = &cobra.Command{Use: "dry-run", Short: "Manage dry-run configuration for a perimeter"}
-
-var (
-	acmPMDryCreateCmd = &cobra.Command{
-		Use: "create NAME", Short: "Create the dry-run spec for a perimeter",
-		Args: cobra.ExactArgs(1), RunE: runACMPMDryCreate,
-	}
-	acmPMDryDescribeCmd = &cobra.Command{
-		Use: "describe NAME", Short: "Describe the dry-run configuration for a perimeter",
-		Args: cobra.ExactArgs(1), RunE: runACMPMDryDescribe,
-	}
-	acmPMDryEnforceCmd = &cobra.Command{
-		Use: "enforce", Short: "Commit dry-run specs across all perimeters in a policy",
-		Args: cobra.NoArgs, RunE: runACMPMDryEnforce,
-	}
-	acmPMDryResetCmd = &cobra.Command{
-		Use: "reset NAME", Short: "Reset the dry-run spec for a perimeter",
-		Args: cobra.ExactArgs(1), RunE: runACMPMDryDrop,
-	}
-	acmPMDryDropCmd = &cobra.Command{
-		Use: "drop NAME", Short: "Drop the dry-run spec for a perimeter",
-		Args: cobra.ExactArgs(1), RunE: runACMPMDryDrop,
-	}
-)
-
-func init() {
+func (s *accessContextManagerCmds) initAcmPerimeters() {
 	all := []*cobra.Command{
-		acmPMCreateCmd, acmPMDeleteCmd, acmPMDescribeCmd, acmPMListCmd, acmPMUpdateCmd, acmPMReplaceAllCmd,
+		s.acmPMCreateCmd, s.acmPMDeleteCmd, s.acmPMDescribeCmd, s.acmPMListCmd, s.acmPMUpdateCmd, s.acmPMReplaceAllCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagACMPMFormat, "format", "", "Output format")
-		c.Flags().StringVar(&flagACMPMPolicy, "policy", "", "Access policy ID (required)")
+		c.Flags().StringVar(&s.flagACMPMFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagACMPMPolicy, "policy", "", "Access policy ID (required)")
 		_ = c.MarkFlagRequired("policy")
 	}
-	for _, c := range []*cobra.Command{acmPMCreateCmd, acmPMUpdateCmd} {
-		c.Flags().StringVar(&flagACMPMConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.acmPMCreateCmd, s.acmPMUpdateCmd} {
+		c.Flags().StringVar(&s.flagACMPMConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the ServicePerimeter body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	acmPMReplaceAllCmd.Flags().StringVar(&flagACMPMSourceFile, "source-file", "",
+	s.acmPMReplaceAllCmd.Flags().StringVar(&s.flagACMPMSourceFile, "source-file", "",
 		"Path to a YAML/JSON file containing a list of ServicePerimeter bodies (required)")
-	_ = acmPMReplaceAllCmd.MarkFlagRequired("source-file")
-	acmPMReplaceAllCmd.Flags().StringVar(&flagACMPMEtag, "etag", "", "Expected etag of the parent AccessPolicy")
-	acmPMListCmd.Flags().Int64Var(&flagACMPMPageSize, "page-size", 0, "Maximum results per page")
+	_ = s.acmPMReplaceAllCmd.MarkFlagRequired("source-file")
+	s.acmPMReplaceAllCmd.Flags().StringVar(&s.flagACMPMEtag, "etag", "", "Expected etag of the parent AccessPolicy")
+	s.acmPMListCmd.Flags().Int64Var(&s.flagACMPMPageSize, "page-size", 0, "Maximum results per page")
 
 	dryAll := []*cobra.Command{
-		acmPMDryCreateCmd, acmPMDryDescribeCmd, acmPMDryEnforceCmd, acmPMDryResetCmd, acmPMDryDropCmd,
+		s.acmPMDryCreateCmd, s.acmPMDryDescribeCmd, s.acmPMDryEnforceCmd, s.acmPMDryResetCmd, s.acmPMDryDropCmd,
 	}
 	for _, c := range dryAll {
-		c.Flags().StringVar(&flagACMPMFormat, "format", "", "Output format")
-		c.Flags().StringVar(&flagACMPMPolicy, "policy", "", "Access policy ID (required)")
+		c.Flags().StringVar(&s.flagACMPMFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagACMPMPolicy, "policy", "", "Access policy ID (required)")
 		_ = c.MarkFlagRequired("policy")
 	}
-	acmPMDryCreateCmd.Flags().StringVar(&flagACMPMConfigFile, "config-file", "",
+	s.acmPMDryCreateCmd.Flags().StringVar(&s.flagACMPMConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the dry-run ServicePerimeter body (required)")
-	_ = acmPMDryCreateCmd.MarkFlagRequired("config-file")
-	acmPMDryEnforceCmd.Flags().StringVar(&flagACMPMEtag, "etag", "", "Expected etag of the parent AccessPolicy")
+	_ = s.acmPMDryCreateCmd.MarkFlagRequired("config-file")
+	s.acmPMDryEnforceCmd.Flags().StringVar(&s.flagACMPMEtag, "etag", "", "Expected etag of the parent AccessPolicy")
 
-	acmPMDryRunCmd.AddCommand(dryAll...)
-	acmPMCmd.AddCommand(all...)
-	acmPMCmd.AddCommand(acmPMDryRunCmd)
-	accessContextManagerCmd.AddCommand(acmPMCmd)
+	s.acmPMDryRunCmd.AddCommand(dryAll...)
+	s.acmPMCmd.AddCommand(all...)
+	s.acmPMCmd.AddCommand(s.acmPMDryRunCmd)
+	s.accessContextManagerCmd.AddCommand(s.acmPMCmd)
 }
 
 func acmPMResource(policy, name string) string {
 	return fmt.Sprintf("%s/servicePerimeters/%s", acmPolicyResource(policy), name)
 }
 
-func runACMPMCreate(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMPMCreate(cmd *cobra.Command, args []string) error {
 	body := &accesscontextmanager.ServicePerimeter{}
-	if err := loadYAMLOrJSONInto(flagACMPMConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMPMConfigFile, body); err != nil {
 		return err
 	}
-	body.Name = acmPMResource(flagACMPMPolicy, args[0])
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	body.Name = acmPMResource(s.flagACMPMPolicy, args[0])
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.AccessPolicies.ServicePerimeters.Create(acmPolicyResource(flagACMPMPolicy), body).Context(ctx).Do()
+	op, err := svc.AccessPolicies.ServicePerimeters.Create(acmPolicyResource(s.flagACMPMPolicy), body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating service perimeter: %w", err)
 	}
-	fmt.Printf("Create request issued for service perimeter [%s].\n", args[0])
-	return emitFormatted(op, flagACMPMFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for service perimeter [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPMFormat)
 }
 
-func runACMPMDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPMDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.AccessPolicies.ServicePerimeters.Delete(acmPMResource(flagACMPMPolicy, args[0])).Context(ctx).Do()
+	op, err := svc.AccessPolicies.ServicePerimeters.Delete(acmPMResource(s.flagACMPMPolicy, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting service perimeter: %w", err)
 	}
-	fmt.Printf("Delete request issued for service perimeter [%s].\n", args[0])
-	return emitFormatted(op, flagACMPMFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for service perimeter [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPMFormat)
 }
 
-func runACMPMDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPMDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.AccessPolicies.ServicePerimeters.Get(acmPMResource(flagACMPMPolicy, args[0])).Context(ctx).Do()
+	got, err := svc.AccessPolicies.ServicePerimeters.Get(acmPMResource(s.flagACMPMPolicy, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing service perimeter: %w", err)
 	}
-	return emitFormatted(got, flagACMPMFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagACMPMFormat)
 }
 
-func runACMPMList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPMList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*accesscontextmanager.ServicePerimeter
 	pageToken := ""
 	for {
-		call := svc.AccessPolicies.ServicePerimeters.List(acmPolicyResource(flagACMPMPolicy)).Context(ctx)
-		if flagACMPMPageSize > 0 {
-			call = call.PageSize(flagACMPMPageSize)
+		call := svc.AccessPolicies.ServicePerimeters.List(acmPolicyResource(s.flagACMPMPolicy)).Context(ctx)
+		if s.flagACMPMPageSize > 0 {
+			call = call.PageSize(s.flagACMPMPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -189,20 +124,20 @@ func runACMPMList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagACMPMFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagACMPMFormat)
 }
 
-func runACMPMUpdate(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMPMUpdate(cmd *cobra.Command, args []string) error {
 	body := &accesscontextmanager.ServicePerimeter{}
-	if err := loadYAMLOrJSONInto(flagACMPMConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMPMConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	call := svc.AccessPolicies.ServicePerimeters.Patch(acmPMResource(flagACMPMPolicy, args[0]), body).Context(ctx)
+	call := svc.AccessPolicies.ServicePerimeters.Patch(acmPMResource(s.flagACMPMPolicy, args[0]), body).Context(ctx)
 	if mask := joinMask(nonEmptyJSONFields(body)); mask != "" {
 		call = call.UpdateMask(mask)
 	}
@@ -210,61 +145,61 @@ func runACMPMUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating service perimeter: %w", err)
 	}
-	fmt.Printf("Update request issued for service perimeter [%s].\n", args[0])
-	return emitFormatted(op, flagACMPMFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for service perimeter [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPMFormat)
 }
 
-func runACMPMReplaceAll(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMPMReplaceAll(cmd *cobra.Command, args []string) error {
 	var perimeters []*accesscontextmanager.ServicePerimeter
-	if err := loadYAMLOrJSONInto(flagACMPMSourceFile, &perimeters); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMPMSourceFile, &perimeters); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
 	req := &accesscontextmanager.ReplaceServicePerimetersRequest{
 		ServicePerimeters: perimeters,
-		Etag:              flagACMPMEtag,
+		Etag:              s.flagACMPMEtag,
 	}
-	op, err := svc.AccessPolicies.ServicePerimeters.ReplaceAll(acmPolicyResource(flagACMPMPolicy), req).Context(ctx).Do()
+	op, err := svc.AccessPolicies.ServicePerimeters.ReplaceAll(acmPolicyResource(s.flagACMPMPolicy), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("replacing service perimeters: %w", err)
 	}
-	fmt.Println("Replace-all request issued for service perimeters.")
-	return emitFormatted(op, flagACMPMFormat)
+	fmt.Fprintln(s.inv.stdout, "Replace-all request issued for service perimeters.")
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPMFormat)
 }
 
-func runACMPMDryCreate(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMPMDryCreate(cmd *cobra.Command, args []string) error {
 	body := &accesscontextmanager.ServicePerimeter{}
-	if err := loadYAMLOrJSONInto(flagACMPMConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMPMConfigFile, body); err != nil {
 		return err
 	}
 	body.UseExplicitDryRunSpec = true
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.AccessPolicies.ServicePerimeters.
-		Patch(acmPMResource(flagACMPMPolicy, args[0]), body).
+		Patch(acmPMResource(s.flagACMPMPolicy, args[0]), body).
 		UpdateMask("spec,useExplicitDryRunSpec").
 		Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating dry-run spec: %w", err)
 	}
-	fmt.Printf("Dry-run spec created for service perimeter [%s].\n", args[0])
-	return emitFormatted(op, flagACMPMFormat)
+	fmt.Fprintf(s.inv.stdout, "Dry-run spec created for service perimeter [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPMFormat)
 }
 
-func runACMPMDryDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPMDryDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.AccessPolicies.ServicePerimeters.Get(acmPMResource(flagACMPMPolicy, args[0])).Context(ctx).Do()
+	got, err := svc.AccessPolicies.ServicePerimeters.Get(acmPMResource(s.flagACMPMPolicy, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing service perimeter: %w", err)
 	}
@@ -279,27 +214,27 @@ func runACMPMDryDescribe(cmd *cobra.Command, args []string) error {
 		Spec:                  got.Spec,
 		UseExplicitDryRunSpec: got.UseExplicitDryRunSpec,
 	}
-	return emitFormatted(view, flagACMPMFormat)
+	return emitFormattedTo(s.inv.stdout, view, s.flagACMPMFormat)
 }
 
-func runACMPMDryEnforce(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPMDryEnforce(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	req := &accesscontextmanager.CommitServicePerimetersRequest{Etag: flagACMPMEtag}
-	op, err := svc.AccessPolicies.ServicePerimeters.Commit(acmPolicyResource(flagACMPMPolicy), req).Context(ctx).Do()
+	req := &accesscontextmanager.CommitServicePerimetersRequest{Etag: s.flagACMPMEtag}
+	op, err := svc.AccessPolicies.ServicePerimeters.Commit(acmPolicyResource(s.flagACMPMPolicy), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("committing dry-run specs: %w", err)
 	}
-	fmt.Println("Enforce request issued for dry-run specs.")
-	return emitFormatted(op, flagACMPMFormat)
+	fmt.Fprintln(s.inv.stdout, "Enforce request issued for dry-run specs.")
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPMFormat)
 }
 
-func runACMPMDryDrop(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPMDryDrop(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -309,12 +244,12 @@ func runACMPMDryDrop(cmd *cobra.Command, args []string) error {
 		NullFields:            []string{"Spec"},
 	}
 	op, err := svc.AccessPolicies.ServicePerimeters.
-		Patch(acmPMResource(flagACMPMPolicy, args[0]), body).
+		Patch(acmPMResource(s.flagACMPMPolicy, args[0]), body).
 		UpdateMask("spec,useExplicitDryRunSpec").
 		Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("clearing dry-run spec: %w", err)
 	}
-	fmt.Printf("Dry-run spec cleared for service perimeter [%s].\n", args[0])
-	return emitFormatted(op, flagACMPMFormat)
+	fmt.Fprintf(s.inv.stdout, "Dry-run spec cleared for service perimeter [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPMFormat)
 }

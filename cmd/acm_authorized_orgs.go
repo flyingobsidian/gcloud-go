@@ -1,128 +1,94 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
 )
 
 // --- gcloud access-context-manager authorized-orgs (#1441) ---
 
-var acmAOCmd = &cobra.Command{Use: "authorized-orgs", Short: "Manage authorized org descriptions"}
-
-var (
-	flagACMAOFormat     string
-	flagACMAOPolicy     string
-	flagACMAOConfigFile string
-	flagACMAOPageSize   int64
-)
-
-var (
-	acmAOCreateCmd = &cobra.Command{
-		Use: "create NAME", Short: "Create an authorized orgs description",
-		Args: cobra.ExactArgs(1), RunE: runACMAOCreate,
-	}
-	acmAODeleteCmd = &cobra.Command{
-		Use: "delete NAME", Short: "Delete an authorized orgs description",
-		Args: cobra.ExactArgs(1), RunE: runACMAODelete,
-	}
-	acmAODescribeCmd = &cobra.Command{
-		Use: "describe NAME", Short: "Describe an authorized orgs description",
-		Args: cobra.ExactArgs(1), RunE: runACMAODescribe,
-	}
-	acmAOListCmd = &cobra.Command{
-		Use: "list", Short: "List authorized orgs descriptions",
-		Args: cobra.NoArgs, RunE: runACMAOList,
-	}
-	acmAOUpdateCmd = &cobra.Command{
-		Use: "update NAME", Short: "Update an authorized orgs description",
-		Args: cobra.ExactArgs(1), RunE: runACMAOUpdate,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{acmAOCreateCmd, acmAODeleteCmd, acmAODescribeCmd, acmAOListCmd, acmAOUpdateCmd}
+func (s *accessContextManagerCmds) initAcmAuthorizedOrgs() {
+	all := []*cobra.Command{s.acmAOCreateCmd, s.acmAODeleteCmd, s.acmAODescribeCmd, s.acmAOListCmd, s.acmAOUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagACMAOFormat, "format", "", "Output format")
-		c.Flags().StringVar(&flagACMAOPolicy, "policy", "", "Access policy ID (required)")
+		c.Flags().StringVar(&s.flagACMAOFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagACMAOPolicy, "policy", "", "Access policy ID (required)")
 		_ = c.MarkFlagRequired("policy")
 	}
-	for _, c := range []*cobra.Command{acmAOCreateCmd, acmAOUpdateCmd} {
-		c.Flags().StringVar(&flagACMAOConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.acmAOCreateCmd, s.acmAOUpdateCmd} {
+		c.Flags().StringVar(&s.flagACMAOConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the AuthorizedOrgsDesc body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	acmAOListCmd.Flags().Int64Var(&flagACMAOPageSize, "page-size", 0, "Maximum results per page")
+	s.acmAOListCmd.Flags().Int64Var(&s.flagACMAOPageSize, "page-size", 0, "Maximum results per page")
 
-	acmAOCmd.AddCommand(all...)
-	accessContextManagerCmd.AddCommand(acmAOCmd)
+	s.acmAOCmd.AddCommand(all...)
+	s.accessContextManagerCmd.AddCommand(s.acmAOCmd)
 }
 
 func acmAOResource(policy, name string) string {
 	return fmt.Sprintf("%s/authorizedOrgsDescs/%s", acmPolicyResource(policy), name)
 }
 
-func runACMAOCreate(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMAOCreate(cmd *cobra.Command, args []string) error {
 	body := &accesscontextmanager.AuthorizedOrgsDesc{}
-	if err := loadYAMLOrJSONInto(flagACMAOConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMAOConfigFile, body); err != nil {
 		return err
 	}
-	body.Name = acmAOResource(flagACMAOPolicy, args[0])
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	body.Name = acmAOResource(s.flagACMAOPolicy, args[0])
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.AccessPolicies.AuthorizedOrgsDescs.Create(acmPolicyResource(flagACMAOPolicy), body).Context(ctx).Do()
+	op, err := svc.AccessPolicies.AuthorizedOrgsDescs.Create(acmPolicyResource(s.flagACMAOPolicy), body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating authorized orgs desc: %w", err)
 	}
-	fmt.Printf("Create request issued for authorized orgs desc [%s].\n", args[0])
-	return emitFormatted(op, flagACMAOFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for authorized orgs desc [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMAOFormat)
 }
 
-func runACMAODelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMAODelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.AccessPolicies.AuthorizedOrgsDescs.Delete(acmAOResource(flagACMAOPolicy, args[0])).Context(ctx).Do()
+	op, err := svc.AccessPolicies.AuthorizedOrgsDescs.Delete(acmAOResource(s.flagACMAOPolicy, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting authorized orgs desc: %w", err)
 	}
-	fmt.Printf("Delete request issued for authorized orgs desc [%s].\n", args[0])
-	return emitFormatted(op, flagACMAOFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for authorized orgs desc [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMAOFormat)
 }
 
-func runACMAODescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMAODescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.AccessPolicies.AuthorizedOrgsDescs.Get(acmAOResource(flagACMAOPolicy, args[0])).Context(ctx).Do()
+	got, err := svc.AccessPolicies.AuthorizedOrgsDescs.Get(acmAOResource(s.flagACMAOPolicy, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing authorized orgs desc: %w", err)
 	}
-	return emitFormatted(got, flagACMAOFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagACMAOFormat)
 }
 
-func runACMAOList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMAOList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*accesscontextmanager.AuthorizedOrgsDesc
 	pageToken := ""
 	for {
-		call := svc.AccessPolicies.AuthorizedOrgsDescs.List(acmPolicyResource(flagACMAOPolicy)).Context(ctx)
-		if flagACMAOPageSize > 0 {
-			call = call.PageSize(flagACMAOPageSize)
+		call := svc.AccessPolicies.AuthorizedOrgsDescs.List(acmPolicyResource(s.flagACMAOPolicy)).Context(ctx)
+		if s.flagACMAOPageSize > 0 {
+			call = call.PageSize(s.flagACMAOPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -137,20 +103,20 @@ func runACMAOList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagACMAOFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagACMAOFormat)
 }
 
-func runACMAOUpdate(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMAOUpdate(cmd *cobra.Command, args []string) error {
 	body := &accesscontextmanager.AuthorizedOrgsDesc{}
-	if err := loadYAMLOrJSONInto(flagACMAOConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMAOConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	call := svc.AccessPolicies.AuthorizedOrgsDescs.Patch(acmAOResource(flagACMAOPolicy, args[0]), body).Context(ctx)
+	call := svc.AccessPolicies.AuthorizedOrgsDescs.Patch(acmAOResource(s.flagACMAOPolicy, args[0]), body).Context(ctx)
 	if mask := joinMask(nonEmptyJSONFields(body)); mask != "" {
 		call = call.UpdateMask(mask)
 	}
@@ -158,6 +124,6 @@ func runACMAOUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating authorized orgs desc: %w", err)
 	}
-	fmt.Printf("Update request issued for authorized orgs desc [%s].\n", args[0])
-	return emitFormatted(op, flagACMAOFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for authorized orgs desc [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMAOFormat)
 }

@@ -127,6 +127,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newManagedKafkaCmd(inv),
 		newHealthcareCmd(inv),
 		newRedisCmd(inv),
+		newAccessContextManagerCmd(inv),
 	}
 }
 

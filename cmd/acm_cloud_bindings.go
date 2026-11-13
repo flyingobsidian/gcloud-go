@@ -1,64 +1,30 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
 )
 
 // --- gcloud access-context-manager cloud-bindings (#1442) ---
 
-var acmCBCmd = &cobra.Command{Use: "cloud-bindings", Short: "Manage cloud access bindings"}
-
-var (
-	flagACMCBFormat       string
-	flagACMCBOrganization string
-	flagACMCBConfigFile   string
-	flagACMCBPageSize     int64
-)
-
-var (
-	acmCBCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create a cloud access binding",
-		Args: cobra.NoArgs, RunE: runACMCBCreate,
-	}
-	acmCBDeleteCmd = &cobra.Command{
-		Use: "delete BINDING_ID", Short: "Delete a cloud access binding",
-		Args: cobra.ExactArgs(1), RunE: runACMCBDelete,
-	}
-	acmCBDescribeCmd = &cobra.Command{
-		Use: "describe BINDING_ID", Short: "Describe a cloud access binding",
-		Args: cobra.ExactArgs(1), RunE: runACMCBDescribe,
-	}
-	acmCBListCmd = &cobra.Command{
-		Use: "list", Short: "List cloud access bindings",
-		Args: cobra.NoArgs, RunE: runACMCBList,
-	}
-	acmCBUpdateCmd = &cobra.Command{
-		Use: "update BINDING_ID", Short: "Update a cloud access binding",
-		Args: cobra.ExactArgs(1), RunE: runACMCBUpdate,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{acmCBCreateCmd, acmCBDeleteCmd, acmCBDescribeCmd, acmCBListCmd, acmCBUpdateCmd}
+func (s *accessContextManagerCmds) initAcmCloudBindings() {
+	all := []*cobra.Command{s.acmCBCreateCmd, s.acmCBDeleteCmd, s.acmCBDescribeCmd, s.acmCBListCmd, s.acmCBUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagACMCBFormat, "format", "", "Output format")
-		c.Flags().StringVar(&flagACMCBOrganization, "organization", "", "Organization ID (required)")
+		c.Flags().StringVar(&s.flagACMCBFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagACMCBOrganization, "organization", "", "Organization ID (required)")
 		_ = c.MarkFlagRequired("organization")
 	}
-	for _, c := range []*cobra.Command{acmCBCreateCmd, acmCBUpdateCmd} {
-		c.Flags().StringVar(&flagACMCBConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.acmCBCreateCmd, s.acmCBUpdateCmd} {
+		c.Flags().StringVar(&s.flagACMCBConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the GcpUserAccessBinding body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	acmCBListCmd.Flags().Int64Var(&flagACMCBPageSize, "page-size", 0, "Maximum results per page")
+	s.acmCBListCmd.Flags().Int64Var(&s.flagACMCBPageSize, "page-size", 0, "Maximum results per page")
 
-	acmCBCmd.AddCommand(all...)
-	accessContextManagerCmd.AddCommand(acmCBCmd)
+	s.acmCBCmd.AddCommand(all...)
+	s.accessContextManagerCmd.AddCommand(s.acmCBCmd)
 }
 
 func acmCBParent(org string) string {
@@ -69,63 +35,63 @@ func acmCBResource(org, binding string) string {
 	return fmt.Sprintf("%s/gcpUserAccessBindings/%s", acmCBParent(org), binding)
 }
 
-func runACMCBCreate(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMCBCreate(cmd *cobra.Command, args []string) error {
 	body := &accesscontextmanager.GcpUserAccessBinding{}
-	if err := loadYAMLOrJSONInto(flagACMCBConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMCBConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Organizations.GcpUserAccessBindings.Create(acmCBParent(flagACMCBOrganization), body).Context(ctx).Do()
+	op, err := svc.Organizations.GcpUserAccessBindings.Create(acmCBParent(s.flagACMCBOrganization), body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating cloud access binding: %w", err)
 	}
-	fmt.Println("Create request issued for cloud access binding.")
-	return emitFormatted(op, flagACMCBFormat)
+	fmt.Fprintln(s.inv.stdout, "Create request issued for cloud access binding.")
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMCBFormat)
 }
 
-func runACMCBDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMCBDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Organizations.GcpUserAccessBindings.Delete(acmCBResource(flagACMCBOrganization, args[0])).Context(ctx).Do()
+	op, err := svc.Organizations.GcpUserAccessBindings.Delete(acmCBResource(s.flagACMCBOrganization, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting cloud access binding: %w", err)
 	}
-	fmt.Printf("Delete request issued for cloud access binding [%s].\n", args[0])
-	return emitFormatted(op, flagACMCBFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for cloud access binding [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMCBFormat)
 }
 
-func runACMCBDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMCBDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Organizations.GcpUserAccessBindings.Get(acmCBResource(flagACMCBOrganization, args[0])).Context(ctx).Do()
+	got, err := svc.Organizations.GcpUserAccessBindings.Get(acmCBResource(s.flagACMCBOrganization, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing cloud access binding: %w", err)
 	}
-	return emitFormatted(got, flagACMCBFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagACMCBFormat)
 }
 
-func runACMCBList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMCBList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*accesscontextmanager.GcpUserAccessBinding
 	pageToken := ""
 	for {
-		call := svc.Organizations.GcpUserAccessBindings.List(acmCBParent(flagACMCBOrganization)).Context(ctx)
-		if flagACMCBPageSize > 0 {
-			call = call.PageSize(flagACMCBPageSize)
+		call := svc.Organizations.GcpUserAccessBindings.List(acmCBParent(s.flagACMCBOrganization)).Context(ctx)
+		if s.flagACMCBPageSize > 0 {
+			call = call.PageSize(s.flagACMCBPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -140,20 +106,20 @@ func runACMCBList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagACMCBFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagACMCBFormat)
 }
 
-func runACMCBUpdate(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMCBUpdate(cmd *cobra.Command, args []string) error {
 	body := &accesscontextmanager.GcpUserAccessBinding{}
-	if err := loadYAMLOrJSONInto(flagACMCBConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMCBConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
-	call := svc.Organizations.GcpUserAccessBindings.Patch(acmCBResource(flagACMCBOrganization, args[0]), body).Context(ctx)
+	call := svc.Organizations.GcpUserAccessBindings.Patch(acmCBResource(s.flagACMCBOrganization, args[0]), body).Context(ctx)
 	if mask := joinMask(nonEmptyJSONFields(body)); mask != "" {
 		call = call.UpdateMask(mask)
 	}
@@ -161,6 +127,6 @@ func runACMCBUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating cloud access binding: %w", err)
 	}
-	fmt.Printf("Update request issued for cloud access binding [%s].\n", args[0])
-	return emitFormatted(op, flagACMCBFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for cloud access binding [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMCBFormat)
 }

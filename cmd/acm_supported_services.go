@@ -1,47 +1,27 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
 )
 
 // --- gcloud access-context-manager supported-services (#1447) ---
 
-var acmSSCmd = &cobra.Command{Use: "supported-services", Short: "VPC-SC supported services"}
-
-var (
-	flagACMSSFormat   string
-	flagACMSSPageSize int64
-)
-
-var (
-	acmSSListCmd = &cobra.Command{
-		Use: "list", Short: "List VPC-SC supported services",
-		Args: cobra.NoArgs, RunE: runACMSSList,
+func (s *accessContextManagerCmds) initAcmSupportedServices() {
+	for _, c := range []*cobra.Command{s.acmSSListCmd, s.acmSSDescribeCmd} {
+		c.Flags().StringVar(&s.flagACMSSFormat, "format", "", "Output format")
 	}
-	acmSSDescribeCmd = &cobra.Command{
-		Use: "describe SERVICE", Short: "Describe a VPC-SC supported service",
-		Args: cobra.ExactArgs(1), RunE: runACMSSDescribe,
-	}
-)
+	s.acmSSListCmd.Flags().Int64Var(&s.flagACMSSPageSize, "page-size", 0, "Maximum results per page")
 
-func init() {
-	for _, c := range []*cobra.Command{acmSSListCmd, acmSSDescribeCmd} {
-		c.Flags().StringVar(&flagACMSSFormat, "format", "", "Output format")
-	}
-	acmSSListCmd.Flags().Int64Var(&flagACMSSPageSize, "page-size", 0, "Maximum results per page")
-
-	acmSSCmd.AddCommand(acmSSListCmd, acmSSDescribeCmd)
-	accessContextManagerCmd.AddCommand(acmSSCmd)
+	s.acmSSCmd.AddCommand(s.acmSSListCmd, s.acmSSDescribeCmd)
+	s.accessContextManagerCmd.AddCommand(s.acmSSCmd)
 }
 
-func runACMSSList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMSSList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -49,8 +29,8 @@ func runACMSSList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Services.List().Context(ctx)
-		if flagACMSSPageSize > 0 {
-			call = call.PageSize(flagACMSSPageSize)
+		if s.flagACMSSPageSize > 0 {
+			call = call.PageSize(s.flagACMSSPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -65,12 +45,12 @@ func runACMSSList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagACMSSFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagACMSSFormat)
 }
 
-func runACMSSDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMSSDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -78,5 +58,5 @@ func runACMSSDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing supported service: %w", err)
 	}
-	return emitFormatted(got, flagACMSSFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagACMSSFormat)
 }

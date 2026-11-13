@@ -35,8 +35,9 @@ func TestPrintACMConfiguredPerimeter(t *testing.T) {
 }
 
 func TestACMLookupConfiguredPerimeterRegistered(t *testing.T) {
-	c, _, err := accessContextManagerCmd.Find([]string{"lookup-configured-perimeter"})
-	if err != nil || c != acmLookupConfiguredPerimeterCmd {
+	grp := newAccessContextManagerCmds(legacyTestInvocation())
+	c, _, err := grp.accessContextManagerCmd.Find([]string{"lookup-configured-perimeter"})
+	if err != nil || c != grp.acmLookupConfiguredPerimeterCmd {
 		t.Fatalf("lookup-configured-perimeter not registered: %v", err)
 	}
 	if c.Flags().Lookup("resource") == nil {
