@@ -42,6 +42,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newPreviewCmd(inv),
 		newAlphaCmd(inv),
 		newGeminiCmd(inv),
+		newOrgPoliciesTopCmd(inv),
 	}
 }
 
