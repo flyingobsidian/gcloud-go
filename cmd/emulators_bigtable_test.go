@@ -9,7 +9,8 @@ import (
 
 // findEmuSubgroup returns the named subgroup under `emulators` (or nil).
 func findEmuSubgroup(name string) *cobra.Command {
-	for _, c := range emulatorsCmd.Commands() {
+	grp := newEmulatorsCmds(legacyTestInvocation())
+	for _, c := range grp.emulatorsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -55,12 +56,13 @@ func TestEmulatorsBigtableRegistered(t *testing.T) {
 }
 
 func TestEmuBigtableEnvInitOutput(t *testing.T) {
-	prev := flagEmuBigtableHostPort
-	defer func() { flagEmuBigtableHostPort = prev }()
-	flagEmuBigtableHostPort = "127.0.0.1:9000"
+	grp := newEmulatorsCmds(legacyTestInvocation())
+	prev := grp.flagEmuBigtableHostPort
+	defer func() { grp.flagEmuBigtableHostPort = prev }()
+	grp.flagEmuBigtableHostPort = "127.0.0.1:9000"
 
 	out := captureStdout(t, func() {
-		if err := runEmuBigtableEnvInit(nil, nil); err != nil {
+		if err := grp.runEmuBigtableEnvInit(nil, nil); err != nil {
 			t.Fatalf("run: %v", err)
 		}
 	})

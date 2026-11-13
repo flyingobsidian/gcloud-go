@@ -28,12 +28,13 @@ func TestEmulatorsDatastoreRegistered(t *testing.T) {
 }
 
 func TestEmuDatastoreEnvInitOutput(t *testing.T) {
-	prevHost := flagEmuDatastoreHostPort
-	defer func() { flagEmuDatastoreHostPort = prevHost }()
-	flagEmuDatastoreHostPort = "127.0.0.1:9099"
+	grp := newEmulatorsCmds(legacyTestInvocation())
+	prevHost := grp.flagEmuDatastoreHostPort
+	defer func() { grp.flagEmuDatastoreHostPort = prevHost }()
+	grp.flagEmuDatastoreHostPort = "127.0.0.1:9099"
 
 	out := captureStdout(t, func() {
-		if err := runEmuDatastoreEnvInit(nil, nil); err != nil {
+		if err := grp.runEmuDatastoreEnvInit(nil, nil); err != nil {
 			t.Fatalf("run: %v", err)
 		}
 	})
@@ -50,8 +51,9 @@ func TestEmuDatastoreEnvInitOutput(t *testing.T) {
 }
 
 func TestEmuDatastoreEnvUnsetOutput(t *testing.T) {
+	grp := newEmulatorsCmds(legacyTestInvocation())
 	out := captureStdout(t, func() {
-		if err := runEmuDatastoreEnvUnset(nil, nil); err != nil {
+		if err := grp.runEmuDatastoreEnvUnset(nil, nil); err != nil {
 			t.Fatalf("run: %v", err)
 		}
 	})
