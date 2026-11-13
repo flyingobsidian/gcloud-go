@@ -4,100 +4,53 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"path"
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dns "google.golang.org/api/dns/v1"
 )
 
 // --- gcloud dns outbound-endpoints (gcloud-python 589.0.0, #1924) ---
 
-var dnsOutboundEndpointsCmd = &cobra.Command{
-	Use: "outbound-endpoints", Short: "Manage Cloud DNS outbound endpoints",
-}
-
-var (
-	dnsOECreateCmd = &cobra.Command{
-		Use: "create OUTBOUND_ENDPOINT", Short: "Create a Cloud DNS outbound endpoint",
-		Args: cobra.ExactArgs(1), RunE: runDNSOECreate,
-	}
-	dnsOEDeleteCmd = &cobra.Command{
-		Use: "delete OUTBOUND_ENDPOINT", Short: "Delete a Cloud DNS outbound endpoint",
-		Args: cobra.ExactArgs(1), RunE: runDNSOEDelete,
-	}
-	dnsOEDescribeCmd = &cobra.Command{
-		Use: "describe OUTBOUND_ENDPOINT", Short: "Describe a Cloud DNS outbound endpoint",
-		Args: cobra.ExactArgs(1), RunE: runDNSOEDescribe,
-	}
-	dnsOEListCmd = &cobra.Command{
-		Use: "list", Short: "List Cloud DNS outbound endpoints in a location",
-		Args: cobra.NoArgs, RunE: runDNSOEList,
-	}
-	dnsOEUpdateCmd = &cobra.Command{
-		Use: "update OUTBOUND_ENDPOINT", Short: "Update the description or labels of a Cloud DNS outbound endpoint",
-		Args: cobra.ExactArgs(1), RunE: runDNSOEUpdate,
-	}
-)
-
-var (
-	flagDNSOELocation     string
-	flagDNSOEEndpointMode string
-	flagDNSOEFormat       string
-	flagDNSOEAsync        bool
-	flagDNSOENetwork      string
-	flagDNSOESubnetwork   string
-	flagDNSOEEndpointIP   string
-	flagDNSOEDescription  string
-	flagDNSOELabels       map[string]string
-	flagDNSOEUpdateLabels map[string]string
-	flagDNSOERemoveLabels []string
-	flagDNSOEClearLabels  bool
-	flagDNSOELimit        int
-	flagDNSOEPageSize     int64
-	flagDNSOEURI          bool
-)
-
-func init() {
-	all := []*cobra.Command{dnsOECreateCmd, dnsOEDeleteCmd, dnsOEDescribeCmd, dnsOEListCmd, dnsOEUpdateCmd}
+func (s *dnsCmds) initDnsOutboundEndpoints() {
+	all := []*cobra.Command{s.dnsOECreateCmd, s.dnsOEDeleteCmd, s.dnsOEDescribeCmd, s.dnsOEListCmd, s.dnsOEUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDNSOELocation, "location", "", "Region of the outbound endpoint (required)")
+		c.Flags().StringVar(&s.flagDNSOELocation, "location", "", "Region of the outbound endpoint (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagDNSOEEndpointMode, "endpoint-mode", "",
+		c.Flags().StringVar(&s.flagDNSOEEndpointMode, "endpoint-mode", "",
 			"Endpoint mode: global (default), regional, or regional-preferred")
-		c.Flags().StringVar(&flagDNSOEFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDNSOEFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dnsOECreateCmd, dnsOEDeleteCmd, dnsOEUpdateCmd} {
-		c.Flags().BoolVar(&flagDNSOEAsync, "async", false,
+	for _, c := range []*cobra.Command{s.dnsOECreateCmd, s.dnsOEDeleteCmd, s.dnsOEUpdateCmd} {
+		c.Flags().BoolVar(&s.flagDNSOEAsync, "async", false,
 			"Return immediately, without waiting for the operation in progress to complete")
 	}
-	for _, c := range []*cobra.Command{dnsOECreateCmd, dnsOEUpdateCmd} {
-		c.Flags().StringVar(&flagDNSOEDescription, "description", "", "Description of the outbound endpoint")
+	for _, c := range []*cobra.Command{s.dnsOECreateCmd, s.dnsOEUpdateCmd} {
+		c.Flags().StringVar(&s.flagDNSOEDescription, "description", "", "Description of the outbound endpoint")
 	}
-	dnsOECreateCmd.Flags().StringVar(&flagDNSOENetwork, "network", "",
+	s.dnsOECreateCmd.Flags().StringVar(&s.flagDNSOENetwork, "network", "",
 		"Network for the outbound endpoint: a network name or projects/P/global/networks/N (required)")
-	dnsOECreateCmd.Flags().StringVar(&flagDNSOESubnetwork, "subnetwork", "",
+	s.dnsOECreateCmd.Flags().StringVar(&s.flagDNSOESubnetwork, "subnetwork", "",
 		"Subnetwork for the outbound endpoint: a subnetwork name or projects/P/regions/R/subnetworks/S (required)")
-	dnsOECreateCmd.Flags().StringVar(&flagDNSOEEndpointIP, "endpoint-ip", "",
+	s.dnsOECreateCmd.Flags().StringVar(&s.flagDNSOEEndpointIP, "endpoint-ip", "",
 		"IP address of the outbound endpoint (required)")
 	for _, f := range []string{"network", "subnetwork", "endpoint-ip"} {
-		_ = dnsOECreateCmd.MarkFlagRequired(f)
+		_ = s.dnsOECreateCmd.MarkFlagRequired(f)
 	}
-	dnsOECreateCmd.Flags().StringToStringVar(&flagDNSOELabels, "labels", nil, "List of label KEY=VALUE pairs to add")
-	dnsOEUpdateCmd.Flags().StringToStringVar(&flagDNSOEUpdateLabels, "update-labels", nil,
+	s.dnsOECreateCmd.Flags().StringToStringVar(&s.flagDNSOELabels, "labels", nil, "List of label KEY=VALUE pairs to add")
+	s.dnsOEUpdateCmd.Flags().StringToStringVar(&s.flagDNSOEUpdateLabels, "update-labels", nil,
 		"List of label KEY=VALUE pairs to update; new keys are added")
-	dnsOEUpdateCmd.Flags().StringSliceVar(&flagDNSOERemoveLabels, "remove-labels", nil, "List of label keys to remove")
-	dnsOEUpdateCmd.Flags().BoolVar(&flagDNSOEClearLabels, "clear-labels", false, "Remove all labels")
-	dnsOEUpdateCmd.MarkFlagsMutuallyExclusive("clear-labels", "remove-labels")
-	dnsOEListCmd.Flags().IntVar(&flagDNSOELimit, "limit", 0, "Maximum number of outbound endpoints to list (0 = no limit)")
-	dnsOEListCmd.Flags().Int64Var(&flagDNSOEPageSize, "page-size", 0, "Number of results per API page")
-	dnsOEListCmd.Flags().BoolVar(&flagDNSOEURI, "uri", false, "Print resource names instead of the table")
+	s.dnsOEUpdateCmd.Flags().StringSliceVar(&s.flagDNSOERemoveLabels, "remove-labels", nil, "List of label keys to remove")
+	s.dnsOEUpdateCmd.Flags().BoolVar(&s.flagDNSOEClearLabels, "clear-labels", false, "Remove all labels")
+	s.dnsOEUpdateCmd.MarkFlagsMutuallyExclusive("clear-labels", "remove-labels")
+	s.dnsOEListCmd.Flags().IntVar(&s.flagDNSOELimit, "limit", 0, "Maximum number of outbound endpoints to list (0 = no limit)")
+	s.dnsOEListCmd.Flags().Int64Var(&s.flagDNSOEPageSize, "page-size", 0, "Number of results per API page")
+	s.dnsOEListCmd.Flags().BoolVar(&s.flagDNSOEURI, "uri", false, "Print resource names instead of the table")
 
-	dnsOutboundEndpointsCmd.AddCommand(all...)
-	dnsCmd.AddCommand(dnsOutboundEndpointsCmd)
+	s.dnsOutboundEndpointsCmd.AddCommand(all...)
+	s.dnsCmd.AddCommand(s.dnsOutboundEndpointsCmd)
 }
 
 // dnsOEEndpoint mirrors gcloud-python's regional-endpoint selection for
@@ -117,20 +70,20 @@ func dnsOEEndpoint(mode, location string) (string, error) {
 
 // dnsOEService returns the project, the projects/P/locations/L parent and a
 // DNS client for the selected endpoint mode.
-func dnsOEService(ctx context.Context) (string, string, *dns.Service, error) {
-	project, err := resolveProject()
+func (s *dnsCmds) dnsOEService(ctx context.Context) (string, string, *dns.Service, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", "", nil, err
 	}
-	endpoint, err := dnsOEEndpoint(flagDNSOEEndpointMode, flagDNSOELocation)
+	endpoint, err := dnsOEEndpoint(s.flagDNSOEEndpointMode, s.flagDNSOELocation)
 	if err != nil {
 		return "", "", nil, err
 	}
-	svc, err := gcp.DNSServiceAt(ctx, flagAccount, endpoint)
+	svc, err := s.inv.clients().DNSAt(ctx, endpoint)
 	if err != nil {
 		return "", "", nil, err
 	}
-	return project, fmt.Sprintf("projects/%s/locations/%s", project, flagDNSOELocation), svc, nil
+	return project, fmt.Sprintf("projects/%s/locations/%s", project, s.flagDNSOELocation), svc, nil
 }
 
 // dnsOEName expands a short endpoint id under parent; full names pass through.
@@ -161,8 +114,8 @@ func dnsOEFormatSubnetwork(subnetwork, project, location string) string {
 var dnsOEPollInterval = 2 * time.Second
 
 // dnsOEWait polls a DNS operation with gcloud's "<progress>...done." line.
-func dnsOEWait(ctx context.Context, svc *dns.Service, op *dns.GoogleLongrunningOperation, progress string) error {
-	fmt.Fprintf(os.Stderr, "%s...", progress)
+func (s *dnsCmds) dnsOEWait(ctx context.Context, svc *dns.Service, op *dns.GoogleLongrunningOperation, progress string) error {
+	fmt.Fprintf(s.inv.stderr, "%s...", progress)
 	interval := dnsOEPollInterval
 	for !op.Done {
 		time.Sleep(interval)
@@ -171,91 +124,91 @@ func dnsOEWait(ctx context.Context, svc *dns.Service, op *dns.GoogleLongrunningO
 		}
 		got, err := svc.Operations.Get(op.Name).Context(ctx).Do()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "failed.")
+			fmt.Fprintln(s.inv.stderr, "failed.")
 			return err
 		}
 		op = got
 	}
 	if op.Error != nil {
-		fmt.Fprintln(os.Stderr, "failed.")
+		fmt.Fprintln(s.inv.stderr, "failed.")
 		return fmt.Errorf("%s", op.Error.Message)
 	}
-	fmt.Fprintln(os.Stderr, "done.")
+	fmt.Fprintln(s.inv.stderr, "done.")
 	return nil
 }
 
-func runDNSOECreate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	project, parent, svc, err := dnsOEService(ctx)
+func (s *dnsCmds) runDNSOECreate(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	project, parent, svc, err := s.dnsOEService(ctx)
 	if err != nil {
 		return err
 	}
 	name := dnsOEName(parent, args[0])
 	ep := &dns.OutboundEndpoint{
 		Name:        name,
-		Network:     dnsOEFormatNetwork(flagDNSOENetwork, project),
-		Subnetwork:  dnsOEFormatSubnetwork(flagDNSOESubnetwork, project, flagDNSOELocation),
-		EndpointIp:  flagDNSOEEndpointIP,
-		Description: flagDNSOEDescription,
-		Labels:      flagDNSOELabels,
+		Network:     dnsOEFormatNetwork(s.flagDNSOENetwork, project),
+		Subnetwork:  dnsOEFormatSubnetwork(s.flagDNSOESubnetwork, project, s.flagDNSOELocation),
+		EndpointIp:  s.flagDNSOEEndpointIP,
+		Description: s.flagDNSOEDescription,
+		Labels:      s.flagDNSOELabels,
 	}
 	op, err := svc.OutboundEndpoints.Create(parent, ep).OutboundEndpointId(path.Base(name)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating outbound endpoint: %w", err)
 	}
-	if flagDNSOEAsync {
-		fmt.Fprintf(os.Stderr, "Create in progress for OutboundEndpoint [%s] with operation [%s].\n", name, op.Name)
-		return emitFormatted(op, dnsOEOutputFormat())
+	if s.flagDNSOEAsync {
+		fmt.Fprintf(s.inv.stderr, "Create in progress for OutboundEndpoint [%s] with operation [%s].\n", name, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.dnsOEOutputFormat())
 	}
-	if err := dnsOEWait(ctx, svc, op, fmt.Sprintf("Creating OutboundEndpoint [%s]", name)); err != nil {
+	if err := s.dnsOEWait(ctx, svc, op, fmt.Sprintf("Creating OutboundEndpoint [%s]", name)); err != nil {
 		return err
 	}
 	got, err := svc.OutboundEndpoints.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing outbound endpoint: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Created OutboundEndpoint [%s].\n", name)
-	return emitFormatted(got, dnsOEOutputFormat())
+	fmt.Fprintf(s.inv.stderr, "Created OutboundEndpoint [%s].\n", name)
+	return emitFormattedTo(s.inv.stdout, got, s.dnsOEOutputFormat())
 }
 
 // dnsOEOutputFormat is --format, defaulting to json as in gcloud-python's
 // create and update.
-func dnsOEOutputFormat() string {
-	if flagDNSOEFormat == "" {
+func (s *dnsCmds) dnsOEOutputFormat() string {
+	if s.flagDNSOEFormat == "" {
 		return "json"
 	}
-	return flagDNSOEFormat
+	return s.flagDNSOEFormat
 }
 
-func runDNSOEDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	_, parent, svc, err := dnsOEService(ctx)
+func (s *dnsCmds) runDNSOEDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	_, parent, svc, err := s.dnsOEService(ctx)
 	if err != nil {
 		return err
 	}
 	name := dnsOEName(parent, args[0])
-	if err := promptContinue(fmt.Sprintf("You are about to delete outbound endpoint [%s]", name), ""); err != nil {
-		fmt.Fprintln(os.Stderr, "Aborted by user.")
+	if err := s.inv.promptContinue(fmt.Sprintf("You are about to delete outbound endpoint [%s]", name), ""); err != nil {
+		fmt.Fprintln(s.inv.stderr, "Aborted by user.")
 		return nil
 	}
 	op, err := svc.OutboundEndpoints.Delete(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting outbound endpoint: %w", err)
 	}
-	if flagDNSOEAsync {
-		fmt.Fprintf(os.Stderr, "Delete in progress for OutboundEndpoint [%s] with operation [%s].\n", name, op.Name)
-		return emitFormatted(op, flagDNSOEFormat)
+	if s.flagDNSOEAsync {
+		fmt.Fprintf(s.inv.stderr, "Delete in progress for OutboundEndpoint [%s] with operation [%s].\n", name, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagDNSOEFormat)
 	}
-	if err := dnsOEWait(ctx, svc, op, fmt.Sprintf("Deleting OutboundEndpoint [%s]", name)); err != nil {
+	if err := s.dnsOEWait(ctx, svc, op, fmt.Sprintf("Deleting OutboundEndpoint [%s]", name)); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "Deleted OutboundEndpoint [%s].\n", name)
+	fmt.Fprintf(s.inv.stderr, "Deleted OutboundEndpoint [%s].\n", name)
 	return nil
 }
 
-func runDNSOEDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	_, parent, svc, err := dnsOEService(ctx)
+func (s *dnsCmds) runDNSOEDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	_, parent, svc, err := s.dnsOEService(ctx)
 	if err != nil {
 		return err
 	}
@@ -263,12 +216,12 @@ func runDNSOEDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing outbound endpoint: %w", err)
 	}
-	return emitFormatted(got, flagDNSOEFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSOEFormat)
 }
 
-func runDNSOEList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	_, parent, svc, err := dnsOEService(ctx)
+func (s *dnsCmds) runDNSOEList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	_, parent, svc, err := s.dnsOEService(ctx)
 	if err != nil {
 		return err
 	}
@@ -276,8 +229,8 @@ func runDNSOEList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.OutboundEndpoints.List(parent).Context(ctx)
-		if flagDNSOEPageSize > 0 {
-			call = call.PageSize(flagDNSOEPageSize)
+		if s.flagDNSOEPageSize > 0 {
+			call = call.PageSize(s.flagDNSOEPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -287,8 +240,8 @@ func runDNSOEList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing outbound endpoints: %w", err)
 		}
 		all = append(all, resp.OutboundEndpoints...)
-		if flagDNSOELimit > 0 && len(all) >= flagDNSOELimit {
-			all = all[:flagDNSOELimit]
+		if s.flagDNSOELimit > 0 && len(all) >= s.flagDNSOELimit {
+			all = all[:s.flagDNSOELimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -296,7 +249,7 @@ func runDNSOEList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitDNSOEList(os.Stdout, os.Stderr, all, flagDNSOEFormat, flagDNSOEURI)
+	return emitDNSOEList(s.inv.stdout, s.inv.stderr, all, s.flagDNSOEFormat, s.flagDNSOEURI)
 }
 
 // emitDNSOEList prints gcloud-python's NAME/ENDPOINT_IP/NETWORK/SUBNETWORK/
@@ -336,9 +289,9 @@ func emitDNSOEList(w, errW io.Writer, all []*dns.OutboundEndpoint, format string
 	return emitFormattedTo(w, rows, "table(name,endpointIp,network,subnetwork,description)")
 }
 
-func runDNSOEUpdate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	_, parent, svc, err := dnsOEService(ctx)
+func (s *dnsCmds) runDNSOEUpdate(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	_, parent, svc, err := s.dnsOEService(ctx)
 	if err != nil {
 		return err
 	}
@@ -349,11 +302,11 @@ func runDNSOEUpdate(cmd *cobra.Command, args []string) error {
 	}
 	var mask []string
 	if cmd.Flags().Changed("description") {
-		ep.Description = flagDNSOEDescription
+		ep.Description = s.flagDNSOEDescription
 		mask = append(mask, "description")
 	}
-	if flagDNSOEClearLabels || len(flagDNSOERemoveLabels) > 0 || len(flagDNSOEUpdateLabels) > 0 {
-		if labels, changed := applyLabelsDiff(ep.Labels, flagDNSOEClearLabels, flagDNSOERemoveLabels, flagDNSOEUpdateLabels); changed {
+	if s.flagDNSOEClearLabels || len(s.flagDNSOERemoveLabels) > 0 || len(s.flagDNSOEUpdateLabels) > 0 {
+		if labels, changed := applyLabelsDiff(ep.Labels, s.flagDNSOEClearLabels, s.flagDNSOERemoveLabels, s.flagDNSOEUpdateLabels); changed {
 			ep.Labels = labels
 			if len(labels) == 0 {
 				ep.NullFields = append(ep.NullFields, "Labels")
@@ -362,24 +315,24 @@ func runDNSOEUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if len(mask) == 0 {
-		fmt.Fprintln(os.Stderr, "Nothing to update.")
-		return emitFormatted(ep, dnsOEOutputFormat())
+		fmt.Fprintln(s.inv.stderr, "Nothing to update.")
+		return emitFormattedTo(s.inv.stdout, ep, s.dnsOEOutputFormat())
 	}
 	op, err := svc.OutboundEndpoints.Patch(name, ep).UpdateMask(strings.Join(mask, ",")).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating outbound endpoint: %w", err)
 	}
-	if flagDNSOEAsync {
-		fmt.Fprintf(os.Stderr, "Update in progress for OutboundEndpoint [%s] with operation [%s].\n", name, op.Name)
-		return emitFormatted(op, dnsOEOutputFormat())
+	if s.flagDNSOEAsync {
+		fmt.Fprintf(s.inv.stderr, "Update in progress for OutboundEndpoint [%s] with operation [%s].\n", name, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.dnsOEOutputFormat())
 	}
-	if err := dnsOEWait(ctx, svc, op, fmt.Sprintf("Updating OutboundEndpoint [%s]", name)); err != nil {
+	if err := s.dnsOEWait(ctx, svc, op, fmt.Sprintf("Updating OutboundEndpoint [%s]", name)); err != nil {
 		return err
 	}
 	got, err := svc.OutboundEndpoints.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing outbound endpoint: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated OutboundEndpoint [%s].\n", name)
-	return emitFormatted(got, dnsOEOutputFormat())
+	fmt.Fprintf(s.inv.stderr, "Updated OutboundEndpoint [%s].\n", name)
+	return emitFormattedTo(s.inv.stdout, got, s.dnsOEOutputFormat())
 }

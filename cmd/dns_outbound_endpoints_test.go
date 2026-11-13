@@ -9,13 +9,14 @@ import (
 )
 
 func TestDNSOutboundEndpointsRegistered(t *testing.T) {
-	c, _, err := dnsCmd.Find([]string{"outbound-endpoints"})
-	if err != nil || c != dnsOutboundEndpointsCmd {
+	grp := newDnsCmds(legacyTestInvocation())
+	c, _, err := grp.dnsCmd.Find([]string{"outbound-endpoints"})
+	if err != nil || c != grp.dnsOutboundEndpointsCmd {
 		t.Fatalf("dns outbound-endpoints not registered: %v", err)
 	}
 	assertSubcommands(t, c, []string{"create", "delete", "describe", "list", "update"})
 	for _, f := range []string{"network", "subnetwork", "endpoint-ip", "labels", "async", "endpoint-mode"} {
-		if dnsOECreateCmd.Flags().Lookup(f) == nil {
+		if grp.dnsOECreateCmd.Flags().Lookup(f) == nil {
 			t.Errorf("create missing --%s", f)
 		}
 	}
