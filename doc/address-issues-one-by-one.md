@@ -3,7 +3,7 @@
 ## Resources
 
 - **gcloud-python** - the original Python implementation of the Google Cloud SDK CLI
-  - Source: `~/src/github.com/flyingobsidian/gcloud-go/reference/google-cloud-sdk-568.0.0/` - read-only. Do not modify files here.
+  - Source: `~/src/github.com/flyingobsidian/gcloud-go/reference/google-cloud-sdk-589.0.0/` - read-only. Do not modify files here.
   - Binary: `/usr/bin/gcloud`
 - **gcloud-go** - our Golang implementation of the Google Cloud SDK CLI
   - Source: `~/.openclaw/workspace/src/github.com/flyingobsidian/gcloud-go/` - your private read-write workspace. Do all work here.
