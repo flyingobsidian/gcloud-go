@@ -7,7 +7,8 @@ import (
 )
 
 func spannerSubgroup(name string) *cobra.Command {
-	for _, c := range spannerCmd.Commands() {
+	grp := newSpannerCmds(legacyTestInvocation())
+	for _, c := range grp.spannerCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

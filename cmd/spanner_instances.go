@@ -1,183 +1,109 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	spanner "google.golang.org/api/spanner/v1"
 )
 
 // --- gcloud spanner instances (#1210) ---
 
-var spannerInstancesCmd = &cobra.Command{Use: "instances", Short: "Manage Cloud Spanner instances"}
-
-var (
-	flagSpInstFormat      string
-	flagSpInstConfigFile  string
-	flagSpInstUpdateMask  string
-	flagSpInstConfig      string
-	flagSpInstNodes       int64
-	flagSpInstPU          int64
-	flagSpInstDisplayName string
-	flagSpInstFilter      string
-	flagSpInstPageSize    int64
-	flagSpInstTargetCfg   string
-	flagSpInstIamMember   string
-	flagSpInstIamRole     string
-	flagSpInstIamCondExpr string
-	flagSpInstIamCondT    string
-	flagSpInstIamCondD    string
-	flagSpInstIamAllCond  bool
-	flagSpInstLabels      map[string]string
-	flagSpInstUpdateLabels map[string]string
-	flagSpInstRemoveLabels []string
-	flagSpInstClearLabels  bool
-)
-
-var (
-	spannerInstCreateCmd = &cobra.Command{
-		Use: "create INSTANCE", Short: "Create a Cloud Spanner instance",
-		Args: cobra.ExactArgs(1), RunE: runSpInstCreate,
-	}
-	spannerInstDeleteCmd = &cobra.Command{
-		Use: "delete INSTANCE", Short: "Delete a Cloud Spanner instance",
-		Args: cobra.ExactArgs(1), RunE: runSpInstDelete,
-	}
-	spannerInstDescribeCmd = &cobra.Command{
-		Use: "describe INSTANCE", Short: "Describe a Cloud Spanner instance",
-		Args: cobra.ExactArgs(1), RunE: runSpInstDescribe,
-	}
-	spannerInstListCmd = &cobra.Command{
-		Use: "list", Short: "List Cloud Spanner instances",
-		Args: cobra.NoArgs, RunE: runSpInstList,
-	}
-	spannerInstUpdateCmd = &cobra.Command{
-		Use: "update INSTANCE", Short: "Update a Cloud Spanner instance",
-		Args: cobra.ExactArgs(1), RunE: runSpInstUpdate,
-	}
-	spannerInstMoveCmd = &cobra.Command{
-		Use: "move INSTANCE", Short: "Move a Cloud Spanner instance to a new instance configuration",
-		Args: cobra.ExactArgs(1), RunE: runSpInstMove,
-	}
-	spannerInstGetLocsCmd = &cobra.Command{
-		Use: "get-locations INSTANCE", Short: "Print the locations (replicas) of the instance's config",
-		Args: cobra.ExactArgs(1), RunE: runSpInstGetLocations,
-	}
-	spannerInstGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy INSTANCE", Short: "Get the IAM policy for an instance",
-		Args: cobra.ExactArgs(1), RunE: runSpInstGetIam,
-	}
-	spannerInstSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy INSTANCE POLICY_FILE", Short: "Set the IAM policy for an instance",
-		Args: cobra.ExactArgs(2), RunE: runSpInstSetIam,
-	}
-	spannerInstAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding INSTANCE", Short: "Add an IAM policy binding on an instance",
-		Args: cobra.ExactArgs(1), RunE: runSpInstAddIam,
-	}
-	spannerInstRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding INSTANCE", Short: "Remove an IAM policy binding from an instance",
-		Args: cobra.ExactArgs(1), RunE: runSpInstRemoveIam,
-	}
-)
-
-func init() {
+func (s *spannerCmds) initSpannerInstances() {
 	all := []*cobra.Command{
-		spannerInstCreateCmd, spannerInstDeleteCmd, spannerInstDescribeCmd, spannerInstListCmd,
-		spannerInstUpdateCmd, spannerInstMoveCmd, spannerInstGetLocsCmd,
-		spannerInstGetIamCmd, spannerInstSetIamCmd, spannerInstAddIamCmd, spannerInstRemoveIamCmd,
+		s.spannerInstCreateCmd, s.spannerInstDeleteCmd, s.spannerInstDescribeCmd, s.spannerInstListCmd,
+		s.spannerInstUpdateCmd, s.spannerInstMoveCmd, s.spannerInstGetLocsCmd,
+		s.spannerInstGetIamCmd, s.spannerInstSetIamCmd, s.spannerInstAddIamCmd, s.spannerInstRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSpInstFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSpInstFormat, "format", "", "Output format")
 	}
 
-	spannerInstCreateCmd.Flags().StringVar(&flagSpInstConfigFile, "config-file", "", "YAML/JSON file with the Instance body")
-	spannerInstCreateCmd.Flags().StringVar(&flagSpInstConfig, "config", "", "Instance config (short name or full URI)")
-	spannerInstCreateCmd.Flags().Int64Var(&flagSpInstNodes, "nodes", 0, "Number of nodes")
-	spannerInstCreateCmd.Flags().Int64Var(&flagSpInstPU, "processing-units", 0, "Processing units")
-	spannerInstCreateCmd.Flags().StringVar(&flagSpInstDisplayName, "display-name", "", "Display name")
-	spannerInstCreateCmd.Flags().StringToStringVar(&flagSpInstLabels, "labels", nil,
+	s.spannerInstCreateCmd.Flags().StringVar(&s.flagSpInstConfigFile, "config-file", "", "YAML/JSON file with the Instance body")
+	s.spannerInstCreateCmd.Flags().StringVar(&s.flagSpInstConfig, "config", "", "Instance config (short name or full URI)")
+	s.spannerInstCreateCmd.Flags().Int64Var(&s.flagSpInstNodes, "nodes", 0, "Number of nodes")
+	s.spannerInstCreateCmd.Flags().Int64Var(&s.flagSpInstPU, "processing-units", 0, "Processing units")
+	s.spannerInstCreateCmd.Flags().StringVar(&s.flagSpInstDisplayName, "display-name", "", "Display name")
+	s.spannerInstCreateCmd.Flags().StringToStringVar(&s.flagSpInstLabels, "labels", nil,
 		"Instance labels as KEY=VALUE pairs")
 
-	spannerInstUpdateCmd.Flags().StringVar(&flagSpInstConfigFile, "config-file", "", "YAML/JSON file with the Instance body")
-	spannerInstUpdateCmd.Flags().StringVar(&flagSpInstUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
-	spannerInstUpdateCmd.Flags().Int64Var(&flagSpInstNodes, "nodes", 0, "Number of nodes")
-	spannerInstUpdateCmd.Flags().Int64Var(&flagSpInstPU, "processing-units", 0, "Processing units")
-	spannerInstUpdateCmd.Flags().StringVar(&flagSpInstDisplayName, "display-name", "", "Display name")
-	spannerInstUpdateCmd.Flags().StringToStringVar(&flagSpInstUpdateLabels, "update-labels", nil,
+	s.spannerInstUpdateCmd.Flags().StringVar(&s.flagSpInstConfigFile, "config-file", "", "YAML/JSON file with the Instance body")
+	s.spannerInstUpdateCmd.Flags().StringVar(&s.flagSpInstUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.spannerInstUpdateCmd.Flags().Int64Var(&s.flagSpInstNodes, "nodes", 0, "Number of nodes")
+	s.spannerInstUpdateCmd.Flags().Int64Var(&s.flagSpInstPU, "processing-units", 0, "Processing units")
+	s.spannerInstUpdateCmd.Flags().StringVar(&s.flagSpInstDisplayName, "display-name", "", "Display name")
+	s.spannerInstUpdateCmd.Flags().StringToStringVar(&s.flagSpInstUpdateLabels, "update-labels", nil,
 		"Set or update instance labels as KEY=VALUE pairs")
-	spannerInstUpdateCmd.Flags().StringSliceVar(&flagSpInstRemoveLabels, "remove-labels", nil,
+	s.spannerInstUpdateCmd.Flags().StringSliceVar(&s.flagSpInstRemoveLabels, "remove-labels", nil,
 		"Comma-separated list of label keys to remove")
-	spannerInstUpdateCmd.Flags().BoolVar(&flagSpInstClearLabels, "clear-labels", false,
+	s.spannerInstUpdateCmd.Flags().BoolVar(&s.flagSpInstClearLabels, "clear-labels", false,
 		"Remove all labels from the instance (mutually exclusive with --update-labels/--remove-labels)")
 
-	spannerInstMoveCmd.Flags().StringVar(&flagSpInstTargetCfg, "target-config", "", "Target instance configuration (required)")
-	_ = spannerInstMoveCmd.MarkFlagRequired("target-config")
+	s.spannerInstMoveCmd.Flags().StringVar(&s.flagSpInstTargetCfg, "target-config", "", "Target instance configuration (required)")
+	_ = s.spannerInstMoveCmd.MarkFlagRequired("target-config")
 
-	spannerInstListCmd.Flags().StringVar(&flagSpInstFilter, "filter", "", "Server-side filter expression")
-	spannerInstListCmd.Flags().Int64Var(&flagSpInstPageSize, "page-size", 0, "Maximum results per page")
+	s.spannerInstListCmd.Flags().StringVar(&s.flagSpInstFilter, "filter", "", "Server-side filter expression")
+	s.spannerInstListCmd.Flags().Int64Var(&s.flagSpInstPageSize, "page-size", 0, "Maximum results per page")
 
-	for _, c := range []*cobra.Command{spannerInstAddIamCmd, spannerInstRemoveIamCmd} {
-		spIamMemberFlags(c, &flagSpInstIamMember, &flagSpInstIamRole,
-			&flagSpInstIamCondExpr, &flagSpInstIamCondT, &flagSpInstIamCondD)
+	for _, c := range []*cobra.Command{s.spannerInstAddIamCmd, s.spannerInstRemoveIamCmd} {
+		spIamMemberFlags(c, &s.flagSpInstIamMember, &s.flagSpInstIamRole,
+			&s.flagSpInstIamCondExpr, &s.flagSpInstIamCondT, &s.flagSpInstIamCondD)
 	}
-	spannerInstRemoveIamCmd.Flags().BoolVar(&flagSpInstIamAllCond, "all", false,
+	s.spannerInstRemoveIamCmd.Flags().BoolVar(&s.flagSpInstIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	spannerInstancesCmd.AddCommand(all...)
-	spannerCmd.AddCommand(spannerInstancesCmd)
+	s.spannerInstancesCmd.AddCommand(all...)
+	s.spannerCmd.AddCommand(s.spannerInstancesCmd)
 }
 
 // spannerInstBuild constructs an Instance from either the config file or the
 // short flags; short flags override file fields when set.
-func spannerInstBuild(existing *spanner.Instance) *spanner.Instance {
+func (s *spannerCmds) spannerInstBuild(existing *spanner.Instance) *spanner.Instance {
 	if existing == nil {
 		existing = &spanner.Instance{}
 	}
-	if flagSpInstConfig != "" {
-		cfg, err := spannerInstanceConfig(flagSpInstConfig)
+	if s.flagSpInstConfig != "" {
+		cfg, err := s.spannerInstanceConfig(s.flagSpInstConfig)
 		if err == nil {
 			existing.Config = cfg
 		}
 	}
-	if flagSpInstNodes > 0 {
-		existing.NodeCount = flagSpInstNodes
+	if s.flagSpInstNodes > 0 {
+		existing.NodeCount = s.flagSpInstNodes
 	}
-	if flagSpInstPU > 0 {
-		existing.ProcessingUnits = flagSpInstPU
+	if s.flagSpInstPU > 0 {
+		existing.ProcessingUnits = s.flagSpInstPU
 	}
-	if flagSpInstDisplayName != "" {
-		existing.DisplayName = flagSpInstDisplayName
+	if s.flagSpInstDisplayName != "" {
+		existing.DisplayName = s.flagSpInstDisplayName
 	}
 	return existing
 }
 
-func runSpInstCreate(cmd *cobra.Command, args []string) error {
-	parent, err := spannerProject()
+func (s *spannerCmds) runSpInstCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerProject()
 	if err != nil {
 		return err
 	}
 	inst := &spanner.Instance{}
-	if flagSpInstConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagSpInstConfigFile, inst); err != nil {
+	if s.flagSpInstConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagSpInstConfigFile, inst); err != nil {
 			return err
 		}
 	}
-	inst = spannerInstBuild(inst)
-	if len(flagSpInstLabels) > 0 {
+	inst = s.spannerInstBuild(inst)
+	if len(s.flagSpInstLabels) > 0 {
 		if inst.Labels == nil {
 			inst.Labels = map[string]string{}
 		}
-		for k, v := range flagSpInstLabels {
+		for k, v := range s.flagSpInstLabels {
 			inst.Labels[k] = v
 		}
 	}
 	body := &spanner.CreateInstanceRequest{Instance: inst, InstanceId: args[0]}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -185,34 +111,34 @@ func runSpInstCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating instance: %w", err)
 	}
-	fmt.Printf("Create instance [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSpInstFormat)
+	fmt.Fprintf(s.inv.stdout, "Create instance [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpInstFormat)
 }
 
-func runSpInstDelete(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstance(args[0])
+func (s *spannerCmds) runSpInstDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstance(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting instance: %w", err)
 	}
-	fmt.Printf("Deleted instance [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted instance [%s].\n", args[0])
 	return nil
 }
 
-func runSpInstDescribe(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstance(args[0])
+func (s *spannerCmds) runSpInstDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstance(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -220,16 +146,16 @@ func runSpInstDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing instance: %w", err)
 	}
-	return emitFormatted(got, flagSpInstFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSpInstFormat)
 }
 
-func runSpInstList(cmd *cobra.Command, args []string) error {
-	parent, err := spannerProject()
+func (s *spannerCmds) runSpInstList(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -237,11 +163,11 @@ func runSpInstList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.List(parent).Context(ctx)
-		if flagSpInstFilter != "" {
-			call = call.Filter(flagSpInstFilter)
+		if s.flagSpInstFilter != "" {
+			call = call.Filter(s.flagSpInstFilter)
 		}
-		if flagSpInstPageSize > 0 {
-			call = call.PageSize(flagSpInstPageSize)
+		if s.flagSpInstPageSize > 0 {
+			call = call.PageSize(s.flagSpInstPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -256,37 +182,37 @@ func runSpInstList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSpInstFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSpInstFormat)
 }
 
-func runSpInstUpdate(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstance(args[0])
+func (s *spannerCmds) runSpInstUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstance(args[0])
 	if err != nil {
 		return err
 	}
-	if flagSpInstClearLabels && (len(flagSpInstUpdateLabels) > 0 || len(flagSpInstRemoveLabels) > 0) {
+	if s.flagSpInstClearLabels && (len(s.flagSpInstUpdateLabels) > 0 || len(s.flagSpInstRemoveLabels) > 0) {
 		return fmt.Errorf("--clear-labels is mutually exclusive with --update-labels/--remove-labels")
 	}
 	inst := &spanner.Instance{}
-	if flagSpInstConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagSpInstConfigFile, inst); err != nil {
+	if s.flagSpInstConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagSpInstConfigFile, inst); err != nil {
 			return err
 		}
 	}
-	inst = spannerInstBuild(inst)
+	inst = s.spannerInstBuild(inst)
 	inst.Name = name
 
 	labelsChanged := false
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
-	if flagSpInstClearLabels {
+	if s.flagSpInstClearLabels {
 		inst.Labels = map[string]string{}
 		inst.ForceSendFields = append(inst.ForceSendFields, "Labels")
 		labelsChanged = true
-	} else if len(flagSpInstUpdateLabels) > 0 || len(flagSpInstRemoveLabels) > 0 {
+	} else if len(s.flagSpInstUpdateLabels) > 0 || len(s.flagSpInstRemoveLabels) > 0 {
 		existing, gerr := svc.Projects.Instances.Get(name).Context(ctx).Do()
 		if gerr != nil {
 			return fmt.Errorf("fetching existing instance for label edit: %w", gerr)
@@ -295,10 +221,10 @@ func runSpInstUpdate(cmd *cobra.Command, args []string) error {
 		for k, v := range existing.Labels {
 			labels[k] = v
 		}
-		for k, v := range flagSpInstUpdateLabels {
+		for k, v := range s.flagSpInstUpdateLabels {
 			labels[k] = v
 		}
-		for _, k := range flagSpInstRemoveLabels {
+		for _, k := range s.flagSpInstRemoveLabels {
 			delete(labels, k)
 		}
 		inst.Labels = labels
@@ -308,7 +234,7 @@ func runSpInstUpdate(cmd *cobra.Command, args []string) error {
 		labelsChanged = true
 	}
 
-	mask := flagSpInstUpdateMask
+	mask := s.flagSpInstUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(inst))
 		if labelsChanged && !maskHasField(mask, "labels") {
@@ -324,7 +250,7 @@ func runSpInstUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating instance: %w", err)
 	}
-	return emitFormatted(op, flagSpInstFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpInstFormat)
 }
 
 // maskHasField reports whether comma-separated `mask` already contains `field`.
@@ -340,18 +266,18 @@ func maskHasField(mask, field string) bool {
 	return false
 }
 
-func runSpInstMove(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstance(args[0])
+func (s *spannerCmds) runSpInstMove(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstance(args[0])
 	if err != nil {
 		return err
 	}
-	target, err := spannerInstanceConfig(flagSpInstTargetCfg)
+	target, err := s.spannerInstanceConfig(s.flagSpInstTargetCfg)
 	if err != nil {
 		return err
 	}
 	body := &spanner.MoveInstanceRequest{TargetConfig: target}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -359,17 +285,17 @@ func runSpInstMove(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("moving instance: %w", err)
 	}
-	fmt.Printf("Move instance [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSpInstFormat)
+	fmt.Fprintf(s.inv.stdout, "Move instance [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpInstFormat)
 }
 
-func runSpInstGetLocations(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstance(args[0])
+func (s *spannerCmds) runSpInstGetLocations(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstance(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -384,16 +310,16 @@ func runSpInstGetLocations(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing instance config: %w", err)
 	}
-	return emitFormatted(cfg.Replicas, flagSpInstFormat)
+	return emitFormattedTo(s.inv.stdout, cfg.Replicas, s.flagSpInstFormat)
 }
 
-func runSpInstGetIam(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstance(args[0])
+func (s *spannerCmds) runSpInstGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstance(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -403,11 +329,11 @@ func runSpInstGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagSpInstFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagSpInstFormat)
 }
 
-func runSpInstSetIam(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstance(args[0])
+func (s *spannerCmds) runSpInstSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstance(args[0])
 	if err != nil {
 		return err
 	}
@@ -416,8 +342,8 @@ func runSpInstSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -425,17 +351,17 @@ func runSpInstSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	spUpdatedIam(fmt.Sprintf("instance [%s]", args[0]))
-	return emitFormatted(updated, flagSpInstFormat)
+	s.spUpdatedIam(fmt.Sprintf("instance [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagSpInstFormat)
 }
 
-func runSpInstAddIam(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstance(args[0])
+func (s *spannerCmds) runSpInstAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstance(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -445,24 +371,24 @@ func runSpInstAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	spIamAddBinding(policy, flagSpInstIamRole, flagSpInstIamMember,
-		spIamBuildCondition(flagSpInstIamCondExpr, flagSpInstIamCondT, flagSpInstIamCondD))
+	spIamAddBinding(policy, s.flagSpInstIamRole, s.flagSpInstIamMember,
+		spIamBuildCondition(s.flagSpInstIamCondExpr, s.flagSpInstIamCondT, s.flagSpInstIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Instances.SetIamPolicy(name, &spanner.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	spUpdatedIam(fmt.Sprintf("instance [%s]", args[0]))
-	return emitFormatted(updated, flagSpInstFormat)
+	s.spUpdatedIam(fmt.Sprintf("instance [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagSpInstFormat)
 }
 
-func runSpInstRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstance(args[0])
+func (s *spannerCmds) runSpInstRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstance(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -472,14 +398,14 @@ func runSpInstRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !spIamRemoveBinding(policy, flagSpInstIamRole, flagSpInstIamMember,
-		spIamBuildCondition(flagSpInstIamCondExpr, flagSpInstIamCondT, flagSpInstIamCondD), flagSpInstIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagSpInstIamRole, flagSpInstIamMember)
+	if !spIamRemoveBinding(policy, s.flagSpInstIamRole, s.flagSpInstIamMember,
+		spIamBuildCondition(s.flagSpInstIamCondExpr, s.flagSpInstIamCondT, s.flagSpInstIamCondD), s.flagSpInstIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagSpInstIamRole, s.flagSpInstIamMember)
 	}
 	updated, err := svc.Projects.Instances.SetIamPolicy(name, &spanner.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	spUpdatedIam(fmt.Sprintf("instance [%s]", args[0]))
-	return emitFormatted(updated, flagSpInstFormat)
+	s.spUpdatedIam(fmt.Sprintf("instance [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagSpInstFormat)
 }

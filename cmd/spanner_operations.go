@@ -1,84 +1,56 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	spanner "google.golang.org/api/spanner/v1"
 )
 
 // --- gcloud spanner operations (#1211) ---
 
-var spannerOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Cloud Spanner operations"}
-
-var (
-	flagSpOpInstance string
-	flagSpOpDatabase string
-	flagSpOpBackup   string
-	flagSpOpFormat   string
-	flagSpOpFilter   string
-	flagSpOpPageSize int64
-)
-
-var (
-	spannerOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a Spanner operation",
-		Args: cobra.ExactArgs(1), RunE: runSpOpCancel,
-	}
-	spannerOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Spanner operation",
-		Args: cobra.ExactArgs(1), RunE: runSpOpDescribe,
-	}
-	spannerOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Spanner operations at the requested scope",
-		Args: cobra.NoArgs, RunE: runSpOpList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{spannerOpCancelCmd, spannerOpDescribeCmd, spannerOpListCmd}
+func (s *spannerCmds) initSpannerOperations() {
+	all := []*cobra.Command{s.spannerOpCancelCmd, s.spannerOpDescribeCmd, s.spannerOpListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSpOpInstance, "instance", "", "Spanner instance (required)")
+		c.Flags().StringVar(&s.flagSpOpInstance, "instance", "", "Spanner instance (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagSpOpDatabase, "database", "",
+		c.Flags().StringVar(&s.flagSpOpDatabase, "database", "",
 			"Database whose operations are targeted (mutually exclusive with --backup)")
-		c.Flags().StringVar(&flagSpOpBackup, "backup", "",
+		c.Flags().StringVar(&s.flagSpOpBackup, "backup", "",
 			"Backup whose operations are targeted (mutually exclusive with --database)")
-		c.Flags().StringVar(&flagSpOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSpOpFormat, "format", "", "Output format")
 	}
-	spannerOpListCmd.Flags().StringVar(&flagSpOpFilter, "filter", "", "Server-side filter expression")
-	spannerOpListCmd.Flags().Int64Var(&flagSpOpPageSize, "page-size", 0, "Maximum results per page")
+	s.spannerOpListCmd.Flags().StringVar(&s.flagSpOpFilter, "filter", "", "Server-side filter expression")
+	s.spannerOpListCmd.Flags().Int64Var(&s.flagSpOpPageSize, "page-size", 0, "Maximum results per page")
 
-	spannerOperationsCmd.AddCommand(all...)
-	spannerCmd.AddCommand(spannerOperationsCmd)
+	s.spannerOperationsCmd.AddCommand(all...)
+	s.spannerCmd.AddCommand(s.spannerOperationsCmd)
 }
 
 // spannerOpParent returns the parent collection for an ops list. The scope is
 // database-level if --database is set, backup-level if --backup, otherwise
 // instance-level.
-func spannerOpParent() (string, string, error) {
-	if flagSpOpDatabase != "" && flagSpOpBackup != "" {
+func (s *spannerCmds) spannerOpParent() (string, string, error) {
+	if s.flagSpOpDatabase != "" && s.flagSpOpBackup != "" {
 		return "", "", fmt.Errorf("--database and --backup are mutually exclusive")
 	}
-	if flagSpOpDatabase != "" {
-		db, err := spannerDatabase(flagSpOpInstance, flagSpOpDatabase)
+	if s.flagSpOpDatabase != "" {
+		db, err := s.spannerDatabase(s.flagSpOpInstance, s.flagSpOpDatabase)
 		return db, "database", err
 	}
-	if flagSpOpBackup != "" {
-		bk, err := spannerBackup(flagSpOpInstance, flagSpOpBackup)
+	if s.flagSpOpBackup != "" {
+		bk, err := s.spannerBackup(s.flagSpOpInstance, s.flagSpOpBackup)
 		return bk, "backup", err
 	}
-	inst, err := spannerInstance(flagSpOpInstance)
+	inst, err := s.spannerInstance(s.flagSpOpInstance)
 	return inst, "instance", err
 }
 
 // spannerOpFullName resolves an operation ID/URI to a fully qualified name,
 // using --database/--backup/--instance to compose the parent when the input is
 // a short ID.
-func spannerOpFullName(id string) (string, string, error) {
+func (s *spannerCmds) spannerOpFullName(id string) (string, string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		switch {
 		case strings.Contains(id, "/databases/"):
@@ -89,20 +61,20 @@ func spannerOpFullName(id string) (string, string, error) {
 			return id, "instance", nil
 		}
 	}
-	parent, scope, err := spannerOpParent()
+	parent, scope, err := s.spannerOpParent()
 	if err != nil {
 		return "", "", err
 	}
 	return fmt.Sprintf("%s/operations/%s", parent, id), scope, nil
 }
 
-func runSpOpCancel(cmd *cobra.Command, args []string) error {
-	name, scope, err := spannerOpFullName(args[0])
+func (s *spannerCmds) runSpOpCancel(cmd *cobra.Command, args []string) error {
+	name, scope, err := s.spannerOpFullName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -117,17 +89,17 @@ func runSpOpCancel(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runSpOpDescribe(cmd *cobra.Command, args []string) error {
-	name, scope, err := spannerOpFullName(args[0])
+func (s *spannerCmds) runSpOpDescribe(cmd *cobra.Command, args []string) error {
+	name, scope, err := s.spannerOpFullName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,18 +115,18 @@ func runSpOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagSpOpFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpOpFormat)
 }
 
-func runSpOpList(cmd *cobra.Command, args []string) error {
-	parent, scope, err := spannerOpParent()
+func (s *spannerCmds) runSpOpList(cmd *cobra.Command, args []string) error {
+	parent, scope, err := s.spannerOpParent()
 	if err != nil {
 		return err
 	}
 	// Operations list endpoints expect the collection "{parent}/operations".
 	target := parent + "/operations"
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -165,11 +137,11 @@ func runSpOpList(cmd *cobra.Command, args []string) error {
 		switch scope {
 		case "database":
 			call := svc.Projects.Instances.Databases.Operations.List(target).Context(ctx)
-			if flagSpOpFilter != "" {
-				call = call.Filter(flagSpOpFilter)
+			if s.flagSpOpFilter != "" {
+				call = call.Filter(s.flagSpOpFilter)
 			}
-			if flagSpOpPageSize > 0 {
-				call = call.PageSize(flagSpOpPageSize)
+			if s.flagSpOpPageSize > 0 {
+				call = call.PageSize(s.flagSpOpPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -177,11 +149,11 @@ func runSpOpList(cmd *cobra.Command, args []string) error {
 			resp, err = call.Do()
 		case "backup":
 			call := svc.Projects.Instances.Backups.Operations.List(target).Context(ctx)
-			if flagSpOpFilter != "" {
-				call = call.Filter(flagSpOpFilter)
+			if s.flagSpOpFilter != "" {
+				call = call.Filter(s.flagSpOpFilter)
 			}
-			if flagSpOpPageSize > 0 {
-				call = call.PageSize(flagSpOpPageSize)
+			if s.flagSpOpPageSize > 0 {
+				call = call.PageSize(s.flagSpOpPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -189,11 +161,11 @@ func runSpOpList(cmd *cobra.Command, args []string) error {
 			resp, err = call.Do()
 		default:
 			call := svc.Projects.Instances.Operations.List(target).Context(ctx)
-			if flagSpOpFilter != "" {
-				call = call.Filter(flagSpOpFilter)
+			if s.flagSpOpFilter != "" {
+				call = call.Filter(s.flagSpOpFilter)
 			}
-			if flagSpOpPageSize > 0 {
-				call = call.PageSize(flagSpOpPageSize)
+			if s.flagSpOpPageSize > 0 {
+				call = call.PageSize(s.flagSpOpPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -209,5 +181,5 @@ func runSpOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSpOpFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSpOpFormat)
 }

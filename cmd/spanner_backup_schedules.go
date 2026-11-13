@@ -1,97 +1,52 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	spanner "google.golang.org/api/spanner/v1"
 )
 
 // --- gcloud spanner backup-schedules (#1214) ---
 
-var spannerBackupSchedulesCmd = &cobra.Command{Use: "backup-schedules", Short: "Manage Spanner backup schedules"}
-
-var (
-	flagSpBsInstance   string
-	flagSpBsDatabase   string
-	flagSpBsFormat     string
-	flagSpBsConfigFile string
-	flagSpBsUpdateMask string
-	flagSpBsPageSize   int64
-)
-
-var (
-	spannerBsCreateCmd = &cobra.Command{
-		Use: "create SCHEDULE", Short: "Create a Spanner backup schedule",
-		Args: cobra.ExactArgs(1), RunE: runSpBsCreate,
-	}
-	spannerBsDeleteCmd = &cobra.Command{
-		Use: "delete SCHEDULE", Short: "Delete a Spanner backup schedule",
-		Args: cobra.ExactArgs(1), RunE: runSpBsDelete,
-	}
-	spannerBsDescribeCmd = &cobra.Command{
-		Use: "describe SCHEDULE", Short: "Describe a Spanner backup schedule",
-		Args: cobra.ExactArgs(1), RunE: runSpBsDescribe,
-	}
-	spannerBsListCmd = &cobra.Command{
-		Use: "list", Short: "List Spanner backup schedules on a database",
-		Args: cobra.NoArgs, RunE: runSpBsList,
-	}
-	spannerBsUpdateCmd = &cobra.Command{
-		Use: "update SCHEDULE", Short: "Update a Spanner backup schedule",
-		Args: cobra.ExactArgs(1), RunE: runSpBsUpdate,
-	}
-	spannerBsGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy SCHEDULE", Short: "Get the IAM policy for a Spanner backup schedule",
-		Args: cobra.ExactArgs(1), RunE: runSpBsGetIam,
-	}
-	spannerBsSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy SCHEDULE POLICY_FILE", Short: "Set the IAM policy for a Spanner backup schedule",
-		Args: cobra.ExactArgs(2), RunE: runSpBsSetIam,
-	}
-)
-
-func init() {
+func (s *spannerCmds) initSpannerBackupSchedules() {
 	all := []*cobra.Command{
-		spannerBsCreateCmd, spannerBsDeleteCmd, spannerBsDescribeCmd,
-		spannerBsListCmd, spannerBsUpdateCmd, spannerBsGetIamCmd, spannerBsSetIamCmd,
+		s.spannerBsCreateCmd, s.spannerBsDeleteCmd, s.spannerBsDescribeCmd,
+		s.spannerBsListCmd, s.spannerBsUpdateCmd, s.spannerBsGetIamCmd, s.spannerBsSetIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSpBsInstance, "instance", "", "Spanner instance (required)")
+		c.Flags().StringVar(&s.flagSpBsInstance, "instance", "", "Spanner instance (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagSpBsDatabase, "database", "", "Spanner database (required)")
+		c.Flags().StringVar(&s.flagSpBsDatabase, "database", "", "Spanner database (required)")
 		_ = c.MarkFlagRequired("database")
-		c.Flags().StringVar(&flagSpBsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSpBsFormat, "format", "", "Output format")
 	}
-	spannerBsCreateCmd.Flags().StringVar(&flagSpBsConfigFile, "config-file", "", "YAML/JSON file with the BackupSchedule body (required)")
-	_ = spannerBsCreateCmd.MarkFlagRequired("config-file")
-	spannerBsListCmd.Flags().Int64Var(&flagSpBsPageSize, "page-size", 0, "Maximum results per page")
-	spannerBsUpdateCmd.Flags().StringVar(&flagSpBsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
-	_ = spannerBsUpdateCmd.MarkFlagRequired("config-file")
-	spannerBsUpdateCmd.Flags().StringVar(&flagSpBsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.spannerBsCreateCmd.Flags().StringVar(&s.flagSpBsConfigFile, "config-file", "", "YAML/JSON file with the BackupSchedule body (required)")
+	_ = s.spannerBsCreateCmd.MarkFlagRequired("config-file")
+	s.spannerBsListCmd.Flags().Int64Var(&s.flagSpBsPageSize, "page-size", 0, "Maximum results per page")
+	s.spannerBsUpdateCmd.Flags().StringVar(&s.flagSpBsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
+	_ = s.spannerBsUpdateCmd.MarkFlagRequired("config-file")
+	s.spannerBsUpdateCmd.Flags().StringVar(&s.flagSpBsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 
-	spannerBackupSchedulesCmd.AddCommand(all...)
-	spannerCmd.AddCommand(spannerBackupSchedulesCmd)
+	s.spannerBackupSchedulesCmd.AddCommand(all...)
+	s.spannerCmd.AddCommand(s.spannerBackupSchedulesCmd)
 }
 
-func spBsName(id string) (string, error) {
-	return spannerBackupSchedule(flagSpBsInstance, flagSpBsDatabase, id)
+func (s *spannerCmds) spBsName(id string) (string, error) {
+	return s.spannerBackupSchedule(s.flagSpBsInstance, s.flagSpBsDatabase, id)
 }
 
-func runSpBsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := spannerDatabase(flagSpBsInstance, flagSpBsDatabase)
+func (s *spannerCmds) runSpBsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerDatabase(s.flagSpBsInstance, s.flagSpBsDatabase)
 	if err != nil {
 		return err
 	}
 	body := &spanner.BackupSchedule{}
-	if err := loadYAMLOrJSONInto(flagSpBsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSpBsConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,34 +54,34 @@ func runSpBsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating backup schedule: %w", err)
 	}
-	fmt.Printf("Created backup schedule [%s].\n", args[0])
-	return emitFormatted(got, flagSpBsFormat)
+	fmt.Fprintf(s.inv.stdout, "Created backup schedule [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagSpBsFormat)
 }
 
-func runSpBsDelete(cmd *cobra.Command, args []string) error {
-	name, err := spBsName(args[0])
+func (s *spannerCmds) runSpBsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.spBsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.Databases.BackupSchedules.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting backup schedule: %w", err)
 	}
-	fmt.Printf("Deleted backup schedule [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted backup schedule [%s].\n", args[0])
 	return nil
 }
 
-func runSpBsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := spBsName(args[0])
+func (s *spannerCmds) runSpBsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.spBsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -134,16 +89,16 @@ func runSpBsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing backup schedule: %w", err)
 	}
-	return emitFormatted(got, flagSpBsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSpBsFormat)
 }
 
-func runSpBsList(cmd *cobra.Command, args []string) error {
-	parent, err := spannerDatabase(flagSpBsInstance, flagSpBsDatabase)
+func (s *spannerCmds) runSpBsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerDatabase(s.flagSpBsInstance, s.flagSpBsDatabase)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -151,8 +106,8 @@ func runSpBsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.Databases.BackupSchedules.List(parent).Context(ctx)
-		if flagSpBsPageSize > 0 {
-			call = call.PageSize(flagSpBsPageSize)
+		if s.flagSpBsPageSize > 0 {
+			call = call.PageSize(s.flagSpBsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -167,25 +122,25 @@ func runSpBsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSpBsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSpBsFormat)
 }
 
-func runSpBsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := spBsName(args[0])
+func (s *spannerCmds) runSpBsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.spBsName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &spanner.BackupSchedule{}
-	if err := loadYAMLOrJSONInto(flagSpBsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSpBsConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagSpBsUpdateMask
+	mask := s.flagSpBsUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -197,17 +152,17 @@ func runSpBsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating backup schedule: %w", err)
 	}
-	fmt.Printf("Updated backup schedule [%s].\n", args[0])
-	return emitFormatted(got, flagSpBsFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated backup schedule [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagSpBsFormat)
 }
 
-func runSpBsGetIam(cmd *cobra.Command, args []string) error {
-	name, err := spBsName(args[0])
+func (s *spannerCmds) runSpBsGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spBsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -217,11 +172,11 @@ func runSpBsGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagSpBsFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagSpBsFormat)
 }
 
-func runSpBsSetIam(cmd *cobra.Command, args []string) error {
-	name, err := spBsName(args[0])
+func (s *spannerCmds) runSpBsSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spBsName(args[0])
 	if err != nil {
 		return err
 	}
@@ -230,8 +185,8 @@ func runSpBsSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -239,6 +194,6 @@ func runSpBsSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for backup schedule [%s].\n", args[0])
-	return emitFormatted(updated, flagSpBsFormat)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for backup schedule [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, updated, s.flagSpBsFormat)
 }

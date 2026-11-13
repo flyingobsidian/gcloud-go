@@ -1,70 +1,42 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 )
 
 // --- gcloud spanner rows (#1212) ---
 
-var spannerRowsCmd = &cobra.Command{Use: "rows", Short: "Manage Cloud Spanner rows via DML"}
-
-var (
-	flagSpRowsInstance string
-	flagSpRowsDatabase string
-	flagSpRowsTable    string
-	flagSpRowsFormat   string
-	flagSpRowsKeys     []string
-	flagSpRowsData     map[string]string
-)
-
-var (
-	spannerRowsInsertCmd = &cobra.Command{
-		Use: "insert", Short: "Insert a row via DML",
-		Args: cobra.NoArgs, RunE: runSpRowsInsert,
-	}
-	spannerRowsUpdateCmd = &cobra.Command{
-		Use: "update", Short: "Update rows via DML",
-		Args: cobra.NoArgs, RunE: runSpRowsUpdate,
-	}
-	spannerRowsDeleteCmd = &cobra.Command{
-		Use: "delete", Short: "Delete rows via DML",
-		Args: cobra.NoArgs, RunE: runSpRowsDelete,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{spannerRowsInsertCmd, spannerRowsUpdateCmd, spannerRowsDeleteCmd}
+func (s *spannerCmds) initSpannerRows() {
+	all := []*cobra.Command{s.spannerRowsInsertCmd, s.spannerRowsUpdateCmd, s.spannerRowsDeleteCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSpRowsInstance, "instance", "", "Spanner instance (required)")
+		c.Flags().StringVar(&s.flagSpRowsInstance, "instance", "", "Spanner instance (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagSpRowsDatabase, "database", "", "Spanner database (required)")
+		c.Flags().StringVar(&s.flagSpRowsDatabase, "database", "", "Spanner database (required)")
 		_ = c.MarkFlagRequired("database")
-		c.Flags().StringVar(&flagSpRowsTable, "table", "", "Table to modify (required)")
+		c.Flags().StringVar(&s.flagSpRowsTable, "table", "", "Table to modify (required)")
 		_ = c.MarkFlagRequired("table")
-		c.Flags().StringVar(&flagSpRowsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSpRowsFormat, "format", "", "Output format")
 	}
-	spannerRowsInsertCmd.Flags().StringToStringVar(&flagSpRowsData, "data", nil,
+	s.spannerRowsInsertCmd.Flags().StringToStringVar(&s.flagSpRowsData, "data", nil,
 		"Column=value pairs to insert (repeatable). Values are inserted as strings; cast in SQL as needed.")
-	_ = spannerRowsInsertCmd.MarkFlagRequired("data")
+	_ = s.spannerRowsInsertCmd.MarkFlagRequired("data")
 
-	spannerRowsUpdateCmd.Flags().StringToStringVar(&flagSpRowsData, "data", nil,
+	s.spannerRowsUpdateCmd.Flags().StringToStringVar(&s.flagSpRowsData, "data", nil,
 		"Column=value pairs to set (repeatable)")
-	_ = spannerRowsUpdateCmd.MarkFlagRequired("data")
-	spannerRowsUpdateCmd.Flags().StringSliceVar(&flagSpRowsKeys, "keys", nil,
+	_ = s.spannerRowsUpdateCmd.MarkFlagRequired("data")
+	s.spannerRowsUpdateCmd.Flags().StringSliceVar(&s.flagSpRowsKeys, "keys", nil,
 		"Primary-key column=value expressions used in the WHERE clause (repeatable)")
-	_ = spannerRowsUpdateCmd.MarkFlagRequired("keys")
+	_ = s.spannerRowsUpdateCmd.MarkFlagRequired("keys")
 
-	spannerRowsDeleteCmd.Flags().StringSliceVar(&flagSpRowsKeys, "keys", nil,
+	s.spannerRowsDeleteCmd.Flags().StringSliceVar(&s.flagSpRowsKeys, "keys", nil,
 		"Primary-key column=value expressions used in the WHERE clause (repeatable)")
-	_ = spannerRowsDeleteCmd.MarkFlagRequired("keys")
+	_ = s.spannerRowsDeleteCmd.MarkFlagRequired("keys")
 
-	spannerRowsCmd.AddCommand(all...)
-	spannerCmd.AddCommand(spannerRowsCmd)
+	s.spannerRowsCmd.AddCommand(all...)
+	s.spannerCmd.AddCommand(s.spannerRowsCmd)
 }
 
 // splitKV splits a "k=v" pair. Trims spaces.
@@ -115,24 +87,24 @@ func isNumeric(v string) bool {
 	return true
 }
 
-func runSpRowsInsert(cmd *cobra.Command, args []string) error {
-	database, err := spannerDatabase(flagSpRowsInstance, flagSpRowsDatabase)
+func (s *spannerCmds) runSpRowsInsert(cmd *cobra.Command, args []string) error {
+	database, err := s.spannerDatabase(s.flagSpRowsInstance, s.flagSpRowsDatabase)
 	if err != nil {
 		return err
 	}
-	if len(flagSpRowsData) == 0 {
+	if len(s.flagSpRowsData) == 0 {
 		return fmt.Errorf("--data is required")
 	}
-	cols := make([]string, 0, len(flagSpRowsData))
-	vals := make([]string, 0, len(flagSpRowsData))
-	for k, v := range flagSpRowsData {
+	cols := make([]string, 0, len(s.flagSpRowsData))
+	vals := make([]string, 0, len(s.flagSpRowsData))
+	for k, v := range s.flagSpRowsData {
 		cols = append(cols, k)
 		vals = append(vals, quoteLit(v))
 	}
 	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		flagSpRowsTable, strings.Join(cols, ","), strings.Join(vals, ","))
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+		s.flagSpRowsTable, strings.Join(cols, ","), strings.Join(vals, ","))
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,32 +112,32 @@ func runSpRowsInsert(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(rs, flagSpRowsFormat)
+	return emitFormattedTo(s.inv.stdout, rs, s.flagSpRowsFormat)
 }
 
-func runSpRowsUpdate(cmd *cobra.Command, args []string) error {
-	database, err := spannerDatabase(flagSpRowsInstance, flagSpRowsDatabase)
+func (s *spannerCmds) runSpRowsUpdate(cmd *cobra.Command, args []string) error {
+	database, err := s.spannerDatabase(s.flagSpRowsInstance, s.flagSpRowsDatabase)
 	if err != nil {
 		return err
 	}
-	if len(flagSpRowsData) == 0 {
+	if len(s.flagSpRowsData) == 0 {
 		return fmt.Errorf("--data is required")
 	}
-	if len(flagSpRowsKeys) == 0 {
+	if len(s.flagSpRowsKeys) == 0 {
 		return fmt.Errorf("--keys is required")
 	}
-	setClauses := make([]string, 0, len(flagSpRowsData))
-	for k, v := range flagSpRowsData {
+	setClauses := make([]string, 0, len(s.flagSpRowsData))
+	for k, v := range s.flagSpRowsData {
 		setClauses = append(setClauses, fmt.Sprintf("%s = %s", k, quoteLit(v)))
 	}
-	whereClauses, err := keysWhere(flagSpRowsKeys)
+	whereClauses, err := keysWhere(s.flagSpRowsKeys)
 	if err != nil {
 		return err
 	}
 	sql := fmt.Sprintf("UPDATE %s SET %s WHERE %s",
-		flagSpRowsTable, strings.Join(setClauses, ", "), strings.Join(whereClauses, " AND "))
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+		s.flagSpRowsTable, strings.Join(setClauses, ", "), strings.Join(whereClauses, " AND "))
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -173,25 +145,25 @@ func runSpRowsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(rs, flagSpRowsFormat)
+	return emitFormattedTo(s.inv.stdout, rs, s.flagSpRowsFormat)
 }
 
-func runSpRowsDelete(cmd *cobra.Command, args []string) error {
-	database, err := spannerDatabase(flagSpRowsInstance, flagSpRowsDatabase)
+func (s *spannerCmds) runSpRowsDelete(cmd *cobra.Command, args []string) error {
+	database, err := s.spannerDatabase(s.flagSpRowsInstance, s.flagSpRowsDatabase)
 	if err != nil {
 		return err
 	}
-	if len(flagSpRowsKeys) == 0 {
+	if len(s.flagSpRowsKeys) == 0 {
 		return fmt.Errorf("--keys is required")
 	}
-	whereClauses, err := keysWhere(flagSpRowsKeys)
+	whereClauses, err := keysWhere(s.flagSpRowsKeys)
 	if err != nil {
 		return err
 	}
 	sql := fmt.Sprintf("DELETE FROM %s WHERE %s",
-		flagSpRowsTable, strings.Join(whereClauses, " AND "))
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+		s.flagSpRowsTable, strings.Join(whereClauses, " AND "))
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -199,7 +171,7 @@ func runSpRowsDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(rs, flagSpRowsFormat)
+	return emitFormattedTo(s.inv.stdout, rs, s.flagSpRowsFormat)
 }
 
 func keysWhere(keys []string) ([]string, error) {
