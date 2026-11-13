@@ -1,0 +1,284 @@
+package cli
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"runtime/debug"
+	"strings"
+
+	"github.com/flyingobsidian/gcloud-go/internal/auth"
+	"github.com/flyingobsidian/gcloud-go/internal/config"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+)
+
+// ErrNotInProcess is returned by RunInProcess for commands that gcloud-go
+// does not have: no command group matches the command name. Every command
+// gcloud-go has can run in-process.
+var ErrNotInProcess = errors.New("command cannot run in-process")
+
+// migratedGroups returns all the top-level command groups, built for inv.
+// Each keeps all its state in inv (#2070).
+func migratedGroups(inv *invocation) []*cobra.Command {
+	return []*cobra.Command{
+		newOrganizationsCmd(inv),
+		newProjectsCmd(inv),
+		newResourceManagerCmd(inv),
+		newComputeCmd(inv),
+		newLoggingCmd(inv),
+		newSchedulerCmd(inv),
+		newStorageCmd(inv),
+		newWorkflowsCmd(inv),
+		newTasksCmd(inv),
+		newLustreCmd(inv),
+		newCloudShellCmd(inv),
+		newEssentialContactsCmd(inv),
+		newServiceHealthCmd(inv),
+		newAnthosCmd(inv),
+		newComplianceManagerCmd(inv),
+		newWorkloadIdentityCmd(inv),
+		newPreviewCmd(inv),
+		newAlphaCmd(inv),
+		newGeminiCmd(inv),
+		newOrgPoliciesTopCmd(inv),
+		newMlCmd(inv),
+		newTopicCmd(inv),
+		newSurveyCmd(inv),
+		newBetaCmd(inv),
+		newVersionCmd(inv),
+		newCheatSheetCmd(inv),
+		newEdgeCloudCmd(inv),
+		newFeedbackCmd(inv),
+		newBackupDRCmd(inv),
+		newPubliccaCmd(inv),
+		newPolicyTroubleshootCmd(inv),
+		newInfoCmd(inv),
+		newComponentsCmd(inv),
+		newCloudLocationFinderCmd(inv),
+		newTelcoAutomationCmd(inv),
+		newWorkspaceAddOnsCmd(inv),
+		newBatchCmd(inv),
+		newIdsCmd(inv),
+		newTranscoderCmd(inv),
+		newBiglakeCmd(inv),
+		newBqCmd(inv),
+		newPolicyIntelligenceCmd(inv),
+		newModelArmorCmd(inv),
+		newConfigCmd(inv),
+		newSourceCmd(inv),
+		newFirebaseCmd(inv),
+		newVectorSearchCmd(inv),
+		newEmulatorsCmd(inv),
+		newDatastoreCmd(inv),
+		newAuditManagerCmd(inv),
+		newMemcacheCmd(inv),
+		newAppTopologyCmd(inv),
+		newAccessApprovalCmd(inv),
+		newWorkstationsCmd(inv),
+		newDesignCenterCmd(inv),
+		newParameterManagerCmd(inv),
+		newObservabilityCmd(inv),
+		newRecommenderCmd(inv),
+		newLookerCmd(inv),
+		newDeveloperConnectCmd(inv),
+		newDatalineageCmd(inv),
+		newApiGatewayCmd(inv),
+		newServiceDirectoryCmd(inv),
+		newDeploymentManagerCmd(inv),
+		newEndpointsCmd(inv),
+		newBeyondcorpCmd(inv),
+		newRecaptchaCmd(inv),
+		newDomainsCmd(inv),
+		newEdgeCacheCmd(inv),
+		newSourceManagerCmd(inv),
+		newPamCmd(inv),
+		newWorkbenchCmd(inv),
+		newIdentityCmd(inv),
+		newFunctionsCmd(inv),
+		newAgentRegistryCmd(inv),
+		newMigrationCmd(inv),
+		newFilestoreCmd(inv),
+		newDataflowCmd(inv),
+		newDatastreamCmd(inv),
+		newAgentIdentityCmd(inv),
+		newNetworkManagementCmd(inv),
+		newCertificateManagerCmd(inv),
+		newBmsCmd(inv),
+		newColabCmd(inv),
+		newInfraManagerCmd(inv),
+		newAssuredCmd(inv),
+		newServiceExtensionsCmd(inv),
+		newIapCmd(inv),
+		newApphubCmd(inv),
+		newServicesCmd(inv),
+		newTransferCmd(inv),
+		newMetastoreCmd(inv),
+		newBuildsCmd(inv),
+		newNotebooksCmd(inv),
+		newDataplexCmd(inv),
+		newNetworkConnectivityCmd(inv),
+		newAiPlatformCmd(inv),
+		newAlloydbCmd(inv),
+		newMemorystoreCmd(inv),
+		newApigeeCmd(inv),
+		newActiveDirectoryCmd(inv),
+		newManagedKafkaCmd(inv),
+		newHealthcareCmd(inv),
+		newRedisCmd(inv),
+		newAccessContextManagerCmd(inv),
+		newAssetCmd(inv),
+		newPrivatecaCmd(inv),
+		newVmwareCmd(inv),
+		newComposerCmd(inv),
+		newFirestoreCmd(inv),
+		newMonitoringCmd(inv),
+		newAppCmd(inv),
+		newContainerCmd(inv),
+		newDnsCmd(inv),
+		newSqlCmd(inv),
+		newEventarcCmd(inv),
+		newDataCatalogCmd(inv),
+		newDeployCmd(inv),
+		newDataprocCmd(inv),
+		newDatabaseMigrationCmd(inv),
+		newPubsubCmd(inv),
+		newNetworkSecurityCmd(inv),
+		newApihubCmd(inv),
+		newBigtableCmd(inv),
+		newSpannerCmd(inv),
+		newNetappCmd(inv),
+		newNetworkServicesCmd(inv),
+		newAiCmd(inv),
+		newKmsCmd(inv),
+		newIamCmd(inv),
+		newOracleDatabaseCmd(inv),
+		newRunCmd(inv),
+		newSccCmd(inv),
+		newArtifactsCmd(inv),
+		newSecretsCmd(inv),
+		newBillingCmd(inv),
+		newAuthCmd(inv),
+		newInitCmd(inv),
+	}
+}
+
+// InProcess describes one command run by RunInProcess.
+type InProcess struct {
+	// Args are the command-line arguments, without the program name.
+	Args []string
+	// Stdin, Stdout and Stderr are the command's standard streams. nil
+	// means no input and discarded output.
+	Stdin          io.Reader
+	Stdout, Stderr io.Writer
+	// Env supplies environment variables and the home directory.
+	Env config.Env
+	// Tokens supplies credentials. Sharing one between runs reuses tokens.
+	Tokens *auth.TokenProvider
+}
+
+// CommandError is the error from a command that RunInProcess ran and that
+// failed. Error returns the text the CLI would print; Unwrap gives the
+// underlying error (for example a *googleapi.Error).
+type CommandError struct {
+	// Command is the dotted path of the command, e.g. "gcloud.projects.list".
+	Command string
+	Err     error
+	text    string
+}
+
+func (e *CommandError) Error() string { return e.text }
+func (e *CommandError) Unwrap() error { return e.Err }
+
+// PanicError is the error from a command that panicked while RunInProcess
+// ran it. The panic is recovered so that it doesn't take down the caller
+// (#2084). Panics in goroutines a command starts are not recovered.
+type PanicError struct {
+	// Value is the value passed to panic.
+	Value any
+	// Stack is the stack trace of the panicking goroutine.
+	Stack []byte
+}
+
+func (e *PanicError) Error() string { return fmt.Sprintf("command panicked: %v", e.Value) }
+
+// RunInProcess runs one gcloud-go command in the calling process. It is safe
+// to call concurrently: each run has its own command tree, flags, streams
+// and environment. It never prompts and never offers to enable APIs.
+//
+// It returns ErrNotInProcess for commands that gcloud-go does not have,
+// a *CommandError if the command ran and failed, a *PanicError if the
+// command panicked, or another error if the arguments could not be parsed.
+func RunInProcess(ctx context.Context, p InProcess) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = &PanicError{Value: r, Stack: debug.Stack()}
+		}
+	}()
+	inv := &invocation{
+		stdin:  p.Stdin,
+		stdout: p.Stdout,
+		stderr: p.Stderr,
+		env:    p.Env,
+		tokens: p.Tokens,
+	}
+	if inv.stdin == nil {
+		inv.stdin = strings.NewReader("")
+	}
+	if inv.stdout == nil {
+		inv.stdout = io.Discard
+	}
+	if inv.stderr == nil {
+		inv.stderr = io.Discard
+	}
+
+	root := newRootCmd(inv)
+	args := p.Args
+	if args == nil {
+		args = []string{}
+	}
+	if found, rest, err := root.Find(args); found == root && (err != nil || hasPositional(root, rest)) {
+		// No command group matched the command name.
+		return ErrNotInProcess
+	}
+	root.SetArgs(args)
+	inv.ctx = ctx
+	executed, err := root.ExecuteContextC(ctx)
+	if err != nil {
+		return &CommandError{Command: commandDottedPath(executed), Err: err, text: inv.formatError(executed, err)}
+	}
+	return nil
+}
+
+// hasPositional reports whether args, parsed against c's local and
+// persistent flags, contain a positional argument.
+func hasPositional(c *cobra.Command, args []string) bool {
+	flags := pflag.NewFlagSet(c.Name(), pflag.ContinueOnError)
+	flags.AddFlagSet(c.LocalFlags())
+	flags.AddFlagSet(c.PersistentFlags())
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--":
+			return i+1 < len(args)
+		case strings.HasPrefix(a, "--"):
+			name := strings.TrimPrefix(a, "--")
+			if strings.Contains(name, "=") {
+				continue
+			}
+			if f := flags.Lookup(name); f != nil && f.NoOptDefVal == "" {
+				i++ // the flag's value
+			}
+		case strings.HasPrefix(a, "-") && len(a) == 2:
+			if f := flags.ShorthandLookup(a[1:]); f != nil && f.NoOptDefVal == "" {
+				i++
+			}
+		case strings.HasPrefix(a, "-") && len(a) > 2:
+			// -xVALUE or combined shorthands: no separate value.
+		default:
+			return true
+		}
+	}
+	return false
+}

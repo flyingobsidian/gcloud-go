@@ -435,7 +435,7 @@ func (c *Clients) IAP(ctx context.Context) (*iap.Service, error) {
 // NetworkServices returns a Network Services v1 client. The v1 client
 // covers the IAM-only Media CDN Edge Cache surfaces; the full EdgeCache CRUD
 // endpoints (keysets, origins, services) are reached via a raw REST client in
-// cmd/edge_cache.go because they are not generated in google.golang.org/api.
+// internal/cli/edge_cache.go because they are not generated in google.golang.org/api.
 func (c *Clients) NetworkServices(ctx context.Context) (*networkservices.Service, error) {
 	return newService(ctx, c, networkservices.NewService)
 }
@@ -524,7 +524,9 @@ const apigeeGlobalHost = "apigee.googleapis.com"
 // apigeeMREPRegions mirrors SUPPORTED_MREP_REGIONS in gcloud-python's
 // command_lib/apigee/request.py ("ch" added in 586.0.0 for the Switzerland
 // data residency zone).
-var apigeeMREPRegions = map[string]bool{"us": true, "eu": true, "in": true, "sa": true, "ch": true}
+func apigeeMREPRegions() map[string]bool {
+	return map[string]bool{"us": true, "eu": true, "in": true, "sa": true, "ch": true}
+}
 
 // ApigeeHostForLocation returns the Apigee API host for an organization
 // location: the global host for "" or "global", the multi-region REP host
@@ -534,7 +536,7 @@ func ApigeeHostForLocation(location string) string {
 	switch {
 	case location == "" || location == "global":
 		return apigeeGlobalHost
-	case apigeeMREPRegions[location]:
+	case apigeeMREPRegions()[location]:
 		return fmt.Sprintf("apigee.%s.rep.googleapis.com", location)
 	default:
 		return fmt.Sprintf("%s-apigee.googleapis.com", location)

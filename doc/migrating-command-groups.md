@@ -2,21 +2,26 @@
 
 gcloud-go is being made usable as a library ([#2070](https://github.com/flyingobsidian/gcloud-go/issues/2070)).
 A command group is *migrated* when it keeps all its state in an `invocation`
-(see `cmd/invocation.go`). Migrated groups can run in-process and
+(see `internal/cli/invocation.go`). Migrated groups can run in-process and
 concurrently through the public `gcloud` package.
 
 Every command group is now migrated, and the process-wide path they used
 before has been removed: there is no global command tree, no `flag*`
 globals and no process-wide forms of the helpers in the table below, so code
 that uses them no longer compiles. New command groups must be written in the
-migrated form from the start. This document records how the groups were
-migrated; the "Before" column names helpers that no longer exist.
+migrated form from the start; `make lint` rejects package-level variables
+and `init` functions (#2063). The command code lives in `internal/cli` (it
+was `cmd/`), so the only public package is `gcloud`. This document records
+how the groups were migrated; the "Before" column names helpers that no
+longer exist.
 
-`cmd/projects.go` is the reference example.
+`internal/cli/projects.go` is the reference example.
 
 ## Large groups: `tools/migrateglobals`
 
-For a large group, start with the rewriter rather than converting by hand:
+The rewriter was deleted once every group was migrated; it is in the git
+history before #2063. For a large group, it was run rather than converting
+by hand:
 
 ```sh
 cd tools/migrateglobals
@@ -43,7 +48,7 @@ It keeps the group's code where it is, but:
 - adds the group to `migratedGroups`;
 - prints references from outside the group to fix by hand.
 
-Things it does not handle, which `go vet ./cmd` or the tests show:
+Things it does not handle, which `go vet ./cmd` or the tests showed:
 
 - methods on other types, such as generic CRUD helpers (`ncCRUD[T]`): give
   the type a field holding the group state and route its globals through it;
@@ -97,11 +102,11 @@ and compute on was migrated this way.
 
    When a shared helper writes to the process streams or reads globals, give
    it an `io.Writer` or `*invocation` form.
-4. **Register the group** in `migratedGroups` (`cmd/inprocess.go`).
+4. **Register the group** in `migratedGroups` (`internal/cli/inprocess.go`).
 5. **Fix tests** that set flag globals or use the old command vars. Build
    commands with `newXxxCmd(inv)` using `newTestInvocation`, or run them end
    to end with `newFakeAPIInvocation` and `runInvocation` (see
-   `cmd/projects_inprocess_test.go`).
+   `internal/cli/projects_inprocess_test.go`).
 6. **Add a `-race` test** that runs several invocations of the group
    concurrently and checks that their outputs stay separate.
 7. **Check output parity.** Build `main` and the branch, and diff stdout,
@@ -111,7 +116,7 @@ and compute on was migrated this way.
 ## Done when
 
 ```sh
-grep -nE 'flag(Project|Zone|Account|Quiet|Format|Filter|Flatten|Verbosity|LogHTTP)\b|context\.Background|os\.(Stdout|Stderr|Stdin)|fmt\.Print|gcp\.[A-Za-z]+Service\(' cmd/<group>*.go
+grep -nE 'flag(Project|Zone|Account|Quiet|Format|Filter|Flatten|Verbosity|LogHTTP)\b|context\.Background|os\.(Stdout|Stderr|Stdin)|fmt\.Print|gcp\.[A-Za-z]+Service\(' internal/cli/<group>*.go
 ```
 
 prints nothing for the group's files.
