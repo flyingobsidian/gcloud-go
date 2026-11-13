@@ -7,7 +7,8 @@ import (
 )
 
 func firebaseTestSubgroup(name string) *cobra.Command {
-	for _, c := range firebaseTestCmd.Commands() {
+	grp := newFirebaseCmds(legacyTestInvocation())
+	for _, c := range grp.firebaseTestCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

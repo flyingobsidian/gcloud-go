@@ -68,6 +68,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newModelArmorCmd(inv),
 		newConfigCmd(inv),
 		newSourceCmd(inv),
+		newFirebaseCmd(inv),
 	}
 }
 

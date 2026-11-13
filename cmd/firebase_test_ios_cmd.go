@@ -4,125 +4,94 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	testing "google.golang.org/api/testing/v1"
 )
 
 // --- gcloud firebase test ios (#1234) ---
 
-var firebaseTestIosCmd = &cobra.Command{Use: "ios", Short: "iOS application testing"}
+func (s *firebaseCmds) initFirebaseTestIosCmd() {
+	s.firebaseTestIosModelsCmd.AddCommand(s.firebaseTestIosModelsListCmd)
+	s.firebaseTestIosVersionsCmd.AddCommand(s.firebaseTestIosVersionsListCmd)
+	s.firebaseTestIosLocalesCmd.AddCommand(s.firebaseTestIosLocalesListCmd)
+	s.firebaseTestIosRunCmd.Flags().StringVar(&s.flagFtiConfigFile, "config-file", "", "YAML/JSON file with a TestMatrix body (required)")
+	_ = s.firebaseTestIosRunCmd.MarkFlagRequired("config-file")
+	s.firebaseTestIosRunCmd.Flags().StringVar(&s.flagFtiProject, "project", "", "Owning project (falls back to the resolved project)")
+	s.firebaseTestIosRunCmd.Flags().StringVar(&s.flagFtiFormat, "format", "", "Output format")
+	s.firebaseTestIosModelsListCmd.Flags().StringVar(&s.flagFtiFormat, "format", "", "Output format")
+	s.firebaseTestIosVersionsListCmd.Flags().StringVar(&s.flagFtiFormat, "format", "", "Output format")
+	s.firebaseTestIosLocalesListCmd.Flags().StringVar(&s.flagFtiFormat, "format", "", "Output format")
 
-var (
-	flagFtiFormat     string
-	flagFtiConfigFile string
-	flagFtiProject    string
-)
-
-var (
-	firebaseTestIosModelsCmd     = &cobra.Command{Use: "models", Short: "Manage supported iOS device models"}
-	firebaseTestIosModelsListCmd = &cobra.Command{
-		Use: "list", Short: "List supported iOS device models",
-		Args: cobra.NoArgs, RunE: runFtiModelsList,
-	}
-	firebaseTestIosVersionsCmd     = &cobra.Command{Use: "versions", Short: "Manage supported iOS versions"}
-	firebaseTestIosVersionsListCmd = &cobra.Command{
-		Use: "list", Short: "List supported iOS versions",
-		Args: cobra.NoArgs, RunE: runFtiVersionsList,
-	}
-	firebaseTestIosLocalesCmd     = &cobra.Command{Use: "locales", Short: "Manage supported iOS locales"}
-	firebaseTestIosLocalesListCmd = &cobra.Command{
-		Use: "list", Short: "List supported iOS locales",
-		Args: cobra.NoArgs, RunE: runFtiLocalesList,
-	}
-	firebaseTestIosRunCmd = &cobra.Command{
-		Use: "run", Short: "Submit an iOS test matrix (loads TestMatrix body from --config-file)",
-		Args: cobra.NoArgs, RunE: runFtiRun,
-	}
-)
-
-func init() {
-	firebaseTestIosModelsCmd.AddCommand(firebaseTestIosModelsListCmd)
-	firebaseTestIosVersionsCmd.AddCommand(firebaseTestIosVersionsListCmd)
-	firebaseTestIosLocalesCmd.AddCommand(firebaseTestIosLocalesListCmd)
-	firebaseTestIosRunCmd.Flags().StringVar(&flagFtiConfigFile, "config-file", "", "YAML/JSON file with a TestMatrix body (required)")
-	_ = firebaseTestIosRunCmd.MarkFlagRequired("config-file")
-	firebaseTestIosRunCmd.Flags().StringVar(&flagFtiProject, "project", "", "Owning project (falls back to the resolved project)")
-	firebaseTestIosRunCmd.Flags().StringVar(&flagFtiFormat, "format", "", "Output format")
-	firebaseTestIosModelsListCmd.Flags().StringVar(&flagFtiFormat, "format", "", "Output format")
-	firebaseTestIosVersionsListCmd.Flags().StringVar(&flagFtiFormat, "format", "", "Output format")
-	firebaseTestIosLocalesListCmd.Flags().StringVar(&flagFtiFormat, "format", "", "Output format")
-
-	firebaseTestIosCmd.AddCommand(
-		firebaseTestIosModelsCmd, firebaseTestIosVersionsCmd,
-		firebaseTestIosLocalesCmd, firebaseTestIosRunCmd,
+	s.firebaseTestIosCmd.AddCommand(
+		s.firebaseTestIosModelsCmd, s.firebaseTestIosVersionsCmd,
+		s.firebaseTestIosLocalesCmd, s.firebaseTestIosRunCmd,
 	)
-	firebaseTestCmd.AddCommand(firebaseTestIosCmd)
+	s.firebaseTestCmd.AddCommand(s.firebaseTestIosCmd)
 }
 
-func ftiCatalog(ctx context.Context) (*testing.TestEnvironmentCatalog, error) {
-	project, err := resolveProject()
+func (s *firebaseCmds) ftiCatalog(ctx context.Context) (*testing.TestEnvironmentCatalog, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return nil, err
 	}
-	svc, err := gcp.TestingService(ctx, flagAccount)
+	svc, err := s.inv.clients().Testing(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return svc.TestEnvironmentCatalog.Get("IOS").ProjectId(project).Context(ctx).Do()
 }
 
-func runFtiModelsList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	cat, err := ftiCatalog(ctx)
+func (s *firebaseCmds) runFtiModelsList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	cat, err := s.ftiCatalog(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching iOS device catalog: %w", err)
 	}
 	if cat.IosDeviceCatalog == nil {
-		return emitFormatted([]any{}, flagFtiFormat)
+		return emitFormattedTo(s.inv.stdout, []any{}, s.flagFtiFormat)
 	}
-	return emitFormatted(cat.IosDeviceCatalog.Models, flagFtiFormat)
+	return emitFormattedTo(s.inv.stdout, cat.IosDeviceCatalog.Models, s.flagFtiFormat)
 }
 
-func runFtiVersionsList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	cat, err := ftiCatalog(ctx)
+func (s *firebaseCmds) runFtiVersionsList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	cat, err := s.ftiCatalog(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching iOS device catalog: %w", err)
 	}
 	if cat.IosDeviceCatalog == nil {
-		return emitFormatted([]any{}, flagFtiFormat)
+		return emitFormattedTo(s.inv.stdout, []any{}, s.flagFtiFormat)
 	}
-	return emitFormatted(cat.IosDeviceCatalog.Versions, flagFtiFormat)
+	return emitFormattedTo(s.inv.stdout, cat.IosDeviceCatalog.Versions, s.flagFtiFormat)
 }
 
-func runFtiLocalesList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	cat, err := ftiCatalog(ctx)
+func (s *firebaseCmds) runFtiLocalesList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	cat, err := s.ftiCatalog(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching iOS device catalog: %w", err)
 	}
 	if cat.IosDeviceCatalog == nil || cat.IosDeviceCatalog.RuntimeConfiguration == nil {
-		return emitFormatted([]any{}, flagFtiFormat)
+		return emitFormattedTo(s.inv.stdout, []any{}, s.flagFtiFormat)
 	}
-	return emitFormatted(cat.IosDeviceCatalog.RuntimeConfiguration.Locales, flagFtiFormat)
+	return emitFormattedTo(s.inv.stdout, cat.IosDeviceCatalog.RuntimeConfiguration.Locales, s.flagFtiFormat)
 }
 
-func runFtiRun(cmd *cobra.Command, args []string) error {
-	project := flagFtiProject
+func (s *firebaseCmds) runFtiRun(cmd *cobra.Command, args []string) error {
+	project := s.flagFtiProject
 	if project == "" {
-		p, err := resolveProject()
+		p, err := s.inv.project()
 		if err != nil {
 			return err
 		}
 		project = p
 	}
 	body := &testing.TestMatrix{}
-	if err := loadYAMLOrJSONInto(flagFtiConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagFtiConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.TestingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Testing(ctx)
 	if err != nil {
 		return err
 	}
@@ -130,6 +99,6 @@ func runFtiRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("submitting iOS test matrix: %w", err)
 	}
-	fmt.Printf("Submitted iOS test matrix [%s].\n", got.TestMatrixId)
-	return emitFormatted(got, flagFtiFormat)
+	fmt.Fprintf(s.inv.stdout, "Submitted iOS test matrix [%s].\n", got.TestMatrixId)
+	return emitFormattedTo(s.inv.stdout, got, s.flagFtiFormat)
 }
