@@ -1,53 +1,32 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	netapp "google.golang.org/api/netapp/v1"
 )
 
 // --- gcloud netapp locations (#1202) ---
 
-var netappLocCmd = &cobra.Command{Use: "locations", Short: "Get and list Cloud NetApp Files locations"}
+func (s *netappCmds) initNetappLocations() {
+	s.netappLocListCmd.Flags().StringVar(&s.flagNetAppLocFormat, "format", "", "Output format")
+	s.netappLocListCmd.Flags().StringVar(&s.flagNetAppLocFilter, "filter", "", "Server-side filter expression")
+	s.netappLocListCmd.Flags().Int64Var(&s.flagNetAppLocPageSize, "page-size", 0, "Maximum number of results per page")
+	s.netappLocDescribeCmd.Flags().StringVar(&s.flagNetAppLocFormat, "format", "", "Output format")
 
-var (
-	flagNetAppLocFormat   string
-	flagNetAppLocFilter   string
-	flagNetAppLocPageSize int64
-)
-
-var (
-	netappLocListCmd = &cobra.Command{
-		Use: "list", Short: "List NetApp locations",
-		Args: cobra.NoArgs, RunE: runNetAppLocList,
-	}
-	netappLocDescribeCmd = &cobra.Command{
-		Use: "describe LOCATION", Short: "Describe a NetApp location",
-		Args: cobra.ExactArgs(1), RunE: runNetAppLocDescribe,
-	}
-)
-
-func init() {
-	netappLocListCmd.Flags().StringVar(&flagNetAppLocFormat, "format", "", "Output format")
-	netappLocListCmd.Flags().StringVar(&flagNetAppLocFilter, "filter", "", "Server-side filter expression")
-	netappLocListCmd.Flags().Int64Var(&flagNetAppLocPageSize, "page-size", 0, "Maximum number of results per page")
-	netappLocDescribeCmd.Flags().StringVar(&flagNetAppLocFormat, "format", "", "Output format")
-
-	netappLocCmd.AddCommand(netappLocListCmd, netappLocDescribeCmd)
-	netappCmd.AddCommand(netappLocCmd)
+	s.netappLocCmd.AddCommand(s.netappLocListCmd, s.netappLocDescribeCmd)
+	s.netappCmd.AddCommand(s.netappLocCmd)
 }
 
-func runNetAppLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *netappCmds) runNetAppLocList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -55,11 +34,11 @@ func runNetAppLocList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
-		if flagNetAppLocFilter != "" {
-			call = call.Filter(flagNetAppLocFilter)
+		if s.flagNetAppLocFilter != "" {
+			call = call.Filter(s.flagNetAppLocFilter)
 		}
-		if flagNetAppLocPageSize > 0 {
-			call = call.PageSize(flagNetAppLocPageSize)
+		if s.flagNetAppLocPageSize > 0 {
+			call = call.PageSize(s.flagNetAppLocPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -74,23 +53,23 @@ func runNetAppLocList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagNetAppLocFormat != "" {
-		return emitFormatted(all, flagNetAppLocFormat)
+	if s.flagNetAppLocFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagNetAppLocFormat)
 	}
-	printTableHeading(len(all), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range all {
-		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
+		fmt.Fprintf(s.inv.stdout, "%-20s %s\n", l.LocationId, l.DisplayName)
 	}
 	return nil
 }
 
-func runNetAppLocDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *netappCmds) runNetAppLocDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -98,9 +77,9 @@ func runNetAppLocDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	if flagNetAppLocFormat != "" {
-		return emitFormatted(loc, flagNetAppLocFormat)
+	if s.flagNetAppLocFormat != "" {
+		return emitFormattedTo(s.inv.stdout, loc, s.flagNetAppLocFormat)
 	}
-	fmt.Printf("%s (%s)\n", path.Base(loc.Name), loc.DisplayName)
+	fmt.Fprintf(s.inv.stdout, "%s (%s)\n", path.Base(loc.Name), loc.DisplayName)
 	return nil
 }

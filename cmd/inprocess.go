@@ -148,6 +148,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newApihubCmd(inv),
 		newBigtableCmd(inv),
 		newSpannerCmd(inv),
+		newNetappCmd(inv),
 	}
 }
 

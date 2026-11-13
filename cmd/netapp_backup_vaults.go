@@ -1,176 +1,106 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	netapp "google.golang.org/api/netapp/v1"
 )
 
 // --- gcloud netapp backup-vaults (#1199) ---
 
-var netappBVCmd = &cobra.Command{Use: "backup-vaults", Short: "Manage NetApp backup vaults"}
-
-var (
-	flagNetAppBVLocation   string
-	flagNetAppBVConfigFile string
-	flagNetAppBVUpdateMask string
-	flagNetAppBVFormat     string
-	flagNetAppBVFilter     string
-	flagNetAppBVPageSize   int64
-)
-
-var (
-	netappBVCreateCmd = &cobra.Command{
-		Use: "create BACKUP_VAULT", Short: "Create a backup vault",
-		Args: cobra.ExactArgs(1), RunE: runNetAppBVCreate,
-	}
-	netappBVDeleteCmd = &cobra.Command{
-		Use: "delete BACKUP_VAULT", Short: "Delete a backup vault",
-		Args: cobra.ExactArgs(1), RunE: runNetAppBVDelete,
-	}
-	netappBVDescribeCmd = &cobra.Command{
-		Use: "describe BACKUP_VAULT", Short: "Describe a backup vault",
-		Args: cobra.ExactArgs(1), RunE: runNetAppBVDescribe,
-	}
-	netappBVListCmd = &cobra.Command{
-		Use: "list", Short: "List backup vaults",
-		Args: cobra.NoArgs, RunE: runNetAppBVList,
-	}
-	netappBVUpdateCmd = &cobra.Command{
-		Use: "update BACKUP_VAULT", Short: "Update a backup vault",
-		Args: cobra.ExactArgs(1), RunE: runNetAppBVUpdate,
-	}
-)
-
 // --- backups subgroup ---
 
-var netappBackupsCmd = &cobra.Command{Use: "backups", Short: "Manage NetApp backups within a backup vault"}
-
-var (
-	flagNetAppBackupVault      string
-	flagNetAppBackupConfigFile string
-	flagNetAppBackupUpdateMask string
-	flagNetAppBackupFilter     string
-	flagNetAppBackupPageSize   int64
-	flagNetAppBackupOntapSrc   string
-)
-
-var (
-	netappBackupCreateCmd = &cobra.Command{
-		Use: "create BACKUP", Short: "Create a backup",
-		Args: cobra.ExactArgs(1), RunE: runNetAppBackupCreate,
-	}
-	netappBackupDeleteCmd = &cobra.Command{
-		Use: "delete BACKUP", Short: "Delete a backup",
-		Args: cobra.ExactArgs(1), RunE: runNetAppBackupDelete,
-	}
-	netappBackupDescribeCmd = &cobra.Command{
-		Use: "describe BACKUP", Short: "Describe a backup",
-		Args: cobra.ExactArgs(1), RunE: runNetAppBackupDescribe,
-	}
-	netappBackupListCmd = &cobra.Command{
-		Use: "list", Short: "List backups within a backup vault",
-		Args: cobra.NoArgs, RunE: runNetAppBackupList,
-	}
-	netappBackupUpdateCmd = &cobra.Command{
-		Use: "update BACKUP", Short: "Update a backup",
-		Args: cobra.ExactArgs(1), RunE: runNetAppBackupUpdate,
-	}
-)
-
-func init() {
+func (s *netappCmds) initNetappBackupVaults() {
 	// backup-vaults command flags
-	bvAll := []*cobra.Command{netappBVCreateCmd, netappBVDeleteCmd, netappBVDescribeCmd, netappBVListCmd, netappBVUpdateCmd}
+	bvAll := []*cobra.Command{s.netappBVCreateCmd, s.netappBVDeleteCmd, s.netappBVDescribeCmd, s.netappBVListCmd, s.netappBVUpdateCmd}
 	for _, c := range bvAll {
-		c.Flags().StringVar(&flagNetAppBVLocation, "location", "", "Location for the backup vault (required)")
+		c.Flags().StringVar(&s.flagNetAppBVLocation, "location", "", "Location for the backup vault (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNetAppBVFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNetAppBVFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{netappBVCreateCmd, netappBVUpdateCmd} {
-		c.Flags().StringVar(&flagNetAppBVConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.netappBVCreateCmd, s.netappBVUpdateCmd} {
+		c.Flags().StringVar(&s.flagNetAppBVConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the BackupVault body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	netappBVUpdateCmd.Flags().StringVar(&flagNetAppBVUpdateMask, "update-mask", "",
+	s.netappBVUpdateCmd.Flags().StringVar(&s.flagNetAppBVUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	netappBVListCmd.Flags().StringVar(&flagNetAppBVFilter, "filter", "", "Server-side filter expression")
-	netappBVListCmd.Flags().Int64Var(&flagNetAppBVPageSize, "page-size", 0, "Maximum number of results per page")
+	s.netappBVListCmd.Flags().StringVar(&s.flagNetAppBVFilter, "filter", "", "Server-side filter expression")
+	s.netappBVListCmd.Flags().Int64Var(&s.flagNetAppBVPageSize, "page-size", 0, "Maximum number of results per page")
 
-	netappBVCmd.AddCommand(bvAll...)
+	s.netappBVCmd.AddCommand(bvAll...)
 
 	// backups subgroup
-	bkAll := []*cobra.Command{netappBackupCreateCmd, netappBackupDeleteCmd, netappBackupDescribeCmd, netappBackupListCmd, netappBackupUpdateCmd}
+	bkAll := []*cobra.Command{s.netappBackupCreateCmd, s.netappBackupDeleteCmd, s.netappBackupDescribeCmd, s.netappBackupListCmd, s.netappBackupUpdateCmd}
 	for _, c := range bkAll {
-		c.Flags().StringVar(&flagNetAppBVLocation, "location", "", "Location for the backup (required)")
+		c.Flags().StringVar(&s.flagNetAppBVLocation, "location", "", "Location for the backup (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNetAppBackupVault, "backup-vault", "", "Backup vault that owns the backup (required)")
+		c.Flags().StringVar(&s.flagNetAppBackupVault, "backup-vault", "", "Backup vault that owns the backup (required)")
 		_ = c.MarkFlagRequired("backup-vault")
-		c.Flags().StringVar(&flagNetAppBVFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNetAppBVFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{netappBackupCreateCmd, netappBackupUpdateCmd} {
-		c.Flags().StringVar(&flagNetAppBackupConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.netappBackupCreateCmd, s.netappBackupUpdateCmd} {
+		c.Flags().StringVar(&s.flagNetAppBackupConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Backup body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	netappBackupUpdateCmd.Flags().StringVar(&flagNetAppBackupUpdateMask, "update-mask", "",
+	s.netappBackupUpdateCmd.Flags().StringVar(&s.flagNetAppBackupUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	netappBackupListCmd.Flags().StringVar(&flagNetAppBackupFilter, "filter", "", "Server-side filter expression")
-	netappBackupListCmd.Flags().Int64Var(&flagNetAppBackupPageSize, "page-size", 0, "Maximum number of results per page")
-	netappBackupCreateCmd.Flags().StringVar(&flagNetAppBackupOntapSrc, "ontap-source", "",
+	s.netappBackupListCmd.Flags().StringVar(&s.flagNetAppBackupFilter, "filter", "", "Server-side filter expression")
+	s.netappBackupListCmd.Flags().Int64Var(&s.flagNetAppBackupPageSize, "page-size", 0, "Maximum number of results per page")
+	s.netappBackupCreateCmd.Flags().StringVar(&s.flagNetAppBackupOntapSrc, "ontap-source", "",
 		"ONTAP source for the backup, as a comma-separated key=value list. "+
 			"Keys: storage-pool (required), volume-uuid (required), snapshot-uuid (optional).")
 
-	netappBackupsCmd.AddCommand(bkAll...)
-	netappBVCmd.AddCommand(netappBackupsCmd)
-	netappCmd.AddCommand(netappBVCmd)
+	s.netappBackupsCmd.AddCommand(bkAll...)
+	s.netappBVCmd.AddCommand(s.netappBackupsCmd)
+	s.netappCmd.AddCommand(s.netappBVCmd)
 }
 
-func netappBVParent() (string, error) {
-	project, err := resolveProject()
+func (s *netappCmds) netappBVParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return netappLocationParent(project, flagNetAppBVLocation), nil
+	return netappLocationParent(project, s.flagNetAppBVLocation), nil
 }
 
-func netappBVName(id string) (string, error) {
-	parent, err := netappBVParent()
+func (s *netappCmds) netappBVName(id string) (string, error) {
+	parent, err := s.netappBVParent()
 	if err != nil {
 		return "", err
 	}
 	return netappChild("backupVaults", id, parent), nil
 }
 
-func netappBackupParent() (string, error) {
-	bv, err := netappBVName(flagNetAppBackupVault)
+func (s *netappCmds) netappBackupParent() (string, error) {
+	bv, err := s.netappBVName(s.flagNetAppBackupVault)
 	if err != nil {
 		return "", err
 	}
 	return bv, nil
 }
 
-func netappBackupName(id string) (string, error) {
-	parent, err := netappBackupParent()
+func (s *netappCmds) netappBackupName(id string) (string, error) {
+	parent, err := s.netappBackupParent()
 	if err != nil {
 		return "", err
 	}
 	return netappChild("backups", id, parent), nil
 }
 
-func runNetAppBVCreate(cmd *cobra.Command, args []string) error {
-	parent, err := netappBVParent()
+func (s *netappCmds) runNetAppBVCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappBVParent()
 	if err != nil {
 		return err
 	}
 	body := &netapp.BackupVault{}
-	if err := loadYAMLOrJSONInto(flagNetAppBVConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppBVConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -178,17 +108,17 @@ func runNetAppBVCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating backup vault: %w", err)
 	}
-	fmt.Printf("Create request issued for backup vault [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppBVFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for backup vault [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppBVFormat)
 }
 
-func runNetAppBVDelete(cmd *cobra.Command, args []string) error {
-	name, err := netappBVName(args[0])
+func (s *netappCmds) runNetAppBVDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.netappBVName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -196,17 +126,17 @@ func runNetAppBVDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting backup vault: %w", err)
 	}
-	fmt.Printf("Delete request issued for backup vault [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppBVFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for backup vault [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppBVFormat)
 }
 
-func runNetAppBVDescribe(cmd *cobra.Command, args []string) error {
-	name, err := netappBVName(args[0])
+func (s *netappCmds) runNetAppBVDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.netappBVName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -214,16 +144,16 @@ func runNetAppBVDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing backup vault: %w", err)
 	}
-	return emitFormatted(got, flagNetAppBVFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNetAppBVFormat)
 }
 
-func runNetAppBVList(cmd *cobra.Command, args []string) error {
-	parent, err := netappBVParent()
+func (s *netappCmds) runNetAppBVList(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappBVParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -231,11 +161,11 @@ func runNetAppBVList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.BackupVaults.List(parent).Context(ctx)
-		if flagNetAppBVFilter != "" {
-			call = call.Filter(flagNetAppBVFilter)
+		if s.flagNetAppBVFilter != "" {
+			call = call.Filter(s.flagNetAppBVFilter)
 		}
-		if flagNetAppBVPageSize > 0 {
-			call = call.PageSize(flagNetAppBVPageSize)
+		if s.flagNetAppBVPageSize > 0 {
+			call = call.PageSize(s.flagNetAppBVPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -250,24 +180,24 @@ func runNetAppBVList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNetAppBVFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNetAppBVFormat)
 }
 
-func runNetAppBVUpdate(cmd *cobra.Command, args []string) error {
-	name, err := netappBVName(args[0])
+func (s *netappCmds) runNetAppBVUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.netappBVName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &netapp.BackupVault{}
-	if err := loadYAMLOrJSONInto(flagNetAppBVConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppBVConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagNetAppBVUpdateMask
+	mask := s.flagNetAppBVUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -279,28 +209,28 @@ func runNetAppBVUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating backup vault: %w", err)
 	}
-	fmt.Printf("Update request issued for backup vault [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppBVFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for backup vault [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppBVFormat)
 }
 
-func runNetAppBackupCreate(cmd *cobra.Command, args []string) error {
-	parent, err := netappBackupParent()
+func (s *netappCmds) runNetAppBackupCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappBackupParent()
 	if err != nil {
 		return err
 	}
 	body := &netapp.Backup{}
-	if err := loadYAMLOrJSONInto(flagNetAppBackupConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppBackupConfigFile, body); err != nil {
 		return err
 	}
-	if flagNetAppBackupOntapSrc != "" {
-		os, perr := parseNetAppOntapSource(flagNetAppBackupOntapSrc)
+	if s.flagNetAppBackupOntapSrc != "" {
+		os, perr := parseNetAppOntapSource(s.flagNetAppBackupOntapSrc)
 		if perr != nil {
 			return perr
 		}
 		body.OntapSource = os
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -308,8 +238,8 @@ func runNetAppBackupCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating backup: %w", err)
 	}
-	fmt.Printf("Create request issued for backup [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppBVFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for backup [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppBVFormat)
 }
 
 func parseNetAppOntapSource(spec string) (*netapp.OntapSource, error) {
@@ -325,13 +255,13 @@ func parseNetAppOntapSource(spec string) (*netapp.OntapSource, error) {
 	return os, nil
 }
 
-func runNetAppBackupDelete(cmd *cobra.Command, args []string) error {
-	name, err := netappBackupName(args[0])
+func (s *netappCmds) runNetAppBackupDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.netappBackupName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -339,17 +269,17 @@ func runNetAppBackupDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting backup: %w", err)
 	}
-	fmt.Printf("Delete request issued for backup [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppBVFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for backup [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppBVFormat)
 }
 
-func runNetAppBackupDescribe(cmd *cobra.Command, args []string) error {
-	name, err := netappBackupName(args[0])
+func (s *netappCmds) runNetAppBackupDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.netappBackupName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -357,16 +287,16 @@ func runNetAppBackupDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing backup: %w", err)
 	}
-	return emitFormatted(got, flagNetAppBVFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNetAppBVFormat)
 }
 
-func runNetAppBackupList(cmd *cobra.Command, args []string) error {
-	parent, err := netappBackupParent()
+func (s *netappCmds) runNetAppBackupList(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappBackupParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -374,11 +304,11 @@ func runNetAppBackupList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.BackupVaults.Backups.List(parent).Context(ctx)
-		if flagNetAppBackupFilter != "" {
-			call = call.Filter(flagNetAppBackupFilter)
+		if s.flagNetAppBackupFilter != "" {
+			call = call.Filter(s.flagNetAppBackupFilter)
 		}
-		if flagNetAppBackupPageSize > 0 {
-			call = call.PageSize(flagNetAppBackupPageSize)
+		if s.flagNetAppBackupPageSize > 0 {
+			call = call.PageSize(s.flagNetAppBackupPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -393,24 +323,24 @@ func runNetAppBackupList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNetAppBVFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNetAppBVFormat)
 }
 
-func runNetAppBackupUpdate(cmd *cobra.Command, args []string) error {
-	name, err := netappBackupName(args[0])
+func (s *netappCmds) runNetAppBackupUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.netappBackupName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &netapp.Backup{}
-	if err := loadYAMLOrJSONInto(flagNetAppBackupConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppBackupConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagNetAppBackupUpdateMask
+	mask := s.flagNetAppBackupUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -422,6 +352,6 @@ func runNetAppBackupUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating backup: %w", err)
 	}
-	fmt.Printf("Update request issued for backup [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppBVFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for backup [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppBVFormat)
 }

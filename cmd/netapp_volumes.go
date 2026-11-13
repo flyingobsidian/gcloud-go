@@ -1,259 +1,127 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	netapp "google.golang.org/api/netapp/v1"
 )
 
 // --- gcloud netapp volumes (#1205) ---
 
-var netappVolCmd = &cobra.Command{Use: "volumes", Short: "Manage NetApp volumes"}
-
-var (
-	flagNetAppVolLocation   string
-	flagNetAppVolConfigFile string
-	flagNetAppVolUpdateMask string
-	flagNetAppVolFormat     string
-	flagNetAppVolFilter     string
-	flagNetAppVolPageSize   int64
-	flagNetAppVolForce      bool
-	flagNetAppVolSnapshotID string
-)
-
-var (
-	netappVolCreateCmd = &cobra.Command{
-		Use: "create VOLUME", Short: "Create a volume",
-		Args: cobra.ExactArgs(1), RunE: runNetAppVolCreate,
-	}
-	netappVolDeleteCmd = &cobra.Command{
-		Use: "delete VOLUME", Short: "Delete a volume",
-		Args: cobra.ExactArgs(1), RunE: runNetAppVolDelete,
-	}
-	netappVolDescribeCmd = &cobra.Command{
-		Use: "describe VOLUME", Short: "Describe a volume",
-		Args: cobra.ExactArgs(1), RunE: runNetAppVolDescribe,
-	}
-	netappVolListCmd = &cobra.Command{
-		Use: "list", Short: "List volumes",
-		Args: cobra.NoArgs, RunE: runNetAppVolList,
-	}
-	netappVolUpdateCmd = &cobra.Command{
-		Use: "update VOLUME", Short: "Update a volume",
-		Args: cobra.ExactArgs(1), RunE: runNetAppVolUpdate,
-	}
-	netappVolRevertCmd = &cobra.Command{
-		Use: "revert VOLUME", Short: "Revert a volume to a snapshot",
-		Args: cobra.ExactArgs(1), RunE: runNetAppVolRevert,
-	}
-	netappVolStartSplitCmd = &cobra.Command{
-		Use: "start-split VOLUME", Short: "Start splitting a clone volume from its source volume",
-		Args: cobra.ExactArgs(1), RunE: runNetAppVolStartSplit,
-	}
-	netappVolGetSplitStatusCmd = &cobra.Command{
-		Use: "get-split-status VOLUME", Short: "Retrieve the split status of a clone volume",
-		Args: cobra.ExactArgs(1), RunE: runNetAppVolGetSplitStatus,
-	}
-)
-
 // --- replications subgroup ---
-
-var netappReplCmd = &cobra.Command{Use: "replications", Short: "Manage NetApp volume replications"}
-
-var (
-	flagNetAppReplVolume     string
-	flagNetAppReplConfigFile string
-	flagNetAppReplUpdateMask string
-	flagNetAppReplFilter     string
-	flagNetAppReplPageSize   int64
-)
-
-var (
-	netappReplCreateCmd = &cobra.Command{
-		Use: "create REPLICATION", Short: "Create a replication",
-		Args: cobra.ExactArgs(1), RunE: runNetAppReplCreate,
-	}
-	netappReplDeleteCmd = &cobra.Command{
-		Use: "delete REPLICATION", Short: "Delete a replication",
-		Args: cobra.ExactArgs(1), RunE: runNetAppReplDelete,
-	}
-	netappReplDescribeCmd = &cobra.Command{
-		Use: "describe REPLICATION", Short: "Describe a replication",
-		Args: cobra.ExactArgs(1), RunE: runNetAppReplDescribe,
-	}
-	netappReplListCmd = &cobra.Command{
-		Use: "list", Short: "List replications for a volume",
-		Args: cobra.NoArgs, RunE: runNetAppReplList,
-	}
-	netappReplUpdateCmd = &cobra.Command{
-		Use: "update REPLICATION", Short: "Update a replication",
-		Args: cobra.ExactArgs(1), RunE: runNetAppReplUpdate,
-	}
-	netappReplResumeCmd = &cobra.Command{
-		Use: "resume REPLICATION", Short: "Resume a replication",
-		Args: cobra.ExactArgs(1), RunE: runNetAppReplResume,
-	}
-	netappReplReverseCmd = &cobra.Command{
-		Use: "reverse-direction REPLICATION", Short: "Reverse a replication's direction",
-		Args: cobra.ExactArgs(1), RunE: runNetAppReplReverse,
-	}
-	netappReplStopCmd = &cobra.Command{
-		Use: "stop REPLICATION", Short: "Stop a replication",
-		Args: cobra.ExactArgs(1), RunE: runNetAppReplStop,
-	}
-	netappReplSyncCmd = &cobra.Command{
-		Use: "sync REPLICATION", Short: "Sync a replication",
-		Args: cobra.ExactArgs(1), RunE: runNetAppReplSync,
-	}
-)
 
 // --- snapshots subgroup ---
 
-var netappSnapCmd = &cobra.Command{Use: "snapshots", Short: "Manage NetApp volume snapshots"}
-
-var (
-	flagNetAppSnapVolume     string
-	flagNetAppSnapConfigFile string
-	flagNetAppSnapUpdateMask string
-	flagNetAppSnapFilter     string
-	flagNetAppSnapPageSize   int64
-)
-
-var (
-	netappSnapCreateCmd = &cobra.Command{
-		Use: "create SNAPSHOT", Short: "Create a snapshot",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSnapCreate,
-	}
-	netappSnapDeleteCmd = &cobra.Command{
-		Use: "delete SNAPSHOT", Short: "Delete a snapshot",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSnapDelete,
-	}
-	netappSnapDescribeCmd = &cobra.Command{
-		Use: "describe SNAPSHOT", Short: "Describe a snapshot",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSnapDescribe,
-	}
-	netappSnapListCmd = &cobra.Command{
-		Use: "list", Short: "List snapshots for a volume",
-		Args: cobra.NoArgs, RunE: runNetAppSnapList,
-	}
-	netappSnapUpdateCmd = &cobra.Command{
-		Use: "update SNAPSHOT", Short: "Update a snapshot",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSnapUpdate,
-	}
-)
-
-func init() {
+func (s *netappCmds) initNetappVolumes() {
 	// volumes top-level flags
 	volAll := []*cobra.Command{
-		netappVolCreateCmd, netappVolDeleteCmd, netappVolDescribeCmd,
-		netappVolListCmd, netappVolUpdateCmd, netappVolRevertCmd,
-		netappVolStartSplitCmd, netappVolGetSplitStatusCmd,
+		s.netappVolCreateCmd, s.netappVolDeleteCmd, s.netappVolDescribeCmd,
+		s.netappVolListCmd, s.netappVolUpdateCmd, s.netappVolRevertCmd,
+		s.netappVolStartSplitCmd, s.netappVolGetSplitStatusCmd,
 	}
 	for _, c := range volAll {
-		c.Flags().StringVar(&flagNetAppVolLocation, "location", "", "Location for the volume (required)")
+		c.Flags().StringVar(&s.flagNetAppVolLocation, "location", "", "Location for the volume (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNetAppVolFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNetAppVolFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{netappVolCreateCmd, netappVolUpdateCmd} {
-		c.Flags().StringVar(&flagNetAppVolConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.netappVolCreateCmd, s.netappVolUpdateCmd} {
+		c.Flags().StringVar(&s.flagNetAppVolConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Volume body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	netappVolUpdateCmd.Flags().StringVar(&flagNetAppVolUpdateMask, "update-mask", "",
+	s.netappVolUpdateCmd.Flags().StringVar(&s.flagNetAppVolUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	netappVolListCmd.Flags().StringVar(&flagNetAppVolFilter, "filter", "", "Server-side filter expression")
-	netappVolListCmd.Flags().Int64Var(&flagNetAppVolPageSize, "page-size", 0, "Maximum number of results per page")
-	netappVolDeleteCmd.Flags().BoolVar(&flagNetAppVolForce, "force", false, "Force delete non-empty volume")
-	netappVolRevertCmd.Flags().StringVar(&flagNetAppVolSnapshotID, "snapshot", "",
+	s.netappVolListCmd.Flags().StringVar(&s.flagNetAppVolFilter, "filter", "", "Server-side filter expression")
+	s.netappVolListCmd.Flags().Int64Var(&s.flagNetAppVolPageSize, "page-size", 0, "Maximum number of results per page")
+	s.netappVolDeleteCmd.Flags().BoolVar(&s.flagNetAppVolForce, "force", false, "Force delete non-empty volume")
+	s.netappVolRevertCmd.Flags().StringVar(&s.flagNetAppVolSnapshotID, "snapshot", "",
 		"Snapshot resource ID to revert to (required)")
-	_ = netappVolRevertCmd.MarkFlagRequired("snapshot")
+	_ = s.netappVolRevertCmd.MarkFlagRequired("snapshot")
 
-	netappVolCmd.AddCommand(volAll...)
+	s.netappVolCmd.AddCommand(volAll...)
 
 	// replications
 	replAll := []*cobra.Command{
-		netappReplCreateCmd, netappReplDeleteCmd, netappReplDescribeCmd,
-		netappReplListCmd, netappReplUpdateCmd, netappReplResumeCmd,
-		netappReplReverseCmd, netappReplStopCmd, netappReplSyncCmd,
+		s.netappReplCreateCmd, s.netappReplDeleteCmd, s.netappReplDescribeCmd,
+		s.netappReplListCmd, s.netappReplUpdateCmd, s.netappReplResumeCmd,
+		s.netappReplReverseCmd, s.netappReplStopCmd, s.netappReplSyncCmd,
 	}
 	for _, c := range replAll {
-		c.Flags().StringVar(&flagNetAppVolLocation, "location", "", "Location for the replication (required)")
+		c.Flags().StringVar(&s.flagNetAppVolLocation, "location", "", "Location for the replication (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNetAppReplVolume, "volume", "", "Volume that owns the replication (required)")
+		c.Flags().StringVar(&s.flagNetAppReplVolume, "volume", "", "Volume that owns the replication (required)")
 		_ = c.MarkFlagRequired("volume")
-		c.Flags().StringVar(&flagNetAppVolFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNetAppVolFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{netappReplCreateCmd, netappReplUpdateCmd} {
-		c.Flags().StringVar(&flagNetAppReplConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.netappReplCreateCmd, s.netappReplUpdateCmd} {
+		c.Flags().StringVar(&s.flagNetAppReplConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Replication body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	netappReplUpdateCmd.Flags().StringVar(&flagNetAppReplUpdateMask, "update-mask", "",
+	s.netappReplUpdateCmd.Flags().StringVar(&s.flagNetAppReplUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	netappReplListCmd.Flags().StringVar(&flagNetAppReplFilter, "filter", "", "Server-side filter expression")
-	netappReplListCmd.Flags().Int64Var(&flagNetAppReplPageSize, "page-size", 0, "Maximum number of results per page")
+	s.netappReplListCmd.Flags().StringVar(&s.flagNetAppReplFilter, "filter", "", "Server-side filter expression")
+	s.netappReplListCmd.Flags().Int64Var(&s.flagNetAppReplPageSize, "page-size", 0, "Maximum number of results per page")
 
-	netappReplCmd.AddCommand(replAll...)
-	netappVolCmd.AddCommand(netappReplCmd)
+	s.netappReplCmd.AddCommand(replAll...)
+	s.netappVolCmd.AddCommand(s.netappReplCmd)
 
 	// snapshots
 	snapAll := []*cobra.Command{
-		netappSnapCreateCmd, netappSnapDeleteCmd, netappSnapDescribeCmd,
-		netappSnapListCmd, netappSnapUpdateCmd,
+		s.netappSnapCreateCmd, s.netappSnapDeleteCmd, s.netappSnapDescribeCmd,
+		s.netappSnapListCmd, s.netappSnapUpdateCmd,
 	}
 	for _, c := range snapAll {
-		c.Flags().StringVar(&flagNetAppVolLocation, "location", "", "Location for the snapshot (required)")
+		c.Flags().StringVar(&s.flagNetAppVolLocation, "location", "", "Location for the snapshot (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNetAppSnapVolume, "volume", "", "Volume that owns the snapshot (required)")
+		c.Flags().StringVar(&s.flagNetAppSnapVolume, "volume", "", "Volume that owns the snapshot (required)")
 		_ = c.MarkFlagRequired("volume")
-		c.Flags().StringVar(&flagNetAppVolFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNetAppVolFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{netappSnapCreateCmd, netappSnapUpdateCmd} {
-		c.Flags().StringVar(&flagNetAppSnapConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.netappSnapCreateCmd, s.netappSnapUpdateCmd} {
+		c.Flags().StringVar(&s.flagNetAppSnapConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Snapshot body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	netappSnapUpdateCmd.Flags().StringVar(&flagNetAppSnapUpdateMask, "update-mask", "",
+	s.netappSnapUpdateCmd.Flags().StringVar(&s.flagNetAppSnapUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	netappSnapListCmd.Flags().StringVar(&flagNetAppSnapFilter, "filter", "", "Server-side filter expression")
-	netappSnapListCmd.Flags().Int64Var(&flagNetAppSnapPageSize, "page-size", 0, "Maximum number of results per page")
+	s.netappSnapListCmd.Flags().StringVar(&s.flagNetAppSnapFilter, "filter", "", "Server-side filter expression")
+	s.netappSnapListCmd.Flags().Int64Var(&s.flagNetAppSnapPageSize, "page-size", 0, "Maximum number of results per page")
 
-	netappSnapCmd.AddCommand(snapAll...)
-	netappVolCmd.AddCommand(netappSnapCmd)
+	s.netappSnapCmd.AddCommand(snapAll...)
+	s.netappVolCmd.AddCommand(s.netappSnapCmd)
 
-	netappCmd.AddCommand(netappVolCmd)
+	s.netappCmd.AddCommand(s.netappVolCmd)
 }
 
-func netappVolParent() (string, error) {
-	project, err := resolveProject()
+func (s *netappCmds) netappVolParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return netappLocationParent(project, flagNetAppVolLocation), nil
+	return netappLocationParent(project, s.flagNetAppVolLocation), nil
 }
 
-func netappVolName(id string) (string, error) {
-	parent, err := netappVolParent()
+func (s *netappCmds) netappVolName(id string) (string, error) {
+	parent, err := s.netappVolParent()
 	if err != nil {
 		return "", err
 	}
 	return netappChild("volumes", id, parent), nil
 }
 
-func runNetAppVolCreate(cmd *cobra.Command, args []string) error {
-	parent, err := netappVolParent()
+func (s *netappCmds) runNetAppVolCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappVolParent()
 	if err != nil {
 		return err
 	}
 	body := &netapp.Volume{}
-	if err := loadYAMLOrJSONInto(flagNetAppVolConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppVolConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -261,39 +129,39 @@ func runNetAppVolCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating volume: %w", err)
 	}
-	fmt.Printf("Create request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppVolDelete(cmd *cobra.Command, args []string) error {
-	name, err := netappVolName(args[0])
+func (s *netappCmds) runNetAppVolDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.netappVolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Projects.Locations.Volumes.Delete(name).Context(ctx)
-	if flagNetAppVolForce {
+	if s.flagNetAppVolForce {
 		call = call.Force(true)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("deleting volume: %w", err)
 	}
-	fmt.Printf("Delete request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppVolDescribe(cmd *cobra.Command, args []string) error {
-	name, err := netappVolName(args[0])
+func (s *netappCmds) runNetAppVolDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.netappVolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -301,16 +169,16 @@ func runNetAppVolDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing volume: %w", err)
 	}
-	return emitFormatted(got, flagNetAppVolFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNetAppVolFormat)
 }
 
-func runNetAppVolList(cmd *cobra.Command, args []string) error {
-	parent, err := netappVolParent()
+func (s *netappCmds) runNetAppVolList(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappVolParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -318,11 +186,11 @@ func runNetAppVolList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Volumes.List(parent).Context(ctx)
-		if flagNetAppVolFilter != "" {
-			call = call.Filter(flagNetAppVolFilter)
+		if s.flagNetAppVolFilter != "" {
+			call = call.Filter(s.flagNetAppVolFilter)
 		}
-		if flagNetAppVolPageSize > 0 {
-			call = call.PageSize(flagNetAppVolPageSize)
+		if s.flagNetAppVolPageSize > 0 {
+			call = call.PageSize(s.flagNetAppVolPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -337,24 +205,24 @@ func runNetAppVolList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNetAppVolFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNetAppVolFormat)
 }
 
-func runNetAppVolUpdate(cmd *cobra.Command, args []string) error {
-	name, err := netappVolName(args[0])
+func (s *netappCmds) runNetAppVolUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.netappVolName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &netapp.Volume{}
-	if err := loadYAMLOrJSONInto(flagNetAppVolConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppVolConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagNetAppVolUpdateMask
+	mask := s.flagNetAppVolUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -366,17 +234,17 @@ func runNetAppVolUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating volume: %w", err)
 	}
-	fmt.Printf("Update request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppVolStartSplit(cmd *cobra.Command, args []string) error {
-	name, err := netappVolName(args[0])
+func (s *netappCmds) runNetAppVolStartSplit(cmd *cobra.Command, args []string) error {
+	name, err := s.netappVolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -384,17 +252,17 @@ func runNetAppVolStartSplit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("starting volume split: %w", err)
 	}
-	fmt.Printf("Start-split request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Start-split request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppVolGetSplitStatus(cmd *cobra.Command, args []string) error {
-	name, err := netappVolName(args[0])
+func (s *netappCmds) runNetAppVolGetSplitStatus(cmd *cobra.Command, args []string) error {
+	name, err := s.netappVolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -402,56 +270,56 @@ func runNetAppVolGetSplitStatus(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting split status: %w", err)
 	}
-	return emitFormatted(got, flagNetAppVolFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNetAppVolFormat)
 }
 
-func runNetAppVolRevert(cmd *cobra.Command, args []string) error {
-	name, err := netappVolName(args[0])
+func (s *netappCmds) runNetAppVolRevert(cmd *cobra.Command, args []string) error {
+	name, err := s.netappVolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Volumes.Revert(name, &netapp.RevertVolumeRequest{
-		SnapshotId: flagNetAppVolSnapshotID,
+		SnapshotId: s.flagNetAppVolSnapshotID,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("reverting volume: %w", err)
 	}
-	fmt.Printf("Revert request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Revert request issued for volume [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func netappReplParent() (string, error) {
-	vol, err := netappVolName(flagNetAppReplVolume)
+func (s *netappCmds) netappReplParent() (string, error) {
+	vol, err := s.netappVolName(s.flagNetAppReplVolume)
 	if err != nil {
 		return "", err
 	}
 	return vol, nil
 }
 
-func netappReplName(id string) (string, error) {
-	parent, err := netappReplParent()
+func (s *netappCmds) netappReplName(id string) (string, error) {
+	parent, err := s.netappReplParent()
 	if err != nil {
 		return "", err
 	}
 	return netappChild("replications", id, parent), nil
 }
 
-func runNetAppReplCreate(cmd *cobra.Command, args []string) error {
-	parent, err := netappReplParent()
+func (s *netappCmds) runNetAppReplCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappReplParent()
 	if err != nil {
 		return err
 	}
 	body := &netapp.Replication{}
-	if err := loadYAMLOrJSONInto(flagNetAppReplConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppReplConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -459,17 +327,17 @@ func runNetAppReplCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating replication: %w", err)
 	}
-	fmt.Printf("Create request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppReplDelete(cmd *cobra.Command, args []string) error {
-	name, err := netappReplName(args[0])
+func (s *netappCmds) runNetAppReplDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.netappReplName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -477,17 +345,17 @@ func runNetAppReplDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting replication: %w", err)
 	}
-	fmt.Printf("Delete request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppReplDescribe(cmd *cobra.Command, args []string) error {
-	name, err := netappReplName(args[0])
+func (s *netappCmds) runNetAppReplDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.netappReplName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -495,16 +363,16 @@ func runNetAppReplDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing replication: %w", err)
 	}
-	return emitFormatted(got, flagNetAppVolFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNetAppVolFormat)
 }
 
-func runNetAppReplList(cmd *cobra.Command, args []string) error {
-	parent, err := netappReplParent()
+func (s *netappCmds) runNetAppReplList(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappReplParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -512,11 +380,11 @@ func runNetAppReplList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Volumes.Replications.List(parent).Context(ctx)
-		if flagNetAppReplFilter != "" {
-			call = call.Filter(flagNetAppReplFilter)
+		if s.flagNetAppReplFilter != "" {
+			call = call.Filter(s.flagNetAppReplFilter)
 		}
-		if flagNetAppReplPageSize > 0 {
-			call = call.PageSize(flagNetAppReplPageSize)
+		if s.flagNetAppReplPageSize > 0 {
+			call = call.PageSize(s.flagNetAppReplPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -531,24 +399,24 @@ func runNetAppReplList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNetAppVolFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNetAppVolFormat)
 }
 
-func runNetAppReplUpdate(cmd *cobra.Command, args []string) error {
-	name, err := netappReplName(args[0])
+func (s *netappCmds) runNetAppReplUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.netappReplName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &netapp.Replication{}
-	if err := loadYAMLOrJSONInto(flagNetAppReplConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppReplConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagNetAppReplUpdateMask
+	mask := s.flagNetAppReplUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -560,17 +428,17 @@ func runNetAppReplUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating replication: %w", err)
 	}
-	fmt.Printf("Update request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppReplResume(cmd *cobra.Command, args []string) error {
-	name, err := netappReplName(args[0])
+func (s *netappCmds) runNetAppReplResume(cmd *cobra.Command, args []string) error {
+	name, err := s.netappReplName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -578,17 +446,17 @@ func runNetAppReplResume(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resuming replication: %w", err)
 	}
-	fmt.Printf("Resume request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Resume request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppReplReverse(cmd *cobra.Command, args []string) error {
-	name, err := netappReplName(args[0])
+func (s *netappCmds) runNetAppReplReverse(cmd *cobra.Command, args []string) error {
+	name, err := s.netappReplName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -596,17 +464,17 @@ func runNetAppReplReverse(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("reversing replication direction: %w", err)
 	}
-	fmt.Printf("Reverse-direction request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Reverse-direction request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppReplStop(cmd *cobra.Command, args []string) error {
-	name, err := netappReplName(args[0])
+func (s *netappCmds) runNetAppReplStop(cmd *cobra.Command, args []string) error {
+	name, err := s.netappReplName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -614,17 +482,17 @@ func runNetAppReplStop(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("stopping replication: %w", err)
 	}
-	fmt.Printf("Stop request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Stop request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppReplSync(cmd *cobra.Command, args []string) error {
-	name, err := netappReplName(args[0])
+func (s *netappCmds) runNetAppReplSync(cmd *cobra.Command, args []string) error {
+	name, err := s.netappReplName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -632,37 +500,37 @@ func runNetAppReplSync(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("syncing replication: %w", err)
 	}
-	fmt.Printf("Sync request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Sync request issued for replication [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func netappSnapParent() (string, error) {
-	vol, err := netappVolName(flagNetAppSnapVolume)
+func (s *netappCmds) netappSnapParent() (string, error) {
+	vol, err := s.netappVolName(s.flagNetAppSnapVolume)
 	if err != nil {
 		return "", err
 	}
 	return vol, nil
 }
 
-func netappSnapName(id string) (string, error) {
-	parent, err := netappSnapParent()
+func (s *netappCmds) netappSnapName(id string) (string, error) {
+	parent, err := s.netappSnapParent()
 	if err != nil {
 		return "", err
 	}
 	return netappChild("snapshots", id, parent), nil
 }
 
-func runNetAppSnapCreate(cmd *cobra.Command, args []string) error {
-	parent, err := netappSnapParent()
+func (s *netappCmds) runNetAppSnapCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappSnapParent()
 	if err != nil {
 		return err
 	}
 	body := &netapp.Snapshot{}
-	if err := loadYAMLOrJSONInto(flagNetAppSnapConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppSnapConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -670,17 +538,17 @@ func runNetAppSnapCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating snapshot: %w", err)
 	}
-	fmt.Printf("Create request issued for snapshot [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for snapshot [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppSnapDelete(cmd *cobra.Command, args []string) error {
-	name, err := netappSnapName(args[0])
+func (s *netappCmds) runNetAppSnapDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.netappSnapName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -688,17 +556,17 @@ func runNetAppSnapDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting snapshot: %w", err)
 	}
-	fmt.Printf("Delete request issued for snapshot [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for snapshot [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
 
-func runNetAppSnapDescribe(cmd *cobra.Command, args []string) error {
-	name, err := netappSnapName(args[0])
+func (s *netappCmds) runNetAppSnapDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.netappSnapName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -706,16 +574,16 @@ func runNetAppSnapDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing snapshot: %w", err)
 	}
-	return emitFormatted(got, flagNetAppVolFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNetAppVolFormat)
 }
 
-func runNetAppSnapList(cmd *cobra.Command, args []string) error {
-	parent, err := netappSnapParent()
+func (s *netappCmds) runNetAppSnapList(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappSnapParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -723,11 +591,11 @@ func runNetAppSnapList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Volumes.Snapshots.List(parent).Context(ctx)
-		if flagNetAppSnapFilter != "" {
-			call = call.Filter(flagNetAppSnapFilter)
+		if s.flagNetAppSnapFilter != "" {
+			call = call.Filter(s.flagNetAppSnapFilter)
 		}
-		if flagNetAppSnapPageSize > 0 {
-			call = call.PageSize(flagNetAppSnapPageSize)
+		if s.flagNetAppSnapPageSize > 0 {
+			call = call.PageSize(s.flagNetAppSnapPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -742,24 +610,24 @@ func runNetAppSnapList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNetAppVolFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNetAppVolFormat)
 }
 
-func runNetAppSnapUpdate(cmd *cobra.Command, args []string) error {
-	name, err := netappSnapName(args[0])
+func (s *netappCmds) runNetAppSnapUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.netappSnapName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &netapp.Snapshot{}
-	if err := loadYAMLOrJSONInto(flagNetAppSnapConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppSnapConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagNetAppSnapUpdateMask
+	mask := s.flagNetAppSnapUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -771,6 +639,6 @@ func runNetAppSnapUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating snapshot: %w", err)
 	}
-	fmt.Printf("Update request issued for snapshot [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppVolFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for snapshot [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppVolFormat)
 }
