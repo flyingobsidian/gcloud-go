@@ -7,7 +7,8 @@ import (
 )
 
 func workbenchSubgroup(name string) *cobra.Command {
-	for _, c := range workbenchCmd.Commands() {
+	grp := newWorkbenchCmds(legacyTestInvocation())
+	for _, c := range grp.workbenchCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

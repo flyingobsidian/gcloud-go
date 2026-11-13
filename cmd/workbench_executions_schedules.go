@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 	"strings"
@@ -13,49 +12,19 @@ import (
 
 // --- workbench executions ---
 
-var workbenchExecutionsCmd = &cobra.Command{
-	Use:   "executions",
-	Short: "Manage Vertex AI Workbench notebook execution jobs",
-}
-
-var (
-	wbExecCreateCmd = &cobra.Command{
-		Use: "create EXECUTION", Short: "Create a notebook execution job from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runWBExecCreate,
-	}
-	wbExecDeleteCmd = &cobra.Command{
-		Use: "delete EXECUTION", Short: "Delete a notebook execution job",
-		Args: cobra.ExactArgs(1), RunE: runWBExecDelete,
-	}
-	wbExecDescribeCmd = &cobra.Command{
-		Use: "describe EXECUTION", Short: "Describe a notebook execution job",
-		Args: cobra.ExactArgs(1), RunE: runWBExecDescribe,
-	}
-	wbExecListCmd = &cobra.Command{
-		Use: "list", Short: "List notebook execution jobs in a location",
-		Args: cobra.NoArgs, RunE: runWBExecList,
-	}
-)
-
-var (
-	flagWBExecRegion     string
-	flagWBExecConfigFile string
-	flagWBExecFormat     string
-)
-
-func init() {
-	for _, c := range []*cobra.Command{wbExecCreateCmd, wbExecDeleteCmd, wbExecDescribeCmd, wbExecListCmd} {
-		c.Flags().StringVar(&flagWBExecRegion, "region", "", "Region containing the execution job (required)")
+func (g *workbenchCmds) initWorkbenchExecutionsSchedules() {
+	for _, c := range []*cobra.Command{g.wbExecCreateCmd, g.wbExecDeleteCmd, g.wbExecDescribeCmd, g.wbExecListCmd} {
+		c.Flags().StringVar(&g.flagWBExecRegion, "region", "", "Region containing the execution job (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	wbExecCreateCmd.Flags().StringVar(&flagWBExecConfigFile, "config-file", "",
+	g.wbExecCreateCmd.Flags().StringVar(&g.flagWBExecConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the NotebookExecutionJob body (required)")
-	_ = wbExecCreateCmd.MarkFlagRequired("config-file")
-	wbExecDescribeCmd.Flags().StringVar(&flagWBExecFormat, "format", "", "Output format")
-	wbExecListCmd.Flags().StringVar(&flagWBExecFormat, "format", "", "Output format")
+	_ = g.wbExecCreateCmd.MarkFlagRequired("config-file")
+	g.wbExecDescribeCmd.Flags().StringVar(&g.flagWBExecFormat, "format", "", "Output format")
+	g.wbExecListCmd.Flags().StringVar(&g.flagWBExecFormat, "format", "", "Output format")
 
-	workbenchExecutionsCmd.AddCommand(wbExecCreateCmd, wbExecDeleteCmd, wbExecDescribeCmd, wbExecListCmd)
-	workbenchCmd.AddCommand(workbenchExecutionsCmd)
+	g.workbenchExecutionsCmd.AddCommand(g.wbExecCreateCmd, g.wbExecDeleteCmd, g.wbExecDescribeCmd, g.wbExecListCmd)
+	g.workbenchCmd.AddCommand(g.workbenchExecutionsCmd)
 }
 
 func wbExecName(id, project, region string) string {
@@ -65,151 +34,107 @@ func wbExecName(id, project, region string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/notebookExecutionJobs/%s", project, region, id)
 }
 
-func runWBExecCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBExecCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	job := &aiplatform.GoogleCloudAiplatformV1NotebookExecutionJob{}
-	if err := loadYAMLOrJSONInto(flagWBExecConfigFile, job); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagWBExecConfigFile, job); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBExecRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBExecRegion)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.NotebookExecutionJobs.Create(fmt.Sprintf("projects/%s/locations/%s", project, flagWBExecRegion), job).
+	op, err := svc.Projects.Locations.NotebookExecutionJobs.Create(fmt.Sprintf("projects/%s/locations/%s", project, g.flagWBExecRegion), job).
 		NotebookExecutionJobId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating execution job: %w", err)
 	}
-	return emitFormatted(op, "")
+	return emitFormattedTo(g.inv.stdout, op, "")
 }
 
-func runWBExecDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBExecDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBExecRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBExecRegion)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.NotebookExecutionJobs.Delete(wbExecName(args[0], project, flagWBExecRegion)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.NotebookExecutionJobs.Delete(wbExecName(args[0], project, g.flagWBExecRegion)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting execution job: %w", err)
 	}
-	fmt.Printf("Deleted execution job [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted execution job [%s].\n", args[0])
 	return nil
 }
 
-func runWBExecDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBExecDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBExecRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBExecRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.NotebookExecutionJobs.Get(wbExecName(args[0], project, flagWBExecRegion)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.NotebookExecutionJobs.Get(wbExecName(args[0], project, g.flagWBExecRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing execution job: %w", err)
 	}
-	return emitFormatted(got, flagWBExecFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagWBExecFormat)
 }
 
-func runWBExecList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBExecList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBExecRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBExecRegion)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.NotebookExecutionJobs.List(fmt.Sprintf("projects/%s/locations/%s", project, flagWBExecRegion)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.NotebookExecutionJobs.List(fmt.Sprintf("projects/%s/locations/%s", project, g.flagWBExecRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing execution jobs: %w", err)
 	}
-	if flagWBExecFormat != "" {
-		return emitFormatted(resp.NotebookExecutionJobs, flagWBExecFormat)
+	if g.flagWBExecFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.NotebookExecutionJobs, g.flagWBExecFormat)
 	}
-	printTableHeading(len(resp.NotebookExecutionJobs), "%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeadingTo(g.inv.stdout, len(resp.NotebookExecutionJobs), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, e := range resp.NotebookExecutionJobs {
-		fmt.Printf("%-40s %s\n", path.Base(e.Name), e.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(e.Name), e.DisplayName)
 	}
 	return nil
 }
 
 // --- workbench schedules ---
 
-var workbenchSchedulesCmd = &cobra.Command{
-	Use:   "schedules",
-	Short: "Manage Vertex AI Workbench schedules",
-}
-
-var (
-	wbSchedCreateCmd = &cobra.Command{
-		Use: "create SCHEDULE", Short: "Create a schedule from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runWBSchedCreate,
-	}
-	wbSchedDeleteCmd = &cobra.Command{
-		Use: "delete SCHEDULE", Short: "Delete a schedule",
-		Args: cobra.ExactArgs(1), RunE: runWBSchedDelete,
-	}
-	wbSchedDescribeCmd = &cobra.Command{
-		Use: "describe SCHEDULE", Short: "Describe a schedule",
-		Args: cobra.ExactArgs(1), RunE: runWBSchedDescribe,
-	}
-	wbSchedListCmd = &cobra.Command{
-		Use: "list", Short: "List schedules in a location",
-		Args: cobra.NoArgs, RunE: runWBSchedList,
-	}
-	wbSchedUpdateCmd = &cobra.Command{
-		Use: "update SCHEDULE", Short: "Update a schedule from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runWBSchedUpdate,
-	}
-	wbSchedPauseCmd = &cobra.Command{
-		Use: "pause SCHEDULE", Short: "Pause a schedule",
-		Args: cobra.ExactArgs(1), RunE: runWBSchedPause,
-	}
-	wbSchedResumeCmd = &cobra.Command{
-		Use: "resume SCHEDULE", Short: "Resume a paused schedule",
-		Args: cobra.ExactArgs(1), RunE: runWBSchedResume,
-	}
-)
-
-var (
-	flagWBSchedRegion     string
-	flagWBSchedConfigFile string
-	flagWBSchedUpdateMask string
-	flagWBSchedFormat     string
-	flagWBSchedCatchup    bool
-)
-
-func init() {
-	for _, c := range []*cobra.Command{wbSchedCreateCmd, wbSchedDeleteCmd, wbSchedDescribeCmd, wbSchedListCmd, wbSchedUpdateCmd, wbSchedPauseCmd, wbSchedResumeCmd} {
-		c.Flags().StringVar(&flagWBSchedRegion, "region", "", "Region containing the schedule (required)")
+func (g *workbenchCmds) initWorkbenchExecutionsSchedules2() {
+	for _, c := range []*cobra.Command{g.wbSchedCreateCmd, g.wbSchedDeleteCmd, g.wbSchedDescribeCmd, g.wbSchedListCmd, g.wbSchedUpdateCmd, g.wbSchedPauseCmd, g.wbSchedResumeCmd} {
+		c.Flags().StringVar(&g.flagWBSchedRegion, "region", "", "Region containing the schedule (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	for _, c := range []*cobra.Command{wbSchedCreateCmd, wbSchedUpdateCmd} {
-		c.Flags().StringVar(&flagWBSchedConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{g.wbSchedCreateCmd, g.wbSchedUpdateCmd} {
+		c.Flags().StringVar(&g.flagWBSchedConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Schedule body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	wbSchedUpdateCmd.Flags().StringVar(&flagWBSchedUpdateMask, "update-mask", "",
+	g.wbSchedUpdateCmd.Flags().StringVar(&g.flagWBSchedUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	wbSchedResumeCmd.Flags().BoolVar(&flagWBSchedCatchup, "catch-up", false,
+	g.wbSchedResumeCmd.Flags().BoolVar(&g.flagWBSchedCatchup, "catch-up", false,
 		"Backfill any missed runs after resuming")
-	wbSchedDescribeCmd.Flags().StringVar(&flagWBSchedFormat, "format", "", "Output format")
-	wbSchedListCmd.Flags().StringVar(&flagWBSchedFormat, "format", "", "Output format")
+	g.wbSchedDescribeCmd.Flags().StringVar(&g.flagWBSchedFormat, "format", "", "Output format")
+	g.wbSchedListCmd.Flags().StringVar(&g.flagWBSchedFormat, "format", "", "Output format")
 
-	workbenchSchedulesCmd.AddCommand(wbSchedCreateCmd, wbSchedDeleteCmd, wbSchedDescribeCmd, wbSchedListCmd, wbSchedUpdateCmd, wbSchedPauseCmd, wbSchedResumeCmd)
-	workbenchCmd.AddCommand(workbenchSchedulesCmd)
+	g.workbenchSchedulesCmd.AddCommand(g.wbSchedCreateCmd, g.wbSchedDeleteCmd, g.wbSchedDescribeCmd, g.wbSchedListCmd, g.wbSchedUpdateCmd, g.wbSchedPauseCmd, g.wbSchedResumeCmd)
+	g.workbenchCmd.AddCommand(g.workbenchSchedulesCmd)
 }
 
 func wbSchedName(id, project, region string) string {
@@ -219,145 +144,145 @@ func wbSchedName(id, project, region string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/schedules/%s", project, region, id)
 }
 
-func runWBSchedCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBSchedCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	sched := &aiplatform.GoogleCloudAiplatformV1Schedule{}
-	if err := loadYAMLOrJSONInto(flagWBSchedConfigFile, sched); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagWBSchedConfigFile, sched); err != nil {
 		return err
 	}
 	if sched.DisplayName == "" {
 		sched.DisplayName = args[0]
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBSchedRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Schedules.Create(fmt.Sprintf("projects/%s/locations/%s", project, flagWBSchedRegion), sched).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Schedules.Create(fmt.Sprintf("projects/%s/locations/%s", project, g.flagWBSchedRegion), sched).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating schedule: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runWBSchedDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBSchedDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBSchedRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Schedules.Delete(wbSchedName(args[0], project, flagWBSchedRegion)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Schedules.Delete(wbSchedName(args[0], project, g.flagWBSchedRegion)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting schedule: %w", err)
 	}
-	fmt.Printf("Deleted schedule [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted schedule [%s].\n", args[0])
 	return nil
 }
 
-func runWBSchedDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBSchedDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBSchedRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Schedules.Get(wbSchedName(args[0], project, flagWBSchedRegion)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Schedules.Get(wbSchedName(args[0], project, g.flagWBSchedRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing schedule: %w", err)
 	}
-	return emitFormatted(got, flagWBSchedFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagWBSchedFormat)
 }
 
-func runWBSchedList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBSchedList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBSchedRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Schedules.List(fmt.Sprintf("projects/%s/locations/%s", project, flagWBSchedRegion)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Schedules.List(fmt.Sprintf("projects/%s/locations/%s", project, g.flagWBSchedRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing schedules: %w", err)
 	}
-	if flagWBSchedFormat != "" {
-		return emitFormatted(resp.Schedules, flagWBSchedFormat)
+	if g.flagWBSchedFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Schedules, g.flagWBSchedFormat)
 	}
-	printTableHeading(len(resp.Schedules), "%-40s %-15s %s\n", "NAME", "STATE", "DISPLAY_NAME")
+	printTableHeadingTo(g.inv.stdout, len(resp.Schedules), "%-40s %-15s %s\n", "NAME", "STATE", "DISPLAY_NAME")
 	for _, s := range resp.Schedules {
-		fmt.Printf("%-40s %-15s %s\n", path.Base(s.Name), s.State, s.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-40s %-15s %s\n", path.Base(s.Name), s.State, s.DisplayName)
 	}
 	return nil
 }
 
-func runWBSchedUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBSchedUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	sched := &aiplatform.GoogleCloudAiplatformV1Schedule{}
-	if err := loadYAMLOrJSONInto(flagWBSchedConfigFile, sched); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagWBSchedConfigFile, sched); err != nil {
 		return err
 	}
-	mask := flagWBSchedUpdateMask
+	mask := g.flagWBSchedUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(sched))
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBSchedRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Schedules.Patch(wbSchedName(args[0], project, flagWBSchedRegion), sched).
+	got, err := svc.Projects.Locations.Schedules.Patch(wbSchedName(args[0], project, g.flagWBSchedRegion), sched).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating schedule: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runWBSchedPause(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBSchedPause(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBSchedRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Schedules.Pause(wbSchedName(args[0], project, flagWBSchedRegion), &aiplatform.GoogleCloudAiplatformV1PauseScheduleRequest{}).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Schedules.Pause(wbSchedName(args[0], project, g.flagWBSchedRegion), &aiplatform.GoogleCloudAiplatformV1PauseScheduleRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("pausing schedule: %w", err)
 	}
-	fmt.Printf("Paused schedule [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Paused schedule [%s].\n", args[0])
 	return nil
 }
 
-func runWBSchedResume(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *workbenchCmds) runWBSchedResume(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagWBSchedRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
-	req := &aiplatform.GoogleCloudAiplatformV1ResumeScheduleRequest{CatchUp: flagWBSchedCatchup}
-	if _, err := svc.Projects.Locations.Schedules.Resume(wbSchedName(args[0], project, flagWBSchedRegion), req).Context(ctx).Do(); err != nil {
+	req := &aiplatform.GoogleCloudAiplatformV1ResumeScheduleRequest{CatchUp: g.flagWBSchedCatchup}
+	if _, err := svc.Projects.Locations.Schedules.Resume(wbSchedName(args[0], project, g.flagWBSchedRegion), req).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("resuming schedule: %w", err)
 	}
-	fmt.Printf("Resumed schedule [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Resumed schedule [%s].\n", args[0])
 	return nil
 }
