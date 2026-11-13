@@ -41,6 +41,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newWorkloadIdentityCmd(inv),
 		newPreviewCmd(inv),
 		newAlphaCmd(inv),
+		newGeminiCmd(inv),
 	}
 }
 
