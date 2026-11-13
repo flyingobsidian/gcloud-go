@@ -1,154 +1,89 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	accessapproval "google.golang.org/api/accessapproval/v1"
 )
 
 // --- gcloud access-approval (#287, #566) ---
 
-var accessApprovalCmd = &cobra.Command{Use: "access-approval", Short: "Manage Access Approval"}
-
-var (
-	flagAAFolder        string
-	flagAAOrganization  string
-	flagAAConfigFile    string
-	flagAAUpdateMask    string
-	flagAAFormat        string
-	flagAAApproveExp    string
-	flagAADismissReason string
-	flagAAFilter        string
-)
-
 // --- requests ---
-
-var accessApprovalRequestsCmd = &cobra.Command{Use: "requests", Short: "Manage access approval requests"}
-
-var (
-	aaReqApproveCmd = &cobra.Command{
-		Use: "approve REQUEST_ID", Short: "Approve an access approval request",
-		Args: cobra.ExactArgs(1), RunE: runAAReqApprove,
-	}
-	aaReqDismissCmd = &cobra.Command{
-		Use: "dismiss REQUEST_ID", Short: "Dismiss an access approval request",
-		Args: cobra.ExactArgs(1), RunE: runAAReqDismiss,
-	}
-	aaReqGetCmd = &cobra.Command{
-		Use: "get REQUEST_ID", Short: "Get an access approval request",
-		Args: cobra.ExactArgs(1), RunE: runAAReqGet,
-	}
-	aaReqInvalidateCmd = &cobra.Command{
-		Use: "invalidate REQUEST_ID", Short: "Invalidate an approved access approval request",
-		Args: cobra.ExactArgs(1), RunE: runAAReqInvalidate,
-	}
-	aaReqListCmd = &cobra.Command{
-		Use: "list", Short: "List access approval requests",
-		Args: cobra.NoArgs, RunE: runAAReqList,
-	}
-)
 
 // --- service-account ---
 
-var accessApprovalServiceAccountCmd = &cobra.Command{Use: "service-account", Short: "Get the Access Approval service account"}
-
-var aaSAGetCmd = &cobra.Command{
-	Use: "get", Short: "Get the Access Approval service account",
-	Args: cobra.NoArgs, RunE: runAASAGet,
-}
-
 // --- settings ---
 
-var accessApprovalSettingsCmd = &cobra.Command{Use: "settings", Short: "Manage Access Approval settings"}
-
-var (
-	aaSetDeleteCmd = &cobra.Command{
-		Use: "delete", Short: "Delete Access Approval settings",
-		Args: cobra.NoArgs, RunE: runAASetDelete,
-	}
-	aaSetDescribeCmd = &cobra.Command{
-		Use: "describe", Short: "Describe Access Approval settings",
-		Args: cobra.NoArgs, RunE: runAASetDescribe,
-	}
-	aaSetUpdateCmd = &cobra.Command{
-		Use: "update", Short: "Update Access Approval settings from a --config-file",
-		Args: cobra.NoArgs, RunE: runAASetUpdate,
-	}
-)
-
-func init() {
+func (s *accessApprovalCmds) initAccessApproval() {
 	// requests
-	reqAll := []*cobra.Command{aaReqApproveCmd, aaReqDismissCmd, aaReqGetCmd, aaReqInvalidateCmd, aaReqListCmd}
+	reqAll := []*cobra.Command{s.aaReqApproveCmd, s.aaReqDismissCmd, s.aaReqGetCmd, s.aaReqInvalidateCmd, s.aaReqListCmd}
 	for _, c := range reqAll {
-		addAAScopeFlags(c)
+		s.addAAScopeFlags(c)
 	}
-	aaReqApproveCmd.Flags().StringVar(&flagAAApproveExp, "expire-time", "",
+	s.aaReqApproveCmd.Flags().StringVar(&s.flagAAApproveExp, "expire-time", "",
 		"Expire time for the approval (RFC 3339)")
-	aaReqDismissCmd.Flags().StringVar(&flagAADismissReason, "reason", "",
+	s.aaReqDismissCmd.Flags().StringVar(&s.flagAADismissReason, "reason", "",
 		"Reason for dismissal")
-	aaReqListCmd.Flags().StringVar(&flagAAFilter, "state", "",
+	s.aaReqListCmd.Flags().StringVar(&s.flagAAFilter, "state", "",
 		"Filter by request state (PENDING, APPROVED, DISMISSED, HISTORY)")
-	for _, c := range []*cobra.Command{aaReqGetCmd, aaReqListCmd} {
-		c.Flags().StringVar(&flagAAFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{s.aaReqGetCmd, s.aaReqListCmd} {
+		c.Flags().StringVar(&s.flagAAFormat, "format", "", "Output format")
 	}
-	accessApprovalRequestsCmd.AddCommand(reqAll...)
-	accessApprovalCmd.AddCommand(accessApprovalRequestsCmd)
+	s.accessApprovalRequestsCmd.AddCommand(reqAll...)
+	s.accessApprovalCmd.AddCommand(s.accessApprovalRequestsCmd)
 
 	// service-account
-	addAAScopeFlags(aaSAGetCmd)
-	aaSAGetCmd.Flags().StringVar(&flagAAFormat, "format", "", "Output format")
-	accessApprovalServiceAccountCmd.AddCommand(aaSAGetCmd)
-	accessApprovalCmd.AddCommand(accessApprovalServiceAccountCmd)
+	s.addAAScopeFlags(s.aaSAGetCmd)
+	s.aaSAGetCmd.Flags().StringVar(&s.flagAAFormat, "format", "", "Output format")
+	s.accessApprovalServiceAccountCmd.AddCommand(s.aaSAGetCmd)
+	s.accessApprovalCmd.AddCommand(s.accessApprovalServiceAccountCmd)
 
 	// settings
-	setAll := []*cobra.Command{aaSetDeleteCmd, aaSetDescribeCmd, aaSetUpdateCmd}
+	setAll := []*cobra.Command{s.aaSetDeleteCmd, s.aaSetDescribeCmd, s.aaSetUpdateCmd}
 	for _, c := range setAll {
-		addAAScopeFlags(c)
+		s.addAAScopeFlags(c)
 	}
-	aaSetUpdateCmd.Flags().StringVar(&flagAAConfigFile, "config-file", "",
+	s.aaSetUpdateCmd.Flags().StringVar(&s.flagAAConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the AccessApprovalSettings body (required)")
-	_ = aaSetUpdateCmd.MarkFlagRequired("config-file")
-	aaSetUpdateCmd.Flags().StringVar(&flagAAUpdateMask, "update-mask", "",
+	_ = s.aaSetUpdateCmd.MarkFlagRequired("config-file")
+	s.aaSetUpdateCmd.Flags().StringVar(&s.flagAAUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	aaSetDescribeCmd.Flags().StringVar(&flagAAFormat, "format", "", "Output format")
-	accessApprovalSettingsCmd.AddCommand(setAll...)
-	accessApprovalCmd.AddCommand(accessApprovalSettingsCmd)
+	s.aaSetDescribeCmd.Flags().StringVar(&s.flagAAFormat, "format", "", "Output format")
+	s.accessApprovalSettingsCmd.AddCommand(setAll...)
+	s.accessApprovalCmd.AddCommand(s.accessApprovalSettingsCmd)
 
-	rootCmd.AddCommand(accessApprovalCmd)
 }
 
-func addAAScopeFlags(c *cobra.Command) {
-	c.Flags().StringVar(&flagAAFolder, "folder", "", "Folder scope (alternative to --project/--organization)")
-	c.Flags().StringVar(&flagAAOrganization, "organization", "", "Organization scope (alternative to --project/--folder)")
+func (s *accessApprovalCmds) addAAScopeFlags(c *cobra.Command) {
+	c.Flags().StringVar(&s.flagAAFolder, "folder", "", "Folder scope (alternative to --project/--organization)")
+	c.Flags().StringVar(&s.flagAAOrganization, "organization", "", "Organization scope (alternative to --project/--folder)")
 }
 
 // aaScopeParent returns "projects/PROJECT", "folders/FOLDER", or "organizations/ORG"
 // based on which flag is set. Falls back to the resolved project.
-func aaScopeParent() (string, error) {
+func (s *accessApprovalCmds) aaScopeParent() (string, error) {
 	set := 0
-	if flagProject != "" {
+	if s.inv.flags.project != "" {
 		set++
 	}
-	if flagAAFolder != "" {
+	if s.flagAAFolder != "" {
 		set++
 	}
-	if flagAAOrganization != "" {
+	if s.flagAAOrganization != "" {
 		set++
 	}
 	if set > 1 {
 		return "", fmt.Errorf("only one of --project, --folder, --organization may be set")
 	}
-	if flagAAFolder != "" {
-		return "folders/" + flagAAFolder, nil
+	if s.flagAAFolder != "" {
+		return "folders/" + s.flagAAFolder, nil
 	}
-	if flagAAOrganization != "" {
-		return "organizations/" + flagAAOrganization, nil
+	if s.flagAAOrganization != "" {
+		return "organizations/" + s.flagAAOrganization, nil
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
@@ -161,23 +96,23 @@ func aaResourceName(scope, resource string) string {
 
 // --- requests impl ---
 
-func runAAReqApprove(cmd *cobra.Command, args []string) error {
-	scope, err := aaScopeParent()
+func (s *accessApprovalCmds) runAAReqApprove(cmd *cobra.Command, args []string) error {
+	scope, err := s.aaScopeParent()
 	if err != nil {
 		return err
 	}
 	name := fmt.Sprintf("%s/approvalRequests/%s", scope, args[0])
-	req := &accessapproval.ApproveApprovalRequestMessage{ExpireTime: flagAAApproveExp}
-	ctx := context.Background()
-	svc, err := gcp.AccessApprovalService(ctx, flagAccount)
+	req := &accessapproval.ApproveApprovalRequestMessage{ExpireTime: s.flagAAApproveExp}
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessApproval(ctx)
 	if err != nil {
 		return err
 	}
 	var got *accessapproval.ApprovalRequest
 	switch {
-	case flagAAFolder != "":
+	case s.flagAAFolder != "":
 		got, err = svc.Folders.ApprovalRequests.Approve(name, req).Context(ctx).Do()
-	case flagAAOrganization != "":
+	case s.flagAAOrganization != "":
 		got, err = svc.Organizations.ApprovalRequests.Approve(name, req).Context(ctx).Do()
 	default:
 		got, err = svc.Projects.ApprovalRequests.Approve(name, req).Context(ctx).Do()
@@ -185,26 +120,26 @@ func runAAReqApprove(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("approving request: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runAAReqDismiss(cmd *cobra.Command, args []string) error {
-	scope, err := aaScopeParent()
+func (s *accessApprovalCmds) runAAReqDismiss(cmd *cobra.Command, args []string) error {
+	scope, err := s.aaScopeParent()
 	if err != nil {
 		return err
 	}
 	name := fmt.Sprintf("%s/approvalRequests/%s", scope, args[0])
 	req := &accessapproval.DismissApprovalRequestMessage{}
-	ctx := context.Background()
-	svc, err := gcp.AccessApprovalService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessApproval(ctx)
 	if err != nil {
 		return err
 	}
 	var got *accessapproval.ApprovalRequest
 	switch {
-	case flagAAFolder != "":
+	case s.flagAAFolder != "":
 		got, err = svc.Folders.ApprovalRequests.Dismiss(name, req).Context(ctx).Do()
-	case flagAAOrganization != "":
+	case s.flagAAOrganization != "":
 		got, err = svc.Organizations.ApprovalRequests.Dismiss(name, req).Context(ctx).Do()
 	default:
 		got, err = svc.Projects.ApprovalRequests.Dismiss(name, req).Context(ctx).Do()
@@ -212,25 +147,25 @@ func runAAReqDismiss(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("dismissing request: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runAAReqGet(cmd *cobra.Command, args []string) error {
-	scope, err := aaScopeParent()
+func (s *accessApprovalCmds) runAAReqGet(cmd *cobra.Command, args []string) error {
+	scope, err := s.aaScopeParent()
 	if err != nil {
 		return err
 	}
 	name := fmt.Sprintf("%s/approvalRequests/%s", scope, args[0])
-	ctx := context.Background()
-	svc, err := gcp.AccessApprovalService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessApproval(ctx)
 	if err != nil {
 		return err
 	}
 	var got *accessapproval.ApprovalRequest
 	switch {
-	case flagAAFolder != "":
+	case s.flagAAFolder != "":
 		got, err = svc.Folders.ApprovalRequests.Get(name).Context(ctx).Do()
-	case flagAAOrganization != "":
+	case s.flagAAOrganization != "":
 		got, err = svc.Organizations.ApprovalRequests.Get(name).Context(ctx).Do()
 	default:
 		got, err = svc.Projects.ApprovalRequests.Get(name).Context(ctx).Do()
@@ -238,26 +173,26 @@ func runAAReqGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting request: %w", err)
 	}
-	return emitFormatted(got, flagAAFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAAFormat)
 }
 
-func runAAReqInvalidate(cmd *cobra.Command, args []string) error {
-	scope, err := aaScopeParent()
+func (s *accessApprovalCmds) runAAReqInvalidate(cmd *cobra.Command, args []string) error {
+	scope, err := s.aaScopeParent()
 	if err != nil {
 		return err
 	}
 	name := fmt.Sprintf("%s/approvalRequests/%s", scope, args[0])
 	req := &accessapproval.InvalidateApprovalRequestMessage{}
-	ctx := context.Background()
-	svc, err := gcp.AccessApprovalService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessApproval(ctx)
 	if err != nil {
 		return err
 	}
 	var got *accessapproval.ApprovalRequest
 	switch {
-	case flagAAFolder != "":
+	case s.flagAAFolder != "":
 		got, err = svc.Folders.ApprovalRequests.Invalidate(name, req).Context(ctx).Do()
-	case flagAAOrganization != "":
+	case s.flagAAOrganization != "":
 		got, err = svc.Organizations.ApprovalRequests.Invalidate(name, req).Context(ctx).Do()
 	default:
 		got, err = svc.Projects.ApprovalRequests.Invalidate(name, req).Context(ctx).Do()
@@ -265,16 +200,16 @@ func runAAReqInvalidate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalidating request: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runAAReqList(cmd *cobra.Command, args []string) error {
-	scope, err := aaScopeParent()
+func (s *accessApprovalCmds) runAAReqList(cmd *cobra.Command, args []string) error {
+	scope, err := s.aaScopeParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AccessApprovalService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessApproval(ctx)
 	if err != nil {
 		return err
 	}
@@ -287,23 +222,23 @@ func runAAReqList(cmd *cobra.Command, args []string) error {
 			err  error
 		)
 		switch {
-		case flagAAFolder != "":
+		case s.flagAAFolder != "":
 			call := svc.Folders.ApprovalRequests.List(scope).Context(ctx)
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
-			if flagAAFilter != "" {
-				call = call.Filter(flagAAFilter)
+			if s.flagAAFilter != "" {
+				call = call.Filter(s.flagAAFilter)
 			}
 			resp, e := call.Do()
 			list, next, err = resp.ApprovalRequests, resp.NextPageToken, e
-		case flagAAOrganization != "":
+		case s.flagAAOrganization != "":
 			call := svc.Organizations.ApprovalRequests.List(scope).Context(ctx)
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
-			if flagAAFilter != "" {
-				call = call.Filter(flagAAFilter)
+			if s.flagAAFilter != "" {
+				call = call.Filter(s.flagAAFilter)
 			}
 			resp, e := call.Do()
 			list, next, err = resp.ApprovalRequests, resp.NextPageToken, e
@@ -312,8 +247,8 @@ func runAAReqList(cmd *cobra.Command, args []string) error {
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
-			if flagAAFilter != "" {
-				call = call.Filter(flagAAFilter)
+			if s.flagAAFilter != "" {
+				call = call.Filter(s.flagAAFilter)
 			}
 			resp, e := call.Do()
 			list, next, err = resp.ApprovalRequests, resp.NextPageToken, e
@@ -327,34 +262,34 @@ func runAAReqList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagAAFormat != "" {
-		return emitFormatted(all, flagAAFormat)
+	if s.flagAAFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagAAFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "REQUEST_TIME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "REQUEST_TIME")
 	for _, r := range all {
-		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.RequestTime)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(r.Name), r.RequestTime)
 	}
 	return nil
 }
 
 // --- service-account impl ---
 
-func runAASAGet(cmd *cobra.Command, args []string) error {
-	scope, err := aaScopeParent()
+func (s *accessApprovalCmds) runAASAGet(cmd *cobra.Command, args []string) error {
+	scope, err := s.aaScopeParent()
 	if err != nil {
 		return err
 	}
 	name := aaResourceName(scope, "serviceAccount")
-	ctx := context.Background()
-	svc, err := gcp.AccessApprovalService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessApproval(ctx)
 	if err != nil {
 		return err
 	}
 	var got *accessapproval.AccessApprovalServiceAccount
 	switch {
-	case flagAAFolder != "":
+	case s.flagAAFolder != "":
 		got, err = svc.Folders.GetServiceAccount(name).Context(ctx).Do()
-	case flagAAOrganization != "":
+	case s.flagAAOrganization != "":
 		got, err = svc.Organizations.GetServiceAccount(name).Context(ctx).Do()
 	default:
 		got, err = svc.Projects.GetServiceAccount(name).Context(ctx).Do()
@@ -362,7 +297,7 @@ func runAASAGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting service account: %w", err)
 	}
-	return emitFormatted(got, flagAAFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAAFormat)
 }
 
 // --- settings impl ---
@@ -371,21 +306,21 @@ func aaSettingsName(scope string) string {
 	return aaResourceName(scope, "accessApprovalSettings")
 }
 
-func runAASetDelete(cmd *cobra.Command, args []string) error {
-	scope, err := aaScopeParent()
+func (s *accessApprovalCmds) runAASetDelete(cmd *cobra.Command, args []string) error {
+	scope, err := s.aaScopeParent()
 	if err != nil {
 		return err
 	}
 	name := aaSettingsName(scope)
-	ctx := context.Background()
-	svc, err := gcp.AccessApprovalService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessApproval(ctx)
 	if err != nil {
 		return err
 	}
 	switch {
-	case flagAAFolder != "":
+	case s.flagAAFolder != "":
 		_, err = svc.Folders.DeleteAccessApprovalSettings(name).Context(ctx).Do()
-	case flagAAOrganization != "":
+	case s.flagAAOrganization != "":
 		_, err = svc.Organizations.DeleteAccessApprovalSettings(name).Context(ctx).Do()
 	default:
 		_, err = svc.Projects.DeleteAccessApprovalSettings(name).Context(ctx).Do()
@@ -397,22 +332,22 @@ func runAASetDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runAASetDescribe(cmd *cobra.Command, args []string) error {
-	scope, err := aaScopeParent()
+func (s *accessApprovalCmds) runAASetDescribe(cmd *cobra.Command, args []string) error {
+	scope, err := s.aaScopeParent()
 	if err != nil {
 		return err
 	}
 	name := aaSettingsName(scope)
-	ctx := context.Background()
-	svc, err := gcp.AccessApprovalService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessApproval(ctx)
 	if err != nil {
 		return err
 	}
 	var got *accessapproval.AccessApprovalSettings
 	switch {
-	case flagAAFolder != "":
+	case s.flagAAFolder != "":
 		got, err = svc.Folders.GetAccessApprovalSettings(name).Context(ctx).Do()
-	case flagAAOrganization != "":
+	case s.flagAAOrganization != "":
 		got, err = svc.Organizations.GetAccessApprovalSettings(name).Context(ctx).Do()
 	default:
 		got, err = svc.Projects.GetAccessApprovalSettings(name).Context(ctx).Do()
@@ -420,33 +355,33 @@ func runAASetDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing settings: %w", err)
 	}
-	return emitFormatted(got, flagAAFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAAFormat)
 }
 
-func runAASetUpdate(cmd *cobra.Command, args []string) error {
-	scope, err := aaScopeParent()
+func (s *accessApprovalCmds) runAASetUpdate(cmd *cobra.Command, args []string) error {
+	scope, err := s.aaScopeParent()
 	if err != nil {
 		return err
 	}
 	body := &accessapproval.AccessApprovalSettings{}
-	if err := loadYAMLOrJSONInto(flagAAConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAAConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagAAUpdateMask
+	mask := s.flagAAUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
 	name := aaSettingsName(scope)
-	ctx := context.Background()
-	svc, err := gcp.AccessApprovalService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessApproval(ctx)
 	if err != nil {
 		return err
 	}
 	var got *accessapproval.AccessApprovalSettings
 	switch {
-	case flagAAFolder != "":
+	case s.flagAAFolder != "":
 		got, err = svc.Folders.UpdateAccessApprovalSettings(name, body).UpdateMask(mask).Context(ctx).Do()
-	case flagAAOrganization != "":
+	case s.flagAAOrganization != "":
 		got, err = svc.Organizations.UpdateAccessApprovalSettings(name, body).UpdateMask(mask).Context(ctx).Do()
 	default:
 		got, err = svc.Projects.UpdateAccessApprovalSettings(name, body).UpdateMask(mask).Context(ctx).Do()
@@ -454,5 +389,85 @@ func runAASetUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating settings: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
+}
+
+// accessApprovalCmds holds the commands and flag values of one invocation's "accessApproval"
+// command group, so invocations don't share state (#2070).
+type accessApprovalCmds struct {
+	inv *invocation
+
+	accessApprovalCmd               *cobra.Command
+	flagAAFolder                    string
+	flagAAOrganization              string
+	flagAAConfigFile                string
+	flagAAUpdateMask                string
+	flagAAFormat                    string
+	flagAAApproveExp                string
+	flagAADismissReason             string
+	flagAAFilter                    string
+	accessApprovalRequestsCmd       *cobra.Command
+	aaReqApproveCmd                 *cobra.Command
+	aaReqDismissCmd                 *cobra.Command
+	aaReqGetCmd                     *cobra.Command
+	aaReqInvalidateCmd              *cobra.Command
+	aaReqListCmd                    *cobra.Command
+	accessApprovalServiceAccountCmd *cobra.Command
+	aaSAGetCmd                      *cobra.Command
+	accessApprovalSettingsCmd       *cobra.Command
+	aaSetDeleteCmd                  *cobra.Command
+	aaSetDescribeCmd                *cobra.Command
+	aaSetUpdateCmd                  *cobra.Command
+}
+
+// newAccessApprovalCmd returns the "accessApproval" command group for inv.
+func newAccessApprovalCmd(inv *invocation) *cobra.Command {
+	return newAccessApprovalCmds(inv).accessApprovalCmd
+}
+
+// newAccessApprovalCmds builds the "accessApproval" command group for inv and returns its state.
+func newAccessApprovalCmds(inv *invocation) *accessApprovalCmds {
+	s := &accessApprovalCmds{inv: inv}
+	s.accessApprovalCmd = &cobra.Command{Use: "access-approval", Short: "Manage Access Approval"}
+	s.accessApprovalRequestsCmd = &cobra.Command{Use: "requests", Short: "Manage access approval requests"}
+	s.aaReqApproveCmd = &cobra.Command{
+		Use: "approve REQUEST_ID", Short: "Approve an access approval request",
+		Args: cobra.ExactArgs(1), RunE: s.runAAReqApprove,
+	}
+	s.aaReqDismissCmd = &cobra.Command{
+		Use: "dismiss REQUEST_ID", Short: "Dismiss an access approval request",
+		Args: cobra.ExactArgs(1), RunE: s.runAAReqDismiss,
+	}
+	s.aaReqGetCmd = &cobra.Command{
+		Use: "get REQUEST_ID", Short: "Get an access approval request",
+		Args: cobra.ExactArgs(1), RunE: s.runAAReqGet,
+	}
+	s.aaReqInvalidateCmd = &cobra.Command{
+		Use: "invalidate REQUEST_ID", Short: "Invalidate an approved access approval request",
+		Args: cobra.ExactArgs(1), RunE: s.runAAReqInvalidate,
+	}
+	s.aaReqListCmd = &cobra.Command{
+		Use: "list", Short: "List access approval requests",
+		Args: cobra.NoArgs, RunE: s.runAAReqList,
+	}
+	s.accessApprovalServiceAccountCmd = &cobra.Command{Use: "service-account", Short: "Get the Access Approval service account"}
+	s.aaSAGetCmd = &cobra.Command{
+		Use: "get", Short: "Get the Access Approval service account",
+		Args: cobra.NoArgs, RunE: s.runAASAGet,
+	}
+	s.accessApprovalSettingsCmd = &cobra.Command{Use: "settings", Short: "Manage Access Approval settings"}
+	s.aaSetDeleteCmd = &cobra.Command{
+		Use: "delete", Short: "Delete Access Approval settings",
+		Args: cobra.NoArgs, RunE: s.runAASetDelete,
+	}
+	s.aaSetDescribeCmd = &cobra.Command{
+		Use: "describe", Short: "Describe Access Approval settings",
+		Args: cobra.NoArgs, RunE: s.runAASetDescribe,
+	}
+	s.aaSetUpdateCmd = &cobra.Command{
+		Use: "update", Short: "Update Access Approval settings from a --config-file",
+		Args: cobra.NoArgs, RunE: s.runAASetUpdate,
+	}
+	s.initAccessApproval()
+	return s
 }
