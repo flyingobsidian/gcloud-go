@@ -1,151 +1,91 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	iap "google.golang.org/api/iap/v1"
 )
 
 // --- gcloud iap tcp dest-groups (#1068) ---
 
-var iapDestGroupsCmd = &cobra.Command{Use: "dest-groups", Short: "Manage IAP TCP destination groups"}
-
-var (
-	flagIapDGLocation   string
-	flagIapDGFormat     string
-	flagIapDGConfigFile string
-	flagIapDGCidrs      []string
-	flagIapDGFqdns      []string
-	flagIapDGUpdateMask string
-	flagIapDGPageSize   int64
-
-	flagIapDGIamMember   string
-	flagIapDGIamRole     string
-	flagIapDGIamCondExpr string
-	flagIapDGIamCondT    string
-	flagIapDGIamCondD    string
-	flagIapDGIamAllCond  bool
-)
-
-var (
-	iapDGCreateCmd = &cobra.Command{
-		Use: "create GROUP", Short: "Create an IAP TCP destination group",
-		Args: cobra.ExactArgs(1), RunE: runIapDGCreate,
-	}
-	iapDGDeleteCmd = &cobra.Command{
-		Use: "delete GROUP", Short: "Delete an IAP TCP destination group",
-		Args: cobra.ExactArgs(1), RunE: runIapDGDelete,
-	}
-	iapDGDescribeCmd = &cobra.Command{
-		Use: "describe GROUP", Short: "Describe an IAP TCP destination group",
-		Args: cobra.ExactArgs(1), RunE: runIapDGDescribe,
-	}
-	iapDGListCmd = &cobra.Command{
-		Use: "list", Short: "List IAP TCP destination groups",
-		Args: cobra.NoArgs, RunE: runIapDGList,
-	}
-	iapDGUpdateCmd = &cobra.Command{
-		Use: "update GROUP", Short: "Update an IAP TCP destination group",
-		Args: cobra.ExactArgs(1), RunE: runIapDGUpdate,
-	}
-	iapDGGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy GROUP", Short: "Get the IAM policy for an IAP TCP destination group",
-		Args: cobra.ExactArgs(1), RunE: runIapDGGetIam,
-	}
-	iapDGSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy GROUP POLICY_FILE", Short: "Set the IAM policy for an IAP TCP destination group",
-		Args: cobra.ExactArgs(2), RunE: runIapDGSetIam,
-	}
-	iapDGAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding GROUP", Short: "Add an IAM policy binding to an IAP TCP destination group",
-		Args: cobra.ExactArgs(1), RunE: runIapDGAddIam,
-	}
-	iapDGRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding GROUP", Short: "Remove an IAM policy binding from an IAP TCP destination group",
-		Args: cobra.ExactArgs(1), RunE: runIapDGRemoveIam,
-	}
-)
-
-func init() {
+func (s *iapCmds) initIapTcpDestGroups() {
 	all := []*cobra.Command{
-		iapDGCreateCmd, iapDGDeleteCmd, iapDGDescribeCmd, iapDGListCmd, iapDGUpdateCmd,
-		iapDGGetIamCmd, iapDGSetIamCmd, iapDGAddIamCmd, iapDGRemoveIamCmd,
+		s.iapDGCreateCmd, s.iapDGDeleteCmd, s.iapDGDescribeCmd, s.iapDGListCmd, s.iapDGUpdateCmd,
+		s.iapDGGetIamCmd, s.iapDGSetIamCmd, s.iapDGAddIamCmd, s.iapDGRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagIapDGLocation, "location", "", "IAP TCP tunnel location (required)")
+		c.Flags().StringVar(&s.flagIapDGLocation, "location", "", "IAP TCP tunnel location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagIapDGFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagIapDGFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{iapDGCreateCmd, iapDGUpdateCmd} {
-		c.Flags().StringVar(&flagIapDGConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.iapDGCreateCmd, s.iapDGUpdateCmd} {
+		c.Flags().StringVar(&s.flagIapDGConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the TunnelDestGroup body")
-		c.Flags().StringSliceVar(&flagIapDGCidrs, "cidrs", nil, "Comma-separated list of CIDR blocks")
-		c.Flags().StringSliceVar(&flagIapDGFqdns, "fqdns", nil, "Comma-separated list of FQDNs")
+		c.Flags().StringSliceVar(&s.flagIapDGCidrs, "cidrs", nil, "Comma-separated list of CIDR blocks")
+		c.Flags().StringSliceVar(&s.flagIapDGFqdns, "fqdns", nil, "Comma-separated list of FQDNs")
 	}
-	iapDGUpdateCmd.Flags().StringVar(&flagIapDGUpdateMask, "update-mask", "",
+	s.iapDGUpdateCmd.Flags().StringVar(&s.flagIapDGUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	iapDGListCmd.Flags().Int64Var(&flagIapDGPageSize, "page-size", 0, "Maximum results per page")
-	for _, c := range []*cobra.Command{iapDGAddIamCmd, iapDGRemoveIamCmd} {
-		iapIamMemberFlags(c, &flagIapDGIamMember, &flagIapDGIamRole,
-			&flagIapDGIamCondExpr, &flagIapDGIamCondT, &flagIapDGIamCondD)
+	s.iapDGListCmd.Flags().Int64Var(&s.flagIapDGPageSize, "page-size", 0, "Maximum results per page")
+	for _, c := range []*cobra.Command{s.iapDGAddIamCmd, s.iapDGRemoveIamCmd} {
+		iapIamMemberFlags(c, &s.flagIapDGIamMember, &s.flagIapDGIamRole,
+			&s.flagIapDGIamCondExpr, &s.flagIapDGIamCondT, &s.flagIapDGIamCondD)
 	}
-	iapDGRemoveIamCmd.Flags().BoolVar(&flagIapDGIamAllCond, "all", false,
+	s.iapDGRemoveIamCmd.Flags().BoolVar(&s.flagIapDGIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	iapDestGroupsCmd.AddCommand(all...)
-	iapTcpCmd.AddCommand(iapDestGroupsCmd)
+	s.iapDestGroupsCmd.AddCommand(all...)
+	s.iapTcpCmd.AddCommand(s.iapDestGroupsCmd)
 }
 
-func iapDGParent() (string, error) {
-	project, err := resolveProject()
+func (s *iapCmds) iapDGParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/iap_tunnel/locations/%s", project, flagIapDGLocation), nil
+	return fmt.Sprintf("projects/%s/iap_tunnel/locations/%s", project, s.flagIapDGLocation), nil
 }
 
-func iapDGName(id string) (string, error) {
+func (s *iapCmds) iapDGName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := iapDGParent()
+	parent, err := s.iapDGParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/destGroups/%s", parent, id), nil
 }
 
-func iapDGBodyFromFlags() (*iap.TunnelDestGroup, error) {
+func (s *iapCmds) iapDGBodyFromFlags() (*iap.TunnelDestGroup, error) {
 	body := &iap.TunnelDestGroup{}
-	if flagIapDGConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagIapDGConfigFile, body); err != nil {
+	if s.flagIapDGConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagIapDGConfigFile, body); err != nil {
 			return nil, err
 		}
 	}
-	if len(flagIapDGCidrs) > 0 {
-		body.Cidrs = flagIapDGCidrs
+	if len(s.flagIapDGCidrs) > 0 {
+		body.Cidrs = s.flagIapDGCidrs
 	}
-	if len(flagIapDGFqdns) > 0 {
-		body.Fqdns = flagIapDGFqdns
+	if len(s.flagIapDGFqdns) > 0 {
+		body.Fqdns = s.flagIapDGFqdns
 	}
 	return body, nil
 }
 
-func runIapDGCreate(cmd *cobra.Command, args []string) error {
-	parent, err := iapDGParent()
+func (s *iapCmds) runIapDGCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.iapDGParent()
 	if err != nil {
 		return err
 	}
-	body, err := iapDGBodyFromFlags()
+	body, err := s.iapDGBodyFromFlags()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -153,34 +93,34 @@ func runIapDGCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating IAP TCP destination group: %w", err)
 	}
-	fmt.Printf("Created IAP TCP destination group [%s].\n", args[0])
-	return emitFormatted(got, flagIapDGFormat)
+	fmt.Fprintf(s.inv.stdout, "Created IAP TCP destination group [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagIapDGFormat)
 }
 
-func runIapDGDelete(cmd *cobra.Command, args []string) error {
-	name, err := iapDGName(args[0])
+func (s *iapCmds) runIapDGDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.iapDGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.IapTunnel.Locations.DestGroups.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting IAP TCP destination group: %w", err)
 	}
-	fmt.Printf("Deleted IAP TCP destination group [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted IAP TCP destination group [%s].\n", args[0])
 	return nil
 }
 
-func runIapDGDescribe(cmd *cobra.Command, args []string) error {
-	name, err := iapDGName(args[0])
+func (s *iapCmds) runIapDGDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.iapDGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -188,16 +128,16 @@ func runIapDGDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing IAP TCP destination group: %w", err)
 	}
-	return emitFormatted(got, flagIapDGFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIapDGFormat)
 }
 
-func runIapDGList(cmd *cobra.Command, args []string) error {
-	parent, err := iapDGParent()
+func (s *iapCmds) runIapDGList(cmd *cobra.Command, args []string) error {
+	parent, err := s.iapDGParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -205,8 +145,8 @@ func runIapDGList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.IapTunnel.Locations.DestGroups.List(parent).Context(ctx)
-		if flagIapDGPageSize > 0 {
-			call = call.PageSize(flagIapDGPageSize)
+		if s.flagIapDGPageSize > 0 {
+			call = call.PageSize(s.flagIapDGPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -221,24 +161,24 @@ func runIapDGList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagIapDGFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagIapDGFormat)
 }
 
-func runIapDGUpdate(cmd *cobra.Command, args []string) error {
-	name, err := iapDGName(args[0])
+func (s *iapCmds) runIapDGUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.iapDGName(args[0])
 	if err != nil {
 		return err
 	}
-	body, err := iapDGBodyFromFlags()
+	body, err := s.iapDGBodyFromFlags()
 	if err != nil {
 		return err
 	}
-	mask := flagIapDGUpdateMask
+	mask := s.flagIapDGUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -250,21 +190,21 @@ func runIapDGUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating IAP TCP destination group: %w", err)
 	}
-	fmt.Printf("Updated IAP TCP destination group [%s].\n", args[0])
-	return emitFormatted(got, flagIapDGFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated IAP TCP destination group [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagIapDGFormat)
 }
 
 // The IAP TCP destination-groups service does not expose per-resource IAM
 // methods; instead policies are attached to the resource via the shared v1
 // IAM endpoints, addressed by the destination-group's full resource name.
 
-func runIapDGGetIam(cmd *cobra.Command, args []string) error {
-	name, err := iapDGName(args[0])
+func (s *iapCmds) runIapDGGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.iapDGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -274,11 +214,11 @@ func runIapDGGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagIapDGFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagIapDGFormat)
 }
 
-func runIapDGSetIam(cmd *cobra.Command, args []string) error {
-	name, err := iapDGName(args[0])
+func (s *iapCmds) runIapDGSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.iapDGName(args[0])
 	if err != nil {
 		return err
 	}
@@ -287,8 +227,8 @@ func runIapDGSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -296,17 +236,17 @@ func runIapDGSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	iapUpdatedIam(fmt.Sprintf("IAP TCP destination group [%s]", args[0]))
-	return emitFormatted(updated, flagIapDGFormat)
+	s.iapUpdatedIam(fmt.Sprintf("IAP TCP destination group [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagIapDGFormat)
 }
 
-func runIapDGAddIam(cmd *cobra.Command, args []string) error {
-	name, err := iapDGName(args[0])
+func (s *iapCmds) runIapDGAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.iapDGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -316,24 +256,24 @@ func runIapDGAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	iapIamAddBinding(policy, flagIapDGIamRole, flagIapDGIamMember,
-		iapIamBuildCondition(flagIapDGIamCondExpr, flagIapDGIamCondT, flagIapDGIamCondD))
+	iapIamAddBinding(policy, s.flagIapDGIamRole, s.flagIapDGIamMember,
+		iapIamBuildCondition(s.flagIapDGIamCondExpr, s.flagIapDGIamCondT, s.flagIapDGIamCondD))
 	policy.Version = 3
 	updated, err := svc.V1.SetIamPolicy(name, &iap.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	iapUpdatedIam(fmt.Sprintf("IAP TCP destination group [%s]", args[0]))
-	return emitFormatted(updated, flagIapDGFormat)
+	s.iapUpdatedIam(fmt.Sprintf("IAP TCP destination group [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagIapDGFormat)
 }
 
-func runIapDGRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := iapDGName(args[0])
+func (s *iapCmds) runIapDGRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.iapDGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -343,15 +283,15 @@ func runIapDGRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !iapIamRemoveBinding(policy, flagIapDGIamRole, flagIapDGIamMember,
-		iapIamBuildCondition(flagIapDGIamCondExpr, flagIapDGIamCondT, flagIapDGIamCondD), flagIapDGIamAllCond) {
+	if !iapIamRemoveBinding(policy, s.flagIapDGIamRole, s.flagIapDGIamMember,
+		iapIamBuildCondition(s.flagIapDGIamCondExpr, s.flagIapDGIamCondT, s.flagIapDGIamCondD), s.flagIapDGIamAllCond) {
 		return fmt.Errorf("policy binding not found for role [%s] and member [%s]",
-			flagIapDGIamRole, flagIapDGIamMember)
+			s.flagIapDGIamRole, s.flagIapDGIamMember)
 	}
 	updated, err := svc.V1.SetIamPolicy(name, &iap.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	iapUpdatedIam(fmt.Sprintf("IAP TCP destination group [%s]", args[0]))
-	return emitFormatted(updated, flagIapDGFormat)
+	s.iapUpdatedIam(fmt.Sprintf("IAP TCP destination group [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagIapDGFormat)
 }

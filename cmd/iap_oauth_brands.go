@@ -1,84 +1,59 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	iap "google.golang.org/api/iap/v1"
 )
 
 // --- gcloud iap oauth-brands (#1065) ---
 
-var iapBrandsCmd = &cobra.Command{Use: "oauth-brands", Short: "Manage IAP OAuth brands"}
-
-var (
-	flagIapBrandsFormat     string
-	flagIapBrandsConfigFile string
-	flagIapBrandsPageSize   int64
-)
-
-var (
-	iapBrandsCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create an IAP OAuth brand",
-		Args: cobra.NoArgs, RunE: runIapBrandsCreate,
-	}
-	iapBrandsDescribeCmd = &cobra.Command{
-		Use: "describe BRAND", Short: "Describe an IAP OAuth brand",
-		Args: cobra.ExactArgs(1), RunE: runIapBrandsDescribe,
-	}
-	iapBrandsListCmd = &cobra.Command{
-		Use: "list", Short: "List IAP OAuth brands",
-		Args: cobra.NoArgs, RunE: runIapBrandsList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{iapBrandsCreateCmd, iapBrandsDescribeCmd, iapBrandsListCmd}
+func (s *iapCmds) initIapOauthBrands() {
+	all := []*cobra.Command{s.iapBrandsCreateCmd, s.iapBrandsDescribeCmd, s.iapBrandsListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagIapBrandsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagIapBrandsFormat, "format", "", "Output format")
 	}
-	iapBrandsCreateCmd.Flags().StringVar(&flagIapBrandsConfigFile, "config-file", "",
+	s.iapBrandsCreateCmd.Flags().StringVar(&s.flagIapBrandsConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the Brand body (required)")
-	_ = iapBrandsCreateCmd.MarkFlagRequired("config-file")
-	iapBrandsListCmd.Flags().Int64Var(&flagIapBrandsPageSize, "page-size", 0, "Maximum results per page")
+	_ = s.iapBrandsCreateCmd.MarkFlagRequired("config-file")
+	s.iapBrandsListCmd.Flags().Int64Var(&s.flagIapBrandsPageSize, "page-size", 0, "Maximum results per page")
 
-	iapBrandsCmd.AddCommand(all...)
-	iapCmd.AddCommand(iapBrandsCmd)
+	s.iapBrandsCmd.AddCommand(all...)
+	s.iapCmd.AddCommand(s.iapBrandsCmd)
 }
 
-func iapBrandsProjectParent() (string, error) {
-	project, err := resolveProject()
+func (s *iapCmds) iapBrandsProjectParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("projects/%s", project), nil
 }
 
-func iapBrandsName(id string) (string, error) {
+func (s *iapCmds) iapBrandsName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := iapBrandsProjectParent()
+	parent, err := s.iapBrandsProjectParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/brands/%s", parent, id), nil
 }
 
-func runIapBrandsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := iapBrandsProjectParent()
+func (s *iapCmds) runIapBrandsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.iapBrandsProjectParent()
 	if err != nil {
 		return err
 	}
 	body := &iap.Brand{}
-	if err := loadYAMLOrJSONInto(flagIapBrandsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagIapBrandsConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -86,17 +61,17 @@ func runIapBrandsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating IAP OAuth brand: %w", err)
 	}
-	fmt.Printf("Created IAP OAuth brand [%s].\n", got.Name)
-	return emitFormatted(got, flagIapBrandsFormat)
+	fmt.Fprintf(s.inv.stdout, "Created IAP OAuth brand [%s].\n", got.Name)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIapBrandsFormat)
 }
 
-func runIapBrandsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := iapBrandsName(args[0])
+func (s *iapCmds) runIapBrandsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.iapBrandsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -104,16 +79,16 @@ func runIapBrandsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing IAP OAuth brand: %w", err)
 	}
-	return emitFormatted(got, flagIapBrandsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIapBrandsFormat)
 }
 
-func runIapBrandsList(cmd *cobra.Command, args []string) error {
-	parent, err := iapBrandsProjectParent()
+func (s *iapCmds) runIapBrandsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.iapBrandsProjectParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -122,5 +97,5 @@ func runIapBrandsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing IAP OAuth brands: %w", err)
 	}
-	return emitFormatted(resp.Brands, flagIapBrandsFormat)
+	return emitFormattedTo(s.inv.stdout, resp.Brands, s.flagIapBrandsFormat)
 }

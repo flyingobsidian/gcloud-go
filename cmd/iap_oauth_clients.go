@@ -1,112 +1,77 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	iap "google.golang.org/api/iap/v1"
 )
 
 // --- gcloud iap oauth-clients (#1066) ---
 
-var iapClientsCmd = &cobra.Command{Use: "oauth-clients", Short: "Manage IAP OAuth clients"}
-
-var (
-	flagIapClientsBrand       string
-	flagIapClientsFormat      string
-	flagIapClientsConfigFile  string
-	flagIapClientsDisplayName string
-	flagIapClientsPageSize    int64
-)
-
-var (
-	iapClientsCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create an IAP OAuth client",
-		Args: cobra.NoArgs, RunE: runIapClientsCreate,
-	}
-	iapClientsDeleteCmd = &cobra.Command{
-		Use: "delete CLIENT", Short: "Delete an IAP OAuth client",
-		Args: cobra.ExactArgs(1), RunE: runIapClientsDelete,
-	}
-	iapClientsDescribeCmd = &cobra.Command{
-		Use: "describe CLIENT", Short: "Describe an IAP OAuth client",
-		Args: cobra.ExactArgs(1), RunE: runIapClientsDescribe,
-	}
-	iapClientsListCmd = &cobra.Command{
-		Use: "list", Short: "List IAP OAuth clients under a brand",
-		Args: cobra.NoArgs, RunE: runIapClientsList,
-	}
-	iapClientsResetSecretCmd = &cobra.Command{
-		Use: "reset-secret CLIENT", Short: "Reset the secret of an IAP OAuth client",
-		Args: cobra.ExactArgs(1), RunE: runIapClientsResetSecret,
-	}
-)
-
-func init() {
+func (s *iapCmds) initIapOauthClients() {
 	all := []*cobra.Command{
-		iapClientsCreateCmd, iapClientsDeleteCmd, iapClientsDescribeCmd,
-		iapClientsListCmd, iapClientsResetSecretCmd,
+		s.iapClientsCreateCmd, s.iapClientsDeleteCmd, s.iapClientsDescribeCmd,
+		s.iapClientsListCmd, s.iapClientsResetSecretCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagIapClientsBrand, "brand", "",
+		c.Flags().StringVar(&s.flagIapClientsBrand, "brand", "",
 			"Brand id (or the full projects/PROJECT/brands/BRAND path) that owns the client (required)")
 		_ = c.MarkFlagRequired("brand")
-		c.Flags().StringVar(&flagIapClientsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagIapClientsFormat, "format", "", "Output format")
 	}
-	iapClientsCreateCmd.Flags().StringVar(&flagIapClientsConfigFile, "config-file", "",
+	s.iapClientsCreateCmd.Flags().StringVar(&s.flagIapClientsConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the IdentityAwareProxyClient body")
-	iapClientsCreateCmd.Flags().StringVar(&flagIapClientsDisplayName, "display-name", "",
+	s.iapClientsCreateCmd.Flags().StringVar(&s.flagIapClientsDisplayName, "display-name", "",
 		"Display name for the new client (used when --config-file is not set)")
-	iapClientsListCmd.Flags().Int64Var(&flagIapClientsPageSize, "page-size", 0, "Maximum results per page")
+	s.iapClientsListCmd.Flags().Int64Var(&s.flagIapClientsPageSize, "page-size", 0, "Maximum results per page")
 
-	iapClientsCmd.AddCommand(all...)
-	iapCmd.AddCommand(iapClientsCmd)
+	s.iapClientsCmd.AddCommand(all...)
+	s.iapCmd.AddCommand(s.iapClientsCmd)
 }
 
-func iapClientsBrandParent() (string, error) {
-	if strings.HasPrefix(flagIapClientsBrand, "projects/") {
-		return flagIapClientsBrand, nil
+func (s *iapCmds) iapClientsBrandParent() (string, error) {
+	if strings.HasPrefix(s.flagIapClientsBrand, "projects/") {
+		return s.flagIapClientsBrand, nil
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/brands/%s", project, flagIapClientsBrand), nil
+	return fmt.Sprintf("projects/%s/brands/%s", project, s.flagIapClientsBrand), nil
 }
 
-func iapClientsName(id string) (string, error) {
+func (s *iapCmds) iapClientsName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := iapClientsBrandParent()
+	parent, err := s.iapClientsBrandParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/identityAwareProxyClients/%s", parent, id), nil
 }
 
-func runIapClientsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := iapClientsBrandParent()
+func (s *iapCmds) runIapClientsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.iapClientsBrandParent()
 	if err != nil {
 		return err
 	}
 	body := &iap.IdentityAwareProxyClient{}
-	if flagIapClientsConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagIapClientsConfigFile, body); err != nil {
+	if s.flagIapClientsConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagIapClientsConfigFile, body); err != nil {
 			return err
 		}
 	}
-	if flagIapClientsDisplayName != "" {
-		body.DisplayName = flagIapClientsDisplayName
+	if s.flagIapClientsDisplayName != "" {
+		body.DisplayName = s.flagIapClientsDisplayName
 	}
 	if body.DisplayName == "" {
 		return fmt.Errorf("either --config-file or --display-name is required")
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -114,34 +79,34 @@ func runIapClientsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating IAP OAuth client: %w", err)
 	}
-	fmt.Printf("Created IAP OAuth client [%s].\n", got.Name)
-	return emitFormatted(got, flagIapClientsFormat)
+	fmt.Fprintf(s.inv.stdout, "Created IAP OAuth client [%s].\n", got.Name)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIapClientsFormat)
 }
 
-func runIapClientsDelete(cmd *cobra.Command, args []string) error {
-	name, err := iapClientsName(args[0])
+func (s *iapCmds) runIapClientsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.iapClientsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Brands.IdentityAwareProxyClients.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting IAP OAuth client: %w", err)
 	}
-	fmt.Printf("Deleted IAP OAuth client [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted IAP OAuth client [%s].\n", args[0])
 	return nil
 }
 
-func runIapClientsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := iapClientsName(args[0])
+func (s *iapCmds) runIapClientsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.iapClientsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -149,16 +114,16 @@ func runIapClientsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing IAP OAuth client: %w", err)
 	}
-	return emitFormatted(got, flagIapClientsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIapClientsFormat)
 }
 
-func runIapClientsList(cmd *cobra.Command, args []string) error {
-	parent, err := iapClientsBrandParent()
+func (s *iapCmds) runIapClientsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.iapClientsBrandParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -166,8 +131,8 @@ func runIapClientsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Brands.IdentityAwareProxyClients.List(parent).Context(ctx)
-		if flagIapClientsPageSize > 0 {
-			call = call.PageSize(flagIapClientsPageSize)
+		if s.flagIapClientsPageSize > 0 {
+			call = call.PageSize(s.flagIapClientsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -182,16 +147,16 @@ func runIapClientsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagIapClientsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagIapClientsFormat)
 }
 
-func runIapClientsResetSecret(cmd *cobra.Command, args []string) error {
-	name, err := iapClientsName(args[0])
+func (s *iapCmds) runIapClientsResetSecret(cmd *cobra.Command, args []string) error {
+	name, err := s.iapClientsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return err
 	}
@@ -200,6 +165,6 @@ func runIapClientsResetSecret(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resetting IAP OAuth client secret: %w", err)
 	}
-	fmt.Printf("Reset secret for IAP OAuth client [%s].\n", args[0])
-	return emitFormatted(got, flagIapClientsFormat)
+	fmt.Fprintf(s.inv.stdout, "Reset secret for IAP OAuth client [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagIapClientsFormat)
 }
