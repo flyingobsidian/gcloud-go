@@ -1,148 +1,80 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	recaptcha "google.golang.org/api/recaptchaenterprise/v1"
 )
 
 // --- gcloud recaptcha keys (#1185) ---
 
-var recaptchaKeysCmd = &cobra.Command{Use: "keys", Short: "Manage reCAPTCHA keys"}
-
-var (
-	flagRcpKeyConfigFile     string
-	flagRcpKeyDisplayName    string
-	flagRcpKeyLabels         []string
-	flagRcpKeyTestingScore   float64
-	flagRcpKeyIntegration    string
-	flagRcpKeyWeb            bool
-	flagRcpKeyAndroid        bool
-	flagRcpKeyIOS            bool
-	flagRcpKeyExpress        bool
-	flagRcpKeyUniversal      bool
-	flagRcpKeyAllowAllDoms   bool
-	flagRcpKeyDomains        []string
-	flagRcpKeyAllowAllBundle bool
-	flagRcpKeyBundleIDs      []string
-	flagRcpKeyAllowAllPkgs   bool
-	flagRcpKeyPackageNames   []string
-	flagRcpKeyIP             string
-	flagRcpKeyOverride       string
-	flagRcpKeySkipBilling    bool
-	flagRcpKeyUpdateMask     string
-	flagRcpKeyFormat         string
-	flagRcpKeyPageSize       int64
-)
-
-var (
-	recaptchaKeysAddIpOverrideCmd = &cobra.Command{
-		Use: "add-ip-override KEY", Short: "Add an IP override to a reCAPTCHA key",
-		Args: cobra.ExactArgs(1), RunE: runRcpKeyAddIpOverride,
-	}
-	recaptchaKeysCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create a reCAPTCHA key",
-		Args: cobra.NoArgs, RunE: runRcpKeyCreate,
-	}
-	recaptchaKeysDeleteCmd = &cobra.Command{
-		Use: "delete KEY", Short: "Delete a reCAPTCHA key",
-		Args: cobra.ExactArgs(1), RunE: runRcpKeyDelete,
-	}
-	recaptchaKeysDescribeCmd = &cobra.Command{
-		Use: "describe KEY", Short: "Describe a reCAPTCHA key",
-		Args: cobra.ExactArgs(1), RunE: runRcpKeyDescribe,
-	}
-	recaptchaKeysListCmd = &cobra.Command{
-		Use: "list", Short: "List reCAPTCHA keys",
-		Args: cobra.NoArgs, RunE: runRcpKeyList,
-	}
-	recaptchaKeysListIpOverridesCmd = &cobra.Command{
-		Use: "list-ip-overrides KEY", Short: "List IP overrides for a reCAPTCHA key",
-		Args: cobra.ExactArgs(1), RunE: runRcpKeyListIpOverrides,
-	}
-	recaptchaKeysMigrateCmd = &cobra.Command{
-		Use: "migrate KEY", Short: "Migrate a legacy reCAPTCHA key to reCAPTCHA Enterprise",
-		Args: cobra.ExactArgs(1), RunE: runRcpKeyMigrate,
-	}
-	recaptchaKeysRemoveIpOverrideCmd = &cobra.Command{
-		Use: "remove-ip-override KEY", Short: "Remove an IP override from a reCAPTCHA key",
-		Args: cobra.ExactArgs(1), RunE: runRcpKeyRemoveIpOverride,
-	}
-	recaptchaKeysUpdateCmd = &cobra.Command{
-		Use: "update KEY", Short: "Update a reCAPTCHA key",
-		Args: cobra.ExactArgs(1), RunE: runRcpKeyUpdate,
-	}
-)
-
-func init() {
+func (s *recaptchaCmds) initRecaptchaKeys() {
 	all := []*cobra.Command{
-		recaptchaKeysAddIpOverrideCmd, recaptchaKeysCreateCmd, recaptchaKeysDeleteCmd,
-		recaptchaKeysDescribeCmd, recaptchaKeysListCmd, recaptchaKeysListIpOverridesCmd,
-		recaptchaKeysMigrateCmd, recaptchaKeysRemoveIpOverrideCmd, recaptchaKeysUpdateCmd,
+		s.recaptchaKeysAddIpOverrideCmd, s.recaptchaKeysCreateCmd, s.recaptchaKeysDeleteCmd,
+		s.recaptchaKeysDescribeCmd, s.recaptchaKeysListCmd, s.recaptchaKeysListIpOverridesCmd,
+		s.recaptchaKeysMigrateCmd, s.recaptchaKeysRemoveIpOverrideCmd, s.recaptchaKeysUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagRcpKeyFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagRcpKeyFormat, "format", "", "Output format")
 	}
 
 	// create/update shared flags
-	for _, c := range []*cobra.Command{recaptchaKeysCreateCmd, recaptchaKeysUpdateCmd} {
-		c.Flags().StringVar(&flagRcpKeyConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.recaptchaKeysCreateCmd, s.recaptchaKeysUpdateCmd} {
+		c.Flags().StringVar(&s.flagRcpKeyConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the full Key body (skips individual flags)")
-		c.Flags().StringVar(&flagRcpKeyDisplayName, "display-name", "",
+		c.Flags().StringVar(&s.flagRcpKeyDisplayName, "display-name", "",
 			"Human-readable display name")
-		c.Flags().StringSliceVar(&flagRcpKeyLabels, "labels", nil, "Labels as KEY=VALUE pairs")
-		c.Flags().Float64Var(&flagRcpKeyTestingScore, "testing-score", 0,
+		c.Flags().StringSliceVar(&s.flagRcpKeyLabels, "labels", nil, "Labels as KEY=VALUE pairs")
+		c.Flags().Float64Var(&s.flagRcpKeyTestingScore, "testing-score", 0,
 			"If set, all assessments return this score (0 to 1)")
-		c.Flags().StringVar(&flagRcpKeyIntegration, "integration-type", "",
+		c.Flags().StringVar(&s.flagRcpKeyIntegration, "integration-type", "",
 			"Web integration type: score, checkbox or invisible")
-		c.Flags().BoolVar(&flagRcpKeyWeb, "web", false, "Configure the key for websites")
-		c.Flags().BoolVar(&flagRcpKeyAndroid, "android", false, "Configure the key for Android apps")
-		c.Flags().BoolVar(&flagRcpKeyIOS, "ios", false, "Configure the key for iOS apps")
-		c.Flags().BoolVar(&flagRcpKeyExpress, "express", false, "Configure the key for Express assessments")
-		c.Flags().BoolVar(&flagRcpKeyUniversal, "universal", false, "Configure the key for Universal integration")
-		c.Flags().BoolVar(&flagRcpKeyAllowAllDoms, "allow-all-domains", false,
+		c.Flags().BoolVar(&s.flagRcpKeyWeb, "web", false, "Configure the key for websites")
+		c.Flags().BoolVar(&s.flagRcpKeyAndroid, "android", false, "Configure the key for Android apps")
+		c.Flags().BoolVar(&s.flagRcpKeyIOS, "ios", false, "Configure the key for iOS apps")
+		c.Flags().BoolVar(&s.flagRcpKeyExpress, "express", false, "Configure the key for Express assessments")
+		c.Flags().BoolVar(&s.flagRcpKeyUniversal, "universal", false, "Configure the key for Universal integration")
+		c.Flags().BoolVar(&s.flagRcpKeyAllowAllDoms, "allow-all-domains", false,
 			"Skip domain enforcement (web)")
-		c.Flags().StringSliceVar(&flagRcpKeyDomains, "domains", nil,
+		c.Flags().StringSliceVar(&s.flagRcpKeyDomains, "domains", nil,
 			"Domains allowed to use the key (web)")
-		c.Flags().BoolVar(&flagRcpKeyAllowAllBundle, "allow-all-bundle-ids", false,
+		c.Flags().BoolVar(&s.flagRcpKeyAllowAllBundle, "allow-all-bundle-ids", false,
 			"Skip bundle id enforcement (iOS)")
-		c.Flags().StringSliceVar(&flagRcpKeyBundleIDs, "bundle-ids", nil,
+		c.Flags().StringSliceVar(&s.flagRcpKeyBundleIDs, "bundle-ids", nil,
 			"iOS bundle ids allowed to use the key")
-		c.Flags().BoolVar(&flagRcpKeyAllowAllPkgs, "allow-all-package-names", false,
+		c.Flags().BoolVar(&s.flagRcpKeyAllowAllPkgs, "allow-all-package-names", false,
 			"Skip package name enforcement (Android)")
-		c.Flags().StringSliceVar(&flagRcpKeyPackageNames, "package-names", nil,
+		c.Flags().StringSliceVar(&s.flagRcpKeyPackageNames, "package-names", nil,
 			"Android package names allowed to use the key")
 	}
-	recaptchaKeysUpdateCmd.Flags().StringVar(&flagRcpKeyUpdateMask, "update-mask", "",
+	s.recaptchaKeysUpdateCmd.Flags().StringVar(&s.flagRcpKeyUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	recaptchaKeysListCmd.Flags().Int64Var(&flagRcpKeyPageSize, "page-size", 0,
+	s.recaptchaKeysListCmd.Flags().Int64Var(&s.flagRcpKeyPageSize, "page-size", 0,
 		"Maximum number of results per page")
-	recaptchaKeysListIpOverridesCmd.Flags().Int64Var(&flagRcpKeyPageSize, "page-size", 0,
+	s.recaptchaKeysListIpOverridesCmd.Flags().Int64Var(&s.flagRcpKeyPageSize, "page-size", 0,
 		"Maximum number of results per page")
 
-	for _, c := range []*cobra.Command{recaptchaKeysAddIpOverrideCmd, recaptchaKeysRemoveIpOverrideCmd} {
-		c.Flags().StringVar(&flagRcpKeyIP, "ip", "", "IP address or CIDR range (required)")
+	for _, c := range []*cobra.Command{s.recaptchaKeysAddIpOverrideCmd, s.recaptchaKeysRemoveIpOverrideCmd} {
+		c.Flags().StringVar(&s.flagRcpKeyIP, "ip", "", "IP address or CIDR range (required)")
 		_ = c.MarkFlagRequired("ip")
-		c.Flags().StringVar(&flagRcpKeyOverride, "override", "",
+		c.Flags().StringVar(&s.flagRcpKeyOverride, "override", "",
 			"Override type: allow (required)")
 		_ = c.MarkFlagRequired("override")
 	}
-	recaptchaKeysMigrateCmd.Flags().BoolVar(&flagRcpKeySkipBilling, "skip-billing-check", false,
+	s.recaptchaKeysMigrateCmd.Flags().BoolVar(&s.flagRcpKeySkipBilling, "skip-billing-check", false,
 		"Skip the billing check")
 
-	recaptchaKeysCmd.AddCommand(all...)
-	recaptchaCmd.AddCommand(recaptchaKeysCmd)
+	s.recaptchaKeysCmd.AddCommand(all...)
+	s.recaptchaCmd.AddCommand(s.recaptchaKeysCmd)
 }
 
-func rcpKeyName(id string) (string, error) {
+func (s *recaptchaCmds) rcpKeyName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := rcpProjectParent()
+	parent, err := s.rcpProjectParent()
 	if err != nil {
 		return "", err
 	}
@@ -173,12 +105,12 @@ func rcpKeyIntegrationEnum(v string) (string, error) {
 	}
 }
 
-func rcpKeyLabelsFromFlag() map[string]string {
-	if len(flagRcpKeyLabels) == 0 {
+func (s *recaptchaCmds) rcpKeyLabelsFromFlag() map[string]string {
+	if len(s.flagRcpKeyLabels) == 0 {
 		return nil
 	}
 	out := map[string]string{}
-	for _, kv := range flagRcpKeyLabels {
+	for _, kv := range s.flagRcpKeyLabels {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok {
 			continue
@@ -191,48 +123,48 @@ func rcpKeyLabelsFromFlag() map[string]string {
 // rcpKeyBodyFromFlags composes a Key body from the flag values. Callers
 // should apply --config-file first (which fully replaces the body) and use
 // this only when --config-file is empty.
-func rcpKeyBodyFromFlags() (*recaptcha.GoogleCloudRecaptchaenterpriseV1Key, error) {
+func (s *recaptchaCmds) rcpKeyBodyFromFlags() (*recaptcha.GoogleCloudRecaptchaenterpriseV1Key, error) {
 	key := &recaptcha.GoogleCloudRecaptchaenterpriseV1Key{
-		DisplayName: flagRcpKeyDisplayName,
-		Labels:      rcpKeyLabelsFromFlag(),
+		DisplayName: s.flagRcpKeyDisplayName,
+		Labels:      s.rcpKeyLabelsFromFlag(),
 	}
-	if flagRcpKeyTestingScore != 0 {
+	if s.flagRcpKeyTestingScore != 0 {
 		key.TestingOptions = &recaptcha.GoogleCloudRecaptchaenterpriseV1TestingOptions{
-			TestingScore: flagRcpKeyTestingScore,
+			TestingScore: s.flagRcpKeyTestingScore,
 		}
 	}
-	integration, err := rcpKeyIntegrationEnum(flagRcpKeyIntegration)
+	integration, err := rcpKeyIntegrationEnum(s.flagRcpKeyIntegration)
 	if err != nil {
 		return nil, err
 	}
 	platforms := 0
-	if flagRcpKeyWeb {
+	if s.flagRcpKeyWeb {
 		platforms++
 		key.WebSettings = &recaptcha.GoogleCloudRecaptchaenterpriseV1WebKeySettings{
-			AllowAllDomains: flagRcpKeyAllowAllDoms,
-			AllowedDomains:  flagRcpKeyDomains,
+			AllowAllDomains: s.flagRcpKeyAllowAllDoms,
+			AllowedDomains:  s.flagRcpKeyDomains,
 			IntegrationType: integration,
 		}
 	}
-	if flagRcpKeyAndroid {
+	if s.flagRcpKeyAndroid {
 		platforms++
 		key.AndroidSettings = &recaptcha.GoogleCloudRecaptchaenterpriseV1AndroidKeySettings{
-			AllowAllPackageNames: flagRcpKeyAllowAllPkgs,
-			AllowedPackageNames:  flagRcpKeyPackageNames,
+			AllowAllPackageNames: s.flagRcpKeyAllowAllPkgs,
+			AllowedPackageNames:  s.flagRcpKeyPackageNames,
 		}
 	}
-	if flagRcpKeyIOS {
+	if s.flagRcpKeyIOS {
 		platforms++
 		key.IosSettings = &recaptcha.GoogleCloudRecaptchaenterpriseV1IOSKeySettings{
-			AllowAllBundleIds: flagRcpKeyAllowAllBundle,
-			AllowedBundleIds:  flagRcpKeyBundleIDs,
+			AllowAllBundleIds: s.flagRcpKeyAllowAllBundle,
+			AllowedBundleIds:  s.flagRcpKeyBundleIDs,
 		}
 	}
-	if flagRcpKeyExpress {
+	if s.flagRcpKeyExpress {
 		platforms++
 		key.ExpressSettings = &recaptcha.GoogleCloudRecaptchaenterpriseV1ExpressKeySettings{}
 	}
-	if flagRcpKeyUniversal {
+	if s.flagRcpKeyUniversal {
 		platforms++
 		key.UniversalSettings = &recaptcha.GoogleCloudRecaptchaenterpriseV1UniversalKeySettings{}
 	}
@@ -242,31 +174,31 @@ func rcpKeyBodyFromFlags() (*recaptcha.GoogleCloudRecaptchaenterpriseV1Key, erro
 	return key, nil
 }
 
-func rcpKeyLoadBody() (*recaptcha.GoogleCloudRecaptchaenterpriseV1Key, error) {
-	if flagRcpKeyConfigFile != "" {
+func (s *recaptchaCmds) rcpKeyLoadBody() (*recaptcha.GoogleCloudRecaptchaenterpriseV1Key, error) {
+	if s.flagRcpKeyConfigFile != "" {
 		key := &recaptcha.GoogleCloudRecaptchaenterpriseV1Key{}
-		if err := loadYAMLOrJSONInto(flagRcpKeyConfigFile, key); err != nil {
+		if err := loadYAMLOrJSONInto(s.flagRcpKeyConfigFile, key); err != nil {
 			return nil, err
 		}
 		return key, nil
 	}
-	return rcpKeyBodyFromFlags()
+	return s.rcpKeyBodyFromFlags()
 }
 
-func runRcpKeyCreate(cmd *cobra.Command, args []string) error {
-	parent, err := rcpProjectParent()
+func (s *recaptchaCmds) runRcpKeyCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.rcpProjectParent()
 	if err != nil {
 		return err
 	}
-	body, err := rcpKeyLoadBody()
+	body, err := s.rcpKeyLoadBody()
 	if err != nil {
 		return err
 	}
 	if body.DisplayName == "" {
 		return fmt.Errorf("--display-name is required (or provide it via --config-file)")
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -274,33 +206,33 @@ func runRcpKeyCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating key: %w", err)
 	}
-	return emitFormatted(got, flagRcpKeyFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpKeyFormat)
 }
 
-func runRcpKeyDelete(cmd *cobra.Command, args []string) error {
-	name, err := rcpKeyName(args[0])
+func (s *recaptchaCmds) runRcpKeyDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpKeyName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Keys.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting key: %w", err)
 	}
-	fmt.Printf("Deleted key [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted key [%s].\n", args[0])
 	return nil
 }
 
-func runRcpKeyDescribe(cmd *cobra.Command, args []string) error {
-	name, err := rcpKeyName(args[0])
+func (s *recaptchaCmds) runRcpKeyDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpKeyName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -308,16 +240,16 @@ func runRcpKeyDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing key: %w", err)
 	}
-	return emitFormatted(got, flagRcpKeyFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpKeyFormat)
 }
 
-func runRcpKeyList(cmd *cobra.Command, args []string) error {
-	parent, err := rcpProjectParent()
+func (s *recaptchaCmds) runRcpKeyList(cmd *cobra.Command, args []string) error {
+	parent, err := s.rcpProjectParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -325,8 +257,8 @@ func runRcpKeyList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Keys.List(parent).Context(ctx)
-		if flagRcpKeyPageSize > 0 {
-			call = call.PageSize(flagRcpKeyPageSize)
+		if s.flagRcpKeyPageSize > 0 {
+			call = call.PageSize(s.flagRcpKeyPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -341,19 +273,19 @@ func runRcpKeyList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagRcpKeyFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagRcpKeyFormat)
 }
 
-func runRcpKeyMigrate(cmd *cobra.Command, args []string) error {
-	name, err := rcpKeyName(args[0])
+func (s *recaptchaCmds) runRcpKeyMigrate(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpKeyName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &recaptcha.GoogleCloudRecaptchaenterpriseV1MigrateKeyRequest{
-		SkipBillingCheck: flagRcpKeySkipBilling,
+		SkipBillingCheck: s.flagRcpKeySkipBilling,
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -361,25 +293,25 @@ func runRcpKeyMigrate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("migrating key: %w", err)
 	}
-	fmt.Printf("Migrated key [%s].\n", args[0])
-	return emitFormatted(got, flagRcpKeyFormat)
+	fmt.Fprintf(s.inv.stdout, "Migrated key [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpKeyFormat)
 }
 
-func runRcpKeyUpdate(cmd *cobra.Command, args []string) error {
-	name, err := rcpKeyName(args[0])
+func (s *recaptchaCmds) runRcpKeyUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpKeyName(args[0])
 	if err != nil {
 		return err
 	}
-	body, err := rcpKeyLoadBody()
+	body, err := s.rcpKeyLoadBody()
 	if err != nil {
 		return err
 	}
-	mask := flagRcpKeyUpdateMask
+	mask := s.flagRcpKeyUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -391,26 +323,26 @@ func runRcpKeyUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating key: %w", err)
 	}
-	return emitFormatted(got, flagRcpKeyFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpKeyFormat)
 }
 
-func runRcpKeyAddIpOverride(cmd *cobra.Command, args []string) error {
-	name, err := rcpKeyName(args[0])
+func (s *recaptchaCmds) runRcpKeyAddIpOverride(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpKeyName(args[0])
 	if err != nil {
 		return err
 	}
-	enum, err := rcpKeyOverrideEnum(flagRcpKeyOverride)
+	enum, err := rcpKeyOverrideEnum(s.flagRcpKeyOverride)
 	if err != nil {
 		return err
 	}
 	body := &recaptcha.GoogleCloudRecaptchaenterpriseV1AddIpOverrideRequest{
 		IpOverrideData: &recaptcha.GoogleCloudRecaptchaenterpriseV1IpOverrideData{
-			Ip:           flagRcpKeyIP,
+			Ip:           s.flagRcpKeyIP,
 			OverrideType: enum,
 		},
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -418,27 +350,27 @@ func runRcpKeyAddIpOverride(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("adding IP override: %w", err)
 	}
-	fmt.Printf("Added IP override [%s] to key [%s].\n", flagRcpKeyIP, args[0])
-	return emitFormatted(got, flagRcpKeyFormat)
+	fmt.Fprintf(s.inv.stdout, "Added IP override [%s] to key [%s].\n", s.flagRcpKeyIP, args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpKeyFormat)
 }
 
-func runRcpKeyRemoveIpOverride(cmd *cobra.Command, args []string) error {
-	name, err := rcpKeyName(args[0])
+func (s *recaptchaCmds) runRcpKeyRemoveIpOverride(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpKeyName(args[0])
 	if err != nil {
 		return err
 	}
-	enum, err := rcpKeyOverrideEnum(flagRcpKeyOverride)
+	enum, err := rcpKeyOverrideEnum(s.flagRcpKeyOverride)
 	if err != nil {
 		return err
 	}
 	body := &recaptcha.GoogleCloudRecaptchaenterpriseV1RemoveIpOverrideRequest{
 		IpOverrideData: &recaptcha.GoogleCloudRecaptchaenterpriseV1IpOverrideData{
-			Ip:           flagRcpKeyIP,
+			Ip:           s.flagRcpKeyIP,
 			OverrideType: enum,
 		},
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -446,17 +378,17 @@ func runRcpKeyRemoveIpOverride(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("removing IP override: %w", err)
 	}
-	fmt.Printf("Removed IP override [%s] from key [%s].\n", flagRcpKeyIP, args[0])
-	return emitFormatted(got, flagRcpKeyFormat)
+	fmt.Fprintf(s.inv.stdout, "Removed IP override [%s] from key [%s].\n", s.flagRcpKeyIP, args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpKeyFormat)
 }
 
-func runRcpKeyListIpOverrides(cmd *cobra.Command, args []string) error {
-	name, err := rcpKeyName(args[0])
+func (s *recaptchaCmds) runRcpKeyListIpOverrides(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpKeyName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -464,8 +396,8 @@ func runRcpKeyListIpOverrides(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Keys.ListIpOverrides(name).Context(ctx)
-		if flagRcpKeyPageSize > 0 {
-			call = call.PageSize(flagRcpKeyPageSize)
+		if s.flagRcpKeyPageSize > 0 {
+			call = call.PageSize(s.flagRcpKeyPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -480,5 +412,5 @@ func runRcpKeyListIpOverrides(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagRcpKeyFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagRcpKeyFormat)
 }

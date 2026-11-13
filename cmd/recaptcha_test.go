@@ -7,7 +7,8 @@ import (
 )
 
 func recaptchaSubgroup(name string) *cobra.Command {
-	for _, c := range recaptchaCmd.Commands() {
+	grp := newRecaptchaCmds(legacyTestInvocation())
+	for _, c := range grp.recaptchaCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -77,13 +78,14 @@ func TestParseRcpFirewallActions(t *testing.T) {
 }
 
 func TestRcpKeyBodyFromFlagsUniversal(t *testing.T) {
+	grp := newRecaptchaCmds(legacyTestInvocation())
 	// Reset and set flags for the universal platform.
-	oldUni, oldWeb, oldAndroid, oldIOS, oldExpress := flagRcpKeyUniversal, flagRcpKeyWeb, flagRcpKeyAndroid, flagRcpKeyIOS, flagRcpKeyExpress
+	oldUni, oldWeb, oldAndroid, oldIOS, oldExpress := grp.flagRcpKeyUniversal, grp.flagRcpKeyWeb, grp.flagRcpKeyAndroid, grp.flagRcpKeyIOS, grp.flagRcpKeyExpress
 	defer func() {
-		flagRcpKeyUniversal, flagRcpKeyWeb, flagRcpKeyAndroid, flagRcpKeyIOS, flagRcpKeyExpress = oldUni, oldWeb, oldAndroid, oldIOS, oldExpress
+		grp.flagRcpKeyUniversal, grp.flagRcpKeyWeb, grp.flagRcpKeyAndroid, grp.flagRcpKeyIOS, grp.flagRcpKeyExpress = oldUni, oldWeb, oldAndroid, oldIOS, oldExpress
 	}()
-	flagRcpKeyUniversal, flagRcpKeyWeb, flagRcpKeyAndroid, flagRcpKeyIOS, flagRcpKeyExpress = true, false, false, false, false
-	body, err := rcpKeyBodyFromFlags()
+	grp.flagRcpKeyUniversal, grp.flagRcpKeyWeb, grp.flagRcpKeyAndroid, grp.flagRcpKeyIOS, grp.flagRcpKeyExpress = true, false, false, false, false
+	body, err := grp.rcpKeyBodyFromFlags()
 	if err != nil {
 		t.Fatalf("rcpKeyBodyFromFlags with --universal returned error: %v", err)
 	}
@@ -95,8 +97,8 @@ func TestRcpKeyBodyFromFlagsUniversal(t *testing.T) {
 	}
 
 	// Setting --universal together with another platform is rejected.
-	flagRcpKeyWeb = true
-	if _, err := rcpKeyBodyFromFlags(); err == nil {
+	grp.flagRcpKeyWeb = true
+	if _, err := grp.rcpKeyBodyFromFlags(); err == nil {
 		t.Error("expected an error when --universal is combined with --web")
 	}
 }

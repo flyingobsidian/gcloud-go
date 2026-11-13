@@ -1,88 +1,43 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	recaptcha "google.golang.org/api/recaptchaenterprise/v1"
 )
 
 // --- gcloud recaptcha firewall-policies (#1184) ---
 
-var recaptchaFirewallPoliciesCmd = &cobra.Command{
-	Use:   "firewall-policies",
-	Short: "Manage reCAPTCHA firewall policies",
-}
-
-var (
-	flagRcpFPDescription string
-	flagRcpFPPath        string
-	flagRcpFPCondition   string
-	flagRcpFPActions     string
-	flagRcpFPNames       []string
-	flagRcpFPFormat      string
-	flagRcpFPPageSize    int64
-	flagRcpFPUpdateMask  string
-)
-
-var (
-	recaptchaFPCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create a reCAPTCHA firewall policy",
-		Args: cobra.NoArgs, RunE: runRcpFPCreate,
-	}
-	recaptchaFPDeleteCmd = &cobra.Command{
-		Use: "delete POLICY_ID", Short: "Delete a reCAPTCHA firewall policy",
-		Args: cobra.ExactArgs(1), RunE: runRcpFPDelete,
-	}
-	recaptchaFPDescribeCmd = &cobra.Command{
-		Use: "describe POLICY_ID", Short: "Describe a reCAPTCHA firewall policy",
-		Args: cobra.ExactArgs(1), RunE: runRcpFPDescribe,
-	}
-	recaptchaFPListCmd = &cobra.Command{
-		Use: "list", Short: "List reCAPTCHA firewall policies",
-		Args: cobra.NoArgs, RunE: runRcpFPList,
-	}
-	recaptchaFPReorderCmd = &cobra.Command{
-		Use: "reorder", Short: "Reorder reCAPTCHA firewall policies",
-		Args: cobra.NoArgs, RunE: runRcpFPReorder,
-	}
-	recaptchaFPUpdateCmd = &cobra.Command{
-		Use: "update POLICY_ID", Short: "Update a reCAPTCHA firewall policy",
-		Args: cobra.ExactArgs(1), RunE: runRcpFPUpdate,
-	}
-)
-
-func init() {
+func (s *recaptchaCmds) initRecaptchaFirewallPolicies() {
 	all := []*cobra.Command{
-		recaptchaFPCreateCmd, recaptchaFPDeleteCmd, recaptchaFPDescribeCmd,
-		recaptchaFPListCmd, recaptchaFPReorderCmd, recaptchaFPUpdateCmd,
+		s.recaptchaFPCreateCmd, s.recaptchaFPDeleteCmd, s.recaptchaFPDescribeCmd,
+		s.recaptchaFPListCmd, s.recaptchaFPReorderCmd, s.recaptchaFPUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagRcpFPFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagRcpFPFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{recaptchaFPCreateCmd, recaptchaFPUpdateCmd} {
-		c.Flags().StringVar(&flagRcpFPDescription, "description", "",
+	for _, c := range []*cobra.Command{s.recaptchaFPCreateCmd, s.recaptchaFPUpdateCmd} {
+		c.Flags().StringVar(&s.flagRcpFPDescription, "description", "",
 			"A description of what this policy aims to achieve")
-		c.Flags().StringVar(&flagRcpFPPath, "path", "",
+		c.Flags().StringVar(&s.flagRcpFPPath, "path", "",
 			"Glob pattern for paths this policy applies to")
-		c.Flags().StringVar(&flagRcpFPCondition, "condition", "",
+		c.Flags().StringVar(&s.flagRcpFPCondition, "condition", "",
 			"CEL expression that gates whether this policy applies")
-		c.Flags().StringVar(&flagRcpFPActions, "actions", "",
+		c.Flags().StringVar(&s.flagRcpFPActions, "actions", "",
 			"Comma-separated actions: allow, block, redirect, substitute=PATH, set_header=KEY=VALUE")
 	}
-	recaptchaFPUpdateCmd.Flags().StringVar(&flagRcpFPUpdateMask, "update-mask", "",
+	s.recaptchaFPUpdateCmd.Flags().StringVar(&s.flagRcpFPUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	recaptchaFPListCmd.Flags().Int64Var(&flagRcpFPPageSize, "page-size", 0,
+	s.recaptchaFPListCmd.Flags().Int64Var(&s.flagRcpFPPageSize, "page-size", 0,
 		"Maximum number of results per page")
-	recaptchaFPReorderCmd.Flags().StringSliceVar(&flagRcpFPNames, "names", nil,
+	s.recaptchaFPReorderCmd.Flags().StringSliceVar(&s.flagRcpFPNames, "names", nil,
 		"Names of all firewall policies in desired order (required)")
-	_ = recaptchaFPReorderCmd.MarkFlagRequired("names")
+	_ = s.recaptchaFPReorderCmd.MarkFlagRequired("names")
 
-	recaptchaFirewallPoliciesCmd.AddCommand(all...)
-	recaptchaCmd.AddCommand(recaptchaFirewallPoliciesCmd)
+	s.recaptchaFirewallPoliciesCmd.AddCommand(all...)
+	s.recaptchaCmd.AddCommand(s.recaptchaFirewallPoliciesCmd)
 }
 
 // parseRcpFirewallActions expands a comma-separated action string into a
@@ -135,49 +90,49 @@ func parseRcpFirewallActions(spec string) ([]*recaptcha.GoogleCloudRecaptchaente
 	return out, nil
 }
 
-func rcpProjectParent() (string, error) {
-	project, err := resolveProject()
+func (s *recaptchaCmds) rcpProjectParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
 	return "projects/" + project, nil
 }
 
-func rcpFPName(id string) (string, error) {
+func (s *recaptchaCmds) rcpFPName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := rcpProjectParent()
+	parent, err := s.rcpProjectParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/firewallpolicies/%s", parent, id), nil
 }
 
-func rcpFPBodyFromFlags() (*recaptcha.GoogleCloudRecaptchaenterpriseV1FirewallPolicy, error) {
-	actions, err := parseRcpFirewallActions(flagRcpFPActions)
+func (s *recaptchaCmds) rcpFPBodyFromFlags() (*recaptcha.GoogleCloudRecaptchaenterpriseV1FirewallPolicy, error) {
+	actions, err := parseRcpFirewallActions(s.flagRcpFPActions)
 	if err != nil {
 		return nil, err
 	}
 	return &recaptcha.GoogleCloudRecaptchaenterpriseV1FirewallPolicy{
-		Description: flagRcpFPDescription,
-		Path:        flagRcpFPPath,
-		Condition:   flagRcpFPCondition,
+		Description: s.flagRcpFPDescription,
+		Path:        s.flagRcpFPPath,
+		Condition:   s.flagRcpFPCondition,
 		Actions:     actions,
 	}, nil
 }
 
-func runRcpFPCreate(cmd *cobra.Command, args []string) error {
-	parent, err := rcpProjectParent()
+func (s *recaptchaCmds) runRcpFPCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.rcpProjectParent()
 	if err != nil {
 		return err
 	}
-	body, err := rcpFPBodyFromFlags()
+	body, err := s.rcpFPBodyFromFlags()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -185,33 +140,33 @@ func runRcpFPCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating firewall policy: %w", err)
 	}
-	return emitFormatted(got, flagRcpFPFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpFPFormat)
 }
 
-func runRcpFPDelete(cmd *cobra.Command, args []string) error {
-	name, err := rcpFPName(args[0])
+func (s *recaptchaCmds) runRcpFPDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpFPName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Firewallpolicies.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting firewall policy: %w", err)
 	}
-	fmt.Printf("Deleted firewall policy [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted firewall policy [%s].\n", args[0])
 	return nil
 }
 
-func runRcpFPDescribe(cmd *cobra.Command, args []string) error {
-	name, err := rcpFPName(args[0])
+func (s *recaptchaCmds) runRcpFPDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpFPName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -219,16 +174,16 @@ func runRcpFPDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing firewall policy: %w", err)
 	}
-	return emitFormatted(got, flagRcpFPFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpFPFormat)
 }
 
-func runRcpFPList(cmd *cobra.Command, args []string) error {
-	parent, err := rcpProjectParent()
+func (s *recaptchaCmds) runRcpFPList(cmd *cobra.Command, args []string) error {
+	parent, err := s.rcpProjectParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -236,8 +191,8 @@ func runRcpFPList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Firewallpolicies.List(parent).Context(ctx)
-		if flagRcpFPPageSize > 0 {
-			call = call.PageSize(flagRcpFPPageSize)
+		if s.flagRcpFPPageSize > 0 {
+			call = call.PageSize(s.flagRcpFPPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -252,18 +207,18 @@ func runRcpFPList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagRcpFPFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagRcpFPFormat)
 }
 
-func runRcpFPReorder(cmd *cobra.Command, args []string) error {
-	parent, err := rcpProjectParent()
+func (s *recaptchaCmds) runRcpFPReorder(cmd *cobra.Command, args []string) error {
+	parent, err := s.rcpProjectParent()
 	if err != nil {
 		return err
 	}
 	// The API expects fully-qualified names in the same project scope, so
 	// promote bare IDs to `projects/PROJECT/firewallpolicies/POLICY_ID`.
-	full := make([]string, 0, len(flagRcpFPNames))
-	for _, n := range flagRcpFPNames {
+	full := make([]string, 0, len(s.flagRcpFPNames))
+	for _, n := range s.flagRcpFPNames {
 		if strings.HasPrefix(n, "projects/") {
 			full = append(full, n)
 		} else {
@@ -271,8 +226,8 @@ func runRcpFPReorder(cmd *cobra.Command, args []string) error {
 		}
 	}
 	body := &recaptcha.GoogleCloudRecaptchaenterpriseV1ReorderFirewallPoliciesRequest{Names: full}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -280,19 +235,19 @@ func runRcpFPReorder(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("reordering firewall policies: %w", err)
 	}
-	return emitFormatted(got, flagRcpFPFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpFPFormat)
 }
 
-func runRcpFPUpdate(cmd *cobra.Command, args []string) error {
-	name, err := rcpFPName(args[0])
+func (s *recaptchaCmds) runRcpFPUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.rcpFPName(args[0])
 	if err != nil {
 		return err
 	}
-	body, err := rcpFPBodyFromFlags()
+	body, err := s.rcpFPBodyFromFlags()
 	if err != nil {
 		return err
 	}
-	mask := flagRcpFPUpdateMask
+	mask := s.flagRcpFPUpdateMask
 	if mask == "" {
 		var fields []string
 		if body.Description != "" {
@@ -309,8 +264,8 @@ func runRcpFPUpdate(cmd *cobra.Command, args []string) error {
 		}
 		mask = strings.Join(fields, ",")
 	}
-	ctx := context.Background()
-	svc, err := gcp.ReCaptchaEnterpriseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ReCaptchaEnterprise(ctx)
 	if err != nil {
 		return err
 	}
@@ -322,5 +277,5 @@ func runRcpFPUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating firewall policy: %w", err)
 	}
-	return emitFormatted(got, flagRcpFPFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRcpFPFormat)
 }

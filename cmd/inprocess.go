@@ -89,6 +89,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newDeploymentManagerCmd(inv),
 		newEndpointsCmd(inv),
 		newBeyondcorpCmd(inv),
+		newRecaptchaCmd(inv),
 	}
 }
 
