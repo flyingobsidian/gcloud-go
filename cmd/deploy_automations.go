@@ -1,83 +1,53 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	clouddeploy "google.golang.org/api/clouddeploy/v1"
 )
 
 // --- gcloud deploy automations (#1525) ---
 
-var deployAutoCmd = &cobra.Command{Use: "automations", Short: "Manage Cloud Deploy automations"}
-
-var (
-	flagDeployAutoRegion   string
-	flagDeployAutoPipeline string
-	flagDeployAutoFormat   string
-	flagDeployAutoPageSize int64
-)
-
-var (
-	deployAutoDeleteCmd = &cobra.Command{
-		Use: "delete AUTOMATION", Short: "Delete an automation",
-		Args: cobra.ExactArgs(1), RunE: runDeployAutoDelete,
-	}
-	deployAutoDescribeCmd = &cobra.Command{
-		Use: "describe AUTOMATION", Short: "Describe an automation",
-		Args: cobra.ExactArgs(1), RunE: runDeployAutoDescribe,
-	}
-	deployAutoExportCmd = &cobra.Command{
-		Use: "export AUTOMATION", Short: "Export an automation",
-		Args: cobra.ExactArgs(1), RunE: runDeployAutoExport,
-	}
-	deployAutoListCmd = &cobra.Command{
-		Use: "list", Short: "List automations for a delivery pipeline",
-		Args: cobra.NoArgs, RunE: runDeployAutoList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{deployAutoDeleteCmd, deployAutoDescribeCmd, deployAutoExportCmd, deployAutoListCmd}
+func (s *deployCmds) initDeployAutomations() {
+	all := []*cobra.Command{s.deployAutoDeleteCmd, s.deployAutoDescribeCmd, s.deployAutoExportCmd, s.deployAutoListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDeployAutoRegion, "region", "", "Cloud Deploy region (required)")
+		c.Flags().StringVar(&s.flagDeployAutoRegion, "region", "", "Cloud Deploy region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDeployAutoPipeline, "delivery-pipeline", "",
+		c.Flags().StringVar(&s.flagDeployAutoPipeline, "delivery-pipeline", "",
 			"Delivery pipeline (required)")
 		_ = c.MarkFlagRequired("delivery-pipeline")
-		c.Flags().StringVar(&flagDeployAutoFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDeployAutoFormat, "format", "", "Output format")
 	}
-	deployAutoListCmd.Flags().Int64Var(&flagDeployAutoPageSize, "page-size", 0, "Maximum results per page")
+	s.deployAutoListCmd.Flags().Int64Var(&s.flagDeployAutoPageSize, "page-size", 0, "Maximum results per page")
 
-	deployAutoCmd.AddCommand(all...)
-	deployCmd.AddCommand(deployAutoCmd)
+	s.deployAutoCmd.AddCommand(all...)
+	s.deployCmd.AddCommand(s.deployAutoCmd)
 }
 
-func deployAutoParent() (string, error) {
-	project, err := resolveProject()
+func (s *deployCmds) deployAutoParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return deployChild("deliveryPipelines", flagDeployAutoPipeline, deployLocationParent(project, flagDeployAutoRegion)), nil
+	return deployChild("deliveryPipelines", s.flagDeployAutoPipeline, deployLocationParent(project, s.flagDeployAutoRegion)), nil
 }
 
-func deployAutoName(id string) (string, error) {
-	parent, err := deployAutoParent()
+func (s *deployCmds) deployAutoName(id string) (string, error) {
+	parent, err := s.deployAutoParent()
 	if err != nil {
 		return "", err
 	}
 	return deployChild("automations", id, parent), nil
 }
 
-func runDeployAutoDelete(cmd *cobra.Command, args []string) error {
-	name, err := deployAutoName(args[0])
+func (s *deployCmds) runDeployAutoDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.deployAutoName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -85,17 +55,17 @@ func runDeployAutoDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting automation: %w", err)
 	}
-	fmt.Printf("Delete request issued for automation [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDeployAutoFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for automation [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDeployAutoFormat)
 }
 
-func runDeployAutoDescribe(cmd *cobra.Command, args []string) error {
-	name, err := deployAutoName(args[0])
+func (s *deployCmds) runDeployAutoDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.deployAutoName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -103,16 +73,16 @@ func runDeployAutoDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing automation: %w", err)
 	}
-	return emitFormatted(got, flagDeployAutoFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDeployAutoFormat)
 }
 
-func runDeployAutoExport(cmd *cobra.Command, args []string) error {
-	name, err := deployAutoName(args[0])
+func (s *deployCmds) runDeployAutoExport(cmd *cobra.Command, args []string) error {
+	name, err := s.deployAutoName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,20 +90,20 @@ func runDeployAutoExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting automation: %w", err)
 	}
-	format := flagDeployAutoFormat
+	format := s.flagDeployAutoFormat
 	if format == "" {
 		format = "yaml"
 	}
-	return emitFormatted(got, format)
+	return emitFormattedTo(s.inv.stdout, got, format)
 }
 
-func runDeployAutoList(cmd *cobra.Command, args []string) error {
-	parent, err := deployAutoParent()
+func (s *deployCmds) runDeployAutoList(cmd *cobra.Command, args []string) error {
+	parent, err := s.deployAutoParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -141,8 +111,8 @@ func runDeployAutoList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DeliveryPipelines.Automations.List(parent).Context(ctx)
-		if flagDeployAutoPageSize > 0 {
-			call = call.PageSize(flagDeployAutoPageSize)
+		if s.flagDeployAutoPageSize > 0 {
+			call = call.PageSize(s.flagDeployAutoPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -157,5 +127,5 @@ func runDeployAutoList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDeployAutoFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDeployAutoFormat)
 }

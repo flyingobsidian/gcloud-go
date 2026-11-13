@@ -1,189 +1,139 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	clouddeploy "google.golang.org/api/clouddeploy/v1"
 )
 
 // --- gcloud deploy rollouts (#1531) ---
 
-var deployRollCmd = &cobra.Command{Use: "rollouts", Short: "Manage Cloud Deploy rollouts"}
-
-var (
-	flagDeployRollRegion   string
-	flagDeployRollPipeline string
-	flagDeployRollRelease  string
-	flagDeployRollFormat   string
-	flagDeployRollPageSize int64
-	flagDeployRollPhaseID  string
-	flagDeployRollJobID    string
-	flagDeployRollOverride []string
-)
-
-var (
-	deployRollAdvanceCmd = &cobra.Command{
-		Use: "advance ROLLOUT", Short: "Advance a rollout to the specified phase",
-		Args: cobra.ExactArgs(1), RunE: runDeployRollAdvance,
-	}
-	deployRollApproveCmd = &cobra.Command{
-		Use: "approve ROLLOUT", Short: "Approve a rollout",
-		Args: cobra.ExactArgs(1), RunE: runDeployRollApprove,
-	}
-	deployRollCancelCmd = &cobra.Command{
-		Use: "cancel ROLLOUT", Short: "Cancel a rollout",
-		Args: cobra.ExactArgs(1), RunE: runDeployRollCancel,
-	}
-	deployRollDescribeCmd = &cobra.Command{
-		Use: "describe ROLLOUT", Short: "Describe a rollout",
-		Args: cobra.ExactArgs(1), RunE: runDeployRollDescribe,
-	}
-	deployRollListCmd = &cobra.Command{
-		Use: "list", Short: "List rollouts for a release",
-		Args: cobra.NoArgs, RunE: runDeployRollList,
-	}
-	deployRollRejectCmd = &cobra.Command{
-		Use: "reject ROLLOUT", Short: "Reject a pending rollout",
-		Args: cobra.ExactArgs(1), RunE: runDeployRollReject,
-	}
-	deployRollIgnoreJobCmd = &cobra.Command{
-		Use: "ignore-job ROLLOUT", Short: "Ignore a job in a rollout phase",
-		Args: cobra.ExactArgs(1), RunE: runDeployRollIgnoreJob,
-	}
-	deployRollRetryJobCmd = &cobra.Command{
-		Use: "retry-job ROLLOUT", Short: "Retry a failed job in a rollout phase",
-		Args: cobra.ExactArgs(1), RunE: runDeployRollRetryJob,
-	}
-)
-
-func init() {
+func (s *deployCmds) initDeployRollouts() {
 	all := []*cobra.Command{
-		deployRollAdvanceCmd, deployRollApproveCmd, deployRollCancelCmd, deployRollDescribeCmd,
-		deployRollListCmd, deployRollRejectCmd, deployRollIgnoreJobCmd, deployRollRetryJobCmd,
+		s.deployRollAdvanceCmd, s.deployRollApproveCmd, s.deployRollCancelCmd, s.deployRollDescribeCmd,
+		s.deployRollListCmd, s.deployRollRejectCmd, s.deployRollIgnoreJobCmd, s.deployRollRetryJobCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDeployRollRegion, "region", "", "Cloud Deploy region (required)")
+		c.Flags().StringVar(&s.flagDeployRollRegion, "region", "", "Cloud Deploy region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDeployRollPipeline, "delivery-pipeline", "",
+		c.Flags().StringVar(&s.flagDeployRollPipeline, "delivery-pipeline", "",
 			"Delivery pipeline that owns the release (required)")
 		_ = c.MarkFlagRequired("delivery-pipeline")
-		c.Flags().StringVar(&flagDeployRollRelease, "release", "",
+		c.Flags().StringVar(&s.flagDeployRollRelease, "release", "",
 			"Release that owns the rollout (required)")
 		_ = c.MarkFlagRequired("release")
-		c.Flags().StringVar(&flagDeployRollFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDeployRollFormat, "format", "", "Output format")
 	}
-	deployRollListCmd.Flags().Int64Var(&flagDeployRollPageSize, "page-size", 0, "Maximum results per page")
+	s.deployRollListCmd.Flags().Int64Var(&s.flagDeployRollPageSize, "page-size", 0, "Maximum results per page")
 
-	deployRollAdvanceCmd.Flags().StringVar(&flagDeployRollPhaseID, "phase-id", "",
+	s.deployRollAdvanceCmd.Flags().StringVar(&s.flagDeployRollPhaseID, "phase-id", "",
 		"Phase ID to advance the rollout to (required)")
-	_ = deployRollAdvanceCmd.MarkFlagRequired("phase-id")
+	_ = s.deployRollAdvanceCmd.MarkFlagRequired("phase-id")
 
-	for _, c := range []*cobra.Command{deployRollIgnoreJobCmd, deployRollRetryJobCmd} {
-		c.Flags().StringVar(&flagDeployRollPhaseID, "phase-id", "",
+	for _, c := range []*cobra.Command{s.deployRollIgnoreJobCmd, s.deployRollRetryJobCmd} {
+		c.Flags().StringVar(&s.flagDeployRollPhaseID, "phase-id", "",
 			"Phase ID that owns the job (required)")
 		_ = c.MarkFlagRequired("phase-id")
-		c.Flags().StringVar(&flagDeployRollJobID, "job-id", "",
+		c.Flags().StringVar(&s.flagDeployRollJobID, "job-id", "",
 			"Job ID within the phase (required)")
 		_ = c.MarkFlagRequired("job-id")
 	}
 	for _, c := range []*cobra.Command{
-		deployRollAdvanceCmd, deployRollApproveCmd, deployRollCancelCmd,
-		deployRollRejectCmd, deployRollIgnoreJobCmd, deployRollRetryJobCmd,
+		s.deployRollAdvanceCmd, s.deployRollApproveCmd, s.deployRollCancelCmd,
+		s.deployRollRejectCmd, s.deployRollIgnoreJobCmd, s.deployRollRetryJobCmd,
 	} {
-		c.Flags().StringSliceVar(&flagDeployRollOverride, "override-deploy-policies", nil,
+		c.Flags().StringSliceVar(&s.flagDeployRollOverride, "override-deploy-policies", nil,
 			"Deploy policies to override (repeatable)")
 	}
 
-	deployRollCmd.AddCommand(all...)
-	deployCmd.AddCommand(deployRollCmd)
+	s.deployRollCmd.AddCommand(all...)
+	s.deployCmd.AddCommand(s.deployRollCmd)
 }
 
-func deployRollParent() (string, error) {
-	project, err := resolveProject()
+func (s *deployCmds) deployRollParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	pipeline := deployChild("deliveryPipelines", flagDeployRollPipeline, deployLocationParent(project, flagDeployRollRegion))
-	return deployChild("releases", flagDeployRollRelease, pipeline), nil
+	pipeline := deployChild("deliveryPipelines", s.flagDeployRollPipeline, deployLocationParent(project, s.flagDeployRollRegion))
+	return deployChild("releases", s.flagDeployRollRelease, pipeline), nil
 }
 
-func deployRollName(id string) (string, error) {
-	parent, err := deployRollParent()
+func (s *deployCmds) deployRollName(id string) (string, error) {
+	parent, err := s.deployRollParent()
 	if err != nil {
 		return "", err
 	}
 	return deployChild("rollouts", id, parent), nil
 }
 
-func runDeployRollAdvance(cmd *cobra.Command, args []string) error {
-	name, err := deployRollName(args[0])
+func (s *deployCmds) runDeployRollAdvance(cmd *cobra.Command, args []string) error {
+	name, err := s.deployRollName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.Advance(name, &clouddeploy.AdvanceRolloutRequest{
-		PhaseId:              flagDeployRollPhaseID,
-		OverrideDeployPolicy: flagDeployRollOverride,
+		PhaseId:              s.flagDeployRollPhaseID,
+		OverrideDeployPolicy: s.flagDeployRollOverride,
 	}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("advancing rollout: %w", err)
 	}
-	fmt.Printf("Advanced rollout [%s] to phase [%s].\n", args[0], flagDeployRollPhaseID)
+	fmt.Fprintf(s.inv.stdout, "Advanced rollout [%s] to phase [%s].\n", args[0], s.flagDeployRollPhaseID)
 	return nil
 }
 
-func runDeployRollApprove(cmd *cobra.Command, args []string) error {
-	name, err := deployRollName(args[0])
+func (s *deployCmds) runDeployRollApprove(cmd *cobra.Command, args []string) error {
+	name, err := s.deployRollName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.Approve(name, &clouddeploy.ApproveRolloutRequest{
 		Approved:             true,
-		OverrideDeployPolicy: flagDeployRollOverride,
+		OverrideDeployPolicy: s.flagDeployRollOverride,
 	}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("approving rollout: %w", err)
 	}
-	fmt.Printf("Approved rollout [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Approved rollout [%s].\n", args[0])
 	return nil
 }
 
-func runDeployRollCancel(cmd *cobra.Command, args []string) error {
-	name, err := deployRollName(args[0])
+func (s *deployCmds) runDeployRollCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.deployRollName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.Cancel(name, &clouddeploy.CancelRolloutRequest{
-		OverrideDeployPolicy: flagDeployRollOverride,
+		OverrideDeployPolicy: s.flagDeployRollOverride,
 	}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling rollout: %w", err)
 	}
-	fmt.Printf("Cancelled rollout [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled rollout [%s].\n", args[0])
 	return nil
 }
 
-func runDeployRollDescribe(cmd *cobra.Command, args []string) error {
-	name, err := deployRollName(args[0])
+func (s *deployCmds) runDeployRollDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.deployRollName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -191,16 +141,16 @@ func runDeployRollDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing rollout: %w", err)
 	}
-	return emitFormatted(got, flagDeployRollFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDeployRollFormat)
 }
 
-func runDeployRollList(cmd *cobra.Command, args []string) error {
-	parent, err := deployRollParent()
+func (s *deployCmds) runDeployRollList(cmd *cobra.Command, args []string) error {
+	parent, err := s.deployRollParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -208,8 +158,8 @@ func runDeployRollList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.List(parent).Context(ctx)
-		if flagDeployRollPageSize > 0 {
-			call = call.PageSize(flagDeployRollPageSize)
+		if s.flagDeployRollPageSize > 0 {
+			call = call.PageSize(s.flagDeployRollPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -224,67 +174,67 @@ func runDeployRollList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDeployRollFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDeployRollFormat)
 }
 
-func runDeployRollReject(cmd *cobra.Command, args []string) error {
-	name, err := deployRollName(args[0])
+func (s *deployCmds) runDeployRollReject(cmd *cobra.Command, args []string) error {
+	name, err := s.deployRollName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.Approve(name, &clouddeploy.ApproveRolloutRequest{
 		Approved:             false,
-		OverrideDeployPolicy: flagDeployRollOverride,
+		OverrideDeployPolicy: s.flagDeployRollOverride,
 	}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("rejecting rollout: %w", err)
 	}
-	fmt.Printf("Rejected rollout [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Rejected rollout [%s].\n", args[0])
 	return nil
 }
 
-func runDeployRollIgnoreJob(cmd *cobra.Command, args []string) error {
-	name, err := deployRollName(args[0])
+func (s *deployCmds) runDeployRollIgnoreJob(cmd *cobra.Command, args []string) error {
+	name, err := s.deployRollName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.IgnoreJob(name, &clouddeploy.IgnoreJobRequest{
-		PhaseId:              flagDeployRollPhaseID,
-		JobId:                flagDeployRollJobID,
-		OverrideDeployPolicy: flagDeployRollOverride,
+		PhaseId:              s.flagDeployRollPhaseID,
+		JobId:                s.flagDeployRollJobID,
+		OverrideDeployPolicy: s.flagDeployRollOverride,
 	}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("ignoring job: %w", err)
 	}
-	fmt.Printf("Ignored job [%s] in phase [%s] of rollout [%s].\n", flagDeployRollJobID, flagDeployRollPhaseID, args[0])
+	fmt.Fprintf(s.inv.stdout, "Ignored job [%s] in phase [%s] of rollout [%s].\n", s.flagDeployRollJobID, s.flagDeployRollPhaseID, args[0])
 	return nil
 }
 
-func runDeployRollRetryJob(cmd *cobra.Command, args []string) error {
-	name, err := deployRollName(args[0])
+func (s *deployCmds) runDeployRollRetryJob(cmd *cobra.Command, args []string) error {
+	name, err := s.deployRollName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.RetryJob(name, &clouddeploy.RetryJobRequest{
-		PhaseId:              flagDeployRollPhaseID,
-		JobId:                flagDeployRollJobID,
-		OverrideDeployPolicy: flagDeployRollOverride,
+		PhaseId:              s.flagDeployRollPhaseID,
+		JobId:                s.flagDeployRollJobID,
+		OverrideDeployPolicy: s.flagDeployRollOverride,
 	}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("retrying job: %w", err)
 	}
-	fmt.Printf("Retried job [%s] in phase [%s] of rollout [%s].\n", flagDeployRollJobID, flagDeployRollPhaseID, args[0])
+	fmt.Fprintf(s.inv.stdout, "Retried job [%s] in phase [%s] of rollout [%s].\n", s.flagDeployRollJobID, s.flagDeployRollPhaseID, args[0])
 	return nil
 }
