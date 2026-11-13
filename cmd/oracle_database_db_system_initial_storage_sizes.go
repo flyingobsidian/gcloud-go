@@ -1,52 +1,34 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database db-system-initial-storage-sizes (#1283, #1563) ---
 
-var oracleDbSystemInitialStorageSizesCmd = &cobra.Command{
-	Use:   "db-system-initial-storage-sizes",
-	Short: "Manage Oracle DB system initial storage sizes",
-}
-
-var (
-	flagOdbSizLocation string
-	flagOdbSizFormat   string
-	flagOdbSizPageSize int64
-)
-
-var oracleSizListCmd = &cobra.Command{
-	Use: "list", Short: "List Oracle DB system initial storage sizes in a location",
-	Args: cobra.NoArgs, RunE: runOracleSizList,
-}
-
-func init() {
-	all := []*cobra.Command{oracleSizListCmd}
+func (s *oracleDatabaseCmds) initOracleDatabaseDbSystemInitialStorageSizes() {
+	all := []*cobra.Command{s.oracleSizListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbSizLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbSizLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbSizFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbSizFormat, "format", "", "Output format")
 	}
-	oracleSizListCmd.Flags().Int64Var(&flagOdbSizPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleSizListCmd.Flags().Int64Var(&s.flagOdbSizPageSize, "page-size", 0, "Maximum results per page")
 
-	oracleDbSystemInitialStorageSizesCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleDbSystemInitialStorageSizesCmd)
+	s.oracleDbSystemInitialStorageSizesCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleDbSystemInitialStorageSizesCmd)
 }
 
-func runOracleSizList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbSizLocation)
+func (s *oracleDatabaseCmds) runOracleSizList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbSizLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -54,8 +36,8 @@ func runOracleSizList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DbSystemInitialStorageSizes.List(parent).Context(ctx)
-		if flagOdbSizPageSize > 0 {
-			call = call.PageSize(flagOdbSizPageSize)
+		if s.flagOdbSizPageSize > 0 {
+			call = call.PageSize(s.flagOdbSizPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -70,5 +52,5 @@ func runOracleSizList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbSizFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbSizFormat)
 }

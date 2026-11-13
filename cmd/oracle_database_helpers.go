@@ -6,8 +6,8 @@ import (
 )
 
 // odbLocationParent returns projects/PROJECT/locations/LOCATION.
-func odbLocationParent(location string) (string, error) {
-	project, err := resolveProject()
+func (s *oracleDatabaseCmds) odbLocationParent(location string) (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
@@ -18,11 +18,11 @@ func odbLocationParent(location string) (string, error) {
 }
 
 // odbResource returns projects/.../COLLECTION/ID.
-func odbResource(location, collection, id string) (string, error) {
+func (s *oracleDatabaseCmds) odbResource(location, collection, id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := odbLocationParent(location)
+	parent, err := s.odbLocationParent(location)
 	if err != nil {
 		return "", err
 	}

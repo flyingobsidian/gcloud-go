@@ -1,64 +1,39 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database pluggable-databases (#1278) ---
 
-var oraclePluggableDatabasesCmd = &cobra.Command{
-	Use:   "pluggable-databases",
-	Short: "Manage Oracle pluggable databases",
-}
-
-var (
-	flagOdbPdbLocation string
-	flagOdbPdbFormat   string
-	flagOdbPdbPageSize int64
-	flagOdbPdbFilter   string
-)
-
-var (
-	oraclePdbDescribeCmd = &cobra.Command{
-		Use: "describe DATABASE", Short: "Describe a pluggable database",
-		Args: cobra.ExactArgs(1), RunE: runOraclePdbDescribe,
-	}
-	oraclePdbListCmd = &cobra.Command{
-		Use: "list", Short: "List pluggable databases in a location",
-		Args: cobra.NoArgs, RunE: runOraclePdbList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{oraclePdbDescribeCmd, oraclePdbListCmd}
+func (s *oracleDatabaseCmds) initOracleDatabasePluggableDatabases() {
+	all := []*cobra.Command{s.oraclePdbDescribeCmd, s.oraclePdbListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbPdbLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbPdbLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbPdbFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbPdbFormat, "format", "", "Output format")
 	}
-	oraclePdbListCmd.Flags().Int64Var(&flagOdbPdbPageSize, "page-size", 0, "Maximum results per page")
-	oraclePdbListCmd.Flags().StringVar(&flagOdbPdbFilter, "filter", "", "Server-side filter expression")
+	s.oraclePdbListCmd.Flags().Int64Var(&s.flagOdbPdbPageSize, "page-size", 0, "Maximum results per page")
+	s.oraclePdbListCmd.Flags().StringVar(&s.flagOdbPdbFilter, "filter", "", "Server-side filter expression")
 
-	oraclePluggableDatabasesCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oraclePluggableDatabasesCmd)
+	s.oraclePluggableDatabasesCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oraclePluggableDatabasesCmd)
 }
 
-func oraclePdbName(id string) (string, error) {
-	return odbResource(flagOdbPdbLocation, "pluggableDatabases", id)
+func (s *oracleDatabaseCmds) oraclePdbName(id string) (string, error) {
+	return s.odbResource(s.flagOdbPdbLocation, "pluggableDatabases", id)
 }
 
-func runOraclePdbDescribe(cmd *cobra.Command, args []string) error {
-	name, err := oraclePdbName(args[0])
+func (s *oracleDatabaseCmds) runOraclePdbDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.oraclePdbName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -66,16 +41,16 @@ func runOraclePdbDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing pluggable database: %w", err)
 	}
-	return emitFormatted(got, flagOdbPdbFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagOdbPdbFormat)
 }
 
-func runOraclePdbList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbPdbLocation)
+func (s *oracleDatabaseCmds) runOraclePdbList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbPdbLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -83,11 +58,11 @@ func runOraclePdbList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.PluggableDatabases.List(parent).Context(ctx)
-		if flagOdbPdbPageSize > 0 {
-			call = call.PageSize(flagOdbPdbPageSize)
+		if s.flagOdbPdbPageSize > 0 {
+			call = call.PageSize(s.flagOdbPdbPageSize)
 		}
-		if flagOdbPdbFilter != "" {
-			call = call.Filter(flagOdbPdbFilter)
+		if s.flagOdbPdbFilter != "" {
+			call = call.Filter(s.flagOdbPdbFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -102,5 +77,5 @@ func runOraclePdbList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbPdbFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbPdbFormat)
 }

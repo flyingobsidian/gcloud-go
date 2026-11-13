@@ -1,106 +1,73 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database operations (#1277) ---
 
-var oracleOperationsCmd = &cobra.Command{
-	Use:   "operations",
-	Short: "Manage Oracle Database long-running operations",
-}
-
-var (
-	flagOdbOpLocation string
-	flagOdbOpFormat   string
-	flagOdbOpFilter   string
-	flagOdbOpPageSize int64
-)
-
-var (
-	oracleOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel an Oracle Database operation",
-		Args: cobra.ExactArgs(1), RunE: runOracleOpCancel,
-	}
-	oracleOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete an Oracle Database operation",
-		Args: cobra.ExactArgs(1), RunE: runOracleOpDelete,
-	}
-	oracleOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an Oracle Database operation",
-		Args: cobra.ExactArgs(1), RunE: runOracleOpDescribe,
-	}
-	oracleOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Oracle Database operations in a location",
-		Args: cobra.NoArgs, RunE: runOracleOpList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{oracleOpCancelCmd, oracleOpDeleteCmd, oracleOpDescribeCmd, oracleOpListCmd}
+func (s *oracleDatabaseCmds) initOracleDatabaseOperations() {
+	all := []*cobra.Command{s.oracleOpCancelCmd, s.oracleOpDeleteCmd, s.oracleOpDescribeCmd, s.oracleOpListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbOpLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbOpLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbOpFormat, "format", "", "Output format")
 	}
-	oracleOpListCmd.Flags().StringVar(&flagOdbOpFilter, "filter", "", "Server-side filter expression")
-	oracleOpListCmd.Flags().Int64Var(&flagOdbOpPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleOpListCmd.Flags().StringVar(&s.flagOdbOpFilter, "filter", "", "Server-side filter expression")
+	s.oracleOpListCmd.Flags().Int64Var(&s.flagOdbOpPageSize, "page-size", 0, "Maximum results per page")
 
-	oracleOperationsCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleOperationsCmd)
+	s.oracleOperationsCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleOperationsCmd)
 }
 
-func oracleOpName(id string) (string, error) {
-	return odbResource(flagOdbOpLocation, "operations", id)
+func (s *oracleDatabaseCmds) oracleOpName(id string) (string, error) {
+	return s.odbResource(s.flagOdbOpLocation, "operations", id)
 }
 
-func runOracleOpCancel(cmd *cobra.Command, args []string) error {
-	name, err := oracleOpName(args[0])
+func (s *oracleDatabaseCmds) runOracleOpCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Cancel(name, &oracledatabase.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runOracleOpDelete(cmd *cobra.Command, args []string) error {
-	name, err := oracleOpName(args[0])
+func (s *oracleDatabaseCmds) runOracleOpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runOracleOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := oracleOpName(args[0])
+func (s *oracleDatabaseCmds) runOracleOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,16 +75,16 @@ func runOracleOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagOdbOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagOdbOpFormat)
 }
 
-func runOracleOpList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbOpLocation)
+func (s *oracleDatabaseCmds) runOracleOpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbOpLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -125,11 +92,11 @@ func runOracleOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Operations.List(parent).Context(ctx)
-		if flagOdbOpFilter != "" {
-			call = call.Filter(flagOdbOpFilter)
+		if s.flagOdbOpFilter != "" {
+			call = call.Filter(s.flagOdbOpFilter)
 		}
-		if flagOdbOpPageSize > 0 {
-			call = call.PageSize(flagOdbOpPageSize)
+		if s.flagOdbOpPageSize > 0 {
+			call = call.PageSize(s.flagOdbOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -144,5 +111,5 @@ func runOracleOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbOpFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbOpFormat)
 }

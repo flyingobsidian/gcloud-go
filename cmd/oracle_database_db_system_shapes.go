@@ -1,54 +1,35 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database db-system-shapes (#1266) ---
 
-var oracleDbSystemShapesCmd = &cobra.Command{
-	Use:   "db-system-shapes",
-	Short: "Manage Oracle DB system shapes",
-}
-
-var (
-	flagOdbShapeLocation string
-	flagOdbShapeFormat   string
-	flagOdbShapeFilter   string
-	flagOdbShapePageSize int64
-)
-
-var oracleShapeListCmd = &cobra.Command{
-	Use: "list", Short: "List Oracle DB system shapes in a location",
-	Args: cobra.NoArgs, RunE: runOracleShapeList,
-}
-
-func init() {
-	all := []*cobra.Command{oracleShapeListCmd}
+func (s *oracleDatabaseCmds) initOracleDatabaseDbSystemShapes() {
+	all := []*cobra.Command{s.oracleShapeListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbShapeLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbShapeLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbShapeFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbShapeFormat, "format", "", "Output format")
 	}
-	oracleShapeListCmd.Flags().StringVar(&flagOdbShapeFilter, "filter", "", "Server-side filter expression")
-	oracleShapeListCmd.Flags().Int64Var(&flagOdbShapePageSize, "page-size", 0, "Maximum results per page")
+	s.oracleShapeListCmd.Flags().StringVar(&s.flagOdbShapeFilter, "filter", "", "Server-side filter expression")
+	s.oracleShapeListCmd.Flags().Int64Var(&s.flagOdbShapePageSize, "page-size", 0, "Maximum results per page")
 
-	oracleDbSystemShapesCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleDbSystemShapesCmd)
+	s.oracleDbSystemShapesCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleDbSystemShapesCmd)
 }
 
-func runOracleShapeList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbShapeLocation)
+func (s *oracleDatabaseCmds) runOracleShapeList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbShapeLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -56,11 +37,11 @@ func runOracleShapeList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DbSystemShapes.List(parent).Context(ctx)
-		if flagOdbShapeFilter != "" {
-			call = call.Filter(flagOdbShapeFilter)
+		if s.flagOdbShapeFilter != "" {
+			call = call.Filter(s.flagOdbShapeFilter)
 		}
-		if flagOdbShapePageSize > 0 {
-			call = call.PageSize(flagOdbShapePageSize)
+		if s.flagOdbShapePageSize > 0 {
+			call = call.PageSize(s.flagOdbShapePageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -75,5 +56,5 @@ func runOracleShapeList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbShapeFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbShapeFormat)
 }

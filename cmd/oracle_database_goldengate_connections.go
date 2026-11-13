@@ -1,82 +1,48 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database goldengate-connections (#1271) ---
 
-var oracleGgConnectionsCmd = &cobra.Command{
-	Use:   "goldengate-connections",
-	Short: "Manage Oracle GoldenGate connections",
-}
-
-var (
-	flagOdbGgCnLocation   string
-	flagOdbGgCnFormat     string
-	flagOdbGgCnConfigFile string
-	flagOdbGgCnPageSize   int64
-	flagOdbGgCnFilter     string
-)
-
-var (
-	oracleGgCnCreateCmd = &cobra.Command{
-		Use: "create CONNECTION", Short: "Create a GoldenGate connection",
-		Args: cobra.ExactArgs(1), RunE: runOracleGgCnCreate,
-	}
-	oracleGgCnDeleteCmd = &cobra.Command{
-		Use: "delete CONNECTION", Short: "Delete a GoldenGate connection",
-		Args: cobra.ExactArgs(1), RunE: runOracleGgCnDelete,
-	}
-	oracleGgCnDescribeCmd = &cobra.Command{
-		Use: "describe CONNECTION", Short: "Describe a GoldenGate connection",
-		Args: cobra.ExactArgs(1), RunE: runOracleGgCnDescribe,
-	}
-	oracleGgCnListCmd = &cobra.Command{
-		Use: "list", Short: "List GoldenGate connections in a location",
-		Args: cobra.NoArgs, RunE: runOracleGgCnList,
-	}
-)
-
-func init() {
+func (s *oracleDatabaseCmds) initOracleDatabaseGoldengateConnections() {
 	all := []*cobra.Command{
-		oracleGgCnCreateCmd, oracleGgCnDeleteCmd,
-		oracleGgCnDescribeCmd, oracleGgCnListCmd,
+		s.oracleGgCnCreateCmd, s.oracleGgCnDeleteCmd,
+		s.oracleGgCnDescribeCmd, s.oracleGgCnListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbGgCnLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbGgCnLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbGgCnFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbGgCnFormat, "format", "", "Output format")
 	}
-	oracleGgCnCreateCmd.Flags().StringVar(&flagOdbGgCnConfigFile, "config-file", "", "YAML/JSON file with GoldengateConnection body (required)")
-	_ = oracleGgCnCreateCmd.MarkFlagRequired("config-file")
-	oracleGgCnListCmd.Flags().Int64Var(&flagOdbGgCnPageSize, "page-size", 0, "Maximum results per page")
-	oracleGgCnListCmd.Flags().StringVar(&flagOdbGgCnFilter, "filter", "", "Server-side filter expression")
+	s.oracleGgCnCreateCmd.Flags().StringVar(&s.flagOdbGgCnConfigFile, "config-file", "", "YAML/JSON file with GoldengateConnection body (required)")
+	_ = s.oracleGgCnCreateCmd.MarkFlagRequired("config-file")
+	s.oracleGgCnListCmd.Flags().Int64Var(&s.flagOdbGgCnPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleGgCnListCmd.Flags().StringVar(&s.flagOdbGgCnFilter, "filter", "", "Server-side filter expression")
 
-	oracleGgConnectionsCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleGgConnectionsCmd)
+	s.oracleGgConnectionsCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleGgConnectionsCmd)
 }
 
-func oracleGgCnName(id string) (string, error) {
-	return odbResource(flagOdbGgCnLocation, "goldengateConnections", id)
+func (s *oracleDatabaseCmds) oracleGgCnName(id string) (string, error) {
+	return s.odbResource(s.flagOdbGgCnLocation, "goldengateConnections", id)
 }
 
-func runOracleGgCnCreate(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbGgCnLocation)
+func (s *oracleDatabaseCmds) runOracleGgCnCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbGgCnLocation)
 	if err != nil {
 		return err
 	}
 	body := &oracledatabase.GoldengateConnection{}
-	if err := loadYAMLOrJSONInto(flagOdbGgCnConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagOdbGgCnConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -84,17 +50,17 @@ func runOracleGgCnCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating goldengate connection: %w", err)
 	}
-	fmt.Printf("Create goldengate connection [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbGgCnFormat)
+	fmt.Fprintf(s.inv.stdout, "Create goldengate connection [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbGgCnFormat)
 }
 
-func runOracleGgCnDelete(cmd *cobra.Command, args []string) error {
-	name, err := oracleGgCnName(args[0])
+func (s *oracleDatabaseCmds) runOracleGgCnDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleGgCnName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -102,17 +68,17 @@ func runOracleGgCnDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting goldengate connection: %w", err)
 	}
-	fmt.Printf("Delete goldengate connection [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbGgCnFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete goldengate connection [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbGgCnFormat)
 }
 
-func runOracleGgCnDescribe(cmd *cobra.Command, args []string) error {
-	name, err := oracleGgCnName(args[0])
+func (s *oracleDatabaseCmds) runOracleGgCnDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleGgCnName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,16 +86,16 @@ func runOracleGgCnDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing goldengate connection: %w", err)
 	}
-	return emitFormatted(got, flagOdbGgCnFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagOdbGgCnFormat)
 }
 
-func runOracleGgCnList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbGgCnLocation)
+func (s *oracleDatabaseCmds) runOracleGgCnList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbGgCnLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -137,11 +103,11 @@ func runOracleGgCnList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.GoldengateConnections.List(parent).Context(ctx)
-		if flagOdbGgCnPageSize > 0 {
-			call = call.PageSize(flagOdbGgCnPageSize)
+		if s.flagOdbGgCnPageSize > 0 {
+			call = call.PageSize(s.flagOdbGgCnPageSize)
 		}
-		if flagOdbGgCnFilter != "" {
-			call = call.Filter(flagOdbGgCnFilter)
+		if s.flagOdbGgCnFilter != "" {
+			call = call.Filter(s.flagOdbGgCnFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -156,5 +122,5 @@ func runOracleGgCnList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbGgCnFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbGgCnFormat)
 }

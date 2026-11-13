@@ -1,82 +1,48 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database cloud-vm-clusters (#1265) ---
 
-var oracleCloudVmClustersCmd = &cobra.Command{
-	Use:   "cloud-vm-clusters",
-	Short: "Manage Oracle Cloud VM clusters",
-}
-
-var (
-	flagOdbVmClLocation   string
-	flagOdbVmClFormat     string
-	flagOdbVmClConfigFile string
-	flagOdbVmClPageSize   int64
-	flagOdbVmClFilter     string
-)
-
-var (
-	oracleVmClCreateCmd = &cobra.Command{
-		Use: "create CLUSTER", Short: "Create a cloud VM cluster",
-		Args: cobra.ExactArgs(1), RunE: runOracleVmClCreate,
-	}
-	oracleVmClDeleteCmd = &cobra.Command{
-		Use: "delete CLUSTER", Short: "Delete a cloud VM cluster",
-		Args: cobra.ExactArgs(1), RunE: runOracleVmClDelete,
-	}
-	oracleVmClDescribeCmd = &cobra.Command{
-		Use: "describe CLUSTER", Short: "Describe a cloud VM cluster",
-		Args: cobra.ExactArgs(1), RunE: runOracleVmClDescribe,
-	}
-	oracleVmClListCmd = &cobra.Command{
-		Use: "list", Short: "List cloud VM clusters in a location",
-		Args: cobra.NoArgs, RunE: runOracleVmClList,
-	}
-)
-
-func init() {
+func (s *oracleDatabaseCmds) initOracleDatabaseCloudVmClusters() {
 	all := []*cobra.Command{
-		oracleVmClCreateCmd, oracleVmClDeleteCmd,
-		oracleVmClDescribeCmd, oracleVmClListCmd,
+		s.oracleVmClCreateCmd, s.oracleVmClDeleteCmd,
+		s.oracleVmClDescribeCmd, s.oracleVmClListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbVmClLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbVmClLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbVmClFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbVmClFormat, "format", "", "Output format")
 	}
-	oracleVmClCreateCmd.Flags().StringVar(&flagOdbVmClConfigFile, "config-file", "", "YAML/JSON file with cloud VM cluster body (required)")
-	_ = oracleVmClCreateCmd.MarkFlagRequired("config-file")
-	oracleVmClListCmd.Flags().Int64Var(&flagOdbVmClPageSize, "page-size", 0, "Maximum results per page")
-	oracleVmClListCmd.Flags().StringVar(&flagOdbVmClFilter, "filter", "", "Server-side filter expression")
+	s.oracleVmClCreateCmd.Flags().StringVar(&s.flagOdbVmClConfigFile, "config-file", "", "YAML/JSON file with cloud VM cluster body (required)")
+	_ = s.oracleVmClCreateCmd.MarkFlagRequired("config-file")
+	s.oracleVmClListCmd.Flags().Int64Var(&s.flagOdbVmClPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleVmClListCmd.Flags().StringVar(&s.flagOdbVmClFilter, "filter", "", "Server-side filter expression")
 
-	oracleCloudVmClustersCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleCloudVmClustersCmd)
+	s.oracleCloudVmClustersCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleCloudVmClustersCmd)
 }
 
-func oracleVmClName(id string) (string, error) {
-	return odbResource(flagOdbVmClLocation, "cloudVmClusters", id)
+func (s *oracleDatabaseCmds) oracleVmClName(id string) (string, error) {
+	return s.odbResource(s.flagOdbVmClLocation, "cloudVmClusters", id)
 }
 
-func runOracleVmClCreate(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbVmClLocation)
+func (s *oracleDatabaseCmds) runOracleVmClCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbVmClLocation)
 	if err != nil {
 		return err
 	}
 	body := &oracledatabase.CloudVmCluster{}
-	if err := loadYAMLOrJSONInto(flagOdbVmClConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagOdbVmClConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -84,17 +50,17 @@ func runOracleVmClCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating cloud VM cluster: %w", err)
 	}
-	fmt.Printf("Create cloud VM cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbVmClFormat)
+	fmt.Fprintf(s.inv.stdout, "Create cloud VM cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbVmClFormat)
 }
 
-func runOracleVmClDelete(cmd *cobra.Command, args []string) error {
-	name, err := oracleVmClName(args[0])
+func (s *oracleDatabaseCmds) runOracleVmClDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleVmClName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -102,17 +68,17 @@ func runOracleVmClDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting cloud VM cluster: %w", err)
 	}
-	fmt.Printf("Delete cloud VM cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbVmClFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete cloud VM cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbVmClFormat)
 }
 
-func runOracleVmClDescribe(cmd *cobra.Command, args []string) error {
-	name, err := oracleVmClName(args[0])
+func (s *oracleDatabaseCmds) runOracleVmClDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleVmClName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,16 +86,16 @@ func runOracleVmClDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing cloud VM cluster: %w", err)
 	}
-	return emitFormatted(got, flagOdbVmClFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagOdbVmClFormat)
 }
 
-func runOracleVmClList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbVmClLocation)
+func (s *oracleDatabaseCmds) runOracleVmClList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbVmClLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -137,11 +103,11 @@ func runOracleVmClList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.CloudVmClusters.List(parent).Context(ctx)
-		if flagOdbVmClPageSize > 0 {
-			call = call.PageSize(flagOdbVmClPageSize)
+		if s.flagOdbVmClPageSize > 0 {
+			call = call.PageSize(s.flagOdbVmClPageSize)
 		}
-		if flagOdbVmClFilter != "" {
-			call = call.Filter(flagOdbVmClFilter)
+		if s.flagOdbVmClFilter != "" {
+			call = call.Filter(s.flagOdbVmClFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -156,5 +122,5 @@ func runOracleVmClList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbVmClFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbVmClFormat)
 }

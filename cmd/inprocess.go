@@ -153,6 +153,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newAiCmd(inv),
 		newKmsCmd(inv),
 		newIamCmd(inv),
+		newOracleDatabaseCmd(inv),
 	}
 }
 

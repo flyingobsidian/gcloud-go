@@ -1,54 +1,35 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database db-versions (#1285, #1565) ---
 
-var oracleDbVersionsCmd = &cobra.Command{
-	Use:   "db-versions",
-	Short: "Manage Oracle DB versions",
-}
-
-var (
-	flagOdbDbvLocation string
-	flagOdbDbvFormat   string
-	flagOdbDbvFilter   string
-	flagOdbDbvPageSize int64
-)
-
-var oracleDbvListCmd = &cobra.Command{
-	Use: "list", Short: "List Oracle DB versions in a location",
-	Args: cobra.NoArgs, RunE: runOracleDbvList,
-}
-
-func init() {
-	all := []*cobra.Command{oracleDbvListCmd}
+func (s *oracleDatabaseCmds) initOracleDatabaseDbVersions() {
+	all := []*cobra.Command{s.oracleDbvListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbDbvLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbDbvLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbDbvFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbDbvFormat, "format", "", "Output format")
 	}
-	oracleDbvListCmd.Flags().StringVar(&flagOdbDbvFilter, "filter", "", "Server-side filter expression")
-	oracleDbvListCmd.Flags().Int64Var(&flagOdbDbvPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleDbvListCmd.Flags().StringVar(&s.flagOdbDbvFilter, "filter", "", "Server-side filter expression")
+	s.oracleDbvListCmd.Flags().Int64Var(&s.flagOdbDbvPageSize, "page-size", 0, "Maximum results per page")
 
-	oracleDbVersionsCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleDbVersionsCmd)
+	s.oracleDbVersionsCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleDbVersionsCmd)
 }
 
-func runOracleDbvList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbDbvLocation)
+func (s *oracleDatabaseCmds) runOracleDbvList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbDbvLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -56,11 +37,11 @@ func runOracleDbvList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DbVersions.List(parent).Context(ctx)
-		if flagOdbDbvFilter != "" {
-			call = call.Filter(flagOdbDbvFilter)
+		if s.flagOdbDbvFilter != "" {
+			call = call.Filter(s.flagOdbDbvFilter)
 		}
-		if flagOdbDbvPageSize > 0 {
-			call = call.PageSize(flagOdbDbvPageSize)
+		if s.flagOdbDbvPageSize > 0 {
+			call = call.PageSize(s.flagOdbDbvPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -75,5 +56,5 @@ func runOracleDbvList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbDbvFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbDbvFormat)
 }
