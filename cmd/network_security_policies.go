@@ -470,7 +470,7 @@ func (s *networkSecurityCmds) registerNSGatewaySecurityPolicies(root *cobra.Comm
 	// Rules subgroup lives under a gateway policy: names must include the policy
 	// ID as a prefix, so parent = projects/PROJECT/locations/LOC/gatewaySecurityPolicies/POLICY.
 	rulesCRUD := &nsCRUD[networksecurity.GatewaySecurityPolicyRule]{
-		s: s,
+		s:     s,
 		group: "rules", singular: "gateway security policy rule", collection: "rules",
 		parentFn: s.nsGatewayPolicyParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.GatewaySecurityPolicyRule, requestID string) (*networksecurity.Operation, error) {
