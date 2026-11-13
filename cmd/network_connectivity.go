@@ -3,11 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkconnectivity "google.golang.org/api/networkconnectivity/v1"
 )
@@ -23,38 +21,22 @@ import (
 //     the standard create/delete/describe/list/update subcommands,
 //   - LRO create/delete/patch calls block by default and wait via ncWaitOp.
 
-var networkConnectivityCmd = &cobra.Command{Use: "network-connectivity", Short: "Manage Network Connectivity"}
-
-// shared network-connectivity flags
-var (
-	flagNCLocation   string
-	flagNCFormat     string
-	flagNCFilter     string
-	flagNCConfigFile string
-	flagNCUpdateMask string
-	flagNCAsync      bool
-	flagNCRequestID  string
-	flagNCHub        string
-	flagNCSpokeURI   string
-	flagNCDetails    string
-)
-
 // ncProjectParent returns projects/PROJECT/locations/LOCATION for the current
 // project and --location.
-func ncProjectParent() (string, error) {
-	project, err := resolveProject()
+func (grp *networkConnectivityCmds) ncProjectParent() (string, error) {
+	project, err := grp.inv.project()
 	if err != nil {
 		return "", err
 	}
-	if flagNCLocation == "" {
+	if grp.flagNCLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagNCLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, grp.flagNCLocation), nil
 }
 
 // ncGlobalParent returns projects/PROJECT/locations/global.
-func ncGlobalParent() (string, error) {
-	project, err := resolveProject()
+func (grp *networkConnectivityCmds) ncGlobalParent() (string, error) {
+	project, err := grp.inv.project()
 	if err != nil {
 		return "", err
 	}
@@ -72,9 +54,9 @@ func ncChild(parent, collection, id string) string {
 
 func ncBasename(name string) string { return path.Base(name) }
 
-func ncResolveMask(body any) string {
-	if flagNCUpdateMask != "" {
-		return flagNCUpdateMask
+func (grp *networkConnectivityCmds) ncResolveMask(body any) string {
+	if grp.flagNCUpdateMask != "" {
+		return grp.flagNCUpdateMask
 	}
 	return joinMask(nonEmptyJSONFields(body))
 }
@@ -94,114 +76,93 @@ func ncWaitOp(ctx context.Context, svc *networkconnectivity.Service, op *network
 	return op, nil
 }
 
-func ncFinishOp(ctx context.Context, svc *networkconnectivity.Service, op *networkconnectivity.GoogleLongrunningOperation, verb, name string) error {
-	if flagNCAsync {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, "")
+func (grp *networkConnectivityCmds) ncFinishOp(ctx context.Context, svc *networkconnectivity.Service, op *networkconnectivity.GoogleLongrunningOperation, verb, name string) error {
+	if grp.flagNCAsync {
+		fmt.Fprintf(grp.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(grp.inv.stdout, op, "")
 	}
 	final, err := ncWaitOp(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
+	fmt.Fprintf(grp.inv.stderr, "%s [%s] completed.\n", verb, name)
 	if final.Response != nil {
-		return emitFormatted(final.Response, "")
+		return emitFormattedTo(grp.inv.stdout, final.Response, "")
 	}
 	return nil
 }
 
-func addNCLocationFlag(cmds ...*cobra.Command) {
+func (grp *networkConnectivityCmds) addNCLocationFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNCLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&grp.flagNCLocation, "location", "", "Location (required)")
 	}
 }
 
-func addNCGlobalLocationFlag(cmds ...*cobra.Command) {
+func (grp *networkConnectivityCmds) addNCGlobalLocationFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNCLocation, "location", "global", "Location (defaults to global)")
+		c.Flags().StringVar(&grp.flagNCLocation, "location", "global", "Location (defaults to global)")
 	}
 }
 
-func addNCFormatFlag(cmds ...*cobra.Command) {
+func (grp *networkConnectivityCmds) addNCFormatFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNCFormat, "format", "", "Output format")
+		c.Flags().StringVar(&grp.flagNCFormat, "format", "", "Output format")
 	}
 }
 
-func addNCFilterFlag(cmds ...*cobra.Command) {
+func (grp *networkConnectivityCmds) addNCFilterFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNCFilter, "filter", "", "Server-side list filter")
+		c.Flags().StringVar(&grp.flagNCFilter, "filter", "", "Server-side list filter")
 	}
 }
 
-func addNCAsyncFlag(cmds ...*cobra.Command) {
+func (grp *networkConnectivityCmds) addNCAsyncFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().BoolVar(&flagNCAsync, "async", false, "Do not wait for the operation to complete")
+		c.Flags().BoolVar(&grp.flagNCAsync, "async", false, "Do not wait for the operation to complete")
 	}
 }
 
-func addNCRequestIDFlag(cmds ...*cobra.Command) {
+func (grp *networkConnectivityCmds) addNCRequestIDFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNCRequestID, "request-id", "", "Optional idempotency request ID")
+		c.Flags().StringVar(&grp.flagNCRequestID, "request-id", "", "Optional idempotency request ID")
 	}
 }
 
-func addNCCreateConfigFlag(cmds ...*cobra.Command) {
+func (grp *networkConnectivityCmds) addNCCreateConfigFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNCConfigFile, "config-file", "", "Path to a JSON/YAML file with the resource body (required)")
+		c.Flags().StringVar(&grp.flagNCConfigFile, "config-file", "", "Path to a JSON/YAML file with the resource body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
 }
 
-func addNCUpdateConfigFlag(cmds ...*cobra.Command) {
+func (grp *networkConnectivityCmds) addNCUpdateConfigFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNCConfigFile, "config-file", "", "Path to a JSON/YAML file with the resource body (required)")
+		c.Flags().StringVar(&grp.flagNCConfigFile, "config-file", "", "Path to a JSON/YAML file with the resource body (required)")
 		_ = c.MarkFlagRequired("config-file")
-		c.Flags().StringVar(&flagNCUpdateMask, "update-mask", "", "Comma-separated list of fields to update (defaults to every populated field)")
+		c.Flags().StringVar(&grp.flagNCUpdateMask, "update-mask", "", "Comma-separated list of fields to update (defaults to every populated field)")
 	}
 }
 
 // --- operations (#906) ---
 
-var networkConnectivityOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Network Connectivity operations"}
-
-var (
-	ncOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel an operation",
-		Args: cobra.ExactArgs(1), RunE: runNCOpCancel,
-	}
-	ncOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete an operation",
-		Args: cobra.ExactArgs(1), RunE: runNCOpDelete,
-	}
-	ncOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an operation",
-		Args: cobra.ExactArgs(1), RunE: runNCOpDescribe,
-	}
-	ncOpListCmd = &cobra.Command{
-		Use: "list", Short: "List operations in a location",
-		Args: cobra.NoArgs, RunE: runNCOpList,
-	}
-)
-
-func ncResolveOperationName(id string) (string, error) {
+func (grp *networkConnectivityCmds) ncResolveOperationName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := ncProjectParent()
+	parent, err := grp.ncProjectParent()
 	if err != nil {
 		return "", err
 	}
 	return ncChild(parent, "operations", id), nil
 }
 
-func runNCOpCancel(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCOpCancel(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := ncResolveOperationName(args[0])
+	name, err := grp.ncResolveOperationName(args[0])
 	if err != nil {
 		return err
 	}
@@ -212,13 +173,13 @@ func runNCOpCancel(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runNCOpDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCOpDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := ncResolveOperationName(args[0])
+	name, err := grp.ncResolveOperationName(args[0])
 	if err != nil {
 		return err
 	}
@@ -229,13 +190,13 @@ func runNCOpDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runNCOpDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCOpDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := ncResolveOperationName(args[0])
+	name, err := grp.ncResolveOperationName(args[0])
 	if err != nil {
 		return err
 	}
@@ -243,16 +204,16 @@ func runNCOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagNCFormat)
+	return emitFormattedTo(grp.inv.stdout, op, grp.flagNCFormat)
 }
 
-func runNCOpList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCOpList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	parent, err := ncProjectParent()
+	parent, err := grp.ncProjectParent()
 	if err != nil {
 		return err
 	}
@@ -260,8 +221,8 @@ func runNCOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Operations.List(parent).Context(ctx)
-		if flagNCFilter != "" {
-			call = call.Filter(flagNCFilter)
+		if grp.flagNCFilter != "" {
+			call = call.Filter(grp.flagNCFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -276,38 +237,25 @@ func runNCOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagNCFormat != "" {
-		return emitFormatted(all, flagNCFormat)
+	if grp.flagNCFormat != "" {
+		return emitFormattedTo(grp.inv.stdout, all, grp.flagNCFormat)
 	}
-	printTableHeading(len(all), "%-60s %s\n", "NAME", "DONE")
+	printTableHeadingTo(grp.inv.stdout, len(all), "%-60s %s\n", "NAME", "DONE")
 	for _, o := range all {
-		fmt.Printf("%-60s %v\n", ncBasename(o.Name), o.Done)
+		fmt.Fprintf(grp.inv.stdout, "%-60s %v\n", ncBasename(o.Name), o.Done)
 	}
 	return nil
 }
 
 // --- locations (#903) ---
 
-var networkConnectivityLocationsCmd = &cobra.Command{Use: "locations", Short: "Get Network Connectivity locations"}
-
-var (
-	ncLocDescribeCmd = &cobra.Command{
-		Use: "describe LOCATION", Short: "Describe a location",
-		Args: cobra.ExactArgs(1), RunE: runNCLocDescribe,
-	}
-	ncLocListCmd = &cobra.Command{
-		Use: "list", Short: "List Network Connectivity locations",
-		Args: cobra.NoArgs, RunE: runNCLocList,
-	}
-)
-
-func runNCLocDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCLocDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	project, err := resolveProject()
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
@@ -319,16 +267,16 @@ func runNCLocDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(loc, flagNCFormat)
+	return emitFormattedTo(grp.inv.stdout, loc, grp.flagNCFormat)
 }
 
-func runNCLocList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCLocList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	project, err := resolveProject()
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
@@ -337,8 +285,8 @@ func runNCLocList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.List(parent).Context(ctx)
-		if flagNCFilter != "" {
-			call = call.Filter(flagNCFilter)
+		if grp.flagNCFilter != "" {
+			call = call.Filter(grp.flagNCFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -353,41 +301,105 @@ func runNCLocList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagNCFormat != "" {
-		return emitFormatted(all, flagNCFormat)
+	if grp.flagNCFormat != "" {
+		return emitFormattedTo(grp.inv.stdout, all, grp.flagNCFormat)
 	}
-	printTableHeading(len(all), "%-30s %s\n", "NAME", "LOCATION_ID")
+	printTableHeadingTo(grp.inv.stdout, len(all), "%-30s %s\n", "NAME", "LOCATION_ID")
 	for _, l := range all {
-		fmt.Printf("%-30s %s\n", ncBasename(l.Name), l.LocationId)
+		fmt.Fprintf(grp.inv.stdout, "%-30s %s\n", ncBasename(l.Name), l.LocationId)
 	}
 	return nil
 }
 
-func init() {
+func (grp *networkConnectivityCmds) initNetworkConnectivity() {
 	// operations
-	for _, c := range []*cobra.Command{ncOpCancelCmd, ncOpDeleteCmd, ncOpDescribeCmd, ncOpListCmd} {
-		c.Flags().StringVar(&flagNCLocation, "location", "", "Location (required)")
+	for _, c := range []*cobra.Command{grp.ncOpCancelCmd, grp.ncOpDeleteCmd, grp.ncOpDescribeCmd, grp.ncOpListCmd} {
+		c.Flags().StringVar(&grp.flagNCLocation, "location", "", "Location (required)")
 	}
-	addNCFormatFlag(ncOpDescribeCmd, ncOpListCmd)
-	addNCFilterFlag(ncOpListCmd)
-	networkConnectivityOperationsCmd.AddCommand(ncOpCancelCmd, ncOpDeleteCmd, ncOpDescribeCmd, ncOpListCmd)
-	networkConnectivityCmd.AddCommand(networkConnectivityOperationsCmd)
+	grp.addNCFormatFlag(grp.ncOpDescribeCmd, grp.ncOpListCmd)
+	grp.addNCFilterFlag(grp.ncOpListCmd)
+	grp.networkConnectivityOperationsCmd.AddCommand(grp.ncOpCancelCmd, grp.ncOpDeleteCmd, grp.ncOpDescribeCmd, grp.ncOpListCmd)
+	grp.networkConnectivityCmd.AddCommand(grp.networkConnectivityOperationsCmd)
 
 	// locations
-	addNCFormatFlag(ncLocDescribeCmd, ncLocListCmd)
-	addNCFilterFlag(ncLocListCmd)
-	networkConnectivityLocationsCmd.AddCommand(ncLocDescribeCmd, ncLocListCmd)
-	networkConnectivityCmd.AddCommand(networkConnectivityLocationsCmd)
+	grp.addNCFormatFlag(grp.ncLocDescribeCmd, grp.ncLocListCmd)
+	grp.addNCFilterFlag(grp.ncLocListCmd)
+	grp.networkConnectivityLocationsCmd.AddCommand(grp.ncLocDescribeCmd, grp.ncLocListCmd)
+	grp.networkConnectivityCmd.AddCommand(grp.networkConnectivityLocationsCmd)
 
-	registerNCHubs(networkConnectivityCmd)
-	registerNCSpokes(networkConnectivityCmd)
-	registerNCInternalRanges(networkConnectivityCmd)
-	registerNCPolicyBasedRoutes(networkConnectivityCmd)
-	registerNCRegionalEndpoints(networkConnectivityCmd)
-	registerNCServiceConnectionPolicies(networkConnectivityCmd)
-	registerNCMulticloudDataTransferConfigs(networkConnectivityCmd)
-	registerNCMulticloudDataTransferSupportedServices(networkConnectivityCmd)
-	registerNCTransports(networkConnectivityCmd)
+	grp.registerNCHubs(grp.networkConnectivityCmd)
+	grp.registerNCSpokes(grp.networkConnectivityCmd)
+	grp.registerNCInternalRanges(grp.networkConnectivityCmd)
+	grp.registerNCPolicyBasedRoutes(grp.networkConnectivityCmd)
+	grp.registerNCRegionalEndpoints(grp.networkConnectivityCmd)
+	grp.registerNCServiceConnectionPolicies(grp.networkConnectivityCmd)
+	grp.registerNCMulticloudDataTransferConfigs(grp.networkConnectivityCmd)
+	grp.registerNCMulticloudDataTransferSupportedServices(grp.networkConnectivityCmd)
+	grp.registerNCTransports(grp.networkConnectivityCmd)
 
-	rootCmd.AddCommand(networkConnectivityCmd)
+}
+
+// networkConnectivityCmds holds the commands and flag values of one invocation's "networkConnectivity"
+// command group, so invocations don't share state (#2070).
+type networkConnectivityCmds struct {
+	inv *invocation
+
+	networkConnectivityCmd           *cobra.Command
+	flagNCLocation                   string
+	flagNCFormat                     string
+	flagNCFilter                     string
+	flagNCConfigFile                 string
+	flagNCUpdateMask                 string
+	flagNCAsync                      bool
+	flagNCRequestID                  string
+	flagNCHub                        string
+	flagNCSpokeURI                   string
+	flagNCDetails                    string
+	networkConnectivityOperationsCmd *cobra.Command
+	ncOpCancelCmd                    *cobra.Command
+	ncOpDeleteCmd                    *cobra.Command
+	ncOpDescribeCmd                  *cobra.Command
+	ncOpListCmd                      *cobra.Command
+	networkConnectivityLocationsCmd  *cobra.Command
+	ncLocDescribeCmd                 *cobra.Command
+	ncLocListCmd                     *cobra.Command
+}
+
+// newNetworkConnectivityCmd returns the "networkConnectivity" command group for inv.
+func newNetworkConnectivityCmd(inv *invocation) *cobra.Command {
+	return newNetworkConnectivityCmds(inv).networkConnectivityCmd
+}
+
+// newNetworkConnectivityCmds builds the "networkConnectivity" command group for inv and returns its state.
+func newNetworkConnectivityCmds(inv *invocation) *networkConnectivityCmds {
+	grp := &networkConnectivityCmds{inv: inv}
+	grp.networkConnectivityCmd = &cobra.Command{Use: "network-connectivity", Short: "Manage Network Connectivity"}
+	grp.networkConnectivityOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Network Connectivity operations"}
+	grp.ncOpCancelCmd = &cobra.Command{
+		Use: "cancel OPERATION", Short: "Cancel an operation",
+		Args: cobra.ExactArgs(1), RunE: grp.runNCOpCancel,
+	}
+	grp.ncOpDeleteCmd = &cobra.Command{
+		Use: "delete OPERATION", Short: "Delete an operation",
+		Args: cobra.ExactArgs(1), RunE: grp.runNCOpDelete,
+	}
+	grp.ncOpDescribeCmd = &cobra.Command{
+		Use: "describe OPERATION", Short: "Describe an operation",
+		Args: cobra.ExactArgs(1), RunE: grp.runNCOpDescribe,
+	}
+	grp.ncOpListCmd = &cobra.Command{
+		Use: "list", Short: "List operations in a location",
+		Args: cobra.NoArgs, RunE: grp.runNCOpList,
+	}
+	grp.networkConnectivityLocationsCmd = &cobra.Command{Use: "locations", Short: "Get Network Connectivity locations"}
+	grp.ncLocDescribeCmd = &cobra.Command{
+		Use: "describe LOCATION", Short: "Describe a location",
+		Args: cobra.ExactArgs(1), RunE: grp.runNCLocDescribe,
+	}
+	grp.ncLocListCmd = &cobra.Command{
+		Use: "list", Short: "List Network Connectivity locations",
+		Args: cobra.NoArgs, RunE: grp.runNCLocList,
+	}
+	grp.initNetworkConnectivity()
+	return grp
 }

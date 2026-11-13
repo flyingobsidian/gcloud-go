@@ -4,17 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkconnectivity "google.golang.org/api/networkconnectivity/v1"
 )
 
 // --- internal-ranges (#902) ---
 
-func registerNCInternalRanges(root *cobra.Command) {
+func (grp *networkConnectivityCmds) registerNCInternalRanges(root *cobra.Command) {
 	crud := &ncCRUD[networkconnectivity.InternalRange]{
+		s:     grp,
 		group: "internal-ranges", singular: "internal range", collection: "internalRanges",
-		parentFn: ncProjectParent,
+		parentFn: grp.ncProjectParent,
 		createFn: func(ctx context.Context, svc *networkconnectivity.Service, parent, id string, body *networkconnectivity.InternalRange, requestID string) (*networkconnectivity.GoogleLongrunningOperation, error) {
 			c := svc.Projects.Locations.InternalRanges.Create(parent, body).InternalRangeId(id).Context(ctx)
 			if requestID != "" {
@@ -57,15 +57,16 @@ func registerNCInternalRanges(root *cobra.Command) {
 		secondaryCol:    func(r *networkconnectivity.InternalRange) string { return r.IpCidrRange },
 		secondaryHeader: "IP_CIDR_RANGE",
 	}
-	crud.build(root, "internal-ranges", "Manage internal ranges", addNCLocationFlag, true)
+	crud.build(root, "internal-ranges", "Manage internal ranges", grp.addNCLocationFlag, true)
 }
 
 // --- policy-based-routes (#907) ---
 
-func registerNCPolicyBasedRoutes(root *cobra.Command) {
+func (grp *networkConnectivityCmds) registerNCPolicyBasedRoutes(root *cobra.Command) {
 	crud := &ncCRUD[networkconnectivity.PolicyBasedRoute]{
+		s:     grp,
 		group: "policy-based-routes", singular: "policy based route", collection: "global/policyBasedRoutes",
-		parentFn: ncGlobalParent,
+		parentFn: grp.ncGlobalParent,
 		createFn: func(ctx context.Context, svc *networkconnectivity.Service, parent, id string, body *networkconnectivity.PolicyBasedRoute, requestID string) (*networkconnectivity.GoogleLongrunningOperation, error) {
 			c := svc.Projects.Locations.Global.PolicyBasedRoutes.Create(parent, body).PolicyBasedRouteId(id).Context(ctx)
 			if requestID != "" {
@@ -107,10 +108,11 @@ func registerNCPolicyBasedRoutes(root *cobra.Command) {
 
 // --- regional-endpoints (#908) ---
 
-func registerNCRegionalEndpoints(root *cobra.Command) {
+func (grp *networkConnectivityCmds) registerNCRegionalEndpoints(root *cobra.Command) {
 	crud := &ncCRUD[networkconnectivity.RegionalEndpoint]{
+		s:     grp,
 		group: "regional-endpoints", singular: "regional endpoint", collection: "regionalEndpoints",
-		parentFn: ncProjectParent,
+		parentFn: grp.ncProjectParent,
 		createFn: func(ctx context.Context, svc *networkconnectivity.Service, parent, id string, body *networkconnectivity.RegionalEndpoint, requestID string) (*networkconnectivity.GoogleLongrunningOperation, error) {
 			c := svc.Projects.Locations.RegionalEndpoints.Create(parent, body).RegionalEndpointId(id).Context(ctx)
 			if requestID != "" {
@@ -146,15 +148,16 @@ func registerNCRegionalEndpoints(root *cobra.Command) {
 		secondaryCol:    func(r *networkconnectivity.RegionalEndpoint) string { return r.Address },
 		secondaryHeader: "ADDRESS",
 	}
-	crud.build(root, "regional-endpoints", "Manage regional endpoints", addNCLocationFlag, false)
+	crud.build(root, "regional-endpoints", "Manage regional endpoints", grp.addNCLocationFlag, false)
 }
 
 // --- service-connection-policies (#909) ---
 
-func registerNCServiceConnectionPolicies(root *cobra.Command) {
+func (grp *networkConnectivityCmds) registerNCServiceConnectionPolicies(root *cobra.Command) {
 	crud := &ncCRUD[networkconnectivity.ServiceConnectionPolicy]{
+		s:     grp,
 		group: "service-connection-policies", singular: "service connection policy", collection: "serviceConnectionPolicies",
-		parentFn: ncProjectParent,
+		parentFn: grp.ncProjectParent,
 		createFn: func(ctx context.Context, svc *networkconnectivity.Service, parent, id string, body *networkconnectivity.ServiceConnectionPolicy, requestID string) (*networkconnectivity.GoogleLongrunningOperation, error) {
 			c := svc.Projects.Locations.ServiceConnectionPolicies.Create(parent, body).ServiceConnectionPolicyId(id).Context(ctx)
 			if requestID != "" {
@@ -197,15 +200,16 @@ func registerNCServiceConnectionPolicies(root *cobra.Command) {
 		secondaryCol:    func(r *networkconnectivity.ServiceConnectionPolicy) string { return r.ServiceClass },
 		secondaryHeader: "SERVICE_CLASS",
 	}
-	crud.build(root, "service-connection-policies", "Manage service connection policies", addNCLocationFlag, true)
+	crud.build(root, "service-connection-policies", "Manage service connection policies", grp.addNCLocationFlag, true)
 }
 
 // --- multicloud-data-transfer-configs (#904) ---
 
-func registerNCMulticloudDataTransferConfigs(root *cobra.Command) {
+func (grp *networkConnectivityCmds) registerNCMulticloudDataTransferConfigs(root *cobra.Command) {
 	crud := &ncCRUD[networkconnectivity.MulticloudDataTransferConfig]{
+		s:     grp,
 		group: "multicloud-data-transfer-configs", singular: "multicloud data transfer config", collection: "multicloudDataTransferConfigs",
-		parentFn: ncProjectParent,
+		parentFn: grp.ncProjectParent,
 		createFn: func(ctx context.Context, svc *networkconnectivity.Service, parent, id string, body *networkconnectivity.MulticloudDataTransferConfig, requestID string) (*networkconnectivity.GoogleLongrunningOperation, error) {
 			c := svc.Projects.Locations.MulticloudDataTransferConfigs.Create(parent, body).MulticloudDataTransferConfigId(id).Context(ctx)
 			if requestID != "" {
@@ -250,36 +254,36 @@ func registerNCMulticloudDataTransferConfigs(root *cobra.Command) {
 		},
 		secondaryHeader: "DESTINATIONS",
 	}
-	crud.build(root, "multicloud-data-transfer-configs", "Manage multicloud data transfer configs", addNCLocationFlag, true)
+	crud.build(root, "multicloud-data-transfer-configs", "Manage multicloud data transfer configs", grp.addNCLocationFlag, true)
 }
 
 // --- multicloud-data-transfer-supported-services (#905) ---
 
-func registerNCMulticloudDataTransferSupportedServices(root *cobra.Command) {
+func (grp *networkConnectivityCmds) registerNCMulticloudDataTransferSupportedServices(root *cobra.Command) {
 	g := &cobra.Command{Use: "multicloud-data-transfer-supported-services", Short: "Manage multicloud data transfer supported services"}
 
 	describe := &cobra.Command{
 		Use: "describe SERVICE", Short: "Describe a supported service",
-		Args: cobra.ExactArgs(1), RunE: runNCSupportedServiceDescribe,
+		Args: cobra.ExactArgs(1), RunE: grp.runNCSupportedServiceDescribe,
 	}
 	list := &cobra.Command{
 		Use: "list", Short: "List supported services in a location",
-		Args: cobra.NoArgs, RunE: runNCSupportedServiceList,
+		Args: cobra.NoArgs, RunE: grp.runNCSupportedServiceList,
 	}
-	addNCLocationFlag(describe, list)
-	addNCFormatFlag(describe, list)
+	grp.addNCLocationFlag(describe, list)
+	grp.addNCFormatFlag(describe, list)
 
 	g.AddCommand(describe, list)
 	root.AddCommand(g)
 }
 
-func runNCSupportedServiceDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCSupportedServiceDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	parent, err := ncProjectParent()
+	parent, err := grp.ncProjectParent()
 	if err != nil {
 		return err
 	}
@@ -288,16 +292,16 @@ func runNCSupportedServiceDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing supported service: %w", err)
 	}
-	return emitFormatted(got, flagNCFormat)
+	return emitFormattedTo(grp.inv.stdout, got, grp.flagNCFormat)
 }
 
-func runNCSupportedServiceList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCSupportedServiceList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	parent, err := ncProjectParent()
+	parent, err := grp.ncProjectParent()
 	if err != nil {
 		return err
 	}
@@ -318,22 +322,23 @@ func runNCSupportedServiceList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagNCFormat != "" {
-		return emitFormatted(all, flagNCFormat)
+	if grp.flagNCFormat != "" {
+		return emitFormattedTo(grp.inv.stdout, all, grp.flagNCFormat)
 	}
-	printTableHeading(len(all), "%-50s\n", "NAME")
+	printTableHeadingTo(grp.inv.stdout, len(all), "%-50s\n", "NAME")
 	for _, s := range all {
-		fmt.Printf("%-50s\n", ncBasename(s.Name))
+		fmt.Fprintf(grp.inv.stdout, "%-50s\n", ncBasename(s.Name))
 	}
 	return nil
 }
 
 // --- transports (#911) ---
 
-func registerNCTransports(root *cobra.Command) {
+func (grp *networkConnectivityCmds) registerNCTransports(root *cobra.Command) {
 	crud := &ncCRUD[networkconnectivity.Transport]{
+		s:     grp,
 		group: "transports", singular: "transport", collection: "transports",
-		parentFn: ncProjectParent,
+		parentFn: grp.ncProjectParent,
 		createFn: func(ctx context.Context, svc *networkconnectivity.Service, parent, id string, body *networkconnectivity.Transport, requestID string) (*networkconnectivity.GoogleLongrunningOperation, error) {
 			c := svc.Projects.Locations.Transports.Create(parent, body).TransportId(id).Context(ctx)
 			if requestID != "" {
@@ -376,5 +381,5 @@ func registerNCTransports(root *cobra.Command) {
 		secondaryCol:    func(r *networkconnectivity.Transport) string { return r.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "transports", "Manage transports", addNCLocationFlag, true)
+	crud.build(root, "transports", "Manage transports", grp.addNCLocationFlag, true)
 }

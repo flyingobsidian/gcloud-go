@@ -118,6 +118,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newBuildsCmd(inv),
 		newNotebooksCmd(inv),
 		newDataplexCmd(inv),
+		newNetworkConnectivityCmd(inv),
 	}
 }
 
