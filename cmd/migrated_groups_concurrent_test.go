@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -34,10 +36,10 @@ func migratedLeafPaths(t *testing.T) [][]string {
 
 type invocationResult struct{ stdout, stderr, err string }
 
-// runIsolated runs args in a fresh invocation whose Google APIs are served
-// by api, giving up after a few seconds.
-func runIsolated(t *testing.T, api http.Handler, args ...string) invocationResult {
-	inv, stdout, stderr := newFakeAPIInvocation(t, api)
+// runIsolated runs args in a fresh invocation from newInv, giving up after a
+// few seconds.
+func runIsolated(newInv func() (*invocation, *bytes.Buffer, *bytes.Buffer), args ...string) invocationResult {
+	inv, stdout, stderr := newInv()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	root := newRootCmd(inv, false)
@@ -60,27 +62,27 @@ func TestMigratedGroupsConcurrent(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs every migrated command")
 	}
-	empty := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	newInv := newFakeAPIFactory(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, "{}")
-	})
+	}))
 	var cases [][]string
 	for _, p := range migratedLeafPaths(t) {
-		cases = append(cases, append(p, "--help"))
+		cases = append(cases, slices.Concat(p, []string{"--help"}))
 		if p[len(p)-1] == "list" {
-			cases = append(cases, append(p, "--project=p"))
+			cases = append(cases, slices.Concat(p, []string{"--project=p"}))
 		}
 	}
 	want := make([]invocationResult, len(cases))
 	for i, args := range cases {
-		want[i] = runIsolated(t, empty, args...)
+		want[i] = runIsolated(newInv, args...)
 	}
 	const copies = 3
 	var wg sync.WaitGroup
 	for i, args := range cases {
 		for range copies {
 			wg.Go(func() {
-				if got := runIsolated(t, empty, args...); got != want[i] {
+				if got := runIsolated(newInv, args...); got != want[i] {
 					t.Errorf("%s: concurrent run = %+v, want %+v", strings.Join(args, " "), got, want[i])
 				}
 			})

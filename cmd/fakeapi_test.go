@@ -18,6 +18,13 @@ import (
 // endpoint. It is for testing migrated command groups end to end.
 func newFakeAPIInvocation(t *testing.T, api http.Handler) (*invocation, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
+	return newFakeAPIFactory(t, api)()
+}
+
+// newFakeAPIFactory starts the servers of newFakeAPIInvocation once and
+// returns a function that makes invocations using them.
+func newFakeAPIFactory(t *testing.T, api http.Handler) func() (*invocation, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
 	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"access_token":"fake-token","token_type":"Bearer","expires_in":3600}`))
@@ -50,9 +57,11 @@ func newFakeAPIInvocation(t *testing.T, api http.Handler) (*invocation, *bytes.B
 		}
 	}
 
-	inv, stdout, stderr := newTestInvocation(t, map[string]string{"CLOUDSDK_CONFIG": dir}, "")
-	inv.clientOptions = []option.ClientOption{option.WithEndpoint(apiSrv.URL + "/")}
-	return inv, stdout, stderr
+	return func() (*invocation, *bytes.Buffer, *bytes.Buffer) {
+		inv, stdout, stderr := newTestInvocation(t, map[string]string{"CLOUDSDK_CONFIG": dir}, "")
+		inv.clientOptions = []option.ClientOption{option.WithEndpoint(apiSrv.URL + "/")}
+		return inv, stdout, stderr
+	}
 }
 
 // runInvocation runs args on a root command for inv without the legacy

@@ -1,72 +1,37 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	datamigration "google.golang.org/api/datamigration/v1"
 )
 
-var dmObjectsCmd = &cobra.Command{
-	Use:   "objects",
-	Short: "Manage migration job objects",
-}
-
-var dmObjListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List objects belonging to a migration job",
-	Args:  cobra.NoArgs,
-	RunE:  runDMObjList,
-}
-
-var dmObjLookupCmd = &cobra.Command{
-	Use:   "lookup",
-	Short: "Look up a migration job object by its source identifier",
-	Args:  cobra.NoArgs,
-	RunE:  runDMObjLookup,
-}
-
-var (
-	flagDMObjRegion         string
-	flagDMObjMigrationJob   string
-	flagDMObjFormat         string
-	flagDMObjListPageSize   int64
-	flagDMObjListLimit      int64
-	flagDMObjListFilter     string
-	flagDMObjListURI        bool
-	flagDMObjLookupDatabase string
-	flagDMObjLookupSchema   string
-	flagDMObjLookupTable    string
-	flagDMObjLookupType     string
-)
-
-func init() {
-	for _, c := range []*cobra.Command{dmObjListCmd, dmObjLookupCmd} {
-		c.Flags().StringVar(&flagDMObjRegion, "region", "", "Region containing the migration job (required)")
-		c.Flags().StringVar(&flagDMObjMigrationJob, "migration-job", "", "Name of the parent migration job (required)")
+func (s *databaseMigrationCmds) initDatabaseMigrationObjects() {
+	for _, c := range []*cobra.Command{s.dmObjListCmd, s.dmObjLookupCmd} {
+		c.Flags().StringVar(&s.flagDMObjRegion, "region", "", "Region containing the migration job (required)")
+		c.Flags().StringVar(&s.flagDMObjMigrationJob, "migration-job", "", "Name of the parent migration job (required)")
 		_ = c.MarkFlagRequired("region")
 		_ = c.MarkFlagRequired("migration-job")
 	}
 
-	dmObjListCmd.Flags().StringVar(&flagDMObjFormat, "format", "", "Output format")
-	dmObjListCmd.Flags().Int64Var(&flagDMObjListPageSize, "page-size", 0, "Page size for API pagination")
-	dmObjListCmd.Flags().Int64Var(&flagDMObjListLimit, "limit", 0, "Cap total results (0 = no cap)")
-	dmObjListCmd.Flags().StringVar(&flagDMObjListFilter, "filter", "", "Server-side filter expression")
-	dmObjListCmd.Flags().BoolVar(&flagDMObjListURI, "uri", false, "Print resource names only")
+	s.dmObjListCmd.Flags().StringVar(&s.flagDMObjFormat, "format", "", "Output format")
+	s.dmObjListCmd.Flags().Int64Var(&s.flagDMObjListPageSize, "page-size", 0, "Page size for API pagination")
+	s.dmObjListCmd.Flags().Int64Var(&s.flagDMObjListLimit, "limit", 0, "Cap total results (0 = no cap)")
+	s.dmObjListCmd.Flags().StringVar(&s.flagDMObjListFilter, "filter", "", "Server-side filter expression")
+	s.dmObjListCmd.Flags().BoolVar(&s.flagDMObjListURI, "uri", false, "Print resource names only")
 
-	dmObjLookupCmd.Flags().StringVar(&flagDMObjLookupDatabase, "database", "", "Source database identifier")
-	dmObjLookupCmd.Flags().StringVar(&flagDMObjLookupSchema, "schema", "", "Source schema identifier")
-	dmObjLookupCmd.Flags().StringVar(&flagDMObjLookupTable, "table", "", "Source table identifier")
-	dmObjLookupCmd.Flags().StringVar(&flagDMObjLookupType, "type", "DATABASE",
+	s.dmObjLookupCmd.Flags().StringVar(&s.flagDMObjLookupDatabase, "database", "", "Source database identifier")
+	s.dmObjLookupCmd.Flags().StringVar(&s.flagDMObjLookupSchema, "schema", "", "Source schema identifier")
+	s.dmObjLookupCmd.Flags().StringVar(&s.flagDMObjLookupTable, "table", "", "Source table identifier")
+	s.dmObjLookupCmd.Flags().StringVar(&s.flagDMObjLookupType, "type", "DATABASE",
 		"Kind of object to look up: DATABASE, SCHEMA, or TABLE")
-	dmObjLookupCmd.Flags().StringVar(&flagDMObjFormat, "format", "", "Output format")
+	s.dmObjLookupCmd.Flags().StringVar(&s.flagDMObjFormat, "format", "", "Output format")
 
-	dmObjectsCmd.AddCommand(dmObjListCmd, dmObjLookupCmd)
-	databaseMigrationCmd.AddCommand(dmObjectsCmd)
+	s.dmObjectsCmd.AddCommand(s.dmObjListCmd, s.dmObjLookupCmd)
+	s.databaseMigrationCmd.AddCommand(s.dmObjectsCmd)
 }
 
 func dmObjParent(project, region, mj string) string {
@@ -76,23 +41,23 @@ func dmObjParent(project, region, mj string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/migrationJobs/%s", project, region, mj)
 }
 
-func runDMObjList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMObjList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	parent := dmObjParent(project, flagDMObjRegion, flagDMObjMigrationJob)
+	parent := dmObjParent(project, s.flagDMObjRegion, s.flagDMObjMigrationJob)
 	var all []*datamigration.MigrationJobObject
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.MigrationJobs.Objects.List(parent).Context(ctx)
-		if flagDMObjListPageSize > 0 {
-			call = call.PageSize(flagDMObjListPageSize)
+		if s.flagDMObjListPageSize > 0 {
+			call = call.PageSize(s.flagDMObjListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -102,8 +67,8 @@ func runDMObjList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing migration job objects: %w", err)
 		}
 		all = append(all, resp.MigrationJobObjects...)
-		if flagDMObjListLimit > 0 && int64(len(all)) >= flagDMObjListLimit {
-			all = all[:flagDMObjListLimit]
+		if s.flagDMObjListLimit > 0 && int64(len(all)) >= s.flagDMObjListLimit {
+			all = all[:s.flagDMObjListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -111,46 +76,46 @@ func runDMObjList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDMObjListURI {
+	if s.flagDMObjListURI {
 		for _, o := range all {
-			fmt.Println(o.Name)
+			fmt.Fprintln(s.inv.stdout, o.Name)
 		}
 		return nil
 	}
-	if flagDMObjFormat != "" {
-		return emitFormatted(all, flagDMObjFormat)
+	if s.flagDMObjFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDMObjFormat)
 	}
-	printTableHeading(len(all), "%-40s %-15s %s\n", "NAME", "PHASE", "STATE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-15s %s\n", "NAME", "PHASE", "STATE")
 	for _, o := range all {
-		fmt.Printf("%-40s %-15s %s\n", path.Base(o.Name), o.Phase, o.State)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-15s %s\n", path.Base(o.Name), o.Phase, o.State)
 	}
 	return nil
 }
 
-func runDMObjLookup(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMObjLookup(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	if flagDMObjLookupDatabase == "" {
+	if s.flagDMObjLookupDatabase == "" {
 		return fmt.Errorf("--database is required")
 	}
 	ident := &datamigration.SourceObjectIdentifier{
-		Database: flagDMObjLookupDatabase,
-		Schema:   flagDMObjLookupSchema,
-		Table:    flagDMObjLookupTable,
-		Type:     strings.ToUpper(flagDMObjLookupType),
+		Database: s.flagDMObjLookupDatabase,
+		Schema:   s.flagDMObjLookupSchema,
+		Table:    s.flagDMObjLookupTable,
+		Type:     strings.ToUpper(s.flagDMObjLookupType),
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	parent := dmObjParent(project, flagDMObjRegion, flagDMObjMigrationJob)
+	parent := dmObjParent(project, s.flagDMObjRegion, s.flagDMObjMigrationJob)
 	req := &datamigration.LookupMigrationJobObjectRequest{SourceObjectIdentifier: ident}
 	obj, err := svc.Projects.Locations.MigrationJobs.Objects.Lookup(parent, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("looking up migration job object: %w", err)
 	}
-	return emitFormatted(obj, flagDMObjFormat)
+	return emitFormattedTo(s.inv.stdout, obj, s.flagDMObjFormat)
 }
