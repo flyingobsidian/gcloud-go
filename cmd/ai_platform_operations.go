@@ -1,89 +1,58 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	ml "google.golang.org/api/ml/v1"
 )
 
 // --- gcloud ai-platform operations (#985) ---
 
-var aiPlatformOpsCmd = &cobra.Command{Use: "operations", Short: "Manage AI Platform long-running operations"}
-
-var (
-	flagAIPlatformOpsFormat    string
-	flagAIPlatformOpsPageSize  int64
-	flagAIPlatformOpsFilter    string
-	flagAIPlatformOpsPollEvery time.Duration
-	flagAIPlatformOpsTimeout   time.Duration
-)
-
-var (
-	aiPlatformOpsCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel an AI Platform operation",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformOpsCancel,
-	}
-	aiPlatformOpsDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an AI Platform operation",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformOpsDescribe,
-	}
-	aiPlatformOpsListCmd = &cobra.Command{
-		Use: "list", Short: "List AI Platform operations",
-		Args: cobra.NoArgs, RunE: runAIPlatformOpsList,
-	}
-	aiPlatformOpsWaitCmd = &cobra.Command{
-		Use: "wait OPERATION", Short: "Poll an AI Platform operation until it completes",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformOpsWait,
-	}
-)
-
-func init() {
+func (s *aiPlatformCmds) initAiPlatformOperations() {
 	all := []*cobra.Command{
-		aiPlatformOpsCancelCmd, aiPlatformOpsDescribeCmd, aiPlatformOpsListCmd, aiPlatformOpsWaitCmd,
+		s.aiPlatformOpsCancelCmd, s.aiPlatformOpsDescribeCmd, s.aiPlatformOpsListCmd, s.aiPlatformOpsWaitCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAIPlatformOpsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAIPlatformOpsFormat, "format", "", "Output format")
 	}
-	aiPlatformOpsListCmd.Flags().Int64Var(&flagAIPlatformOpsPageSize, "page-size", 0, "Maximum results per page")
-	aiPlatformOpsListCmd.Flags().StringVar(&flagAIPlatformOpsFilter, "filter", "", "List filter expression")
+	s.aiPlatformOpsListCmd.Flags().Int64Var(&s.flagAIPlatformOpsPageSize, "page-size", 0, "Maximum results per page")
+	s.aiPlatformOpsListCmd.Flags().StringVar(&s.flagAIPlatformOpsFilter, "filter", "", "List filter expression")
 
-	aiPlatformOpsWaitCmd.Flags().DurationVar(&flagAIPlatformOpsPollEvery, "poll-interval", 5*time.Second,
+	s.aiPlatformOpsWaitCmd.Flags().DurationVar(&s.flagAIPlatformOpsPollEvery, "poll-interval", 5*time.Second,
 		"Interval between operation polls")
-	aiPlatformOpsWaitCmd.Flags().DurationVar(&flagAIPlatformOpsTimeout, "timeout", 30*time.Minute,
+	s.aiPlatformOpsWaitCmd.Flags().DurationVar(&s.flagAIPlatformOpsTimeout, "timeout", 30*time.Minute,
 		"Maximum time to wait for the operation to complete")
 
-	aiPlatformOpsCmd.AddCommand(all...)
-	aiPlatformCmd.AddCommand(aiPlatformOpsCmd)
+	s.aiPlatformOpsCmd.AddCommand(all...)
+	s.aiPlatformCmd.AddCommand(s.aiPlatformOpsCmd)
 }
 
-func runAIPlatformOpsCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformOpsCancel(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Operations.Cancel(mlOperationName(project, args[0])).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runAIPlatformOpsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformOpsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -91,16 +60,16 @@ func runAIPlatformOpsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagAIPlatformOpsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIPlatformOpsFormat)
 }
 
-func runAIPlatformOpsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformOpsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,11 +77,11 @@ func runAIPlatformOpsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Operations.List(mlProjectPath(project)).Context(ctx)
-		if flagAIPlatformOpsPageSize > 0 {
-			call = call.PageSize(flagAIPlatformOpsPageSize)
+		if s.flagAIPlatformOpsPageSize > 0 {
+			call = call.PageSize(s.flagAIPlatformOpsPageSize)
 		}
-		if flagAIPlatformOpsFilter != "" {
-			call = call.Filter(flagAIPlatformOpsFilter)
+		if s.flagAIPlatformOpsFilter != "" {
+			call = call.Filter(s.flagAIPlatformOpsFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -127,21 +96,21 @@ func runAIPlatformOpsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAIPlatformOpsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAIPlatformOpsFormat)
 }
 
-func runAIPlatformOpsWait(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformOpsWait(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
 	name := mlOperationName(project, args[0])
-	deadline := time.Now().Add(flagAIPlatformOpsTimeout)
+	deadline := time.Now().Add(s.flagAIPlatformOpsTimeout)
 	for {
 		op, err := svc.Projects.Operations.Get(name).Context(ctx).Do()
 		if err != nil {
@@ -151,11 +120,11 @@ func runAIPlatformOpsWait(cmd *cobra.Command, args []string) error {
 			if op.Error != nil {
 				return fmt.Errorf("operation %s failed: %s (code %d)", args[0], op.Error.Message, op.Error.Code)
 			}
-			return emitFormatted(op, flagAIPlatformOpsFormat)
+			return emitFormattedTo(s.inv.stdout, op, s.flagAIPlatformOpsFormat)
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out after %s waiting for operation [%s]", flagAIPlatformOpsTimeout, args[0])
+			return fmt.Errorf("timed out after %s waiting for operation [%s]", s.flagAIPlatformOpsTimeout, args[0])
 		}
-		time.Sleep(flagAIPlatformOpsPollEvery)
+		time.Sleep(s.flagAIPlatformOpsPollEvery)
 	}
 }

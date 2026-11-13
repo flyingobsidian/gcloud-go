@@ -1,115 +1,57 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	ml "google.golang.org/api/ml/v1"
 )
 
 // --- gcloud ai-platform models (#984) ---
 
-var aiPlatformModelsCmd = &cobra.Command{Use: "models", Short: "Manage AI Platform models"}
-
-var (
-	flagAIPlatformModelsFormat     string
-	flagAIPlatformModelsConfigFile string
-	flagAIPlatformModelsPageSize   int64
-	flagAIPlatformModelsFilter     string
-	flagAIPlatformModelsUpdateMask string
-
-	flagAIPlatformModelsIamMember   string
-	flagAIPlatformModelsIamRole     string
-	flagAIPlatformModelsIamCondExpr string
-	flagAIPlatformModelsIamCondT    string
-	flagAIPlatformModelsIamCondD    string
-	flagAIPlatformModelsIamAllCond  bool
-)
-
-var (
-	aiPlatformModelsCreateCmd = &cobra.Command{
-		Use: "create MODEL", Short: "Create an AI Platform model",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformModelsCreate,
-	}
-	aiPlatformModelsDeleteCmd = &cobra.Command{
-		Use: "delete MODEL", Short: "Delete an AI Platform model",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformModelsDelete,
-	}
-	aiPlatformModelsDescribeCmd = &cobra.Command{
-		Use: "describe MODEL", Short: "Describe an AI Platform model",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformModelsDescribe,
-	}
-	aiPlatformModelsListCmd = &cobra.Command{
-		Use: "list", Short: "List AI Platform models",
-		Args: cobra.NoArgs, RunE: runAIPlatformModelsList,
-	}
-	aiPlatformModelsUpdateCmd = &cobra.Command{
-		Use: "update MODEL", Short: "Update an AI Platform model",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformModelsUpdate,
-	}
-	aiPlatformModelsGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy MODEL", Short: "Get the IAM policy for an AI Platform model",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformModelsGetIam,
-	}
-	aiPlatformModelsSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy MODEL POLICY_FILE", Short: "Set the IAM policy for an AI Platform model",
-		Args: cobra.ExactArgs(2), RunE: runAIPlatformModelsSetIam,
-	}
-	aiPlatformModelsAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding MODEL", Short: "Add an IAM policy binding to an AI Platform model",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformModelsAddIam,
-	}
-	aiPlatformModelsRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding MODEL", Short: "Remove an IAM policy binding from an AI Platform model",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformModelsRemoveIam,
-	}
-)
-
-func init() {
+func (s *aiPlatformCmds) initAiPlatformModels() {
 	all := []*cobra.Command{
-		aiPlatformModelsCreateCmd, aiPlatformModelsDeleteCmd, aiPlatformModelsDescribeCmd,
-		aiPlatformModelsListCmd, aiPlatformModelsUpdateCmd, aiPlatformModelsGetIamCmd,
-		aiPlatformModelsSetIamCmd, aiPlatformModelsAddIamCmd, aiPlatformModelsRemoveIamCmd,
+		s.aiPlatformModelsCreateCmd, s.aiPlatformModelsDeleteCmd, s.aiPlatformModelsDescribeCmd,
+		s.aiPlatformModelsListCmd, s.aiPlatformModelsUpdateCmd, s.aiPlatformModelsGetIamCmd,
+		s.aiPlatformModelsSetIamCmd, s.aiPlatformModelsAddIamCmd, s.aiPlatformModelsRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAIPlatformModelsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAIPlatformModelsFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{aiPlatformModelsCreateCmd, aiPlatformModelsUpdateCmd} {
-		c.Flags().StringVar(&flagAIPlatformModelsConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.aiPlatformModelsCreateCmd, s.aiPlatformModelsUpdateCmd} {
+		c.Flags().StringVar(&s.flagAIPlatformModelsConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Model body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	aiPlatformModelsUpdateCmd.Flags().StringVar(&flagAIPlatformModelsUpdateMask, "update-mask", "",
+	s.aiPlatformModelsUpdateCmd.Flags().StringVar(&s.flagAIPlatformModelsUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update; defaults to the populated top-level fields in --config-file")
 
-	aiPlatformModelsListCmd.Flags().Int64Var(&flagAIPlatformModelsPageSize, "page-size", 0, "Maximum results per page")
-	aiPlatformModelsListCmd.Flags().StringVar(&flagAIPlatformModelsFilter, "filter", "", "List filter expression")
+	s.aiPlatformModelsListCmd.Flags().Int64Var(&s.flagAIPlatformModelsPageSize, "page-size", 0, "Maximum results per page")
+	s.aiPlatformModelsListCmd.Flags().StringVar(&s.flagAIPlatformModelsFilter, "filter", "", "List filter expression")
 
-	for _, c := range []*cobra.Command{aiPlatformModelsAddIamCmd, aiPlatformModelsRemoveIamCmd} {
-		mlIamFlags(c, &flagAIPlatformModelsIamMember, &flagAIPlatformModelsIamRole,
-			&flagAIPlatformModelsIamCondExpr, &flagAIPlatformModelsIamCondT, &flagAIPlatformModelsIamCondD)
+	for _, c := range []*cobra.Command{s.aiPlatformModelsAddIamCmd, s.aiPlatformModelsRemoveIamCmd} {
+		mlIamFlags(c, &s.flagAIPlatformModelsIamMember, &s.flagAIPlatformModelsIamRole,
+			&s.flagAIPlatformModelsIamCondExpr, &s.flagAIPlatformModelsIamCondT, &s.flagAIPlatformModelsIamCondD)
 	}
-	aiPlatformModelsRemoveIamCmd.Flags().BoolVar(&flagAIPlatformModelsIamAllCond, "all", false,
+	s.aiPlatformModelsRemoveIamCmd.Flags().BoolVar(&s.flagAIPlatformModelsIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	aiPlatformModelsCmd.AddCommand(all...)
-	aiPlatformCmd.AddCommand(aiPlatformModelsCmd)
+	s.aiPlatformModelsCmd.AddCommand(all...)
+	s.aiPlatformCmd.AddCommand(s.aiPlatformModelsCmd)
 }
 
-func runAIPlatformModelsCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformModelsCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &ml.GoogleCloudMlV1__Model{}
-	if err := loadYAMLOrJSONInto(flagAIPlatformModelsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIPlatformModelsConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = args[0]
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -117,17 +59,17 @@ func runAIPlatformModelsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating model: %w", err)
 	}
-	fmt.Printf("Created model [%s].\n", args[0])
-	return emitFormatted(got, flagAIPlatformModelsFormat)
+	fmt.Fprintf(s.inv.stdout, "Created model [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIPlatformModelsFormat)
 }
 
-func runAIPlatformModelsDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformModelsDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -135,17 +77,17 @@ func runAIPlatformModelsDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting model: %w", err)
 	}
-	fmt.Printf("Delete request issued for model [%s].\n", args[0])
-	return emitFormatted(op, flagAIPlatformModelsFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for model [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIPlatformModelsFormat)
 }
 
-func runAIPlatformModelsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformModelsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -153,16 +95,16 @@ func runAIPlatformModelsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing model: %w", err)
 	}
-	return emitFormatted(got, flagAIPlatformModelsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIPlatformModelsFormat)
 }
 
-func runAIPlatformModelsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformModelsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -170,11 +112,11 @@ func runAIPlatformModelsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Models.List(mlProjectPath(project)).Context(ctx)
-		if flagAIPlatformModelsPageSize > 0 {
-			call = call.PageSize(flagAIPlatformModelsPageSize)
+		if s.flagAIPlatformModelsPageSize > 0 {
+			call = call.PageSize(s.flagAIPlatformModelsPageSize)
 		}
-		if flagAIPlatformModelsFilter != "" {
-			call = call.Filter(flagAIPlatformModelsFilter)
+		if s.flagAIPlatformModelsFilter != "" {
+			call = call.Filter(s.flagAIPlatformModelsFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -189,24 +131,24 @@ func runAIPlatformModelsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAIPlatformModelsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAIPlatformModelsFormat)
 }
 
-func runAIPlatformModelsUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformModelsUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &ml.GoogleCloudMlV1__Model{}
-	if err := loadYAMLOrJSONInto(flagAIPlatformModelsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIPlatformModelsConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagAIPlatformModelsUpdateMask
+	mask := s.flagAIPlatformModelsUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -218,17 +160,17 @@ func runAIPlatformModelsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating model: %w", err)
 	}
-	fmt.Printf("Update request issued for model [%s].\n", args[0])
-	return emitFormatted(op, flagAIPlatformModelsFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for model [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIPlatformModelsFormat)
 }
 
-func runAIPlatformModelsGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformModelsGetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -237,11 +179,11 @@ func runAIPlatformModelsGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagAIPlatformModelsFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagAIPlatformModelsFormat)
 }
 
-func runAIPlatformModelsSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformModelsSetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
@@ -250,8 +192,8 @@ func runAIPlatformModelsSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -260,17 +202,17 @@ func runAIPlatformModelsSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	mlUpdatedIam(fmt.Sprintf("model [%s]", args[0]))
-	return emitFormatted(updated, flagAIPlatformModelsFormat)
+	s.mlUpdatedIam(fmt.Sprintf("model [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagAIPlatformModelsFormat)
 }
 
-func runAIPlatformModelsAddIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformModelsAddIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -279,25 +221,25 @@ func runAIPlatformModelsAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	mlAddBinding(policy, flagAIPlatformModelsIamRole, flagAIPlatformModelsIamMember,
-		mlBuildCondition(flagAIPlatformModelsIamCondExpr, flagAIPlatformModelsIamCondT, flagAIPlatformModelsIamCondD))
+	mlAddBinding(policy, s.flagAIPlatformModelsIamRole, s.flagAIPlatformModelsIamMember,
+		mlBuildCondition(s.flagAIPlatformModelsIamCondExpr, s.flagAIPlatformModelsIamCondT, s.flagAIPlatformModelsIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Models.SetIamPolicy(resource,
 		&ml.GoogleIamV1__SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	mlUpdatedIam(fmt.Sprintf("model [%s]", args[0]))
-	return emitFormatted(updated, flagAIPlatformModelsFormat)
+	s.mlUpdatedIam(fmt.Sprintf("model [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagAIPlatformModelsFormat)
 }
 
-func runAIPlatformModelsRemoveIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformModelsRemoveIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -306,17 +248,17 @@ func runAIPlatformModelsRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !mlRemoveBinding(policy, flagAIPlatformModelsIamRole, flagAIPlatformModelsIamMember,
-		mlBuildCondition(flagAIPlatformModelsIamCondExpr, flagAIPlatformModelsIamCondT, flagAIPlatformModelsIamCondD),
-		flagAIPlatformModelsIamAllCond) {
+	if !mlRemoveBinding(policy, s.flagAIPlatformModelsIamRole, s.flagAIPlatformModelsIamMember,
+		mlBuildCondition(s.flagAIPlatformModelsIamCondExpr, s.flagAIPlatformModelsIamCondT, s.flagAIPlatformModelsIamCondD),
+		s.flagAIPlatformModelsIamAllCond) {
 		return fmt.Errorf("policy binding not found for role [%s] and member [%s]",
-			flagAIPlatformModelsIamRole, flagAIPlatformModelsIamMember)
+			s.flagAIPlatformModelsIamRole, s.flagAIPlatformModelsIamMember)
 	}
 	updated, err := svc.Projects.Models.SetIamPolicy(resource,
 		&ml.GoogleIamV1__SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	mlUpdatedIam(fmt.Sprintf("model [%s]", args[0]))
-	return emitFormatted(updated, flagAIPlatformModelsFormat)
+	s.mlUpdatedIam(fmt.Sprintf("model [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagAIPlatformModelsFormat)
 }
