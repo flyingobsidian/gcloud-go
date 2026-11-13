@@ -7,7 +7,8 @@ import (
 )
 
 func memcacheSubgroup(name string) *cobra.Command {
-	for _, c := range memcacheCmd.Commands() {
+	grp := newMemcacheCmds(legacyTestInvocation())
+	for _, c := range grp.memcacheCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
