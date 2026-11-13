@@ -22,7 +22,6 @@ jobs:
         with:
           filters: |
             go:
-              - 'cmd/**/*.go'
               - 'internal/**/*.go'
               - 'gcloud/**/*.go'
               - 'main.go'

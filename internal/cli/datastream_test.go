@@ -1,0 +1,101 @@
+package cli
+
+import (
+	"testing"
+
+	"github.com/spf13/cobra"
+)
+
+func datastreamSubgroup(name string) *cobra.Command {
+	grp := newDatastreamCmds(legacyTestInvocation())
+	for _, c := range grp.datastreamCmd.Commands() {
+		if c.Name() == name {
+			return c
+		}
+	}
+	return nil
+}
+
+func TestDatastreamConnectionProfilesSubcommands(t *testing.T) {
+	g := datastreamSubgroup("connection-profiles")
+	if g == nil {
+		t.Fatal("datastream connection-profiles missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "discover", "list", "update"})
+}
+
+func TestDatastreamLocationsSubcommands(t *testing.T) {
+	g := datastreamSubgroup("locations")
+	if g == nil {
+		t.Fatal("datastream locations missing")
+	}
+	assertSubcommands(t, g, []string{"describe", "list"})
+}
+
+func TestDatastreamObjectsSubcommands(t *testing.T) {
+	g := datastreamSubgroup("objects")
+	if g == nil {
+		t.Fatal("datastream objects missing")
+	}
+	assertSubcommands(t, g, []string{"describe", "list", "lookup", "start-backfill", "stop-backfill"})
+}
+
+func TestDatastreamOperationsSubcommands(t *testing.T) {
+	g := datastreamSubgroup("operations")
+	if g == nil {
+		t.Fatal("datastream operations missing")
+	}
+	assertSubcommands(t, g, []string{"cancel", "delete", "describe", "list"})
+}
+
+func TestDatastreamPrivateConnectionsSubcommands(t *testing.T) {
+	g := datastreamSubgroup("private-connections")
+	if g == nil {
+		t.Fatal("datastream private-connections missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list"})
+}
+
+func TestDatastreamRoutesSubcommands(t *testing.T) {
+	g := datastreamSubgroup("routes")
+	if g == nil {
+		t.Fatal("datastream routes missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list"})
+}
+
+func TestDatastreamStreamsSubcommands(t *testing.T) {
+	g := datastreamSubgroup("streams")
+	if g == nil {
+		t.Fatal("datastream streams missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
+}
+
+func TestDatastreamStartBackfillHasSQLWhereClause(t *testing.T) {
+	g := datastreamSubgroup("objects")
+	if g == nil {
+		t.Fatal("datastream objects missing")
+	}
+	var startBackfill *cobra.Command
+	for _, c := range g.Commands() {
+		if c.Name() == "start-backfill" {
+			startBackfill = c
+			break
+		}
+	}
+	if startBackfill == nil {
+		t.Fatal("datastream objects start-backfill missing")
+	}
+	if flag := startBackfill.Flags().Lookup("sql-where-clause"); flag == nil {
+		t.Error("start-backfill missing --sql-where-clause flag")
+	}
+	// stop-backfill has no such flag upstream; make sure we did not leak it.
+	for _, c := range g.Commands() {
+		if c.Name() == "stop-backfill" {
+			if flag := c.Flags().Lookup("sql-where-clause"); flag != nil {
+				t.Error("stop-backfill should not expose --sql-where-clause")
+			}
+		}
+	}
+}

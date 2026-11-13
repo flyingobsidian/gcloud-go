@@ -28,8 +28,8 @@ import (
 	"os/exec"
 	"runtime/debug"
 
-	"github.com/flyingobsidian/gcloud-go/cmd"
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
+	"github.com/flyingobsidian/gcloud-go/internal/cli"
 	"github.com/flyingobsidian/gcloud-go/internal/config"
 )
 
@@ -37,17 +37,17 @@ const modulePath = "github.com/flyingobsidian/gcloud-go"
 
 // ErrNotInProcess is returned by Runner.Run for commands that gcloud-go does
 // not have.
-var ErrNotInProcess = cmd.ErrNotInProcess
+var ErrNotInProcess = cli.ErrNotInProcess
 
 // CommandError is returned by Runner.Run when a command ran and failed.
 // Error returns the message the CLI would print, e.g.
 // "ERROR: (gcloud.projects.describe) NOT_FOUND: …"; errors.As reaches the
 // underlying cause, such as a *googleapi.Error.
-type CommandError = cmd.CommandError
+type CommandError = cli.CommandError
 
 // PanicError is returned by Runner.Run when a command panicked. Run recovers
 // the panic so it doesn't take down the caller; Stack holds the trace.
-type PanicError = cmd.PanicError
+type PanicError = cli.PanicError
 
 // Options configures a Runner. The zero value uses the process environment.
 type Options struct {
@@ -97,7 +97,7 @@ type Invocation struct {
 // does not have, a *CommandError when the command failed, a *PanicError
 // when it panicked, or another error when the arguments could not be parsed.
 func (r *Runner) Run(ctx context.Context, inv Invocation) error {
-	return cmd.RunInProcess(ctx, cmd.InProcess{
+	return cli.RunInProcess(ctx, cli.InProcess{
 		Args:   inv.Args,
 		Stdin:  inv.Stdin,
 		Stdout: inv.Stdout,
@@ -129,8 +129,8 @@ func ExitCode(err error) int {
 // Version describes the gcloud-go build: the version stamped at build time,
 // else the module version recorded by the Go toolchain, else "dev".
 func Version() string {
-	if cmd.Version != "" && cmd.Version != "dev" {
-		return cmd.Version
+	if cli.Version != "" && cli.Version != "dev" {
+		return cli.Version
 	}
 	if info, ok := debug.ReadBuildInfo(); ok {
 		if info.Main.Path == modulePath && info.Main.Version != "" && info.Main.Version != "(devel)" {

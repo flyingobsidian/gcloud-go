@@ -2,7 +2,7 @@ default: build
 
 BINARY := gcloud-go
 VERSION := $(shell git describe --tags 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X github.com/flyingobsidian/gcloud-go/cmd.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/flyingobsidian/gcloud-go/internal/cli.Version=$(VERSION)
 
 # Limit go commands to half the CPUs and half the memory, without swap.
 CPUS := $(shell n=$$(( $$(nproc) / 2 )); echo $$(( n > 0 ? n : 1 )))

@@ -435,7 +435,7 @@ func (c *Clients) IAP(ctx context.Context) (*iap.Service, error) {
 // NetworkServices returns a Network Services v1 client. The v1 client
 // covers the IAM-only Media CDN Edge Cache surfaces; the full EdgeCache CRUD
 // endpoints (keysets, origins, services) are reached via a raw REST client in
-// cmd/edge_cache.go because they are not generated in google.golang.org/api.
+// internal/cli/edge_cache.go because they are not generated in google.golang.org/api.
 func (c *Clients) NetworkServices(ctx context.Context) (*networkservices.Service, error) {
 	return newService(ctx, c, networkservices.NewService)
 }

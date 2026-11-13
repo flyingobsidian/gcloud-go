@@ -44,7 +44,7 @@ by making it clear when a checkbox needs no code change.
 - **`--control-plane-soak-duration` + `gcloud container clusters
   complete-control-plane-upgrade` promoted to GA** (576.0.0) — the
   `complete-control-plane-upgrade` command is now wired to the container v1
-  API in `cmd/container_clusters.go`. The soak-duration knob is passed
+  API in `internal/cli/container_clusters.go`. The soak-duration knob is passed
   through the `ClusterUpdate` body on `container clusters update`.
 
 ## Kpt 575.0.0–579.0.0 (#1808)
@@ -360,7 +360,7 @@ new CLI flags are needed:
 ## Cloud Managed Lustre 587.0.0 (#1934)
 
 gcloud-go's `lustre instances` and `lustre operations` commands are still
-"not yet implemented" stubs (`cmd/lustre.go`): there is no generated Lustre
+"not yet implemented" stubs (`internal/cli/lustre.go`): there is no generated Lustre
 client in `google.golang.org/api` (still absent at v0.307.0), which is why
 #1257 was closed unimplemented. As with Backup DR (#1920), the 587.0.0
 changes should land with a real `lustre` implementation rather than as more
@@ -416,7 +416,7 @@ stubs:
   support** (588.0.0) — this changes gcloud-python's separately installed
   `local-extract` component, which `artifacts docker images scan` shells out
   to. gcloud-go does not ship that component: its `scan` does its own local
-  package extraction (`extractLocalPackages` in `cmd/artifacts.go`, which
+  package extraction (`extractLocalPackages` in `internal/cli/artifacts.go`, which
   runs the image with Docker) or skips it with `--remote`, and then calls the
   same On-Demand Scanning `analyzePackages` API. No change is needed.
 
@@ -550,7 +550,7 @@ code:
 - **Legacy Cloud SQL Proxy V1 (`cloud_sql_proxy`) removal, mandatory Cloud
   SQL Auth Proxy V2** (582.0.0) — gcloud-go's `sql connect psql/mysql/sqlserver`
   path shells out to the DB client using the instance's public IP directly
-  (see `cmd/sql_all.go`); no `cloud_sql_proxy` or `cloud-sql-proxy` binary
+  (see `internal/cli/sql_all.go`); no `cloud_sql_proxy` or `cloud-sql-proxy` binary
   is bundled or invoked, so the V1 removal has no effect.
 - **`gcloud api-registry mcp servers|tools list`,
   `gcloud api-registry mcp enable|disable`,
@@ -560,7 +560,7 @@ code:
   mcp` subgroup, so the removals do not need to be mirrored. The Agent
   Registry successor at
   `gcloud alpha agent-registry mcp-servers` is exposed in gcloud-go as
-  `agent-registry` (see `cmd/agent_registry.go`).
+  `agent-registry` (see `internal/cli/agent_registry.go`).
 - **`google-cloud-sdk` Snap deprecation on 2026-09-29 in favour of
   `google-cloud-cli`** (580.0.0) — gcloud-go is a single native Go binary
   distributed via `go install` and release tarballs; there is no Snap or
@@ -631,7 +631,7 @@ The remaining bullets don't need code changes:
 - **587.0.0** — `gcloud agent-registry bindings create` makes
   `--source-identifier` optional (the `binding.source` argument group
   flipped from `required: true` to `required: false`). gcloud-go's
-  `agent-registry bindings create` (see `cmd/agent_registry.go`) takes the
+  `agent-registry bindings create` (see `internal/cli/agent_registry.go`) takes the
   whole `Binding` body from `--config-file` and unmarshals it straight into
   `google.golang.org/api/agentregistry/v1alpha.Binding` with no client-side
   check on `source`, so omitting `source.identifier` from the payload
@@ -639,7 +639,7 @@ The remaining bullets don't need code changes:
 
 ## AlloyDB 583.0.0–589.0.0 (#1902)
 
-gcloud-go's `alloydb clusters` commands (see `cmd/alloydb_all.go`) take the
+gcloud-go's `alloydb clusters` commands (see `internal/cli/alloydb_all.go`) take the
 request body from `--config-file` and call `google.golang.org/api/alloydb/v1`,
 so none of the five items needs a code change:
 
@@ -671,7 +671,7 @@ so none of the five items needs a code change:
   Go binary (the `anthoscli` component), not a change to gcloud-python's
   `gcloud anthos` command surface. gcloud-go does not bundle `anthoscli`
   (see the 569.0.0 note under Breaking Changes), and its `gcloud anthos`
-  commands in `cmd/anthos.go` are stubs, so there is nothing to mirror.
+  commands in `internal/cli/anthos.go` are stubs, so there is nothing to mirror.
 
 ## Apigee 583.0.0–589.0.0 (#1904)
 
@@ -824,9 +824,9 @@ No item needs a gcloud-go code change:
 ## Workbench 572.0.0 (#1824)
 
 The 572.0.0 `--image-family` flag is implemented (see
-`cmd/workbench_instances.go`: `wbiUpgradeCmd` now populates
+`internal/cli/workbench_instances.go`: `wbiUpgradeCmd` now populates
 `UpgradeInstanceRequest.imageFamily`; tested in
-`cmd/workbench_groups_test.go`). The accelerator-type enum expansion
+`internal/cli/workbench_groups_test.go`). The accelerator-type enum expansion
 is Python argparse-only:
 
 - **572.0.0** — `NVIDIA_RTX6000` added to `--accelerator-type` choices on
@@ -840,10 +840,10 @@ is Python argparse-only:
 ## Vmware Engine 576.0.0–582.0.0 (#1823)
 
 The 582.0.0 `migrate-management-vms` command is implemented (see
-`cmd/vmware_private_clouds.go`: `vmwarePcMigrateMgmtVmsCmd` wraps
+`internal/cli/vmware_private_clouds.go`: `vmwarePcMigrateMgmtVmsCmd` wraps
 `ProjectsLocationsPrivateCloudsService.MigrateManagementVms` with
 `--cluster-id`, `--request-id`, and `--etag`; tests in
-`cmd/vmware_test.go`). The other three items are already reachable via
+`internal/cli/vmware_test.go`). The other three items are already reachable via
 gcloud-go's `--config-file` payload on `vmware private-clouds
 create`/`update`:
 
@@ -869,7 +869,7 @@ create`/`update`:
   on argparse-level YAML schemas driving `authz-extensions import` /
   `export` (extra optional keys plus a stricter enum validator).
   gcloud-go's `authz-extensions import` (see
-  `cmd/service_extensions_authz_extensions.go`) unmarshals the file
+  `internal/cli/service_extensions_authz_extensions.go`) unmarshals the file
   straight into `google.golang.org/api/networkservices/v1.AuthzExtension`,
   so any field on the Go client's `AuthzExtension` struct is settable
   through the payload today — no per-schema validator to keep in sync.
@@ -879,14 +879,14 @@ create`/`update`:
 ## Recaptcha 573.0.0–577.0.0 (#1818)
 
 The 577.0.0 `--universal` flag is implemented (see
-`cmd/recaptcha_keys.go`: sets `Key.universalSettings` on
+`internal/cli/recaptcha_keys.go`: sets `Key.universalSettings` on
 `recaptcha keys create` and `update`, and joins the existing
 `--web`/`--android`/`--ios`/`--express` mutually-exclusive platform
 group). The 573.0.0 bug fix has no gcloud-go equivalent:
 
 - **573.0.0** — Fix for `gcloud recaptcha keys create` ignoring
   `--testing-score` when creating Android or iOS keys. gcloud-go's
-  `rcpKeyBodyFromFlags` (in `cmd/recaptcha_keys.go`) sets
+  `rcpKeyBodyFromFlags` (in `internal/cli/recaptcha_keys.go`) sets
   `Key.testingOptions.testingScore` from `--testing-score` on the
   outgoing body before it selects a platform, so the value is applied
   regardless of whether `--android`, `--ios`, or `--web` is set. The
@@ -901,7 +901,7 @@ group). The 573.0.0 bug fix has no gcloud-go equivalent:
   gcloud-python; gcloud-go has no `orchestration-pipelines` command
   (the closest name in the tree is `telco-automation orchestration-cluster`,
   which is a distinct product). Adding the group is standalone work —
-  it needs its own `cmd/orchestration_pipelines*.go` files plus a
+  it needs its own `internal/cli/orchestration_pipelines*.go` files plus a
   `gcp.OrchestrationPipelinesService` constructor once the API is
   reachable through `google.golang.org/api/orchestrationpipelines/*`
   (or an equivalent client). Tracked here for follow-up so the
@@ -915,7 +915,7 @@ two commands, neither of which needs a gcloud-go CLI change today:
 - **`--total-vm-storage-size-gb` on
   `oracle-database cloud-exadata-infrastructures configure-exascale`**
   — gcloud-go's `cloud-exadata-infrastructures` (see
-  `cmd/oracle_database_cloud_exadata_infrastructures.go`) exposes
+  `internal/cli/oracle_database_cloud_exadata_infrastructures.go`) exposes
   `create`, `delete`, `describe`, and `list`; the
   `configure-exascale` subcommand is not implemented. `configure-exascale`
   in gcloud-python corresponds to the
@@ -929,7 +929,7 @@ two commands, neither of which needs a gcloud-go CLI change today:
   `--properties-vm-file-system-storage-type` on
   `oracle-database cloud-vm-clusters create`** — gcloud-go's
   `cloud-vm-clusters create` (see
-  `cmd/oracle_database_cloud_vm_clusters.go`) takes the full
+  `internal/cli/oracle_database_cloud_vm_clusters.go`) takes the full
   `CloudVmCluster` body via `--config-file`, so these settings would
   live under `properties.*StorageType`. The current version of
   `google.golang.org/api/oracledatabase/v1` used by gcloud-go does
@@ -947,7 +947,7 @@ All four 575.0.0–580.0.0 items are either already covered or Python-only:
 - **580.0.0** — `network-services telemetry-policies delete` promoted
   to BETA. `telemetry-policies` is a v1beta1-only surface that is not
   exposed by `google.golang.org/api/networkservices/v1` and is not
-  implemented in gcloud-go's `cmd/network_services*.go`. Both the
+  implemented in gcloud-go's `internal/cli/network_services*.go`. Both the
   subgroup and its `delete` command should land together when the
   v1beta1 client (or the eventual GA promotion) reaches gcloud-go.
 - **579.0.0** — `clientTlsPolicy` field deprecation on
@@ -955,21 +955,21 @@ All four 575.0.0–580.0.0 items are either already covered or Python-only:
   argparse-level deprecation warning; the underlying `EndpointPolicy.
   clientTlsPolicy` field on the Go client is still present, so
   gcloud-go's `endpoint-policies import` (see
-  `cmd/network_services_endpoint_policies.go`) continues to accept it
+  `internal/cli/network_services_endpoint_policies.go`) continues to accept it
   through the YAML body until the API removes it. No Go-side
   deprecation notice is required.
 - **579.0.0** — Regional-locations support for the
   `endpoint-policies` resource name pattern. gcloud-go's
   `endpoint-policies` already takes `--location` and derives
   `projects/PROJECT/locations/LOCATION/endpointPolicies/…` from it
-  (`nsResourceName` in `cmd/network_services_endpoint_policies.go`),
+  (`nsResourceName` in `internal/cli/network_services_endpoint_policies.go`),
   so users can pass any regional location today; only the Python
   argparse resource-arg validator required updating.
 - **575.0.0** — `edge-cache services` import schema updates to allow
   up to 100 `CORSPolicy.allowOrigins` and a `0s` `CDNPolicy.clientTtl`.
   gcloud-python's `edge-cache services import` had client-side
   argparse validators; gcloud-go's `edge-cache services import`
-  (see `cmd/edge_cache_services.go`) passes the YAML/JSON payload
+  (see `internal/cli/edge_cache_services.go`) passes the YAML/JSON payload
   straight through and lets the API enforce limits, so raising the
   cap and allowing `0s` requires no CLI change — the requests
   already succeed on the API side.
@@ -982,14 +982,14 @@ subgroups that gcloud-go already exposes as project-scoped CRUD
 without alpha/beta/GA distinctions. gcloud-go's `authz-policies`,
 `firewall-endpoints`, `security-profiles`,
 `security-profile-groups`, `secure-access-connect`, and `operations`
-subgroups are all wired to real APIs in `cmd/network_security*.go`
+subgroups are all wired to real APIs in `internal/cli/network_security*.go`
 and take the full resource body via `--config-file` on create/update:
 
 - **580.0.0** — `mcp` / `policyProfile` GA in `authz-policies import`
   and `export`; **580.0.0** — `loadBalancingScheme` made optional in
   the same commands; **577.0.0** — `networkRules` / `snis` support in
   `authz-policies import`. gcloud-go's `authz-policies` (see
-  `cmd/network_security_policies.go`) takes the full `AuthzPolicy`
+  `internal/cli/network_security_policies.go`) takes the full `AuthzPolicy`
   body via `--config-file` on create/update. The Go client exposes
   `AuthzPolicy.policyProfile`, `AuthzPolicy.networkRules`, and
   `AuthzPolicyTarget.loadBalancingScheme` today, so the fields are
@@ -1000,7 +1000,7 @@ and take the full resource body via `--config-file` on create/update:
 - **576.0.0** and **573.0.0** — Track promotions of
   `security-profiles wildfire-analysis` (project scope, BETA
   promotion). gcloud-go's `security-profiles` (see
-  `cmd/network_security_profiles.go`) is a single project-scoped CRUD
+  `internal/cli/network_security_profiles.go`) is a single project-scoped CRUD
   group with no wildfire-analysis-specific subgroup; the underlying
   `SecurityProfile.customIntercept`/`customMirroring`/`threatPrevention`/
   `wildfireAnalysis` message fields are reachable via `--config-file`.
@@ -1013,12 +1013,12 @@ and take the full resource body via `--config-file` on create/update:
   Adding them is standalone work.
 - **573.0.0** — `network-security operations` command group
   (`describe`, `wait`, `list`, `cancel`). Already implemented at
-  `cmd/network_security.go` (issue 833); `wait` is not exposed
+  `internal/cli/network_security.go` (issue 833); `wait` is not exposed
   because gcloud-go's create/update wait on the LRO by default
   (`--async` opts out), but `describe`/`list`/`cancel` are wired via
   the same builder.
 - **573.0.0** — Wildfire subgroups / flags on `firewall-endpoints`.
-  `firewall-endpoints` (see `cmd/network_security_firewall.go`) is a
+  `firewall-endpoints` (see `internal/cli/network_security_firewall.go`) is a
   project- and organization-scoped CRUD group taking the full
   `FirewallEndpoint` body via `--config-file`; wildfire-related
   fields on the body are reachable through the payload. The
@@ -1036,7 +1036,7 @@ and take the full resource body via `--config-file` on create/update:
   `security-profiles threat-prevention` (including override
   helpers), `security-profiles url-filtering`, and
   `security-profile-groups`. gcloud-go's `security-profiles` and
-  `security-profile-groups` (see `cmd/network_security_profiles.go`)
+  `security-profile-groups` (see `internal/cli/network_security_profiles.go`)
   are single project-scoped CRUD groups; per-type subgroups exist in
   the Python argparse hierarchy but gcloud-go exposes the same field
   surface through `--config-file` on the parent CRUD. Threat-prevention
@@ -1046,7 +1046,7 @@ and take the full resource body via `--config-file` on create/update:
   `threatOverrides` arrays; those are set through the payload today.
 - **570.0.0** — `secure-access-connect` GA (attachments, realms).
   Already implemented in gcloud-go via the v1beta1 REST client (see
-  `cmd/network_security_sac.go`, issue #835).
+  `internal/cli/network_security_sac.go`, issue #835).
 - **570.0.0** — Symantec integration / localization flags restricted
   to ALPHA/BETA. gcloud-go does not maintain per-track argparse
   gates; the underlying Symantec-integration fields on the
@@ -1064,7 +1064,7 @@ the other four are new subgroups gcloud-go has not implemented yet:
   `Endpoint.dmsPrivateConnection` (a string field on the connectivity
   test's source/destination endpoint, exposed by
   `google.golang.org/api/networkmanagement/v1`). gcloud-go's
-  `connectivity-tests create` (see `cmd/network_management.go`) takes
+  `connectivity-tests create` (see `internal/cli/network_management.go`) takes
   the full `ConnectivityTest` body via `--config-from-file`, so the
   field is settable through the YAML/JSON payload today; adding a
   dedicated convenience flag is optional.
@@ -1075,7 +1075,7 @@ the other four are new subgroups gcloud-go has not implemented yet:
 - **570.0.0** — `network-management network-monitoring-providers
   monitoring-points` subgroup (agents that send probes). gcloud-go's
   `network-monitoring-providers` (see
-  `cmd/network_management_network_monitoring_providers.go`) is served
+  `internal/cli/network_management_network_monitoring_providers.go`) is served
   by a raw REST client (`netmgmtMonRest`) against the v1beta1 surface;
   it wires the provider-level commands (`create`, `delete`, `describe`,
   `generate-monitoring-point-config`, `generate-provider-access-token`,
@@ -1088,13 +1088,13 @@ the other four are new subgroups gcloud-go has not implemented yet:
   applications or URLs).
 - **570.0.0** — `network-management network-monitoring-providers`
   top-level command group. Already implemented in gcloud-go at
-  `cmd/network_management_network_monitoring_providers.go` (tracked
+  `internal/cli/network_management_network_monitoring_providers.go` (tracked
   under #954); only the three nested subgroups above remain.
 
 ## Network Connectivity 570.0.0–580.0.0 (#1812)
 
 gcloud-go's `network-connectivity hubs` and `spokes` commands (see
-`cmd/network_connectivity_hubs.go`) take the full `Hub` / `Spoke` body
+`internal/cli/network_connectivity_hubs.go`) take the full `Hub` / `Spoke` body
 via `--config-file`, and gcloud-go does not maintain separate
 alpha/beta/GA tracks. That covers four of the five items:
 
@@ -1107,7 +1107,7 @@ alpha/beta/GA tracks. That covers four of the five items:
   `--config-file` today.
 - **573.0.0** — Updated `--region` help text on
   `network-connectivity transports create` (`registerNCTransports` in
-  `cmd/network_connectivity_resources.go`) to list supported regions.
+  `internal/cli/network_connectivity_resources.go`) to list supported regions.
   gcloud-go's `--location` flag description does not enumerate valid
   values — that list is served by the API and changes over time; the
   Python help-text expansion is a Python-only refresh and adding a
@@ -1131,13 +1131,13 @@ implemented:
   client), not a flag on an existing command. Adding the subgroup is a
   standalone piece of work (its own `registerNCSpokeGatewayAdvertisedRoutes`
   builder mirroring the existing `ncCRUD` pattern in
-  `cmd/network_connectivity_hubs.go`) — tracked here for follow-up.
+  `internal/cli/network_connectivity_hubs.go`) — tracked here for follow-up.
 
 ## Metastore 580.0.0 (#1811)
 
 Both 580.0.0 items are on `gcloud beta metastore services migrations
 start`, which is a subgroup that does not exist in gcloud-go. The
-`metastore services` group in `cmd/metastore.go` currently wires
+`metastore services` group in `internal/cli/metastore.go` currently wires
 `create`, `delete`, `describe`, `list`, `update`, IAM, alter/move/query,
 export, import, restore, and the nested `backups` subgroup — no
 `migrations` subgroup — so both items land when the migrations subgroup
@@ -1160,7 +1160,7 @@ or output changes:
   `--accelerated-security-patch-enabled` GA promotion on
   `gcloud looker instances create` and `update`. In gcloud-go those
   commands take the full `looker.Instance` body via `--config-file` (see
-  `cmd/looker.go`), and `google.golang.org/api/looker/v1` already
+  `internal/cli/looker.go`), and `google.golang.org/api/looker/v1` already
   exposes `Instance.releaseChannel` and
   `Instance.acceleratedSecurityPatchEnabled`, so both fields are
   settable today by populating them in the YAML/JSON payload.
@@ -1169,7 +1169,7 @@ or output changes:
 - **576.0.0** — `RELEASE_CHANNEL` and `ACCELERATED_SECURITY_PATCH_ENABLED`
   columns added to `gcloud looker instances describe` output in GA.
   gcloud-python's describe uses a per-track projection that hides some
-  fields on GA; gcloud-go's `runLKInstDescribe` (`cmd/looker.go`) calls
+  fields on GA; gcloud-go's `runLKInstDescribe` (`internal/cli/looker.go`) calls
   `emitFormatted(got, flagLKFormat)` on the full `Instance` object, so
   users already see `releaseChannel` and
   `acceleratedSecurityPatchEnabled` (and every other resource field) in
@@ -1179,7 +1179,7 @@ or output changes:
 
 Both 579.0.0 items land in `gcloud functions deploy` / `gcloud functions
 upgrade`, neither of which is implemented in gcloud-go (`deploy` is
-registered as a `"Not yet implemented"` stub in `cmd/functions.go`, and
+registered as a `"Not yet implemented"` stub in `internal/cli/functions.go`, and
 `upgrade` is not present at all, since only the IAM, event-types, logs,
 regions, and runtimes subgroups are wired to real APIs today under
 #860–#864 as part of #342). The two items should land alongside a real
@@ -1198,7 +1198,7 @@ implementation of `functions deploy` / `functions upgrade`:
 
 ## Cloud Firestore Emulator 577.0.0–579.0.0 (#1778)
 
-gcloud-go's `emulators firestore` group is a stub (see `cmd/emulators.go`:
+gcloud-go's `emulators firestore` group is a stub (see `internal/cli/emulators.go`:
 `registerStubGroup(emulatorsCmd, "firestore", ..., "start", "env-init")`)
 because gcloud-go does not bundle the Java-based Cloud Firestore emulator
 jar. Both upstream items are therefore not applicable to the current
@@ -1224,7 +1224,7 @@ gcloud-go binary and should land alongside a future implementation of
   that maps onto `GoogleFirestoreAdminV1IndexField.searchConfig` (a
   `GoogleFirestoreAdminV1SearchConfig`) inside the composite index body.
   gcloud-go's `firestore indexes composite create` command (see
-  `cmd/firestore_fields_indexes.go`) takes the full
+  `internal/cli/firestore_fields_indexes.go`) takes the full
   `GoogleFirestoreAdminV1Index` via `--config-file`, and the Go client
   already exposes `IndexField.searchConfig` and
   `IndexField.vectorConfig`, so search-index configuration is settable
@@ -1238,7 +1238,7 @@ gcloud-go binary and should land alongside a future implementation of
 The `--sql-where-clause` flag on `gcloud datastream objects start-backfill`
 (571.0.0) is implemented — it populates
 `StartBackfillJobRequest.eventFilter.sqlWhereClause` on the outgoing
-request; see `cmd/datastream_all.go`. The remaining three items don't
+request; see `internal/cli/datastream_all.go`. The remaining three items don't
 need CLI changes:
 
 - **574.0.0** — Regional Endpoints (REP) support for all Datastream
@@ -1257,7 +1257,7 @@ need CLI changes:
   connection-profile types on `datastream connection-profiles create`
   and `update`. gcloud-go's `connection-profiles create`/`update`
   commands take the full `ConnectionProfile` body via `--config-file`
-  (see `cmd/datastream_all.go`), and
+  (see `internal/cli/datastream_all.go`), and
   `google.golang.org/api/datastream/v1` already exposes
   `ConnectionProfile.dataverseProfile`,
   `ConnectionProfile.salesforceMarketingCloudProfile`, and
@@ -1276,8 +1276,8 @@ need CLI changes:
 gcloud-go's `dataproc clusters create/update`, `dataproc workflow-templates
 set-managed-cluster`, and `dataproc batches submit` all take the full
 `Cluster` / `ManagedCluster` / `Batch` body via `--config-file`
-(`--source` for workflow templates — see `cmd/dataproc_clusters.go`,
-`cmd/dataproc_workflow_templates.go`, `cmd/dataproc_batches.go`), so any
+(`--source` for workflow templates — see `internal/cli/dataproc_clusters.go`,
+`internal/cli/dataproc_workflow_templates.go`, `internal/cli/dataproc_batches.go`), so any
 proto field exposed by `google.golang.org/api/dataproc/v1` is already
 settable through the YAML/JSON payload. The five payload-reachable
 items therefore don't need new CLI flags:
@@ -1336,7 +1336,7 @@ All four items add flags to `gcloud backup-dr backup-plans` and
 `gcloud backup-dr backups restore` commands. gcloud-go's entire
 `backup-dr` surface (all twelve sub-groups, including `backup-plans`,
 `backups`, `management-servers`, etc.) is registered as `"not yet
-implemented"` stubs in `cmd/backup_dr.go` (tracked under #303), so there
+implemented"` stubs in `internal/cli/backup_dr.go` (tracked under #303), so there
 is no create-request/patch-request builder or restore surface for these
 flags to hang off of yet:
 
@@ -1362,7 +1362,7 @@ All three items add or enable Enterprise Certificate Proxy (ECP) HTTP
 Proxy support in the Python auth stack. gcloud-go does not implement ECP
 (the `auth enterprise-certificate-config` group is a stub — see
 `registerStubGroup(authCmd, "enterprise-certificate-config", ...)` in
-`cmd/auth.go`), and the Go binary uses the standard `crypto/tls` stack
+`internal/cli/auth.go`), and the Go binary uses the standard `crypto/tls` stack
 plus `HTTP_PROXY`/`HTTPS_PROXY` environment variables for its transport,
 so none of these translate to gcloud-go code today:
 
@@ -1383,7 +1383,7 @@ so none of these translate to gcloud-go code today:
   upstream fix is entirely inside the Python argparse `examples` block of
   `surface/monitoring/policies/list.yaml`, refining the `--sort-by` and
   `--filter` snippets shown in `gcloud monitoring policies list --help`.
-  gcloud-go's `monitoring policies list` command (see `cmd/monitoring.go`)
+  gcloud-go's `monitoring policies list` command (see `internal/cli/monitoring.go`)
   provides its own short help text and does not carry the Python
   example strings, so there is nothing to sync into the Go binary. Users
   who want the refreshed example commands can consult the upstream
@@ -1399,7 +1399,7 @@ Both cloud-bindings items are already reachable through gcloud-go's
   (575.0.0) — gcloud-python promoted two ALPHA-only argparse flags that map
   onto `GcpUserAccessBinding.principal.serviceAccount` and
   `GcpUserAccessBinding.principal.serviceAccountProjectNumber`. gcloud-go's
-  `cloud-bindings create` and `update` commands (see `cmd/acm_cloud_bindings.go`)
+  `cloud-bindings create` and `update` commands (see `internal/cli/acm_cloud_bindings.go`)
   do not maintain separate alpha/beta/GA tracks and take the full
   `GcpUserAccessBinding` body via `--config-file`, so both fields are already
   settable today by populating `principal.serviceAccount` /

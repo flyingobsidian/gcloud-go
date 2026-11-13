@@ -1,0 +1,127 @@
+package cli
+
+import (
+	"testing"
+
+	"github.com/spf13/cobra"
+)
+
+func vmwareSubgroup(name string) *cobra.Command {
+	grp := newVmwareCmds(legacyTestInvocation())
+	for _, c := range grp.vmwareCmd.Commands() {
+		if c.Name() == name {
+			return c
+		}
+	}
+	return nil
+}
+
+func TestVmwareAnnouncementsSubcommands(t *testing.T) {
+	g := vmwareSubgroup("announcements")
+	if g == nil {
+		t.Fatal("vmware announcements missing")
+	}
+	assertSubcommands(t, g, []string{"describe", "list"})
+}
+
+func TestVmwareDatastoresSubcommands(t *testing.T) {
+	g := vmwareSubgroup("datastores")
+	if g == nil {
+		t.Fatal("vmware datastores missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
+}
+
+func TestVmwareDnsBindPermissionSubcommands(t *testing.T) {
+	g := vmwareSubgroup("dns-bind-permission")
+	if g == nil {
+		t.Fatal("vmware dns-bind-permission missing")
+	}
+	assertSubcommands(t, g, []string{"describe", "grant", "revoke"})
+}
+
+func TestVmwareLocationsSubcommands(t *testing.T) {
+	g := vmwareSubgroup("locations")
+	if g == nil {
+		t.Fatal("vmware locations missing")
+	}
+	assertSubcommands(t, g, []string{"describe", "list"})
+}
+
+func TestVmwareNetworkPeeringsSubcommands(t *testing.T) {
+	g := vmwareSubgroup("network-peerings")
+	if g == nil {
+		t.Fatal("vmware network-peerings missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
+}
+
+func TestVmwareNetworkPoliciesSubcommands(t *testing.T) {
+	g := vmwareSubgroup("network-policies")
+	if g == nil {
+		t.Fatal("vmware network-policies missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
+}
+
+func TestVmwareNetworksSubcommands(t *testing.T) {
+	g := vmwareSubgroup("networks")
+	if g == nil {
+		t.Fatal("vmware networks missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
+}
+
+func TestVmwareNodeTypesSubcommands(t *testing.T) {
+	g := vmwareSubgroup("node-types")
+	if g == nil {
+		t.Fatal("vmware node-types missing")
+	}
+	assertSubcommands(t, g, []string{"describe", "list"})
+}
+
+func TestVmwareOperationsSubcommands(t *testing.T) {
+	g := vmwareSubgroup("operations")
+	if g == nil {
+		t.Fatal("vmware operations missing")
+	}
+	assertSubcommands(t, g, []string{"describe", "list", "delete"})
+}
+
+func TestVmwarePrivateCloudsSubcommands(t *testing.T) {
+	g := vmwareSubgroup("private-clouds")
+	if g == nil {
+		t.Fatal("vmware private-clouds missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "migrate-management-vms", "update"})
+}
+
+func TestVmwarePrivateCloudsMigrateManagementVmsFlags(t *testing.T) {
+	g := vmwareSubgroup("private-clouds")
+	if g == nil {
+		t.Fatal("vmware private-clouds missing")
+	}
+	var mig *cobra.Command
+	for _, c := range g.Commands() {
+		if c.Name() == "migrate-management-vms" {
+			mig = c
+			break
+		}
+	}
+	if mig == nil {
+		t.Fatal("migrate-management-vms missing")
+	}
+	for _, name := range []string{"cluster-id", "location", "request-id", "etag"} {
+		if flag := mig.Flags().Lookup(name); flag == nil {
+			t.Errorf("migrate-management-vms missing --%s", name)
+		}
+	}
+}
+
+func TestVmwarePrivateConnectionsSubcommands(t *testing.T) {
+	g := vmwareSubgroup("private-connections")
+	if g == nil {
+		t.Fatal("vmware private-connections missing")
+	}
+	assertSubcommands(t, g, []string{"create", "delete", "describe", "list", "update"})
+}

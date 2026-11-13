@@ -4,9 +4,9 @@ import (
 	"context"
 	"os"
 
-	"github.com/flyingobsidian/gcloud-go/cmd"
+	"github.com/flyingobsidian/gcloud-go/internal/cli"
 )
 
 func main() {
-	os.Exit(cmd.Main(context.Background(), os.Args[1:]))
+	os.Exit(cli.Main(context.Background(), os.Args[1:]))
 }
