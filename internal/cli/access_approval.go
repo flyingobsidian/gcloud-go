@@ -219,7 +219,6 @@ func (s *accessApprovalCmds) runAAReqList(cmd *cobra.Command, args []string) err
 		var (
 			list []*accessapproval.ApprovalRequest
 			next string
-			err  error
 		)
 		switch {
 		case s.flagAAFolder != "":
@@ -231,7 +230,10 @@ func (s *accessApprovalCmds) runAAReqList(cmd *cobra.Command, args []string) err
 				call = call.Filter(s.flagAAFilter)
 			}
 			resp, e := call.Do()
-			list, next, err = resp.ApprovalRequests, resp.NextPageToken, e
+			if e != nil {
+				return fmt.Errorf("listing requests: %w", e)
+			}
+			list, next = resp.ApprovalRequests, resp.NextPageToken
 		case s.flagAAOrganization != "":
 			call := svc.Organizations.ApprovalRequests.List(scope).Context(ctx)
 			if pageToken != "" {
@@ -241,7 +243,10 @@ func (s *accessApprovalCmds) runAAReqList(cmd *cobra.Command, args []string) err
 				call = call.Filter(s.flagAAFilter)
 			}
 			resp, e := call.Do()
-			list, next, err = resp.ApprovalRequests, resp.NextPageToken, e
+			if e != nil {
+				return fmt.Errorf("listing requests: %w", e)
+			}
+			list, next = resp.ApprovalRequests, resp.NextPageToken
 		default:
 			call := svc.Projects.ApprovalRequests.List(scope).Context(ctx)
 			if pageToken != "" {
@@ -251,10 +256,10 @@ func (s *accessApprovalCmds) runAAReqList(cmd *cobra.Command, args []string) err
 				call = call.Filter(s.flagAAFilter)
 			}
 			resp, e := call.Do()
-			list, next, err = resp.ApprovalRequests, resp.NextPageToken, e
-		}
-		if err != nil {
-			return fmt.Errorf("listing requests: %w", err)
+			if e != nil {
+				return fmt.Errorf("listing requests: %w", e)
+			}
+			list, next = resp.ApprovalRequests, resp.NextPageToken
 		}
 		all = append(all, list...)
 		if next == "" {
