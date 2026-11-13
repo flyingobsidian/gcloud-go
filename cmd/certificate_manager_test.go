@@ -7,7 +7,8 @@ import (
 )
 
 func cmSubgroup(name string) *cobra.Command {
-	for _, c := range certificateManagerCmd.Commands() {
+	grp := newCertificateManagerCmds(legacyTestInvocation())
+	for _, c := range grp.certificateManagerCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -107,29 +108,30 @@ func TestCMTagsFlagOnCreates(t *testing.T) {
 }
 
 func TestCMMergeTags(t *testing.T) {
-	orig := flagCMTags
-	t.Cleanup(func() { flagCMTags = orig })
+	grp := newCertificateManagerCmds(legacyTestInvocation())
+	orig := grp.flagCMTags
+	t.Cleanup(func() { grp.flagCMTags = orig })
 
 	// Empty flag → keep existing map (including nil) untouched.
-	flagCMTags = nil
-	if got := cmMergeTags(nil); got != nil {
+	grp.flagCMTags = nil
+	if got := grp.cmMergeTags(nil); got != nil {
 		t.Errorf("empty flag, nil input: got=%v want=nil", got)
 	}
 	existing := map[string]string{"k": "v"}
-	got := cmMergeTags(existing)
+	got := grp.cmMergeTags(existing)
 	if len(got) != 1 || got["k"] != "v" {
 		t.Errorf("empty flag, existing input mutated: got=%v", got)
 	}
 
 	// Flag overlays and wins on collision.
-	flagCMTags = map[string]string{"k": "override", "b": "2"}
-	got = cmMergeTags(map[string]string{"k": "v", "a": "1"})
+	grp.flagCMTags = map[string]string{"k": "override", "b": "2"}
+	got = grp.cmMergeTags(map[string]string{"k": "v", "a": "1"})
 	if got["k"] != "override" || got["a"] != "1" || got["b"] != "2" {
 		t.Errorf("overlay: got=%v", got)
 	}
 
 	// Flag with nil input allocates a fresh map.
-	got = cmMergeTags(nil)
+	got = grp.cmMergeTags(nil)
 	if got["k"] != "override" || got["b"] != "2" {
 		t.Errorf("allocate: got=%v", got)
 	}
