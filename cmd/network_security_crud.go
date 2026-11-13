@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networksecurity "google.golang.org/api/networksecurity/v1"
 )
@@ -13,6 +12,7 @@ import (
 // security resources. Each resource plugs the API service calls in via closures
 // so registerNS* only has to build the cobra subcommands.
 type nsCRUD[T any] struct {
+	s *networkSecurityCmds
 	// group is the cobra subcommand name (e.g. "url-lists"). It is not used
 	// for API calls; it exists so error messages can mention the group.
 	group string
@@ -42,52 +42,52 @@ type nsCRUD[T any] struct {
 	secondaryHeader string
 }
 
-func (b *nsCRUD[T]) runCreate(_ *cobra.Command, args []string) error {
+func (b *nsCRUD[T]) runCreate(c *cobra.Command, args []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
 	body := new(T)
-	if err := loadYAMLOrJSONInto(flagNSConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(b.s.flagNSConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkSecurityService(ctx, flagAccount)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkSecurity(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := b.createFn(ctx, svc, parent, args[0], body, flagNSRequestID)
+	op, err := b.createFn(ctx, svc, parent, args[0], body, b.s.flagNSRequestID)
 	if err != nil {
 		return fmt.Errorf("creating %s: %w", b.singular, err)
 	}
-	return nsFinishOp(ctx, svc, op, "Create "+b.singular, args[0])
+	return b.s.nsFinishOp(ctx, svc, op, "Create "+b.singular, args[0])
 }
 
-func (b *nsCRUD[T]) runDelete(_ *cobra.Command, args []string) error {
+func (b *nsCRUD[T]) runDelete(c *cobra.Command, args []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkSecurityService(ctx, flagAccount)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkSecurity(ctx)
 	if err != nil {
 		return err
 	}
 	name := nsChild(parent, b.collection, args[0])
-	op, err := b.deleteFn(ctx, svc, name, flagNSRequestID)
+	op, err := b.deleteFn(ctx, svc, name, b.s.flagNSRequestID)
 	if err != nil {
 		return fmt.Errorf("deleting %s: %w", b.singular, err)
 	}
-	return nsFinishOp(ctx, svc, op, "Delete "+b.singular, args[0])
+	return b.s.nsFinishOp(ctx, svc, op, "Delete "+b.singular, args[0])
 }
 
-func (b *nsCRUD[T]) runDescribe(_ *cobra.Command, args []string) error {
+func (b *nsCRUD[T]) runDescribe(c *cobra.Command, args []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkSecurityService(ctx, flagAccount)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkSecurity(ctx)
 	if err != nil {
 		return err
 	}
@@ -96,23 +96,23 @@ func (b *nsCRUD[T]) runDescribe(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing %s: %w", b.singular, err)
 	}
-	return emitFormatted(got, flagNSFormat)
+	return emitFormattedTo(b.s.inv.stdout, got, b.s.flagNSFormat)
 }
 
-func (b *nsCRUD[T]) runList(_ *cobra.Command, _ []string) error {
+func (b *nsCRUD[T]) runList(c *cobra.Command, _ []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkSecurityService(ctx, flagAccount)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkSecurity(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*T
 	pageToken := ""
 	for {
-		items, next, err := b.listFn(ctx, svc, parent, pageToken, flagNSFilter)
+		items, next, err := b.listFn(ctx, svc, parent, pageToken, b.s.flagNSFilter)
 		if err != nil {
 			return fmt.Errorf("listing %s: %w", b.group, err)
 		}
@@ -122,47 +122,47 @@ func (b *nsCRUD[T]) runList(_ *cobra.Command, _ []string) error {
 		}
 		pageToken = next
 	}
-	if flagNSFormat != "" {
-		return emitFormatted(all, flagNSFormat)
+	if b.s.flagNSFormat != "" {
+		return emitFormattedTo(b.s.inv.stdout, all, b.s.flagNSFormat)
 	}
 	if b.nameCol == nil {
-		return emitFormatted(all, "")
+		return emitFormattedTo(b.s.inv.stdout, all, "")
 	}
 	if b.secondaryCol == nil {
-		printTableHeading(len(all), "%-50s\n", "NAME")
+		printTableHeadingTo(b.s.inv.stdout, len(all), "%-50s\n", "NAME")
 		for _, it := range all {
-			fmt.Printf("%-50s\n", b.nameCol(it))
+			fmt.Fprintf(b.s.inv.stdout, "%-50s\n", b.nameCol(it))
 		}
 		return nil
 	}
-	printTableHeading(len(all), "%-50s %s\n", "NAME", b.secondaryHeader)
+	printTableHeadingTo(b.s.inv.stdout, len(all), "%-50s %s\n", "NAME", b.secondaryHeader)
 	for _, it := range all {
-		fmt.Printf("%-50s %s\n", b.nameCol(it), b.secondaryCol(it))
+		fmt.Fprintf(b.s.inv.stdout, "%-50s %s\n", b.nameCol(it), b.secondaryCol(it))
 	}
 	return nil
 }
 
-func (b *nsCRUD[T]) runUpdate(_ *cobra.Command, args []string) error {
+func (b *nsCRUD[T]) runUpdate(c *cobra.Command, args []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
 	body := new(T)
-	if err := loadYAMLOrJSONInto(flagNSConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(b.s.flagNSConfigFile, body); err != nil {
 		return err
 	}
-	mask := nsResolveMask(body)
-	ctx := context.Background()
-	svc, err := gcp.NetworkSecurityService(ctx, flagAccount)
+	mask := b.s.nsResolveMask(body)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkSecurity(ctx)
 	if err != nil {
 		return err
 	}
 	name := nsChild(parent, b.collection, args[0])
-	op, err := b.patchFn(ctx, svc, name, body, mask, flagNSRequestID)
+	op, err := b.patchFn(ctx, svc, name, body, mask, b.s.flagNSRequestID)
 	if err != nil {
 		return fmt.Errorf("updating %s: %w", b.singular, err)
 	}
-	return nsFinishOp(ctx, svc, op, "Update "+b.singular, args[0])
+	return b.s.nsFinishOp(ctx, svc, op, "Update "+b.singular, args[0])
 }
 
 // build wires the CRUD subcommands under group, honouring the parent-scope
@@ -195,12 +195,12 @@ func (b *nsCRUD[T]) build(parent *cobra.Command, group, groupShort string, scope
 	}
 
 	scopeFlags(create, del, desc, list, upd)
-	addNSFormatFlag(desc, list)
-	addNSFilterFlag(list)
-	addNSCreateConfigFlag(create)
-	addNSUpdateConfigFlag(upd)
-	addNSAsyncFlag(create, del, upd)
-	addNSRequestIDFlag(create, del, upd)
+	b.s.addNSFormatFlag(desc, list)
+	b.s.addNSFilterFlag(list)
+	b.s.addNSCreateConfigFlag(create)
+	b.s.addNSUpdateConfigFlag(upd)
+	b.s.addNSAsyncFlag(create, del, upd)
+	b.s.addNSRequestIDFlag(create, del, upd)
 
 	g.AddCommand(create, del, desc, list, upd)
 	parent.AddCommand(g)

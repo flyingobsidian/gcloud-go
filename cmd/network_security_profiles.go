@@ -9,15 +9,16 @@ import (
 
 // registerNSProfiles wires up security-profiles and security-profile-groups.
 // Both are organization-scoped (issues #836, #837).
-func registerNSProfiles(root *cobra.Command) {
-	registerNSSecurityProfiles(root)
-	registerNSSecurityProfileGroups(root)
+func (s *networkSecurityCmds) registerNSProfiles(root *cobra.Command) {
+	s.registerNSSecurityProfiles(root)
+	s.registerNSSecurityProfileGroups(root)
 }
 
-func registerNSSecurityProfiles(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSSecurityProfiles(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.SecurityProfile]{
+		s:     s,
 		group: "security-profiles", singular: "security profile", collection: "securityProfiles",
-		parentFn: nsOrgParent,
+		parentFn: s.nsOrgParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.SecurityProfile, requestID string) (*networksecurity.Operation, error) {
 			return svc.Organizations.Locations.SecurityProfiles.Create(parent, body).SecurityProfileId(id).Context(ctx).Do()
 		},
@@ -45,13 +46,14 @@ func registerNSSecurityProfiles(root *cobra.Command) {
 		secondaryCol:    func(p *networksecurity.SecurityProfile) string { return p.Type },
 		secondaryHeader: "TYPE",
 	}
-	crud.build(root, "security-profiles", "Manage security profiles", addNSOrgFlags)
+	crud.build(root, "security-profiles", "Manage security profiles", s.addNSOrgFlags)
 }
 
-func registerNSSecurityProfileGroups(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSSecurityProfileGroups(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.SecurityProfileGroup]{
+		s:     s,
 		group: "security-profile-groups", singular: "security profile group", collection: "securityProfileGroups",
-		parentFn: nsOrgParent,
+		parentFn: s.nsOrgParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.SecurityProfileGroup, requestID string) (*networksecurity.Operation, error) {
 			return svc.Organizations.Locations.SecurityProfileGroups.Create(parent, body).SecurityProfileGroupId(id).Context(ctx).Do()
 		},
@@ -77,5 +79,5 @@ func registerNSSecurityProfileGroups(root *cobra.Command) {
 		},
 		nameCol: func(g *networksecurity.SecurityProfileGroup) string { return nsBasename(g.Name) },
 	}
-	crud.build(root, "security-profile-groups", "Manage security profile groups", addNSOrgFlags)
+	crud.build(root, "security-profile-groups", "Manage security profile groups", s.addNSOrgFlags)
 }

@@ -4,15 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networksecurity "google.golang.org/api/networksecurity/v1"
 )
 
 // gcpNS is a convenience wrapper for the networksecurity v1 client used
 // across the network-security subgroup files.
-func gcpNS(ctx context.Context) (*networksecurity.Service, error) {
-	return gcp.NetworkSecurityService(ctx, flagAccount)
+func (s *networkSecurityCmds) gcpNS(ctx context.Context) (*networksecurity.Service, error) {
+	return s.inv.clients().NetworkSecurity(ctx)
 }
 
 // registerNSPolicies wires up every project-scoped policy / config resource:
@@ -20,22 +19,23 @@ func gcpNS(ctx context.Context) (*networksecurity.Service, error) {
 // client-tls-policies, dns-threat-detectors, server-tls-policies,
 // tls-inspection-policies, url-lists, and gateway-security-policies (with its
 // rules subgroup).
-func registerNSPolicies(root *cobra.Command) {
-	registerNSAuthorizationPolicies(root)
-	registerNSAuthzPolicies(root)
-	registerNSBackendAuthenticationConfigs(root)
-	registerNSClientTlsPolicies(root)
-	registerNSDnsThreatDetectors(root)
-	registerNSServerTlsPolicies(root)
-	registerNSTlsInspectionPolicies(root)
-	registerNSUrlLists(root)
-	registerNSGatewaySecurityPolicies(root)
+func (s *networkSecurityCmds) registerNSPolicies(root *cobra.Command) {
+	s.registerNSAuthorizationPolicies(root)
+	s.registerNSAuthzPolicies(root)
+	s.registerNSBackendAuthenticationConfigs(root)
+	s.registerNSClientTlsPolicies(root)
+	s.registerNSDnsThreatDetectors(root)
+	s.registerNSServerTlsPolicies(root)
+	s.registerNSTlsInspectionPolicies(root)
+	s.registerNSUrlLists(root)
+	s.registerNSGatewaySecurityPolicies(root)
 }
 
-func registerNSAuthorizationPolicies(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSAuthorizationPolicies(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.AuthorizationPolicy]{
+		s:     s,
 		group: "authorization-policies", singular: "authorization policy", collection: "authorizationPolicies",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.AuthorizationPolicy, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.AuthorizationPolicies.Create(parent, body).AuthorizationPolicyId(id).Context(ctx)
 			return c.Do()
@@ -64,13 +64,14 @@ func registerNSAuthorizationPolicies(root *cobra.Command) {
 		secondaryCol:    func(p *networksecurity.AuthorizationPolicy) string { return p.Action },
 		secondaryHeader: "ACTION",
 	}
-	crud.build(root, "authorization-policies", "Manage authorization policies", addNSLocationFlag)
+	crud.build(root, "authorization-policies", "Manage authorization policies", s.addNSLocationFlag)
 }
 
-func registerNSAuthzPolicies(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSAuthzPolicies(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.AuthzPolicy]{
+		s:     s,
 		group: "authz-policies", singular: "authz policy", collection: "authzPolicies",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.AuthzPolicy, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.AuthzPolicies.Create(parent, body).AuthzPolicyId(id).Context(ctx)
 			if requestID != "" {
@@ -113,13 +114,14 @@ func registerNSAuthzPolicies(root *cobra.Command) {
 		secondaryCol:    func(p *networksecurity.AuthzPolicy) string { return p.Action },
 		secondaryHeader: "ACTION",
 	}
-	crud.build(root, "authz-policies", "Manage authz policies", addNSLocationFlag)
+	crud.build(root, "authz-policies", "Manage authz policies", s.addNSLocationFlag)
 }
 
-func registerNSBackendAuthenticationConfigs(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSBackendAuthenticationConfigs(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.BackendAuthenticationConfig]{
+		s:     s,
 		group: "backend-authentication-configs", singular: "backend authentication config", collection: "backendAuthenticationConfigs",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.BackendAuthenticationConfig, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.BackendAuthenticationConfigs.Create(parent, body).BackendAuthenticationConfigId(id).Context(ctx)
 			return c.Do()
@@ -146,13 +148,14 @@ func registerNSBackendAuthenticationConfigs(root *cobra.Command) {
 		},
 		nameCol: func(p *networksecurity.BackendAuthenticationConfig) string { return nsBasename(p.Name) },
 	}
-	crud.build(root, "backend-authentication-configs", "Manage backend authentication configs", addNSLocationFlag)
+	crud.build(root, "backend-authentication-configs", "Manage backend authentication configs", s.addNSLocationFlag)
 }
 
-func registerNSClientTlsPolicies(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSClientTlsPolicies(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.ClientTlsPolicy]{
+		s:     s,
 		group: "client-tls-policies", singular: "client TLS policy", collection: "clientTlsPolicies",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.ClientTlsPolicy, requestID string) (*networksecurity.Operation, error) {
 			return svc.Projects.Locations.ClientTlsPolicies.Create(parent, body).ClientTlsPolicyId(id).Context(ctx).Do()
 		},
@@ -180,53 +183,53 @@ func registerNSClientTlsPolicies(root *cobra.Command) {
 		secondaryCol:    func(p *networksecurity.ClientTlsPolicy) string { return p.Sni },
 		secondaryHeader: "SNI",
 	}
-	crud.build(root, "client-tls-policies", "Manage client TLS policies", addNSLocationFlag)
+	crud.build(root, "client-tls-policies", "Manage client TLS policies", s.addNSLocationFlag)
 }
 
 // DnsThreatDetectors is unusual: Create/Delete/Patch are synchronous and
 // return the resource (or Empty) directly rather than an LRO. It is wired
 // with dedicated cobra RunEs instead of the shared nsCRUD framework.
-func registerNSDnsThreatDetectors(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSDnsThreatDetectors(root *cobra.Command) {
 	group := &cobra.Command{Use: "dns-threat-detectors", Short: "Manage DNS threat detectors"}
 	create := &cobra.Command{
 		Use: "create DETECTOR", Short: "Create a DNS threat detector from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runNSDNSCreate,
+		Args: cobra.ExactArgs(1), RunE: s.runNSDNSCreate,
 	}
 	del := &cobra.Command{
 		Use: "delete DETECTOR", Short: "Delete a DNS threat detector",
-		Args: cobra.ExactArgs(1), RunE: runNSDNSDelete,
+		Args: cobra.ExactArgs(1), RunE: s.runNSDNSDelete,
 	}
 	desc := &cobra.Command{
 		Use: "describe DETECTOR", Short: "Describe a DNS threat detector",
-		Args: cobra.ExactArgs(1), RunE: runNSDNSDescribe,
+		Args: cobra.ExactArgs(1), RunE: s.runNSDNSDescribe,
 	}
 	list := &cobra.Command{
 		Use: "list", Short: "List DNS threat detectors in a location",
-		Args: cobra.NoArgs, RunE: runNSDNSList,
+		Args: cobra.NoArgs, RunE: s.runNSDNSList,
 	}
 	upd := &cobra.Command{
 		Use: "update DETECTOR", Short: "Update a DNS threat detector from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runNSDNSUpdate,
+		Args: cobra.ExactArgs(1), RunE: s.runNSDNSUpdate,
 	}
-	addNSLocationFlag(create, del, desc, list, upd)
-	addNSFormatFlag(desc, list)
-	addNSCreateConfigFlag(create)
-	addNSUpdateConfigFlag(upd)
+	s.addNSLocationFlag(create, del, desc, list, upd)
+	s.addNSFormatFlag(desc, list)
+	s.addNSCreateConfigFlag(create)
+	s.addNSUpdateConfigFlag(upd)
 	group.AddCommand(create, del, desc, list, upd)
 	root.AddCommand(group)
 }
 
-func runNSDNSCreate(_ *cobra.Command, args []string) error {
-	parent, err := nsProjectParent()
+func (s *networkSecurityCmds) runNSDNSCreate(_ *cobra.Command, args []string) error {
+	parent, err := s.nsProjectParent()
 	if err != nil {
 		return err
 	}
 	body := &networksecurity.DnsThreatDetector{}
-	if err := loadYAMLOrJSONInto(flagNSConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNSConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcpNS(ctx)
+	ctx := s.inv.context()
+	svc, err := s.gcpNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -234,16 +237,16 @@ func runNSDNSCreate(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating DNS threat detector: %w", err)
 	}
-	return emitFormatted(res, "")
+	return emitFormattedTo(s.inv.stdout, res, "")
 }
 
-func runNSDNSDelete(_ *cobra.Command, args []string) error {
-	parent, err := nsProjectParent()
+func (s *networkSecurityCmds) runNSDNSDelete(_ *cobra.Command, args []string) error {
+	parent, err := s.nsProjectParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcpNS(ctx)
+	ctx := s.inv.context()
+	svc, err := s.gcpNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -251,17 +254,17 @@ func runNSDNSDelete(_ *cobra.Command, args []string) error {
 	if _, err := svc.Projects.Locations.DnsThreatDetectors.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting DNS threat detector: %w", err)
 	}
-	fmt.Printf("Deleted DNS threat detector %s.\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted DNS threat detector %s.\n", args[0])
 	return nil
 }
 
-func runNSDNSDescribe(_ *cobra.Command, args []string) error {
-	parent, err := nsProjectParent()
+func (s *networkSecurityCmds) runNSDNSDescribe(_ *cobra.Command, args []string) error {
+	parent, err := s.nsProjectParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcpNS(ctx)
+	ctx := s.inv.context()
+	svc, err := s.gcpNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -270,16 +273,16 @@ func runNSDNSDescribe(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing DNS threat detector: %w", err)
 	}
-	return emitFormatted(got, flagNSFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNSFormat)
 }
 
-func runNSDNSList(_ *cobra.Command, _ []string) error {
-	parent, err := nsProjectParent()
+func (s *networkSecurityCmds) runNSDNSList(_ *cobra.Command, _ []string) error {
+	parent, err := s.nsProjectParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcpNS(ctx)
+	ctx := s.inv.context()
+	svc, err := s.gcpNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -300,28 +303,28 @@ func runNSDNSList(_ *cobra.Command, _ []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagNSFormat != "" {
-		return emitFormatted(all, flagNSFormat)
+	if s.flagNSFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagNSFormat)
 	}
-	printTableHeading(len(all), "%-50s\n", "NAME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-50s\n", "NAME")
 	for _, d := range all {
-		fmt.Printf("%-50s\n", nsBasename(d.Name))
+		fmt.Fprintf(s.inv.stdout, "%-50s\n", nsBasename(d.Name))
 	}
 	return nil
 }
 
-func runNSDNSUpdate(_ *cobra.Command, args []string) error {
-	parent, err := nsProjectParent()
+func (s *networkSecurityCmds) runNSDNSUpdate(_ *cobra.Command, args []string) error {
+	parent, err := s.nsProjectParent()
 	if err != nil {
 		return err
 	}
 	body := &networksecurity.DnsThreatDetector{}
-	if err := loadYAMLOrJSONInto(flagNSConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNSConfigFile, body); err != nil {
 		return err
 	}
-	mask := nsResolveMask(body)
-	ctx := context.Background()
-	svc, err := gcpNS(ctx)
+	mask := s.nsResolveMask(body)
+	ctx := s.inv.context()
+	svc, err := s.gcpNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -330,13 +333,14 @@ func runNSDNSUpdate(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating DNS threat detector: %w", err)
 	}
-	return emitFormatted(res, "")
+	return emitFormattedTo(s.inv.stdout, res, "")
 }
 
-func registerNSServerTlsPolicies(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSServerTlsPolicies(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.ServerTlsPolicy]{
+		s:     s,
 		group: "server-tls-policies", singular: "server TLS policy", collection: "serverTlsPolicies",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.ServerTlsPolicy, requestID string) (*networksecurity.Operation, error) {
 			return svc.Projects.Locations.ServerTlsPolicies.Create(parent, body).ServerTlsPolicyId(id).Context(ctx).Do()
 		},
@@ -362,13 +366,14 @@ func registerNSServerTlsPolicies(root *cobra.Command) {
 		},
 		nameCol: func(p *networksecurity.ServerTlsPolicy) string { return nsBasename(p.Name) },
 	}
-	crud.build(root, "server-tls-policies", "Manage server TLS policies", addNSLocationFlag)
+	crud.build(root, "server-tls-policies", "Manage server TLS policies", s.addNSLocationFlag)
 }
 
-func registerNSTlsInspectionPolicies(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSTlsInspectionPolicies(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.TlsInspectionPolicy]{
+		s:     s,
 		group: "tls-inspection-policies", singular: "TLS inspection policy", collection: "tlsInspectionPolicies",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.TlsInspectionPolicy, requestID string) (*networksecurity.Operation, error) {
 			return svc.Projects.Locations.TlsInspectionPolicies.Create(parent, body).TlsInspectionPolicyId(id).Context(ctx).Do()
 		},
@@ -394,13 +399,14 @@ func registerNSTlsInspectionPolicies(root *cobra.Command) {
 		},
 		nameCol: func(p *networksecurity.TlsInspectionPolicy) string { return nsBasename(p.Name) },
 	}
-	crud.build(root, "tls-inspection-policies", "Manage TLS inspection policies", addNSLocationFlag)
+	crud.build(root, "tls-inspection-policies", "Manage TLS inspection policies", s.addNSLocationFlag)
 }
 
-func registerNSUrlLists(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSUrlLists(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.UrlList]{
+		s:     s,
 		group: "url-lists", singular: "URL list", collection: "urlLists",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.UrlList, requestID string) (*networksecurity.Operation, error) {
 			return svc.Projects.Locations.UrlLists.Create(parent, body).UrlListId(id).Context(ctx).Do()
 		},
@@ -426,13 +432,14 @@ func registerNSUrlLists(root *cobra.Command) {
 		},
 		nameCol: func(p *networksecurity.UrlList) string { return nsBasename(p.Name) },
 	}
-	crud.build(root, "url-lists", "Manage URL lists", addNSLocationFlag)
+	crud.build(root, "url-lists", "Manage URL lists", s.addNSLocationFlag)
 }
 
-func registerNSGatewaySecurityPolicies(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSGatewaySecurityPolicies(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.GatewaySecurityPolicy]{
+		s:     s,
 		group: "gateway-security-policies", singular: "gateway security policy", collection: "gatewaySecurityPolicies",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.GatewaySecurityPolicy, requestID string) (*networksecurity.Operation, error) {
 			return svc.Projects.Locations.GatewaySecurityPolicies.Create(parent, body).GatewaySecurityPolicyId(id).Context(ctx).Do()
 		},
@@ -458,13 +465,13 @@ func registerNSGatewaySecurityPolicies(root *cobra.Command) {
 		},
 		nameCol: func(p *networksecurity.GatewaySecurityPolicy) string { return nsBasename(p.Name) },
 	}
-	group := crud.build(root, "gateway-security-policies", "Manage gateway security policies", addNSLocationFlag)
+	group := crud.build(root, "gateway-security-policies", "Manage gateway security policies", s.addNSLocationFlag)
 
 	// Rules subgroup lives under a gateway policy: names must include the policy
 	// ID as a prefix, so parent = projects/PROJECT/locations/LOC/gatewaySecurityPolicies/POLICY.
 	rulesCRUD := &nsCRUD[networksecurity.GatewaySecurityPolicyRule]{
 		group: "rules", singular: "gateway security policy rule", collection: "rules",
-		parentFn: nsGatewayPolicyParent,
+		parentFn: s.nsGatewayPolicyParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.GatewaySecurityPolicyRule, requestID string) (*networksecurity.Operation, error) {
 			return svc.Projects.Locations.GatewaySecurityPolicies.Rules.Create(parent, body).GatewaySecurityPolicyRuleId(id).Context(ctx).Do()
 		},
@@ -492,27 +499,23 @@ func registerNSGatewaySecurityPolicies(root *cobra.Command) {
 		secondaryCol:    func(r *networksecurity.GatewaySecurityPolicyRule) string { return r.BasicProfile },
 		secondaryHeader: "PROFILE",
 	}
-	rulesGroup := rulesCRUD.build(group, "rules", "Manage gateway security policy rules", addNSLocationFlag)
+	rulesGroup := rulesCRUD.build(group, "rules", "Manage gateway security policy rules", s.addNSLocationFlag)
 	// Add --policy on every rules subcommand.
 	for _, c := range rulesGroup.Commands() {
-		c.Flags().StringVar(&flagNSGatewayPolicy, "policy", "", "Parent gateway security policy ID (required)")
+		c.Flags().StringVar(&s.flagNSGatewayPolicy, "policy", "", "Parent gateway security policy ID (required)")
 		_ = c.MarkFlagRequired("policy")
 	}
 }
 
-// flagNSGatewayPolicy identifies the parent gateway security policy for rules
-// subcommands.
-var flagNSGatewayPolicy string
-
-func nsGatewayPolicyParent() (string, error) {
-	parent, err := nsProjectParent()
+func (s *networkSecurityCmds) nsGatewayPolicyParent() (string, error) {
+	parent, err := s.nsProjectParent()
 	if err != nil {
 		return "", err
 	}
-	if flagNSGatewayPolicy == "" {
+	if s.flagNSGatewayPolicy == "" {
 		return "", errFlagRequired("policy")
 	}
-	return parent + "/gatewaySecurityPolicies/" + flagNSGatewayPolicy, nil
+	return parent + "/gatewaySecurityPolicies/" + s.flagNSGatewayPolicy, nil
 }
 
 func errFlagRequired(name string) error {

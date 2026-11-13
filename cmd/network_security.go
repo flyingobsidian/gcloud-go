@@ -3,11 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networksecurity "google.golang.org/api/networksecurity/v1"
 )
@@ -25,50 +23,29 @@ import (
 //   - update flows accept a JSON or YAML body via --config-file and derive
 //     the update mask automatically when --update-mask is not supplied.
 
-var networkSecurityCmd = &cobra.Command{Use: "network-security", Short: "Manage Network Security"}
-
-// shared network-security flags
-var (
-	flagNSLocation     string
-	flagNSOrganization string
-	flagNSFormat       string
-	flagNSFilter       string
-	flagNSConfigFile   string
-	flagNSUpdateMask   string
-	flagNSAsync        bool
-	flagNSRequestID    string
-
-	// address-groups item flags
-	flagNSItems              []string
-	flagNSSourceAddressGroup string
-
-	// address-groups list-references
-	flagNSPageSize int64
-)
-
 // nsProjectParent returns projects/PROJECT/locations/LOCATION using the current
 // project and --location.
-func nsProjectParent() (string, error) {
-	project, err := resolveProject()
+func (s *networkSecurityCmds) nsProjectParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	if flagNSLocation == "" {
+	if s.flagNSLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagNSLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagNSLocation), nil
 }
 
 // nsOrgParent returns organizations/ORG/locations/LOCATION using --organization
 // and --location.
-func nsOrgParent() (string, error) {
-	if flagNSOrganization == "" {
+func (s *networkSecurityCmds) nsOrgParent() (string, error) {
+	if s.flagNSOrganization == "" {
 		return "", fmt.Errorf("--organization is required")
 	}
-	if flagNSLocation == "" {
+	if s.flagNSLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	return fmt.Sprintf("organizations/%s/locations/%s", flagNSOrganization, flagNSLocation), nil
+	return fmt.Sprintf("organizations/%s/locations/%s", s.flagNSOrganization, s.flagNSLocation), nil
 }
 
 // nsChild appends "collection/id" to parent unless id is already a fully
@@ -103,79 +80,79 @@ func nsWaitOp(ctx context.Context, svc *networksecurity.Service, op *networksecu
 	return op, nil
 }
 
-func nsFinishOp(ctx context.Context, svc *networksecurity.Service, op *networksecurity.Operation, verb, name string) error {
-	if flagNSAsync {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, "")
+func (s *networkSecurityCmds) nsFinishOp(ctx context.Context, svc *networksecurity.Service, op *networksecurity.Operation, verb, name string) error {
+	if s.flagNSAsync {
+		fmt.Fprintf(s.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	final, err := nsWaitOp(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
+	fmt.Fprintf(s.inv.stderr, "%s [%s] completed.\n", verb, name)
 	if final.Response != nil {
-		return emitFormatted(final.Response, "")
+		return emitFormattedTo(s.inv.stdout, final.Response, "")
 	}
 	return nil
 }
 
 // addNSLocationFlag adds --location to each command.
-func addNSLocationFlag(cmds ...*cobra.Command) {
+func (s *networkSecurityCmds) addNSLocationFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNSLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNSLocation, "location", "", "Location (required)")
 	}
 }
 
 // addNSOrgFlags adds --organization + --location to each command.
-func addNSOrgFlags(cmds ...*cobra.Command) {
+func (s *networkSecurityCmds) addNSOrgFlags(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNSOrganization, "organization", "", "Organization ID (required)")
-		c.Flags().StringVar(&flagNSLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNSOrganization, "organization", "", "Organization ID (required)")
+		c.Flags().StringVar(&s.flagNSLocation, "location", "", "Location (required)")
 	}
 }
 
 // addNSFormatFlag adds --format to each command.
-func addNSFormatFlag(cmds ...*cobra.Command) {
+func (s *networkSecurityCmds) addNSFormatFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNSFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNSFormat, "format", "", "Output format")
 	}
 }
 
 // addNSFilterFlag adds --filter to each command.
-func addNSFilterFlag(cmds ...*cobra.Command) {
+func (s *networkSecurityCmds) addNSFilterFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNSFilter, "filter", "", "Server-side list filter")
+		c.Flags().StringVar(&s.flagNSFilter, "filter", "", "Server-side list filter")
 	}
 }
 
 // addNSAsyncFlag adds --async to each command.
-func addNSAsyncFlag(cmds ...*cobra.Command) {
+func (s *networkSecurityCmds) addNSAsyncFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().BoolVar(&flagNSAsync, "async", false, "Do not wait for the operation to complete")
+		c.Flags().BoolVar(&s.flagNSAsync, "async", false, "Do not wait for the operation to complete")
 	}
 }
 
 // addNSRequestIDFlag adds --request-id to each command.
-func addNSRequestIDFlag(cmds ...*cobra.Command) {
+func (s *networkSecurityCmds) addNSRequestIDFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNSRequestID, "request-id", "", "Optional idempotency request ID")
+		c.Flags().StringVar(&s.flagNSRequestID, "request-id", "", "Optional idempotency request ID")
 	}
 }
 
 // addNSCreateConfigFlag adds a required --config-file flag.
-func addNSCreateConfigFlag(cmds ...*cobra.Command) {
+func (s *networkSecurityCmds) addNSCreateConfigFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNSConfigFile, "config-file", "", "Path to a JSON/YAML file with the resource body (required)")
+		c.Flags().StringVar(&s.flagNSConfigFile, "config-file", "", "Path to a JSON/YAML file with the resource body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
 }
 
 // addNSUpdateConfigFlag adds a required --config-file plus --update-mask.
-func addNSUpdateConfigFlag(cmds ...*cobra.Command) {
+func (s *networkSecurityCmds) addNSUpdateConfigFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagNSConfigFile, "config-file", "", "Path to a JSON/YAML file with the resource body (required)")
+		c.Flags().StringVar(&s.flagNSConfigFile, "config-file", "", "Path to a JSON/YAML file with the resource body (required)")
 		_ = c.MarkFlagRequired("config-file")
-		c.Flags().StringVar(&flagNSUpdateMask, "update-mask", "", "Comma-separated list of fields to update (defaults to every populated field)")
+		c.Flags().StringVar(&s.flagNSUpdateMask, "update-mask", "", "Comma-separated list of fields to update (defaults to every populated field)")
 	}
 }
 
@@ -184,43 +161,22 @@ func nsBasename(name string) string { return path.Base(name) }
 
 // nsResolveMask picks --update-mask if given, otherwise every top-level field
 // present in body.
-func nsResolveMask(body any) string {
-	if flagNSUpdateMask != "" {
-		return flagNSUpdateMask
+func (s *networkSecurityCmds) nsResolveMask(body any) string {
+	if s.flagNSUpdateMask != "" {
+		return s.flagNSUpdateMask
 	}
 	return joinMask(nonEmptyJSONFields(body))
 }
 
 // --- operations (issue 833) ---
 
-var networkSecurityOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Network Security operations"}
-
-var (
-	nsOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel an operation",
-		Args: cobra.ExactArgs(1), RunE: runNSOpCancel,
-	}
-	nsOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete an operation",
-		Args: cobra.ExactArgs(1), RunE: runNSOpDelete,
-	}
-	nsOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an operation",
-		Args: cobra.ExactArgs(1), RunE: runNSOpDescribe,
-	}
-	nsOpListCmd = &cobra.Command{
-		Use: "list", Short: "List operations in a location",
-		Args: cobra.NoArgs, RunE: runNSOpList,
-	}
-)
-
-func runNSOpCancel(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkSecurityService(ctx, flagAccount)
+func (s *networkSecurityCmds) runNSOpCancel(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkSecurity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := nsResolveOperationName(args[0])
+	name, err := s.nsResolveOperationName(args[0])
 	if err != nil {
 		return err
 	}
@@ -237,13 +193,13 @@ func runNSOpCancel(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runNSOpDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkSecurityService(ctx, flagAccount)
+func (s *networkSecurityCmds) runNSOpDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkSecurity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := nsResolveOperationName(args[0])
+	name, err := s.nsResolveOperationName(args[0])
 	if err != nil {
 		return err
 	}
@@ -260,13 +216,13 @@ func runNSOpDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runNSOpDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkSecurityService(ctx, flagAccount)
+func (s *networkSecurityCmds) runNSOpDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkSecurity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := nsResolveOperationName(args[0])
+	name, err := s.nsResolveOperationName(args[0])
 	if err != nil {
 		return err
 	}
@@ -279,24 +235,24 @@ func runNSOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagNSFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNSFormat)
 }
 
-func runNSOpList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkSecurityService(ctx, flagAccount)
+func (s *networkSecurityCmds) runNSOpList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkSecurity(ctx)
 	if err != nil {
 		return err
 	}
 	var parent string
-	if flagNSOrganization != "" {
-		p, err := nsOrgParent()
+	if s.flagNSOrganization != "" {
+		p, err := s.nsOrgParent()
 		if err != nil {
 			return err
 		}
 		parent = p
 	} else {
-		p, err := nsProjectParent()
+		p, err := s.nsProjectParent()
 		if err != nil {
 			return err
 		}
@@ -311,8 +267,8 @@ func runNSOpList(cmd *cobra.Command, args []string) error {
 		)
 		if strings.HasPrefix(parent, "organizations/") {
 			call := svc.Organizations.Locations.Operations.List(parent).Context(ctx)
-			if flagNSFilter != "" {
-				call = call.Filter(flagNSFilter)
+			if s.flagNSFilter != "" {
+				call = call.Filter(s.flagNSFilter)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -320,8 +276,8 @@ func runNSOpList(cmd *cobra.Command, args []string) error {
 			resp, err = call.Do()
 		} else {
 			call := svc.Projects.Locations.Operations.List(parent).Context(ctx)
-			if flagNSFilter != "" {
-				call = call.Filter(flagNSFilter)
+			if s.flagNSFilter != "" {
+				call = call.Filter(s.flagNSFilter)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -337,53 +293,205 @@ func runNSOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagNSFormat != "" {
-		return emitFormatted(all, flagNSFormat)
+	if s.flagNSFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagNSFormat)
 	}
-	printTableHeading(len(all), "%-60s %s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-60s %s\n", "NAME", "DONE")
 	for _, o := range all {
-		fmt.Printf("%-60s %v\n", nsBasename(o.Name), o.Done)
+		fmt.Fprintf(s.inv.stdout, "%-60s %v\n", nsBasename(o.Name), o.Done)
 	}
 	return nil
 }
 
 // nsResolveOperationName accepts either a fully qualified operation name or a
 // short ID relative to the current --organization / --project + --location.
-func nsResolveOperationName(id string) (string, error) {
+func (s *networkSecurityCmds) nsResolveOperationName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") || strings.HasPrefix(id, "organizations/") {
 		return id, nil
 	}
-	if flagNSOrganization != "" {
-		parent, err := nsOrgParent()
+	if s.flagNSOrganization != "" {
+		parent, err := s.nsOrgParent()
 		if err != nil {
 			return "", err
 		}
 		return nsChild(parent, "operations", id), nil
 	}
-	parent, err := nsProjectParent()
+	parent, err := s.nsProjectParent()
 	if err != nil {
 		return "", err
 	}
 	return nsChild(parent, "operations", id), nil
 }
 
-func init() {
+func (s *networkSecurityCmds) initNetworkSecurity() {
 	// operations
-	for _, c := range []*cobra.Command{nsOpCancelCmd, nsOpDeleteCmd, nsOpDescribeCmd, nsOpListCmd} {
-		c.Flags().StringVar(&flagNSLocation, "location", "", "Location (required)")
-		c.Flags().StringVar(&flagNSOrganization, "organization", "", "Organization ID (for org-scoped operations)")
+	for _, c := range []*cobra.Command{s.nsOpCancelCmd, s.nsOpDeleteCmd, s.nsOpDescribeCmd, s.nsOpListCmd} {
+		c.Flags().StringVar(&s.flagNSLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNSOrganization, "organization", "", "Organization ID (for org-scoped operations)")
 	}
-	addNSFormatFlag(nsOpDescribeCmd, nsOpListCmd)
-	addNSFilterFlag(nsOpListCmd)
-	networkSecurityOperationsCmd.AddCommand(nsOpCancelCmd, nsOpDeleteCmd, nsOpDescribeCmd, nsOpListCmd)
-	networkSecurityCmd.AddCommand(networkSecurityOperationsCmd)
+	s.addNSFormatFlag(s.nsOpDescribeCmd, s.nsOpListCmd)
+	s.addNSFilterFlag(s.nsOpListCmd)
+	s.networkSecurityOperationsCmd.AddCommand(s.nsOpCancelCmd, s.nsOpDeleteCmd, s.nsOpDescribeCmd, s.nsOpListCmd)
+	s.networkSecurityCmd.AddCommand(s.networkSecurityOperationsCmd)
 
-	registerNSAddressGroups(networkSecurityCmd)
-	registerNSPolicies(networkSecurityCmd)
-	registerNSFirewall(networkSecurityCmd)
-	registerNSInterceptMirroring(networkSecurityCmd)
-	registerNSProfiles(networkSecurityCmd)
-	registerNSSecureAccessConnect(networkSecurityCmd)
+	s.registerNSAddressGroups(s.networkSecurityCmd)
+	s.registerNSPolicies(s.networkSecurityCmd)
+	s.registerNSFirewall(s.networkSecurityCmd)
+	s.registerNSInterceptMirroring(s.networkSecurityCmd)
+	s.registerNSProfiles(s.networkSecurityCmd)
+	s.registerNSSecureAccessConnect(s.networkSecurityCmd)
 
-	rootCmd.AddCommand(networkSecurityCmd)
+}
+
+// networkSecurityCmds holds the commands and flag values of one invocation's "networkSecurity"
+// command group, so invocations don't share state (#2070).
+type networkSecurityCmds struct {
+	inv *invocation
+
+	networkSecurityCmd *cobra.Command
+	flagNSLocation     string
+	flagNSOrganization string
+	flagNSFormat       string
+	flagNSFilter       string
+	flagNSConfigFile   string
+	flagNSUpdateMask   string
+	flagNSAsync        bool
+	flagNSRequestID    string
+	// address-groups item flags
+	flagNSItems              []string
+	flagNSSourceAddressGroup string
+	// address-groups list-references
+	flagNSPageSize                     int64
+	networkSecurityOperationsCmd       *cobra.Command
+	nsOpCancelCmd                      *cobra.Command
+	nsOpDeleteCmd                      *cobra.Command
+	nsOpDescribeCmd                    *cobra.Command
+	nsOpListCmd                        *cobra.Command
+	networkSecurityAddressGroupsCmd    *cobra.Command
+	networkSecurityOrgAddressGroupsCmd *cobra.Command
+	nsAGCreateCmd                      *cobra.Command
+	nsAGDeleteCmd                      *cobra.Command
+	nsAGDescribeCmd                    *cobra.Command
+	nsAGListCmd                        *cobra.Command
+	nsAGUpdateCmd                      *cobra.Command
+	nsAGAddItemsCmd                    *cobra.Command
+	nsAGRemoveItemsCmd                 *cobra.Command
+	nsAGCloneItemsCmd                  *cobra.Command
+	nsAGListRefsCmd                    *cobra.Command
+	nsOAGCreateCmd                     *cobra.Command
+	nsOAGDeleteCmd                     *cobra.Command
+	nsOAGDescribeCmd                   *cobra.Command
+	nsOAGListCmd                       *cobra.Command
+	nsOAGUpdateCmd                     *cobra.Command
+	nsOAGAddItemsCmd                   *cobra.Command
+	nsOAGRemoveItemsCmd                *cobra.Command
+	nsOAGCloneItemsCmd                 *cobra.Command
+	nsOAGListRefsCmd                   *cobra.Command
+	// flagNSGatewayPolicy identifies the parent gateway security policy for rules
+	// subcommands.
+	flagNSGatewayPolicy string
+}
+
+// newNetworkSecurityCmd returns the "networkSecurity" command group for inv.
+func newNetworkSecurityCmd(inv *invocation) *cobra.Command {
+	return newNetworkSecurityCmds(inv).networkSecurityCmd
+}
+
+// newNetworkSecurityCmds builds the "networkSecurity" command group for inv and returns its state.
+func newNetworkSecurityCmds(inv *invocation) *networkSecurityCmds {
+	s := &networkSecurityCmds{inv: inv}
+	s.networkSecurityCmd = &cobra.Command{Use: "network-security", Short: "Manage Network Security"}
+	s.networkSecurityOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Network Security operations"}
+	s.nsOpCancelCmd = &cobra.Command{
+		Use: "cancel OPERATION", Short: "Cancel an operation",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOpCancel,
+	}
+	s.nsOpDeleteCmd = &cobra.Command{
+		Use: "delete OPERATION", Short: "Delete an operation",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOpDelete,
+	}
+	s.nsOpDescribeCmd = &cobra.Command{
+		Use: "describe OPERATION", Short: "Describe an operation",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOpDescribe,
+	}
+	s.nsOpListCmd = &cobra.Command{
+		Use: "list", Short: "List operations in a location",
+		Args: cobra.NoArgs, RunE: s.runNSOpList,
+	}
+	s.networkSecurityAddressGroupsCmd = &cobra.Command{Use: "address-groups", Short: "Manage address groups"}
+	s.networkSecurityOrgAddressGroupsCmd = &cobra.Command{Use: "org-address-groups", Short: "Manage organization address groups"}
+	s.nsAGCreateCmd = &cobra.Command{
+		Use: "create ADDRESS_GROUP", Short: "Create an address group from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: s.runNSAGCreate,
+	}
+	s.nsAGDeleteCmd = &cobra.Command{
+		Use: "delete ADDRESS_GROUP", Short: "Delete an address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSAGDelete,
+	}
+	s.nsAGDescribeCmd = &cobra.Command{
+		Use: "describe ADDRESS_GROUP", Short: "Describe an address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSAGDescribe,
+	}
+	s.nsAGListCmd = &cobra.Command{
+		Use: "list", Short: "List address groups in a location",
+		Args: cobra.NoArgs, RunE: s.runNSAGList,
+	}
+	s.nsAGUpdateCmd = &cobra.Command{
+		Use: "update ADDRESS_GROUP", Short: "Update an address group from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: s.runNSAGUpdate,
+	}
+	s.nsAGAddItemsCmd = &cobra.Command{
+		Use: "add-items ADDRESS_GROUP", Short: "Add items to an address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSAGAddItems,
+	}
+	s.nsAGRemoveItemsCmd = &cobra.Command{
+		Use: "remove-items ADDRESS_GROUP", Short: "Remove items from an address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSAGRemoveItems,
+	}
+	s.nsAGCloneItemsCmd = &cobra.Command{
+		Use: "clone-items ADDRESS_GROUP", Short: "Clone items into an address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSAGCloneItems,
+	}
+	s.nsAGListRefsCmd = &cobra.Command{
+		Use: "list-references ADDRESS_GROUP", Short: "List references to an address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSAGListRefs,
+	}
+	s.nsOAGCreateCmd = &cobra.Command{
+		Use: "create ADDRESS_GROUP", Short: "Create an organization address group from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOAGCreate,
+	}
+	s.nsOAGDeleteCmd = &cobra.Command{
+		Use: "delete ADDRESS_GROUP", Short: "Delete an organization address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOAGDelete,
+	}
+	s.nsOAGDescribeCmd = &cobra.Command{
+		Use: "describe ADDRESS_GROUP", Short: "Describe an organization address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOAGDescribe,
+	}
+	s.nsOAGListCmd = &cobra.Command{
+		Use: "list", Short: "List organization address groups",
+		Args: cobra.NoArgs, RunE: s.runNSOAGList,
+	}
+	s.nsOAGUpdateCmd = &cobra.Command{
+		Use: "update ADDRESS_GROUP", Short: "Update an organization address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOAGUpdate,
+	}
+	s.nsOAGAddItemsCmd = &cobra.Command{
+		Use: "add-items ADDRESS_GROUP", Short: "Add items to an organization address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOAGAddItems,
+	}
+	s.nsOAGRemoveItemsCmd = &cobra.Command{
+		Use: "remove-items ADDRESS_GROUP", Short: "Remove items from an organization address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOAGRemoveItems,
+	}
+	s.nsOAGCloneItemsCmd = &cobra.Command{
+		Use: "clone-items ADDRESS_GROUP", Short: "Clone items into an organization address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOAGCloneItems,
+	}
+	s.nsOAGListRefsCmd = &cobra.Command{
+		Use: "list-references ADDRESS_GROUP", Short: "List references to an organization address group",
+		Args: cobra.ExactArgs(1), RunE: s.runNSOAGListRefs,
+	}
+	s.initNetworkSecurity()
+	return s
 }
