@@ -7,7 +7,8 @@ import (
 )
 
 func apihubSubgroup(name string) *cobra.Command {
-	for _, c := range apihubCmd.Commands() {
+	grp := newApihubCmds(legacyTestInvocation())
+	for _, c := range grp.apihubCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

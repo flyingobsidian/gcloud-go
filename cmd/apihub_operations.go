@@ -1,103 +1,73 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
 
 // --- gcloud apihub operations (#1163) ---
 
-var apihubOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage API Hub long-running operations"}
-
-var (
-	flagApihubOpLocation string
-	flagApihubOpFormat   string
-	flagApihubOpFilter   string
-	flagApihubOpPageSize int64
-)
-
-var (
-	apihubOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel an API Hub operation",
-		Args: cobra.ExactArgs(1), RunE: runApihubOpCancel,
-	}
-	apihubOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete an API Hub operation",
-		Args: cobra.ExactArgs(1), RunE: runApihubOpDelete,
-	}
-	apihubOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an API Hub operation",
-		Args: cobra.ExactArgs(1), RunE: runApihubOpDescribe,
-	}
-	apihubOpListCmd = &cobra.Command{
-		Use: "list", Short: "List API Hub operations in a location",
-		Args: cobra.NoArgs, RunE: runApihubOpList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{apihubOpCancelCmd, apihubOpDeleteCmd, apihubOpDescribeCmd, apihubOpListCmd}
+func (g *apihubCmds) initApihubOperations() {
+	all := []*cobra.Command{g.apihubOpCancelCmd, g.apihubOpDeleteCmd, g.apihubOpDescribeCmd, g.apihubOpListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApihubOpLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&g.flagApihubOpLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagApihubOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagApihubOpFormat, "format", "", "Output format")
 	}
-	apihubOpListCmd.Flags().StringVar(&flagApihubOpFilter, "filter", "", "Server-side filter expression")
-	apihubOpListCmd.Flags().Int64Var(&flagApihubOpPageSize, "page-size", 0, "Maximum results per page")
+	g.apihubOpListCmd.Flags().StringVar(&g.flagApihubOpFilter, "filter", "", "Server-side filter expression")
+	g.apihubOpListCmd.Flags().Int64Var(&g.flagApihubOpPageSize, "page-size", 0, "Maximum results per page")
 
-	apihubOperationsCmd.AddCommand(all...)
-	apihubCmd.AddCommand(apihubOperationsCmd)
+	g.apihubOperationsCmd.AddCommand(all...)
+	g.apihubCmd.AddCommand(g.apihubOperationsCmd)
 }
 
-func apihubOpName(id string) (string, error) {
-	return apihubResource(flagApihubOpLocation, "operations", id)
+func (g *apihubCmds) apihubOpName(id string) (string, error) {
+	return g.apihubResource(g.flagApihubOpLocation, "operations", id)
 }
 
-func runApihubOpCancel(cmd *cobra.Command, args []string) error {
-	name, err := apihubOpName(args[0])
+func (g *apihubCmds) runApihubOpCancel(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Cancel(name, &apihub.GoogleLongrunningCancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runApihubOpDelete(cmd *cobra.Command, args []string) error {
-	name, err := apihubOpName(args[0])
+func (g *apihubCmds) runApihubOpDelete(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runApihubOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apihubOpName(args[0])
+func (g *apihubCmds) runApihubOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -105,16 +75,16 @@ func runApihubOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagApihubOpFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubOpFormat)
 }
 
-func runApihubOpList(cmd *cobra.Command, args []string) error {
-	parent, err := apihubLocationParent(flagApihubOpLocation)
+func (g *apihubCmds) runApihubOpList(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubLocationParent(g.flagApihubOpLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -122,11 +92,11 @@ func runApihubOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Operations.List(parent).Context(ctx)
-		if flagApihubOpFilter != "" {
-			call = call.Filter(flagApihubOpFilter)
+		if g.flagApihubOpFilter != "" {
+			call = call.Filter(g.flagApihubOpFilter)
 		}
-		if flagApihubOpPageSize > 0 {
-			call = call.PageSize(flagApihubOpPageSize)
+		if g.flagApihubOpPageSize > 0 {
+			call = call.PageSize(g.flagApihubOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -141,5 +111,5 @@ func runApihubOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagApihubOpFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagApihubOpFormat)
 }

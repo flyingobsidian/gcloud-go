@@ -1,96 +1,61 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
 
 // --- gcloud apihub curations (#1157) ---
 
-var apihubCurCmd = &cobra.Command{Use: "curations", Short: "Manage API Hub curations"}
-
-var (
-	flagApihubCurLocation    string
-	flagApihubCurFormat      string
-	flagApihubCurDestination string
-	flagApihubCurSource      string
-	flagApihubCurPageSize    int64
-)
-
-var (
-	apihubCurDeleteCmd = &cobra.Command{
-		Use: "delete RESOURCE", Short: "Delete a curation",
-		Args: cobra.ExactArgs(1), RunE: runApihubCurDelete,
-	}
-	apihubCurDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe a curation",
-		Args: cobra.ExactArgs(1), RunE: runApihubCurDescribe,
-	}
-	apihubCurExportCmd = &cobra.Command{
-		Use: "export RESOURCE", Short: "Export a curation to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runApihubCurExport,
-	}
-	apihubCurImportCmd = &cobra.Command{
-		Use: "import RESOURCE", Short: "Import a curation from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runApihubCurImport,
-	}
-	apihubCurListCmd = &cobra.Command{
-		Use: "list", Short: "List curations in a location",
-		Args: cobra.NoArgs, RunE: runApihubCurList,
-	}
-)
-
-func init() {
+func (g *apihubCmds) initApihubCurations() {
 	all := []*cobra.Command{
-		apihubCurDeleteCmd, apihubCurDescribeCmd,
-		apihubCurExportCmd, apihubCurImportCmd,
-		apihubCurListCmd,
+		g.apihubCurDeleteCmd, g.apihubCurDescribeCmd,
+		g.apihubCurExportCmd, g.apihubCurImportCmd,
+		g.apihubCurListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApihubCurLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&g.flagApihubCurLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagApihubCurFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagApihubCurFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(apihubCurExportCmd, &flagApihubCurDestination)
-	nsBindImportFlags(apihubCurImportCmd, &flagApihubCurSource)
-	apihubCurListCmd.Flags().Int64Var(&flagApihubCurPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(g.apihubCurExportCmd, &g.flagApihubCurDestination)
+	nsBindImportFlags(g.apihubCurImportCmd, &g.flagApihubCurSource)
+	g.apihubCurListCmd.Flags().Int64Var(&g.flagApihubCurPageSize, "page-size", 0, "Maximum results per page")
 
-	apihubCurCmd.AddCommand(all...)
-	apihubCmd.AddCommand(apihubCurCmd)
+	g.apihubCurCmd.AddCommand(all...)
+	g.apihubCmd.AddCommand(g.apihubCurCmd)
 }
 
-func apihubCurName(id string) (string, error) {
-	return apihubResource(flagApihubCurLocation, "curations", id)
+func (g *apihubCmds) apihubCurName(id string) (string, error) {
+	return g.apihubResource(g.flagApihubCurLocation, "curations", id)
 }
 
-func runApihubCurDelete(cmd *cobra.Command, args []string) error {
-	name, err := apihubCurName(args[0])
+func (g *apihubCmds) runApihubCurDelete(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubCurName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Curations.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting curation: %w", err)
 	}
-	fmt.Printf("Deleted curation [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted curation [%s].\n", args[0])
 	return nil
 }
 
-func runApihubCurDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apihubCurName(args[0])
+func (g *apihubCmds) runApihubCurDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubCurName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -98,16 +63,16 @@ func runApihubCurDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing curation: %w", err)
 	}
-	return emitFormatted(got, flagApihubCurFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubCurFormat)
 }
 
-func runApihubCurExport(cmd *cobra.Command, args []string) error {
-	name, err := apihubCurName(args[0])
+func (g *apihubCmds) runApihubCurExport(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubCurName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,25 +80,25 @@ func runApihubCurExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting curation: %w", err)
 	}
-	return saveAsYAML(flagApihubCurDestination, got)
+	return saveAsYAML(g.flagApihubCurDestination, got)
 }
 
-func runApihubCurImport(cmd *cobra.Command, args []string) error {
-	parent, err := apihubLocationParent(flagApihubCurLocation)
+func (g *apihubCmds) runApihubCurImport(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubLocationParent(g.flagApihubCurLocation)
 	if err != nil {
 		return err
 	}
-	name, err := apihubCurName(args[0])
+	name, err := g.apihubCurName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &apihub.GoogleCloudApihubV1Curation{}
-	if err := loadYAMLOrJSONInto(flagApihubCurSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagApihubCurSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -142,22 +107,22 @@ func runApihubCurImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating curation: %w", err)
 		}
-		return emitFormatted(got, flagApihubCurFormat)
+		return emitFormattedTo(g.inv.stdout, got, g.flagApihubCurFormat)
 	}
 	got, err := svc.Projects.Locations.Curations.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating curation: %w", err)
 	}
-	return emitFormatted(got, flagApihubCurFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubCurFormat)
 }
 
-func runApihubCurList(cmd *cobra.Command, args []string) error {
-	parent, err := apihubLocationParent(flagApihubCurLocation)
+func (g *apihubCmds) runApihubCurList(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubLocationParent(g.flagApihubCurLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -165,8 +130,8 @@ func runApihubCurList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Curations.List(parent).Context(ctx)
-		if flagApihubCurPageSize > 0 {
-			call = call.PageSize(flagApihubCurPageSize)
+		if g.flagApihubCurPageSize > 0 {
+			call = call.PageSize(g.flagApihubCurPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -181,5 +146,5 @@ func runApihubCurList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagApihubCurFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagApihubCurFormat)
 }

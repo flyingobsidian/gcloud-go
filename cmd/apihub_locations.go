@@ -1,12 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
@@ -18,51 +15,28 @@ import (
 // backend; this command exposes the corresponding v1
 // `apihub.projects.locations.servers.configureAndDeployServer` RPC.
 
-var apihubLocationsCmd = &cobra.Command{
-	Use:   "locations",
-	Short: "Manage API Hub location-level resources",
-}
-
-var apihubLocationsConfigureAndDeployCmd = &cobra.Command{
-	Use:   "configure-and-deploy-server LOCATION",
-	Short: "Configure and deploy an API Hub MCP server (currently on Apigee X)",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runApihubLocationsConfigureAndDeploy,
-}
-
-var (
-	flagApihubCDFormat            string
-	flagApihubCDMcpTools          []string
-	flagApihubCDMcpToolsFromFile  string
-	flagApihubCDApigeeXEnv        string
-	flagApihubCDApigeeXProxy      string
-	flagApihubCDApigeeXTargetProj string
-	flagApihubCDApigeeXDisplay    string
-	flagApihubCDApigeeXDescr      string
-)
-
-func init() {
-	apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&flagApihubCDFormat, "format", "", "Output format")
-	apihubLocationsConfigureAndDeployCmd.Flags().StringArrayVar(&flagApihubCDMcpTools, "mcp-tools", nil,
+func (g *apihubCmds) initApihubLocations() {
+	g.apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&g.flagApihubCDFormat, "format", "", "Output format")
+	g.apihubLocationsConfigureAndDeployCmd.Flags().StringArrayVar(&g.flagApihubCDMcpTools, "mcp-tools", nil,
 		"MCP tool exposed on the server; repeatable. Each value is a comma-separated dict with keys "+
 			"tool-id=..,description=..,operation=<full API Hub operation resource name>. "+
 			"For tools that reference an operation by spec+path+method, use --mcp-tools-from-file")
-	apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&flagApihubCDMcpToolsFromFile, "mcp-tools-from-file", "",
+	g.apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&g.flagApihubCDMcpToolsFromFile, "mcp-tools-from-file", "",
 		"Path to a YAML/JSON file containing a list of MCP tools "+
 			"(supports the http_operation oneof arm as {spec,path,method})")
-	apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&flagApihubCDApigeeXEnv, "apigee-x-environment", "",
+	g.apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&g.flagApihubCDApigeeXEnv, "apigee-x-environment", "",
 		"Apigee X environment to deploy into (required for Apigee X target)")
-	apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&flagApihubCDApigeeXProxy, "apigee-x-proxy", "",
+	g.apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&g.flagApihubCDApigeeXProxy, "apigee-x-proxy", "",
 		"Apigee X proxy resource name (required for Apigee X target)")
-	apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&flagApihubCDApigeeXTargetProj, "apigee-x-target-project", "",
+	g.apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&g.flagApihubCDApigeeXTargetProj, "apigee-x-target-project", "",
 		"Runtime project hosting the Apigee X organization (required for Apigee X target)")
-	apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&flagApihubCDApigeeXDisplay, "apigee-x-proxy-display-name", "",
+	g.apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&g.flagApihubCDApigeeXDisplay, "apigee-x-proxy-display-name", "",
 		"Display name for the deployed Apigee X proxy revision")
-	apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&flagApihubCDApigeeXDescr, "apigee-x-proxy-description", "",
+	g.apihubLocationsConfigureAndDeployCmd.Flags().StringVar(&g.flagApihubCDApigeeXDescr, "apigee-x-proxy-description", "",
 		"Description for the deployed Apigee X proxy revision")
 
-	apihubLocationsCmd.AddCommand(apihubLocationsConfigureAndDeployCmd)
-	apihubCmd.AddCommand(apihubLocationsCmd)
+	g.apihubLocationsCmd.AddCommand(g.apihubLocationsConfigureAndDeployCmd)
+	g.apihubCmd.AddCommand(g.apihubLocationsCmd)
 }
 
 // parseMcpToolFlag parses a single --mcp-tools value into an
@@ -110,22 +84,22 @@ func parseMcpToolFlag(spec string) (*apihub.GoogleCloudApihubV1McpToolConfig, er
 
 // buildApihubMcpTools returns the McpToolConfig list from --mcp-tools /
 // --mcp-tools-from-file, enforcing mutual exclusion.
-func buildApihubMcpTools() ([]*apihub.GoogleCloudApihubV1McpToolConfig, error) {
-	if len(flagApihubCDMcpTools) > 0 && flagApihubCDMcpToolsFromFile != "" {
+func (g *apihubCmds) buildApihubMcpTools() ([]*apihub.GoogleCloudApihubV1McpToolConfig, error) {
+	if len(g.flagApihubCDMcpTools) > 0 && g.flagApihubCDMcpToolsFromFile != "" {
 		return nil, fmt.Errorf("--mcp-tools and --mcp-tools-from-file are mutually exclusive")
 	}
-	if len(flagApihubCDMcpTools) == 0 && flagApihubCDMcpToolsFromFile == "" {
+	if len(g.flagApihubCDMcpTools) == 0 && g.flagApihubCDMcpToolsFromFile == "" {
 		return nil, fmt.Errorf("one of --mcp-tools or --mcp-tools-from-file is required")
 	}
-	if flagApihubCDMcpToolsFromFile != "" {
+	if g.flagApihubCDMcpToolsFromFile != "" {
 		var tools []*apihub.GoogleCloudApihubV1McpToolConfig
-		if err := loadYAMLOrJSONInto(flagApihubCDMcpToolsFromFile, &tools); err != nil {
+		if err := loadYAMLOrJSONInto(g.flagApihubCDMcpToolsFromFile, &tools); err != nil {
 			return nil, err
 		}
 		return tools, nil
 	}
-	out := make([]*apihub.GoogleCloudApihubV1McpToolConfig, 0, len(flagApihubCDMcpTools))
-	for _, s := range flagApihubCDMcpTools {
+	out := make([]*apihub.GoogleCloudApihubV1McpToolConfig, 0, len(g.flagApihubCDMcpTools))
+	for _, s := range g.flagApihubCDMcpTools {
 		t, err := parseMcpToolFlag(s)
 		if err != nil {
 			return nil, err
@@ -135,36 +109,36 @@ func buildApihubMcpTools() ([]*apihub.GoogleCloudApihubV1McpToolConfig, error) {
 	return out, nil
 }
 
-func runApihubLocationsConfigureAndDeploy(cmd *cobra.Command, args []string) error {
+func (g *apihubCmds) runApihubLocationsConfigureAndDeploy(cmd *cobra.Command, args []string) error {
 	loc := args[0]
 	parent := loc
 	if !strings.HasPrefix(loc, "projects/") {
 		var err error
-		parent, err = apihubLocationParent(loc)
+		parent, err = g.apihubLocationParent(loc)
 		if err != nil {
 			return err
 		}
 	}
 
-	if flagApihubCDApigeeXEnv == "" || flagApihubCDApigeeXProxy == "" || flagApihubCDApigeeXTargetProj == "" {
+	if g.flagApihubCDApigeeXEnv == "" || g.flagApihubCDApigeeXProxy == "" || g.flagApihubCDApigeeXTargetProj == "" {
 		return fmt.Errorf("--apigee-x-environment, --apigee-x-proxy, and --apigee-x-target-project are required " +
 			"(Apigee X is currently the only supported MCP target)")
 	}
 
-	tools, err := buildApihubMcpTools()
+	tools, err := g.buildApihubMcpTools()
 	if err != nil {
 		return err
 	}
 
 	target := &apihub.GoogleCloudApihubV1ApigeeXTargetDetails{
-		Environment:   flagApihubCDApigeeXEnv,
-		Proxy:         flagApihubCDApigeeXProxy,
-		TargetProject: flagApihubCDApigeeXTargetProj,
+		Environment:   g.flagApihubCDApigeeXEnv,
+		Proxy:         g.flagApihubCDApigeeXProxy,
+		TargetProject: g.flagApihubCDApigeeXTargetProj,
 	}
-	if flagApihubCDApigeeXDisplay != "" || flagApihubCDApigeeXDescr != "" {
+	if g.flagApihubCDApigeeXDisplay != "" || g.flagApihubCDApigeeXDescr != "" {
 		target.Metadata = &apihub.GoogleCloudApihubV1MetaData{
-			DisplayName: flagApihubCDApigeeXDisplay,
-			Description: flagApihubCDApigeeXDescr,
+			DisplayName: g.flagApihubCDApigeeXDisplay,
+			Description: g.flagApihubCDApigeeXDescr,
 		}
 	}
 
@@ -175,8 +149,8 @@ func runApihubLocationsConfigureAndDeploy(cmd *cobra.Command, args []string) err
 		},
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -184,6 +158,6 @@ func runApihubLocationsConfigureAndDeploy(cmd *cobra.Command, args []string) err
 	if err != nil {
 		return fmt.Errorf("configure-and-deploy MCP server: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Configure-and-deploy request issued (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagApihubCDFormat)
+	fmt.Fprintf(g.inv.stderr, "Configure-and-deploy request issued (operation: %s).\n", op.Name)
+	return emitFormattedTo(g.inv.stdout, op, g.flagApihubCDFormat)
 }

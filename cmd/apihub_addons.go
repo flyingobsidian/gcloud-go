@@ -1,86 +1,59 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
 
 // --- gcloud apihub addons (#1166) ---
 
-var apihubAddonsCmd = &cobra.Command{Use: "addons", Short: "Manage API Hub addons"}
-
-var (
-	flagApihubAddonsLocation   string
-	flagApihubAddonsFormat     string
-	flagApihubAddonsFilter     string
-	flagApihubAddonsPageSize   int64
-	flagApihubAddonsConfigFile string
-)
-
-var (
-	apihubAddonsDescribeCmd = &cobra.Command{
-		Use: "describe ADDON", Short: "Describe an API Hub addon",
-		Args: cobra.ExactArgs(1), RunE: runApihubAddonDescribe,
-	}
-	apihubAddonsListCmd = &cobra.Command{
-		Use: "list", Short: "List API Hub addons in a location",
-		Args: cobra.NoArgs, RunE: runApihubAddonList,
-	}
-	apihubAddonsManageConfigCmd = &cobra.Command{
-		Use: "manage-config ADDON", Short: "Manage the config of an API Hub addon",
-		Args: cobra.ExactArgs(1), RunE: runApihubAddonManageConfig,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{apihubAddonsDescribeCmd, apihubAddonsListCmd, apihubAddonsManageConfigCmd}
+func (g *apihubCmds) initApihubAddons() {
+	all := []*cobra.Command{g.apihubAddonsDescribeCmd, g.apihubAddonsListCmd, g.apihubAddonsManageConfigCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApihubAddonsLocation, "location", "",
+		c.Flags().StringVar(&g.flagApihubAddonsLocation, "location", "",
 			"Location that owns the addons (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagApihubAddonsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagApihubAddonsFormat, "format", "", "Output format")
 	}
-	apihubAddonsListCmd.Flags().StringVar(&flagApihubAddonsFilter, "filter", "", "Server-side filter expression")
-	apihubAddonsListCmd.Flags().Int64Var(&flagApihubAddonsPageSize, "page-size", 0, "Maximum number of results per page")
-	apihubAddonsManageConfigCmd.Flags().StringVar(&flagApihubAddonsConfigFile, "config-file", "",
+	g.apihubAddonsListCmd.Flags().StringVar(&g.flagApihubAddonsFilter, "filter", "", "Server-side filter expression")
+	g.apihubAddonsListCmd.Flags().Int64Var(&g.flagApihubAddonsPageSize, "page-size", 0, "Maximum number of results per page")
+	g.apihubAddonsManageConfigCmd.Flags().StringVar(&g.flagApihubAddonsConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the ManageAddonConfigRequest body (required)")
-	_ = apihubAddonsManageConfigCmd.MarkFlagRequired("config-file")
+	_ = g.apihubAddonsManageConfigCmd.MarkFlagRequired("config-file")
 
-	apihubAddonsCmd.AddCommand(all...)
-	apihubCmd.AddCommand(apihubAddonsCmd)
+	g.apihubAddonsCmd.AddCommand(all...)
+	g.apihubCmd.AddCommand(g.apihubAddonsCmd)
 }
 
-func apihubAddonsParent() (string, error) {
-	project, err := resolveProject()
+func (g *apihubCmds) apihubAddonsParent() (string, error) {
+	project, err := g.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagApihubAddonsLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, g.flagApihubAddonsLocation), nil
 }
 
-func apihubAddonName(id string) (string, error) {
+func (g *apihubCmds) apihubAddonName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := apihubAddonsParent()
+	parent, err := g.apihubAddonsParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/addons/%s", parent, id), nil
 }
 
-func runApihubAddonDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apihubAddonName(args[0])
+func (g *apihubCmds) runApihubAddonDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubAddonName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -88,16 +61,16 @@ func runApihubAddonDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing addon: %w", err)
 	}
-	return emitFormatted(got, flagApihubAddonsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubAddonsFormat)
 }
 
-func runApihubAddonList(cmd *cobra.Command, args []string) error {
-	parent, err := apihubAddonsParent()
+func (g *apihubCmds) runApihubAddonList(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubAddonsParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -105,11 +78,11 @@ func runApihubAddonList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Addons.List(parent).Context(ctx)
-		if flagApihubAddonsFilter != "" {
-			call = call.Filter(flagApihubAddonsFilter)
+		if g.flagApihubAddonsFilter != "" {
+			call = call.Filter(g.flagApihubAddonsFilter)
 		}
-		if flagApihubAddonsPageSize > 0 {
-			call = call.PageSize(flagApihubAddonsPageSize)
+		if g.flagApihubAddonsPageSize > 0 {
+			call = call.PageSize(g.flagApihubAddonsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -124,20 +97,20 @@ func runApihubAddonList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagApihubAddonsFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagApihubAddonsFormat)
 }
 
-func runApihubAddonManageConfig(cmd *cobra.Command, args []string) error {
-	name, err := apihubAddonName(args[0])
+func (g *apihubCmds) runApihubAddonManageConfig(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubAddonName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &apihub.GoogleCloudApihubV1ManageAddonConfigRequest{}
-	if err := loadYAMLOrJSONInto(flagApihubAddonsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagApihubAddonsConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -145,5 +118,5 @@ func runApihubAddonManageConfig(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("managing addon config: %w", err)
 	}
-	return emitFormatted(got, flagApihubAddonsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubAddonsFormat)
 }

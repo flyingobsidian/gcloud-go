@@ -1,96 +1,61 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
 
 // --- gcloud apihub dependencies (#1158) ---
 
-var apihubDepCmd = &cobra.Command{Use: "dependencies", Short: "Manage API Hub dependencies"}
-
-var (
-	flagApihubDepLocation    string
-	flagApihubDepFormat      string
-	flagApihubDepDestination string
-	flagApihubDepSource      string
-	flagApihubDepPageSize    int64
-)
-
-var (
-	apihubDepDeleteCmd = &cobra.Command{
-		Use: "delete RESOURCE", Short: "Delete a dependency",
-		Args: cobra.ExactArgs(1), RunE: runApihubDepDelete,
-	}
-	apihubDepDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe a dependency",
-		Args: cobra.ExactArgs(1), RunE: runApihubDepDescribe,
-	}
-	apihubDepExportCmd = &cobra.Command{
-		Use: "export RESOURCE", Short: "Export a dependency to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runApihubDepExport,
-	}
-	apihubDepImportCmd = &cobra.Command{
-		Use: "import RESOURCE", Short: "Import a dependency from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runApihubDepImport,
-	}
-	apihubDepListCmd = &cobra.Command{
-		Use: "list", Short: "List dependencies in a location",
-		Args: cobra.NoArgs, RunE: runApihubDepList,
-	}
-)
-
-func init() {
+func (g *apihubCmds) initApihubDependencies() {
 	all := []*cobra.Command{
-		apihubDepDeleteCmd, apihubDepDescribeCmd,
-		apihubDepExportCmd, apihubDepImportCmd,
-		apihubDepListCmd,
+		g.apihubDepDeleteCmd, g.apihubDepDescribeCmd,
+		g.apihubDepExportCmd, g.apihubDepImportCmd,
+		g.apihubDepListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApihubDepLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&g.flagApihubDepLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagApihubDepFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagApihubDepFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(apihubDepExportCmd, &flagApihubDepDestination)
-	nsBindImportFlags(apihubDepImportCmd, &flagApihubDepSource)
-	apihubDepListCmd.Flags().Int64Var(&flagApihubDepPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(g.apihubDepExportCmd, &g.flagApihubDepDestination)
+	nsBindImportFlags(g.apihubDepImportCmd, &g.flagApihubDepSource)
+	g.apihubDepListCmd.Flags().Int64Var(&g.flagApihubDepPageSize, "page-size", 0, "Maximum results per page")
 
-	apihubDepCmd.AddCommand(all...)
-	apihubCmd.AddCommand(apihubDepCmd)
+	g.apihubDepCmd.AddCommand(all...)
+	g.apihubCmd.AddCommand(g.apihubDepCmd)
 }
 
-func apihubDepName(id string) (string, error) {
-	return apihubResource(flagApihubDepLocation, "dependencies", id)
+func (g *apihubCmds) apihubDepName(id string) (string, error) {
+	return g.apihubResource(g.flagApihubDepLocation, "dependencies", id)
 }
 
-func runApihubDepDelete(cmd *cobra.Command, args []string) error {
-	name, err := apihubDepName(args[0])
+func (g *apihubCmds) runApihubDepDelete(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubDepName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Dependencies.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting dependency: %w", err)
 	}
-	fmt.Printf("Deleted dependency [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted dependency [%s].\n", args[0])
 	return nil
 }
 
-func runApihubDepDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apihubDepName(args[0])
+func (g *apihubCmds) runApihubDepDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubDepName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -98,16 +63,16 @@ func runApihubDepDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing dependency: %w", err)
 	}
-	return emitFormatted(got, flagApihubDepFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubDepFormat)
 }
 
-func runApihubDepExport(cmd *cobra.Command, args []string) error {
-	name, err := apihubDepName(args[0])
+func (g *apihubCmds) runApihubDepExport(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubDepName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,25 +80,25 @@ func runApihubDepExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting dependency: %w", err)
 	}
-	return saveAsYAML(flagApihubDepDestination, got)
+	return saveAsYAML(g.flagApihubDepDestination, got)
 }
 
-func runApihubDepImport(cmd *cobra.Command, args []string) error {
-	parent, err := apihubLocationParent(flagApihubDepLocation)
+func (g *apihubCmds) runApihubDepImport(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubLocationParent(g.flagApihubDepLocation)
 	if err != nil {
 		return err
 	}
-	name, err := apihubDepName(args[0])
+	name, err := g.apihubDepName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &apihub.GoogleCloudApihubV1Dependency{}
-	if err := loadYAMLOrJSONInto(flagApihubDepSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagApihubDepSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -142,22 +107,22 @@ func runApihubDepImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating dependency: %w", err)
 		}
-		return emitFormatted(got, flagApihubDepFormat)
+		return emitFormattedTo(g.inv.stdout, got, g.flagApihubDepFormat)
 	}
 	got, err := svc.Projects.Locations.Dependencies.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating dependency: %w", err)
 	}
-	return emitFormatted(got, flagApihubDepFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubDepFormat)
 }
 
-func runApihubDepList(cmd *cobra.Command, args []string) error {
-	parent, err := apihubLocationParent(flagApihubDepLocation)
+func (g *apihubCmds) runApihubDepList(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubLocationParent(g.flagApihubDepLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -165,8 +130,8 @@ func runApihubDepList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Dependencies.List(parent).Context(ctx)
-		if flagApihubDepPageSize > 0 {
-			call = call.PageSize(flagApihubDepPageSize)
+		if g.flagApihubDepPageSize > 0 {
+			call = call.PageSize(g.flagApihubDepPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -181,5 +146,5 @@ func runApihubDepList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagApihubDepFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagApihubDepFormat)
 }
