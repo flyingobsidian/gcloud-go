@@ -79,6 +79,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newWorkstationsCmd(inv),
 		newDesignCenterCmd(inv),
 		newParameterManagerCmd(inv),
+		newObservabilityCmd(inv),
 	}
 }
 
