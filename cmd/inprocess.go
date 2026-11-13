@@ -40,6 +40,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newComplianceManagerCmd(inv),
 		newWorkloadIdentityCmd(inv),
 		newPreviewCmd(inv),
+		newAlphaCmd(inv),
 	}
 }
 
