@@ -8,7 +8,8 @@ import (
 )
 
 func sqlSubgroup(name string) *cobra.Command {
-	for _, c := range sqlCmd.Commands() {
+	grp := newSqlCmds(legacyTestInvocation())
+	for _, c := range grp.sqlCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

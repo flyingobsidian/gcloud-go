@@ -137,6 +137,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newAppCmd(inv),
 		newContainerCmd(inv),
 		newDnsCmd(inv),
+		newSqlCmd(inv),
 	}
 }
 
