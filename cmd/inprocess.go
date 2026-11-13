@@ -65,6 +65,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newBiglakeCmd(inv),
 		newBqCmd(inv),
 		newPolicyIntelligenceCmd(inv),
+		newModelArmorCmd(inv),
 	}
 }
 
