@@ -100,6 +100,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newAgentRegistryCmd(inv),
 		newMigrationCmd(inv),
 		newFilestoreCmd(inv),
+		newDataflowCmd(inv),
 	}
 }
 
