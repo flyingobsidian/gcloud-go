@@ -1,19 +1,15 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	servicedirectory "google.golang.org/api/servicedirectory/v1"
 )
 
 // --- gcloud service-directory (#382) ---
-
-var serviceDirectoryCmd = &cobra.Command{Use: "service-directory", Short: "Manage Service Directory"}
 
 func sdLocationParent(project, location string) string {
 	return fmt.Sprintf("projects/%s/locations/%s", project, location)
@@ -26,222 +22,102 @@ func sdChild(collection, id, parent string) string {
 	return fmt.Sprintf("%s/%s/%s", parent, collection, id)
 }
 
-var (
-	flagSDLocation   string
-	flagSDNamespace  string
-	flagSDService    string
-	flagSDConfigFile string
-	flagSDUpdateMask string
-	flagSDFormat     string
-	flagSDIamMember  string
-	flagSDIamRole    string
-)
-
 // --- locations ---
-
-var sdLocationsCmd = &cobra.Command{Use: "locations", Short: "Explore Service Directory locations"}
-
-var (
-	sdLocDescribeCmd = &cobra.Command{
-		Use: "describe LOCATION", Short: "Describe a location",
-		Args: cobra.ExactArgs(1), RunE: runSDLocDescribe,
-	}
-	sdLocListCmd = &cobra.Command{
-		Use: "list", Short: "List locations",
-		Args: cobra.NoArgs, RunE: runSDLocList,
-	}
-)
 
 // --- namespaces ---
 
-var sdNamespacesCmd = &cobra.Command{Use: "namespaces", Short: "Manage Service Directory namespaces"}
-
-var (
-	sdNSCreateCmd = &cobra.Command{
-		Use: "create NAMESPACE", Short: "Create a namespace from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSDNSCreate,
-	}
-	sdNSDeleteCmd = &cobra.Command{
-		Use: "delete NAMESPACE", Short: "Delete a namespace",
-		Args: cobra.ExactArgs(1), RunE: runSDNSDelete,
-	}
-	sdNSDescribeCmd = &cobra.Command{
-		Use: "describe NAMESPACE", Short: "Describe a namespace",
-		Args: cobra.ExactArgs(1), RunE: runSDNSDescribe,
-	}
-	sdNSListCmd = &cobra.Command{
-		Use: "list", Short: "List namespaces in a location",
-		Args: cobra.NoArgs, RunE: runSDNSList,
-	}
-	sdNSUpdateCmd = &cobra.Command{
-		Use: "update NAMESPACE", Short: "Update a namespace from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSDNSUpdate,
-	}
-	sdNSGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy NAMESPACE", Short: "Get the IAM policy for a namespace",
-		Args: cobra.ExactArgs(1), RunE: runSDNSGetIam,
-	}
-	sdNSSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy NAMESPACE POLICY_FILE", Short: "Replace the IAM policy",
-		Args: cobra.ExactArgs(2), RunE: runSDNSSetIam,
-	}
-	sdNSAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding NAMESPACE", Short: "Add an IAM binding",
-		Args: cobra.ExactArgs(1), RunE: runSDNSAddIam,
-	}
-	sdNSRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding NAMESPACE", Short: "Remove an IAM binding",
-		Args: cobra.ExactArgs(1), RunE: runSDNSRemoveIam,
-	}
-)
-
 // --- services ---
-
-var sdServicesCmd = &cobra.Command{Use: "services", Short: "Manage Service Directory services"}
-
-var (
-	sdSvcCreateCmd = &cobra.Command{
-		Use: "create SERVICE", Short: "Create a service from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSDSvcCreate,
-	}
-	sdSvcDeleteCmd = &cobra.Command{
-		Use: "delete SERVICE", Short: "Delete a service",
-		Args: cobra.ExactArgs(1), RunE: runSDSvcDelete,
-	}
-	sdSvcDescribeCmd = &cobra.Command{
-		Use: "describe SERVICE", Short: "Describe a service",
-		Args: cobra.ExactArgs(1), RunE: runSDSvcDescribe,
-	}
-	sdSvcListCmd = &cobra.Command{
-		Use: "list", Short: "List services in a namespace",
-		Args: cobra.NoArgs, RunE: runSDSvcList,
-	}
-	sdSvcUpdateCmd = &cobra.Command{
-		Use: "update SERVICE", Short: "Update a service from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSDSvcUpdate,
-	}
-	sdSvcResolveCmd = &cobra.Command{
-		Use: "resolve SERVICE", Short: "Resolve a service (return endpoints)",
-		Args: cobra.ExactArgs(1), RunE: runSDSvcResolve,
-	}
-)
 
 // --- endpoints ---
 
-var sdEndpointsCmd = &cobra.Command{Use: "endpoints", Short: "Manage Service Directory endpoints"}
-
-var (
-	sdEPCreateCmd = &cobra.Command{
-		Use: "create ENDPOINT", Short: "Create an endpoint from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSDEPCreate,
-	}
-	sdEPDeleteCmd = &cobra.Command{
-		Use: "delete ENDPOINT", Short: "Delete an endpoint",
-		Args: cobra.ExactArgs(1), RunE: runSDEPDelete,
-	}
-	sdEPDescribeCmd = &cobra.Command{
-		Use: "describe ENDPOINT", Short: "Describe an endpoint",
-		Args: cobra.ExactArgs(1), RunE: runSDEPDescribe,
-	}
-	sdEPListCmd = &cobra.Command{
-		Use: "list", Short: "List endpoints in a service",
-		Args: cobra.NoArgs, RunE: runSDEPList,
-	}
-	sdEPUpdateCmd = &cobra.Command{
-		Use: "update ENDPOINT", Short: "Update an endpoint from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSDEPUpdate,
-	}
-)
-
-func init() {
+func (g *serviceDirectoryCmds) initServiceDirectory() {
 	// locations
-	sdLocDescribeCmd.Flags().StringVar(&flagSDFormat, "format", "", "Output format")
-	sdLocListCmd.Flags().StringVar(&flagSDFormat, "format", "", "Output format")
-	sdLocationsCmd.AddCommand(sdLocDescribeCmd, sdLocListCmd)
-	serviceDirectoryCmd.AddCommand(sdLocationsCmd)
+	g.sdLocDescribeCmd.Flags().StringVar(&g.flagSDFormat, "format", "", "Output format")
+	g.sdLocListCmd.Flags().StringVar(&g.flagSDFormat, "format", "", "Output format")
+	g.sdLocationsCmd.AddCommand(g.sdLocDescribeCmd, g.sdLocListCmd)
+	g.serviceDirectoryCmd.AddCommand(g.sdLocationsCmd)
 
 	// namespaces
-	nsAll := []*cobra.Command{sdNSCreateCmd, sdNSDeleteCmd, sdNSDescribeCmd, sdNSListCmd, sdNSUpdateCmd,
-		sdNSGetIamCmd, sdNSSetIamCmd, sdNSAddIamCmd, sdNSRemoveIamCmd}
+	nsAll := []*cobra.Command{g.sdNSCreateCmd, g.sdNSDeleteCmd, g.sdNSDescribeCmd, g.sdNSListCmd, g.sdNSUpdateCmd,
+		g.sdNSGetIamCmd, g.sdNSSetIamCmd, g.sdNSAddIamCmd, g.sdNSRemoveIamCmd}
 	for _, c := range nsAll {
-		c.Flags().StringVar(&flagSDLocation, "location", "", "Location containing the namespace (required)")
+		c.Flags().StringVar(&g.flagSDLocation, "location", "", "Location containing the namespace (required)")
 		_ = c.MarkFlagRequired("location")
 	}
-	for _, c := range []*cobra.Command{sdNSCreateCmd, sdNSUpdateCmd} {
-		c.Flags().StringVar(&flagSDConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{g.sdNSCreateCmd, g.sdNSUpdateCmd} {
+		c.Flags().StringVar(&g.flagSDConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Namespace body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	sdNSUpdateCmd.Flags().StringVar(&flagSDUpdateMask, "update-mask", "",
+	g.sdNSUpdateCmd.Flags().StringVar(&g.flagSDUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{sdNSDescribeCmd, sdNSListCmd, sdNSGetIamCmd} {
-		c.Flags().StringVar(&flagSDFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{g.sdNSDescribeCmd, g.sdNSListCmd, g.sdNSGetIamCmd} {
+		c.Flags().StringVar(&g.flagSDFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{sdNSAddIamCmd, sdNSRemoveIamCmd} {
-		c.Flags().StringVar(&flagSDIamMember, "member", "", "IAM member (required)")
-		c.Flags().StringVar(&flagSDIamRole, "role", "", "IAM role (required)")
+	for _, c := range []*cobra.Command{g.sdNSAddIamCmd, g.sdNSRemoveIamCmd} {
+		c.Flags().StringVar(&g.flagSDIamMember, "member", "", "IAM member (required)")
+		c.Flags().StringVar(&g.flagSDIamRole, "role", "", "IAM role (required)")
 		_ = c.MarkFlagRequired("member")
 		_ = c.MarkFlagRequired("role")
 	}
-	sdNamespacesCmd.AddCommand(nsAll...)
-	serviceDirectoryCmd.AddCommand(sdNamespacesCmd)
+	g.sdNamespacesCmd.AddCommand(nsAll...)
+	g.serviceDirectoryCmd.AddCommand(g.sdNamespacesCmd)
 
 	// services
-	svcAll := []*cobra.Command{sdSvcCreateCmd, sdSvcDeleteCmd, sdSvcDescribeCmd, sdSvcListCmd, sdSvcUpdateCmd, sdSvcResolveCmd}
+	svcAll := []*cobra.Command{g.sdSvcCreateCmd, g.sdSvcDeleteCmd, g.sdSvcDescribeCmd, g.sdSvcListCmd, g.sdSvcUpdateCmd, g.sdSvcResolveCmd}
 	for _, c := range svcAll {
-		c.Flags().StringVar(&flagSDLocation, "location", "", "Location containing the service (required)")
-		c.Flags().StringVar(&flagSDNamespace, "namespace", "", "Namespace containing the service (required)")
+		c.Flags().StringVar(&g.flagSDLocation, "location", "", "Location containing the service (required)")
+		c.Flags().StringVar(&g.flagSDNamespace, "namespace", "", "Namespace containing the service (required)")
 		_ = c.MarkFlagRequired("location")
 		_ = c.MarkFlagRequired("namespace")
 	}
-	for _, c := range []*cobra.Command{sdSvcCreateCmd, sdSvcUpdateCmd} {
-		c.Flags().StringVar(&flagSDConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{g.sdSvcCreateCmd, g.sdSvcUpdateCmd} {
+		c.Flags().StringVar(&g.flagSDConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Service body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	sdSvcUpdateCmd.Flags().StringVar(&flagSDUpdateMask, "update-mask", "",
+	g.sdSvcUpdateCmd.Flags().StringVar(&g.flagSDUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{sdSvcDescribeCmd, sdSvcListCmd, sdSvcResolveCmd} {
-		c.Flags().StringVar(&flagSDFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{g.sdSvcDescribeCmd, g.sdSvcListCmd, g.sdSvcResolveCmd} {
+		c.Flags().StringVar(&g.flagSDFormat, "format", "", "Output format")
 	}
-	sdServicesCmd.AddCommand(svcAll...)
-	serviceDirectoryCmd.AddCommand(sdServicesCmd)
+	g.sdServicesCmd.AddCommand(svcAll...)
+	g.serviceDirectoryCmd.AddCommand(g.sdServicesCmd)
 
 	// endpoints
-	epAll := []*cobra.Command{sdEPCreateCmd, sdEPDeleteCmd, sdEPDescribeCmd, sdEPListCmd, sdEPUpdateCmd}
+	epAll := []*cobra.Command{g.sdEPCreateCmd, g.sdEPDeleteCmd, g.sdEPDescribeCmd, g.sdEPListCmd, g.sdEPUpdateCmd}
 	for _, c := range epAll {
-		c.Flags().StringVar(&flagSDLocation, "location", "", "Location containing the endpoint (required)")
-		c.Flags().StringVar(&flagSDNamespace, "namespace", "", "Namespace containing the endpoint (required)")
-		c.Flags().StringVar(&flagSDService, "service", "", "Service containing the endpoint (required)")
+		c.Flags().StringVar(&g.flagSDLocation, "location", "", "Location containing the endpoint (required)")
+		c.Flags().StringVar(&g.flagSDNamespace, "namespace", "", "Namespace containing the endpoint (required)")
+		c.Flags().StringVar(&g.flagSDService, "service", "", "Service containing the endpoint (required)")
 		_ = c.MarkFlagRequired("location")
 		_ = c.MarkFlagRequired("namespace")
 		_ = c.MarkFlagRequired("service")
 	}
-	for _, c := range []*cobra.Command{sdEPCreateCmd, sdEPUpdateCmd} {
-		c.Flags().StringVar(&flagSDConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{g.sdEPCreateCmd, g.sdEPUpdateCmd} {
+		c.Flags().StringVar(&g.flagSDConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Endpoint body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	sdEPUpdateCmd.Flags().StringVar(&flagSDUpdateMask, "update-mask", "",
+	g.sdEPUpdateCmd.Flags().StringVar(&g.flagSDUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{sdEPDescribeCmd, sdEPListCmd} {
-		c.Flags().StringVar(&flagSDFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{g.sdEPDescribeCmd, g.sdEPListCmd} {
+		c.Flags().StringVar(&g.flagSDFormat, "format", "", "Output format")
 	}
-	sdEndpointsCmd.AddCommand(epAll...)
-	serviceDirectoryCmd.AddCommand(sdEndpointsCmd)
+	g.sdEndpointsCmd.AddCommand(epAll...)
+	g.serviceDirectoryCmd.AddCommand(g.sdEndpointsCmd)
 
-	rootCmd.AddCommand(serviceDirectoryCmd)
 }
 
 // --- locations impl ---
 
-func runSDLocDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDLocDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
@@ -249,16 +125,16 @@ func runSDLocDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(loc, flagSDFormat)
+	return emitFormattedTo(g.inv.stdout, loc, g.flagSDFormat)
 }
 
-func runSDLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDLocList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
@@ -266,12 +142,12 @@ func runSDLocList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing locations: %w", err)
 	}
-	if flagSDFormat != "" {
-		return emitFormatted(resp.Locations, flagSDFormat)
+	if g.flagSDFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Locations, g.flagSDFormat)
 	}
-	printTableHeading(len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeadingTo(g.inv.stdout, len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
-		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-20s %s\n", l.LocationId, l.DisplayName)
 	}
 	return nil
 }
@@ -282,131 +158,131 @@ func sdNSName(id, project, location string) string {
 	return sdChild("namespaces", id, sdLocationParent(project, location))
 }
 
-func runSDNSCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDNSCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	ns := &servicedirectory.Namespace{}
-	if err := loadYAMLOrJSONInto(flagSDConfigFile, ns); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSDConfigFile, ns); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Create(sdLocationParent(project, flagSDLocation), ns).
+	got, err := svc.Projects.Locations.Namespaces.Create(sdLocationParent(project, g.flagSDLocation), ns).
 		NamespaceId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating namespace: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runSDNSDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDNSDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Namespaces.Delete(sdNSName(args[0], project, flagSDLocation)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Namespaces.Delete(sdNSName(args[0], project, g.flagSDLocation)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting namespace: %w", err)
 	}
-	fmt.Printf("Deleted namespace [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted namespace [%s].\n", args[0])
 	return nil
 }
 
-func runSDNSDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDNSDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Get(sdNSName(args[0], project, flagSDLocation)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Namespaces.Get(sdNSName(args[0], project, g.flagSDLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing namespace: %w", err)
 	}
-	return emitFormatted(got, flagSDFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSDFormat)
 }
 
-func runSDNSList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDNSList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Namespaces.List(sdLocationParent(project, flagSDLocation)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Namespaces.List(sdLocationParent(project, g.flagSDLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing namespaces: %w", err)
 	}
-	if flagSDFormat != "" {
-		return emitFormatted(resp.Namespaces, flagSDFormat)
+	if g.flagSDFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Namespaces, g.flagSDFormat)
 	}
-	printTableHeading(len(resp.Namespaces), "%-40s\n", "NAME")
+	printTableHeadingTo(g.inv.stdout, len(resp.Namespaces), "%-40s\n", "NAME")
 	for _, n := range resp.Namespaces {
-		fmt.Println(path.Base(n.Name))
+		fmt.Fprintln(g.inv.stdout, path.Base(n.Name))
 	}
 	return nil
 }
 
-func runSDNSUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDNSUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	ns := &servicedirectory.Namespace{}
-	if err := loadYAMLOrJSONInto(flagSDConfigFile, ns); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSDConfigFile, ns); err != nil {
 		return err
 	}
-	mask := flagSDUpdateMask
+	mask := g.flagSDUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(ns))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Patch(sdNSName(args[0], project, flagSDLocation), ns).
+	got, err := svc.Projects.Locations.Namespaces.Patch(sdNSName(args[0], project, g.flagSDLocation), ns).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating namespace: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runSDNSGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDNSGetIam(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	policy, err := svc.Projects.Locations.Namespaces.GetIamPolicy(sdNSName(args[0], project, flagSDLocation), &servicedirectory.GetIamPolicyRequest{}).Context(ctx).Do()
+	policy, err := svc.Projects.Locations.Namespaces.GetIamPolicy(sdNSName(args[0], project, g.flagSDLocation), &servicedirectory.GetIamPolicyRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagSDFormat)
+	return emitFormattedTo(g.inv.stdout, policy, g.flagSDFormat)
 }
 
-func runSDNSSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDNSSetIam(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
@@ -414,44 +290,44 @@ func runSDNSSetIam(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.SetIamPolicy(sdNSName(args[0], project, flagSDLocation), &servicedirectory.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Namespaces.SetIamPolicy(sdNSName(args[0], project, g.flagSDLocation), &servicedirectory.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runSDNSAddIam(cmd *cobra.Command, args []string) error {
-	return sdNSModifyIam(args[0], func(p *servicedirectory.Policy) {
+func (g *serviceDirectoryCmds) runSDNSAddIam(cmd *cobra.Command, args []string) error {
+	return g.sdNSModifyIam(args[0], func(p *servicedirectory.Policy) {
 		for _, b := range p.Bindings {
-			if b.Role == flagSDIamRole {
+			if b.Role == g.flagSDIamRole {
 				for _, m := range b.Members {
-					if m == flagSDIamMember {
+					if m == g.flagSDIamMember {
 						return
 					}
 				}
-				b.Members = append(b.Members, flagSDIamMember)
+				b.Members = append(b.Members, g.flagSDIamMember)
 				return
 			}
 		}
-		p.Bindings = append(p.Bindings, &servicedirectory.Binding{Role: flagSDIamRole, Members: []string{flagSDIamMember}})
+		p.Bindings = append(p.Bindings, &servicedirectory.Binding{Role: g.flagSDIamRole, Members: []string{g.flagSDIamMember}})
 	})
 }
 
-func runSDNSRemoveIam(cmd *cobra.Command, args []string) error {
-	return sdNSModifyIam(args[0], func(p *servicedirectory.Policy) {
+func (g *serviceDirectoryCmds) runSDNSRemoveIam(cmd *cobra.Command, args []string) error {
+	return g.sdNSModifyIam(args[0], func(p *servicedirectory.Policy) {
 		for _, b := range p.Bindings {
-			if b.Role != flagSDIamRole {
+			if b.Role != g.flagSDIamRole {
 				continue
 			}
 			out := b.Members[:0]
 			for _, m := range b.Members {
-				if m != flagSDIamMember {
+				if m != g.flagSDIamMember {
 					out = append(out, m)
 				}
 			}
@@ -460,17 +336,17 @@ func runSDNSRemoveIam(cmd *cobra.Command, args []string) error {
 	})
 }
 
-func sdNSModifyIam(name string, mutate func(*servicedirectory.Policy)) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) sdNSModifyIam(name string, mutate func(*servicedirectory.Policy)) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := g.inv.context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	resource := sdNSName(name, project, flagSDLocation)
+	resource := sdNSName(name, project, g.flagSDLocation)
 	policy, err := svc.Projects.Locations.Namespaces.GetIamPolicy(resource, &servicedirectory.GetIamPolicyRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
@@ -480,7 +356,7 @@ func sdNSModifyIam(name string, mutate func(*servicedirectory.Policy)) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
 // --- services impl ---
@@ -493,127 +369,127 @@ func sdSvcName(id, project, location, ns string) string {
 	return sdChild("services", id, sdSvcParent(project, location, ns))
 }
 
-func runSDSvcCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDSvcCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	s := &servicedirectory.Service{}
-	if err := loadYAMLOrJSONInto(flagSDConfigFile, s); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSDConfigFile, s); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Services.Create(sdSvcParent(project, flagSDLocation, flagSDNamespace), s).
+	got, err := svc.Projects.Locations.Namespaces.Services.Create(sdSvcParent(project, g.flagSDLocation, g.flagSDNamespace), s).
 		ServiceId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating service: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runSDSvcDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDSvcDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Namespaces.Services.Delete(sdSvcName(args[0], project, flagSDLocation, flagSDNamespace)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Namespaces.Services.Delete(sdSvcName(args[0], project, g.flagSDLocation, g.flagSDNamespace)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting service: %w", err)
 	}
-	fmt.Printf("Deleted service [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted service [%s].\n", args[0])
 	return nil
 }
 
-func runSDSvcDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDSvcDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Services.Get(sdSvcName(args[0], project, flagSDLocation, flagSDNamespace)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Namespaces.Services.Get(sdSvcName(args[0], project, g.flagSDLocation, g.flagSDNamespace)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing service: %w", err)
 	}
-	return emitFormatted(got, flagSDFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSDFormat)
 }
 
-func runSDSvcList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDSvcList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Namespaces.Services.List(sdSvcParent(project, flagSDLocation, flagSDNamespace)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Namespaces.Services.List(sdSvcParent(project, g.flagSDLocation, g.flagSDNamespace)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing services: %w", err)
 	}
-	if flagSDFormat != "" {
-		return emitFormatted(resp.Services, flagSDFormat)
+	if g.flagSDFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Services, g.flagSDFormat)
 	}
-	printTableHeading(len(resp.Services), "%-40s\n", "NAME")
+	printTableHeadingTo(g.inv.stdout, len(resp.Services), "%-40s\n", "NAME")
 	for _, s := range resp.Services {
-		fmt.Println(path.Base(s.Name))
+		fmt.Fprintln(g.inv.stdout, path.Base(s.Name))
 	}
 	return nil
 }
 
-func runSDSvcUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDSvcUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	s := &servicedirectory.Service{}
-	if err := loadYAMLOrJSONInto(flagSDConfigFile, s); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSDConfigFile, s); err != nil {
 		return err
 	}
-	mask := flagSDUpdateMask
+	mask := g.flagSDUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(s))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Services.Patch(sdSvcName(args[0], project, flagSDLocation, flagSDNamespace), s).
+	got, err := svc.Projects.Locations.Namespaces.Services.Patch(sdSvcName(args[0], project, g.flagSDLocation, g.flagSDNamespace), s).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating service: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runSDSvcResolve(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDSvcResolve(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Services.Resolve(sdSvcName(args[0], project, flagSDLocation, flagSDNamespace), &servicedirectory.ResolveServiceRequest{}).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Namespaces.Services.Resolve(sdSvcName(args[0], project, g.flagSDLocation, g.flagSDNamespace), &servicedirectory.ResolveServiceRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("resolving service: %w", err)
 	}
-	return emitFormatted(got, flagSDFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSDFormat)
 }
 
 // --- endpoints impl ---
@@ -626,108 +502,255 @@ func sdEPName(id, project, location, ns, service string) string {
 	return sdChild("endpoints", id, sdEPParent(project, location, ns, service))
 }
 
-func runSDEPCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDEPCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	e := &servicedirectory.Endpoint{}
-	if err := loadYAMLOrJSONInto(flagSDConfigFile, e); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSDConfigFile, e); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Services.Endpoints.Create(sdEPParent(project, flagSDLocation, flagSDNamespace, flagSDService), e).
+	got, err := svc.Projects.Locations.Namespaces.Services.Endpoints.Create(sdEPParent(project, g.flagSDLocation, g.flagSDNamespace, g.flagSDService), e).
 		EndpointId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating endpoint: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runSDEPDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDEPDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Namespaces.Services.Endpoints.Delete(sdEPName(args[0], project, flagSDLocation, flagSDNamespace, flagSDService)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Namespaces.Services.Endpoints.Delete(sdEPName(args[0], project, g.flagSDLocation, g.flagSDNamespace, g.flagSDService)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting endpoint: %w", err)
 	}
-	fmt.Printf("Deleted endpoint [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted endpoint [%s].\n", args[0])
 	return nil
 }
 
-func runSDEPDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDEPDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Services.Endpoints.Get(sdEPName(args[0], project, flagSDLocation, flagSDNamespace, flagSDService)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Namespaces.Services.Endpoints.Get(sdEPName(args[0], project, g.flagSDLocation, g.flagSDNamespace, g.flagSDService)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing endpoint: %w", err)
 	}
-	return emitFormatted(got, flagSDFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSDFormat)
 }
 
-func runSDEPList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDEPList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Namespaces.Services.Endpoints.List(sdEPParent(project, flagSDLocation, flagSDNamespace, flagSDService)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Namespaces.Services.Endpoints.List(sdEPParent(project, g.flagSDLocation, g.flagSDNamespace, g.flagSDService)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing endpoints: %w", err)
 	}
-	if flagSDFormat != "" {
-		return emitFormatted(resp.Endpoints, flagSDFormat)
+	if g.flagSDFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Endpoints, g.flagSDFormat)
 	}
-	printTableHeading(len(resp.Endpoints), "%-40s %s\n", "NAME", "ADDRESS")
+	printTableHeadingTo(g.inv.stdout, len(resp.Endpoints), "%-40s %s\n", "NAME", "ADDRESS")
 	for _, e := range resp.Endpoints {
-		fmt.Printf("%-40s %s\n", path.Base(e.Name), e.Address)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(e.Name), e.Address)
 	}
 	return nil
 }
 
-func runSDEPUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *serviceDirectoryCmds) runSDEPUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	e := &servicedirectory.Endpoint{}
-	if err := loadYAMLOrJSONInto(flagSDConfigFile, e); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSDConfigFile, e); err != nil {
 		return err
 	}
-	mask := flagSDUpdateMask
+	mask := g.flagSDUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(e))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceDirectoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceDirectory(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Namespaces.Services.Endpoints.Patch(sdEPName(args[0], project, flagSDLocation, flagSDNamespace, flagSDService), e).
+	got, err := svc.Projects.Locations.Namespaces.Services.Endpoints.Patch(sdEPName(args[0], project, g.flagSDLocation, g.flagSDNamespace, g.flagSDService), e).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating endpoint: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
+}
+
+// serviceDirectoryCmds holds the commands and flag values of one invocation's "serviceDirectory"
+// command group, so invocations don't share state (#2070).
+type serviceDirectoryCmds struct {
+	inv *invocation
+
+	serviceDirectoryCmd *cobra.Command
+	flagSDLocation      string
+	flagSDNamespace     string
+	flagSDService       string
+	flagSDConfigFile    string
+	flagSDUpdateMask    string
+	flagSDFormat        string
+	flagSDIamMember     string
+	flagSDIamRole       string
+	sdLocationsCmd      *cobra.Command
+	sdLocDescribeCmd    *cobra.Command
+	sdLocListCmd        *cobra.Command
+	sdNamespacesCmd     *cobra.Command
+	sdNSCreateCmd       *cobra.Command
+	sdNSDeleteCmd       *cobra.Command
+	sdNSDescribeCmd     *cobra.Command
+	sdNSListCmd         *cobra.Command
+	sdNSUpdateCmd       *cobra.Command
+	sdNSGetIamCmd       *cobra.Command
+	sdNSSetIamCmd       *cobra.Command
+	sdNSAddIamCmd       *cobra.Command
+	sdNSRemoveIamCmd    *cobra.Command
+	sdServicesCmd       *cobra.Command
+	sdSvcCreateCmd      *cobra.Command
+	sdSvcDeleteCmd      *cobra.Command
+	sdSvcDescribeCmd    *cobra.Command
+	sdSvcListCmd        *cobra.Command
+	sdSvcUpdateCmd      *cobra.Command
+	sdSvcResolveCmd     *cobra.Command
+	sdEndpointsCmd      *cobra.Command
+	sdEPCreateCmd       *cobra.Command
+	sdEPDeleteCmd       *cobra.Command
+	sdEPDescribeCmd     *cobra.Command
+	sdEPListCmd         *cobra.Command
+	sdEPUpdateCmd       *cobra.Command
+}
+
+// newServiceDirectoryCmd returns the "serviceDirectory" command group for inv.
+func newServiceDirectoryCmd(inv *invocation) *cobra.Command {
+	return newServiceDirectoryCmds(inv).serviceDirectoryCmd
+}
+
+// newServiceDirectoryCmds builds the "serviceDirectory" command group for inv and returns its state.
+func newServiceDirectoryCmds(inv *invocation) *serviceDirectoryCmds {
+	g := &serviceDirectoryCmds{inv: inv}
+	g.serviceDirectoryCmd = &cobra.Command{Use: "service-directory", Short: "Manage Service Directory"}
+	g.sdLocationsCmd = &cobra.Command{Use: "locations", Short: "Explore Service Directory locations"}
+	g.sdLocDescribeCmd = &cobra.Command{
+		Use: "describe LOCATION", Short: "Describe a location",
+		Args: cobra.ExactArgs(1), RunE: g.runSDLocDescribe,
+	}
+	g.sdLocListCmd = &cobra.Command{
+		Use: "list", Short: "List locations",
+		Args: cobra.NoArgs, RunE: g.runSDLocList,
+	}
+	g.sdNamespacesCmd = &cobra.Command{Use: "namespaces", Short: "Manage Service Directory namespaces"}
+	g.sdNSCreateCmd = &cobra.Command{
+		Use: "create NAMESPACE", Short: "Create a namespace from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSDNSCreate,
+	}
+	g.sdNSDeleteCmd = &cobra.Command{
+		Use: "delete NAMESPACE", Short: "Delete a namespace",
+		Args: cobra.ExactArgs(1), RunE: g.runSDNSDelete,
+	}
+	g.sdNSDescribeCmd = &cobra.Command{
+		Use: "describe NAMESPACE", Short: "Describe a namespace",
+		Args: cobra.ExactArgs(1), RunE: g.runSDNSDescribe,
+	}
+	g.sdNSListCmd = &cobra.Command{
+		Use: "list", Short: "List namespaces in a location",
+		Args: cobra.NoArgs, RunE: g.runSDNSList,
+	}
+	g.sdNSUpdateCmd = &cobra.Command{
+		Use: "update NAMESPACE", Short: "Update a namespace from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSDNSUpdate,
+	}
+	g.sdNSGetIamCmd = &cobra.Command{
+		Use: "get-iam-policy NAMESPACE", Short: "Get the IAM policy for a namespace",
+		Args: cobra.ExactArgs(1), RunE: g.runSDNSGetIam,
+	}
+	g.sdNSSetIamCmd = &cobra.Command{
+		Use: "set-iam-policy NAMESPACE POLICY_FILE", Short: "Replace the IAM policy",
+		Args: cobra.ExactArgs(2), RunE: g.runSDNSSetIam,
+	}
+	g.sdNSAddIamCmd = &cobra.Command{
+		Use: "add-iam-policy-binding NAMESPACE", Short: "Add an IAM binding",
+		Args: cobra.ExactArgs(1), RunE: g.runSDNSAddIam,
+	}
+	g.sdNSRemoveIamCmd = &cobra.Command{
+		Use: "remove-iam-policy-binding NAMESPACE", Short: "Remove an IAM binding",
+		Args: cobra.ExactArgs(1), RunE: g.runSDNSRemoveIam,
+	}
+	g.sdServicesCmd = &cobra.Command{Use: "services", Short: "Manage Service Directory services"}
+	g.sdSvcCreateCmd = &cobra.Command{
+		Use: "create SERVICE", Short: "Create a service from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSDSvcCreate,
+	}
+	g.sdSvcDeleteCmd = &cobra.Command{
+		Use: "delete SERVICE", Short: "Delete a service",
+		Args: cobra.ExactArgs(1), RunE: g.runSDSvcDelete,
+	}
+	g.sdSvcDescribeCmd = &cobra.Command{
+		Use: "describe SERVICE", Short: "Describe a service",
+		Args: cobra.ExactArgs(1), RunE: g.runSDSvcDescribe,
+	}
+	g.sdSvcListCmd = &cobra.Command{
+		Use: "list", Short: "List services in a namespace",
+		Args: cobra.NoArgs, RunE: g.runSDSvcList,
+	}
+	g.sdSvcUpdateCmd = &cobra.Command{
+		Use: "update SERVICE", Short: "Update a service from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSDSvcUpdate,
+	}
+	g.sdSvcResolveCmd = &cobra.Command{
+		Use: "resolve SERVICE", Short: "Resolve a service (return endpoints)",
+		Args: cobra.ExactArgs(1), RunE: g.runSDSvcResolve,
+	}
+	g.sdEndpointsCmd = &cobra.Command{Use: "endpoints", Short: "Manage Service Directory endpoints"}
+	g.sdEPCreateCmd = &cobra.Command{
+		Use: "create ENDPOINT", Short: "Create an endpoint from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSDEPCreate,
+	}
+	g.sdEPDeleteCmd = &cobra.Command{
+		Use: "delete ENDPOINT", Short: "Delete an endpoint",
+		Args: cobra.ExactArgs(1), RunE: g.runSDEPDelete,
+	}
+	g.sdEPDescribeCmd = &cobra.Command{
+		Use: "describe ENDPOINT", Short: "Describe an endpoint",
+		Args: cobra.ExactArgs(1), RunE: g.runSDEPDescribe,
+	}
+	g.sdEPListCmd = &cobra.Command{
+		Use: "list", Short: "List endpoints in a service",
+		Args: cobra.NoArgs, RunE: g.runSDEPList,
+	}
+	g.sdEPUpdateCmd = &cobra.Command{
+		Use: "update ENDPOINT", Short: "Update an endpoint from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSDEPUpdate,
+	}
+	g.initServiceDirectory()
+	return g
 }
