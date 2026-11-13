@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,79 +10,60 @@ import (
 
 // --- gcloud edge-cache operations (#1058) ---
 
-var edgeCacheOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Media CDN Edge Cache long-running operations"}
-
-var (
-	flagEdgeCacheOperationsLocation string
-	flagEdgeCacheOperationsFormat   string
-	flagEdgeCacheOperationsPageSize int64
-)
-
-var (
-	edgeCacheOperationsDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an Edge Cache long-running operation",
-		Args: cobra.ExactArgs(1), RunE: runEdgeCacheOperationsDescribe,
-	}
-	edgeCacheOperationsListCmd = &cobra.Command{
-		Use: "list", Short: "List Edge Cache long-running operations",
-		Args: cobra.NoArgs, RunE: runEdgeCacheOperationsList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{edgeCacheOperationsDescribeCmd, edgeCacheOperationsListCmd}
+func (s *edgeCacheCmds) initEdgeCacheOperations() {
+	all := []*cobra.Command{s.edgeCacheOperationsDescribeCmd, s.edgeCacheOperationsListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagEdgeCacheOperationsLocation, "location", "", "Edge Cache location (required)")
+		c.Flags().StringVar(&s.flagEdgeCacheOperationsLocation, "location", "", "Edge Cache location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagEdgeCacheOperationsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagEdgeCacheOperationsFormat, "format", "", "Output format")
 	}
-	edgeCacheOperationsListCmd.Flags().Int64Var(&flagEdgeCacheOperationsPageSize, "page-size", 0, "Maximum results per page")
+	s.edgeCacheOperationsListCmd.Flags().Int64Var(&s.flagEdgeCacheOperationsPageSize, "page-size", 0, "Maximum results per page")
 
-	edgeCacheOperationsCmd.AddCommand(all...)
-	edgeCacheCmd.AddCommand(edgeCacheOperationsCmd)
+	s.edgeCacheOperationsCmd.AddCommand(all...)
+	s.edgeCacheCmd.AddCommand(s.edgeCacheOperationsCmd)
 }
 
-func edgeCacheOperationsParent() (string, error) {
-	project, err := resolveProject()
+func (s *edgeCacheCmds) edgeCacheOperationsParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagEdgeCacheOperationsLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagEdgeCacheOperationsLocation), nil
 }
 
-func edgeCacheOperationsName(id string) (string, error) {
+func (s *edgeCacheCmds) edgeCacheOperationsName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := edgeCacheOperationsParent()
+	parent, err := s.edgeCacheOperationsParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/operations/%s", parent, id), nil
 }
 
-func runEdgeCacheOperationsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := edgeCacheOperationsName(args[0])
+func (s *edgeCacheCmds) runEdgeCacheOperationsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.edgeCacheOperationsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := edgeCacheRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing edge-cache operation: %w", err)
 	}
-	return emitFormatted(got, flagEdgeCacheOperationsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagEdgeCacheOperationsFormat)
 }
 
-func runEdgeCacheOperationsList(cmd *cobra.Command, args []string) error {
-	parent, err := edgeCacheOperationsParent()
+func (s *edgeCacheCmds) runEdgeCacheOperationsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.edgeCacheOperationsParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	items, err := edgeCacheRest.paginate(ctx, "/"+parent+"/operations", nil, "operations", flagEdgeCacheOperationsPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(edgeCacheRest).paginate(ctx, "/"+parent+"/operations", nil, "operations", s.flagEdgeCacheOperationsPageSize)
 	if err != nil {
 		return fmt.Errorf("listing edge-cache operations: %w", err)
 	}
-	return emitFormatted(items, flagEdgeCacheOperationsFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagEdgeCacheOperationsFormat)
 }
