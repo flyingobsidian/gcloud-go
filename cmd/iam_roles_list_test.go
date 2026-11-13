@@ -53,8 +53,9 @@ func TestListRoles(t *testing.T) {
 }
 
 func TestIamRolesListRegistered(t *testing.T) {
-	list, _, err := rolesCmd.Find([]string{"list"})
-	if err != nil || list != roleListCmd {
+	grp := newIamCmds(legacyTestInvocation())
+	list, _, err := grp.rolesCmd.Find([]string{"list"})
+	if err != nil || list != grp.roleListCmd {
 		t.Fatalf("iam roles list not registered: %v", err)
 	}
 }

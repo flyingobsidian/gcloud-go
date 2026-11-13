@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	policysimulator "google.golang.org/api/policysimulator/v1"
 )
@@ -15,71 +13,50 @@ import (
 // The simulator subgroup is a thin wrapper around the policysimulator v1
 // "replays" resource — a Replay is one simulation run.
 
-var iamSimulatorCmd = &cobra.Command{Use: "simulator", Short: "Simulate IAM policy changes"}
-var iamSimulatorReplaysCmd = &cobra.Command{Use: "replays", Short: "Manage IAM policy simulation Replays"}
-
-var (
-	flagIamSimScope      string
-	flagIamSimLocation   string
-	flagIamSimConfigFile string
-	flagIamSimFormat     string
-)
-
-var (
-	iamSimCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create a Replay (loads the Replay body from --config-file)",
-		Args: cobra.NoArgs, RunE: runIamSimCreate,
-	}
-	iamSimDescribeCmd = &cobra.Command{
-		Use: "describe REPLAY", Short: "Describe a Replay",
-		Args: cobra.ExactArgs(1), RunE: runIamSimDescribe,
-	}
-)
-
-func init() {
-	for _, c := range []*cobra.Command{iamSimCreateCmd, iamSimDescribeCmd} {
-		c.Flags().StringVar(&flagIamSimScope, "scope", "", "Owning scope, e.g. projects/PROJECT, folders/FOLDER, or organizations/ORG (required)")
+func (s *iamCmds) initIamSimulator() {
+	for _, c := range []*cobra.Command{s.iamSimCreateCmd, s.iamSimDescribeCmd} {
+		c.Flags().StringVar(&s.flagIamSimScope, "scope", "", "Owning scope, e.g. projects/PROJECT, folders/FOLDER, or organizations/ORG (required)")
 		_ = c.MarkFlagRequired("scope")
-		c.Flags().StringVar(&flagIamSimLocation, "location", "global", "Location (defaults to global)")
-		c.Flags().StringVar(&flagIamSimFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagIamSimLocation, "location", "global", "Location (defaults to global)")
+		c.Flags().StringVar(&s.flagIamSimFormat, "format", "", "Output format")
 	}
-	iamSimCreateCmd.Flags().StringVar(&flagIamSimConfigFile, "config-file", "", "YAML/JSON file with the Replay body (required)")
-	_ = iamSimCreateCmd.MarkFlagRequired("config-file")
+	s.iamSimCreateCmd.Flags().StringVar(&s.flagIamSimConfigFile, "config-file", "", "YAML/JSON file with the Replay body (required)")
+	_ = s.iamSimCreateCmd.MarkFlagRequired("config-file")
 
-	iamSimulatorReplaysCmd.AddCommand(iamSimCreateCmd, iamSimDescribeCmd)
-	iamSimulatorCmd.AddCommand(iamSimulatorReplaysCmd)
-	iamCmd.AddCommand(iamSimulatorCmd)
+	s.iamSimulatorReplaysCmd.AddCommand(s.iamSimCreateCmd, s.iamSimDescribeCmd)
+	s.iamSimulatorCmd.AddCommand(s.iamSimulatorReplaysCmd)
+	s.iamCmd.AddCommand(s.iamSimulatorCmd)
 }
 
-func iamSimReplayParent() string {
-	return fmt.Sprintf("%s/locations/%s", flagIamSimScope, flagIamSimLocation)
+func (s *iamCmds) iamSimReplayParent() string {
+	return fmt.Sprintf("%s/locations/%s", s.flagIamSimScope, s.flagIamSimLocation)
 }
 
-func iamSimReplayName(id string) string {
+func (s *iamCmds) iamSimReplayName(id string) string {
 	if strings.Contains(id, "/replays/") {
 		return id
 	}
-	return fmt.Sprintf("%s/replays/%s", iamSimReplayParent(), id)
+	return fmt.Sprintf("%s/replays/%s", s.iamSimReplayParent(), id)
 }
 
-func runIamSimCreate(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runIamSimCreate(cmd *cobra.Command, args []string) error {
 	body := &policysimulator.GoogleCloudPolicysimulatorV1Replay{}
-	if err := loadYAMLOrJSONInto(flagIamSimConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagIamSimConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PolicySimulatorService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PolicySimulator(ctx)
 	if err != nil {
 		return err
 	}
-	parent := iamSimReplayParent()
+	parent := s.iamSimReplayParent()
 	var op *policysimulator.GoogleLongrunningOperation
 	switch {
-	case strings.HasPrefix(flagIamSimScope, "projects/"):
+	case strings.HasPrefix(s.flagIamSimScope, "projects/"):
 		op, err = svc.Projects.Locations.Replays.Create(parent, body).Context(ctx).Do()
-	case strings.HasPrefix(flagIamSimScope, "folders/"):
+	case strings.HasPrefix(s.flagIamSimScope, "folders/"):
 		op, err = svc.Folders.Locations.Replays.Create(parent, body).Context(ctx).Do()
-	case strings.HasPrefix(flagIamSimScope, "organizations/"):
+	case strings.HasPrefix(s.flagIamSimScope, "organizations/"):
 		op, err = svc.Organizations.Locations.Replays.Create(parent, body).Context(ctx).Do()
 	default:
 		return fmt.Errorf("--scope must start with projects/, folders/, or organizations/")
@@ -87,24 +64,24 @@ func runIamSimCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating replay: %w", err)
 	}
-	fmt.Printf("Create replay initiated (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagIamSimFormat)
+	fmt.Fprintf(s.inv.stdout, "Create replay initiated (operation: %s).\n", op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIamSimFormat)
 }
 
-func runIamSimDescribe(cmd *cobra.Command, args []string) error {
-	name := iamSimReplayName(args[0])
-	ctx := context.Background()
-	svc, err := gcp.PolicySimulatorService(ctx, flagAccount)
+func (s *iamCmds) runIamSimDescribe(cmd *cobra.Command, args []string) error {
+	name := s.iamSimReplayName(args[0])
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PolicySimulator(ctx)
 	if err != nil {
 		return err
 	}
 	var got *policysimulator.GoogleCloudPolicysimulatorV1Replay
 	switch {
-	case strings.HasPrefix(flagIamSimScope, "projects/"):
+	case strings.HasPrefix(s.flagIamSimScope, "projects/"):
 		got, err = svc.Projects.Locations.Replays.Get(name).Context(ctx).Do()
-	case strings.HasPrefix(flagIamSimScope, "folders/"):
+	case strings.HasPrefix(s.flagIamSimScope, "folders/"):
 		got, err = svc.Folders.Locations.Replays.Get(name).Context(ctx).Do()
-	case strings.HasPrefix(flagIamSimScope, "organizations/"):
+	case strings.HasPrefix(s.flagIamSimScope, "organizations/"):
 		got, err = svc.Organizations.Locations.Replays.Get(name).Context(ctx).Do()
 	default:
 		return fmt.Errorf("--scope must start with projects/, folders/, or organizations/")
@@ -112,5 +89,5 @@ func runIamSimDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing replay: %w", err)
 	}
-	return emitFormatted(got, flagIamSimFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIamSimFormat)
 }

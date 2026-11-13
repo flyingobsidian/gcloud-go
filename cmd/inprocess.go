@@ -152,6 +152,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newNetworkServicesCmd(inv),
 		newAiCmd(inv),
 		newKmsCmd(inv),
+		newIamCmd(inv),
 	}
 }
 
