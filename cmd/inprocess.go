@@ -71,6 +71,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newFirebaseCmd(inv),
 		newVectorSearchCmd(inv),
 		newEmulatorsCmd(inv),
+		newDatastoreCmd(inv),
 	}
 }
 
