@@ -99,10 +99,11 @@ func TestResolveBillingProjectPriority(t *testing.T) {
 // `gcloud config set`. Regression for the "unrecognized section: billing"
 // error noted in the #1740 report.
 func TestBillingConfigSetGet(t *testing.T) {
+	grp := newConfigCmds(legacyTestInvocation())
 	t.Setenv("CLOUDSDK_CONFIG", t.TempDir())
 	t.Setenv("CLOUDSDK_BILLING_QUOTA_PROJECT", "")
 
-	if err := runConfigSet(configSetCmd, []string{"billing/quota_project", "qp-set"}); err != nil {
+	if err := grp.runConfigSet(grp.configSetCmd, []string{"billing/quota_project", "qp-set"}); err != nil {
 		t.Fatalf("config set billing/quota_project: %v", err)
 	}
 	props, err := config.Load()
