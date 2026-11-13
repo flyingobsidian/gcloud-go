@@ -1,114 +1,63 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
 
 // --- gcloud ai index-endpoints (#1454) ---
 
-var aiIECmd = &cobra.Command{Use: "index-endpoints", Short: "Manage Vertex AI index endpoints"}
-
-var (
-	flagAIIERegion     string
-	flagAIIEFormat     string
-	flagAIIEConfigFile string
-	flagAIIEUpdateMask string
-	flagAIIEFilter     string
-	flagAIIEPageSize   int64
-	flagAIIEReadMask   string
-)
-
-var (
-	aiIECreateCmd = &cobra.Command{
-		Use: "create", Short: "Create an index endpoint",
-		Args: cobra.NoArgs, RunE: runAIIECreate,
-	}
-	aiIEDeleteCmd = &cobra.Command{
-		Use: "delete INDEX_ENDPOINT", Short: "Delete an index endpoint",
-		Args: cobra.ExactArgs(1), RunE: runAIIEDelete,
-	}
-	aiIEDeployIndexCmd = &cobra.Command{
-		Use: "deploy-index INDEX_ENDPOINT", Short: "Deploy an index to an index endpoint",
-		Args: cobra.ExactArgs(1), RunE: runAIIEDeployIndex,
-	}
-	aiIEDescribeCmd = &cobra.Command{
-		Use: "describe INDEX_ENDPOINT", Short: "Describe an index endpoint",
-		Args: cobra.ExactArgs(1), RunE: runAIIEDescribe,
-	}
-	aiIEListCmd = &cobra.Command{
-		Use: "list", Short: "List index endpoints",
-		Args: cobra.NoArgs, RunE: runAIIEList,
-	}
-	aiIEMutateDeployedIndexCmd = &cobra.Command{
-		Use:   "mutate-deployed-index INDEX_ENDPOINT",
-		Short: "Update a deployed index on an index endpoint",
-		Args:  cobra.ExactArgs(1), RunE: runAIIEMutateDeployedIndex,
-	}
-	aiIEUndeployIndexCmd = &cobra.Command{
-		Use: "undeploy-index INDEX_ENDPOINT", Short: "Undeploy an index from an index endpoint",
-		Args: cobra.ExactArgs(1), RunE: runAIIEUndeployIndex,
-	}
-	aiIEUpdateCmd = &cobra.Command{
-		Use: "update INDEX_ENDPOINT", Short: "Update an index endpoint",
-		Args: cobra.ExactArgs(1), RunE: runAIIEUpdate,
-	}
-)
-
-func init() {
+func (s *aiCmds) initAiIndexEndpoints() {
 	all := []*cobra.Command{
-		aiIECreateCmd, aiIEDeleteCmd, aiIEDeployIndexCmd, aiIEDescribeCmd, aiIEListCmd,
-		aiIEMutateDeployedIndexCmd, aiIEUndeployIndexCmd, aiIEUpdateCmd,
+		s.aiIECreateCmd, s.aiIEDeleteCmd, s.aiIEDeployIndexCmd, s.aiIEDescribeCmd, s.aiIEListCmd,
+		s.aiIEMutateDeployedIndexCmd, s.aiIEUndeployIndexCmd, s.aiIEUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAIIERegion, "region", "", "Region where the index endpoint lives (required)")
+		c.Flags().StringVar(&s.flagAIIERegion, "region", "", "Region where the index endpoint lives (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagAIIEFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAIIEFormat, "format", "", "Output format")
 	}
 	for _, c := range []*cobra.Command{
-		aiIECreateCmd, aiIEDeployIndexCmd, aiIEMutateDeployedIndexCmd,
-		aiIEUndeployIndexCmd, aiIEUpdateCmd,
+		s.aiIECreateCmd, s.aiIEDeployIndexCmd, s.aiIEMutateDeployedIndexCmd,
+		s.aiIEUndeployIndexCmd, s.aiIEUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagAIIEConfigFile, "config-file", "",
+		c.Flags().StringVar(&s.flagAIIEConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	aiIEUpdateCmd.Flags().StringVar(&flagAIIEUpdateMask, "update-mask", "",
+	s.aiIEUpdateCmd.Flags().StringVar(&s.flagAIIEUpdateMask, "update-mask", "",
 		"Comma-separated field mask; defaults to top-level fields in --config-file")
-	aiIEListCmd.Flags().StringVar(&flagAIIEFilter, "filter", "", "Server-side filter expression")
-	aiIEListCmd.Flags().Int64Var(&flagAIIEPageSize, "page-size", 0, "Maximum results per page")
-	aiIEListCmd.Flags().StringVar(&flagAIIEReadMask, "read-mask", "", "Field mask for reads")
+	s.aiIEListCmd.Flags().StringVar(&s.flagAIIEFilter, "filter", "", "Server-side filter expression")
+	s.aiIEListCmd.Flags().Int64Var(&s.flagAIIEPageSize, "page-size", 0, "Maximum results per page")
+	s.aiIEListCmd.Flags().StringVar(&s.flagAIIEReadMask, "read-mask", "", "Field mask for reads")
 
-	aiIECmd.AddCommand(all...)
-	aiCmd.AddCommand(aiIECmd)
+	s.aiIECmd.AddCommand(all...)
+	s.aiCmd.AddCommand(s.aiIECmd)
 }
 
-func aiIEParent() (string, error) { return aiParent(flagAIIERegion) }
+func (s *aiCmds) aiIEParent() (string, error) { return s.aiParent(s.flagAIIERegion) }
 
-func aiIEName(id string) (string, error) {
-	parent, err := aiIEParent()
+func (s *aiCmds) aiIEName(id string) (string, error) {
+	parent, err := s.aiIEParent()
 	if err != nil {
 		return "", err
 	}
 	return aiChild("indexEndpoints", id, parent), nil
 }
 
-func runAIIECreate(cmd *cobra.Command, args []string) error {
-	parent, err := aiIEParent()
+func (s *aiCmds) runAIIECreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiIEParent()
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1IndexEndpoint{}
-	if err := loadYAMLOrJSONInto(flagAIIEConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIIEConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIIERegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIIERegion)
 	if err != nil {
 		return err
 	}
@@ -116,17 +65,17 @@ func runAIIECreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating index endpoint: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Create request issued (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagAIIEFormat)
+	fmt.Fprintf(s.inv.stderr, "Create request issued (operation: %s).\n", op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIIEFormat)
 }
 
-func runAIIEDelete(cmd *cobra.Command, args []string) error {
-	name, err := aiIEName(args[0])
+func (s *aiCmds) runAIIEDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.aiIEName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIIERegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIIERegion)
 	if err != nil {
 		return err
 	}
@@ -134,21 +83,21 @@ func runAIIEDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting index endpoint: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Delete request issued for index endpoint [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAIIEFormat)
+	fmt.Fprintf(s.inv.stderr, "Delete request issued for index endpoint [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIIEFormat)
 }
 
-func runAIIEDeployIndex(cmd *cobra.Command, args []string) error {
-	name, err := aiIEName(args[0])
+func (s *aiCmds) runAIIEDeployIndex(cmd *cobra.Command, args []string) error {
+	name, err := s.aiIEName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1DeployIndexRequest{}
-	if err := loadYAMLOrJSONInto(flagAIIEConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIIEConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIIERegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIIERegion)
 	if err != nil {
 		return err
 	}
@@ -156,17 +105,17 @@ func runAIIEDeployIndex(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deploying index: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Deploy request issued for index endpoint [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAIIEFormat)
+	fmt.Fprintf(s.inv.stderr, "Deploy request issued for index endpoint [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIIEFormat)
 }
 
-func runAIIEDescribe(cmd *cobra.Command, args []string) error {
-	name, err := aiIEName(args[0])
+func (s *aiCmds) runAIIEDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.aiIEName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIIERegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIIERegion)
 	if err != nil {
 		return err
 	}
@@ -174,16 +123,16 @@ func runAIIEDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing index endpoint: %w", err)
 	}
-	return emitFormatted(got, flagAIIEFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIIEFormat)
 }
 
-func runAIIEList(cmd *cobra.Command, args []string) error {
-	parent, err := aiIEParent()
+func (s *aiCmds) runAIIEList(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiIEParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIIERegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIIERegion)
 	if err != nil {
 		return err
 	}
@@ -191,14 +140,14 @@ func runAIIEList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.IndexEndpoints.List(parent).Context(ctx)
-		if flagAIIEFilter != "" {
-			call = call.Filter(flagAIIEFilter)
+		if s.flagAIIEFilter != "" {
+			call = call.Filter(s.flagAIIEFilter)
 		}
-		if flagAIIEPageSize > 0 {
-			call = call.PageSize(flagAIIEPageSize)
+		if s.flagAIIEPageSize > 0 {
+			call = call.PageSize(s.flagAIIEPageSize)
 		}
-		if flagAIIEReadMask != "" {
-			call = call.ReadMask(flagAIIEReadMask)
+		if s.flagAIIEReadMask != "" {
+			call = call.ReadMask(s.flagAIIEReadMask)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -213,20 +162,20 @@ func runAIIEList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAIIEFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAIIEFormat)
 }
 
-func runAIIEMutateDeployedIndex(cmd *cobra.Command, args []string) error {
-	name, err := aiIEName(args[0])
+func (s *aiCmds) runAIIEMutateDeployedIndex(cmd *cobra.Command, args []string) error {
+	name, err := s.aiIEName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1DeployedIndex{}
-	if err := loadYAMLOrJSONInto(flagAIIEConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIIEConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIIERegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIIERegion)
 	if err != nil {
 		return err
 	}
@@ -234,21 +183,21 @@ func runAIIEMutateDeployedIndex(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("mutating deployed index: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Mutate request issued for index endpoint [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAIIEFormat)
+	fmt.Fprintf(s.inv.stderr, "Mutate request issued for index endpoint [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIIEFormat)
 }
 
-func runAIIEUndeployIndex(cmd *cobra.Command, args []string) error {
-	name, err := aiIEName(args[0])
+func (s *aiCmds) runAIIEUndeployIndex(cmd *cobra.Command, args []string) error {
+	name, err := s.aiIEName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1UndeployIndexRequest{}
-	if err := loadYAMLOrJSONInto(flagAIIEConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIIEConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIIERegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIIERegion)
 	if err != nil {
 		return err
 	}
@@ -256,25 +205,25 @@ func runAIIEUndeployIndex(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("undeploying index: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Undeploy request issued for index endpoint [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAIIEFormat)
+	fmt.Fprintf(s.inv.stderr, "Undeploy request issued for index endpoint [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIIEFormat)
 }
 
-func runAIIEUpdate(cmd *cobra.Command, args []string) error {
-	name, err := aiIEName(args[0])
+func (s *aiCmds) runAIIEUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.aiIEName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1IndexEndpoint{}
-	if err := loadYAMLOrJSONInto(flagAIIEConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIIEConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagAIIEUpdateMask
+	mask := s.flagAIIEUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIIERegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIIERegion)
 	if err != nil {
 		return err
 	}
@@ -282,5 +231,5 @@ func runAIIEUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating index endpoint: %w", err)
 	}
-	return emitFormatted(got, flagAIIEFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIIEFormat)
 }

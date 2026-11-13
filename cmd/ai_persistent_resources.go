@@ -1,111 +1,75 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
 
 // --- gcloud ai persistent-resources (#1460) ---
 
-var aiPRCmd = &cobra.Command{Use: "persistent-resources", Short: "Manage Vertex AI persistent resources"}
-
-var (
-	flagAIPRRegion     string
-	flagAIPRFormat     string
-	flagAIPRConfigFile string
-	flagAIPRPRId       string
-	flagAIPRPageSize   int64
-)
-
-var (
-	aiPRCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create a persistent resource",
-		Args: cobra.NoArgs, RunE: runAIPRCreate,
-	}
-	aiPRDeleteCmd = &cobra.Command{
-		Use: "delete PERSISTENT_RESOURCE", Short: "Delete a persistent resource",
-		Args: cobra.ExactArgs(1), RunE: runAIPRDelete,
-	}
-	aiPRDescribeCmd = &cobra.Command{
-		Use: "describe PERSISTENT_RESOURCE", Short: "Describe a persistent resource",
-		Args: cobra.ExactArgs(1), RunE: runAIPRDescribe,
-	}
-	aiPRListCmd = &cobra.Command{
-		Use: "list", Short: "List persistent resources",
-		Args: cobra.NoArgs, RunE: runAIPRList,
-	}
-	aiPRRebootCmd = &cobra.Command{
-		Use: "reboot PERSISTENT_RESOURCE", Short: "Reboot a persistent resource",
-		Args: cobra.ExactArgs(1), RunE: runAIPRReboot,
-	}
-)
-
-func init() {
+func (s *aiCmds) initAiPersistentResources() {
 	all := []*cobra.Command{
-		aiPRCreateCmd, aiPRDeleteCmd, aiPRDescribeCmd, aiPRListCmd, aiPRRebootCmd,
+		s.aiPRCreateCmd, s.aiPRDeleteCmd, s.aiPRDescribeCmd, s.aiPRListCmd, s.aiPRRebootCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAIPRRegion, "region", "", "Region where the persistent resource lives (required)")
+		c.Flags().StringVar(&s.flagAIPRRegion, "region", "", "Region where the persistent resource lives (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagAIPRFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAIPRFormat, "format", "", "Output format")
 	}
-	aiPRCreateCmd.Flags().StringVar(&flagAIPRConfigFile, "config-file", "",
+	s.aiPRCreateCmd.Flags().StringVar(&s.flagAIPRConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the PersistentResource body (required)")
-	_ = aiPRCreateCmd.MarkFlagRequired("config-file")
-	aiPRCreateCmd.Flags().StringVar(&flagAIPRPRId, "persistent-resource-id", "",
+	_ = s.aiPRCreateCmd.MarkFlagRequired("config-file")
+	s.aiPRCreateCmd.Flags().StringVar(&s.flagAIPRPRId, "persistent-resource-id", "",
 		"Caller-supplied persistent resource ID (required)")
-	_ = aiPRCreateCmd.MarkFlagRequired("persistent-resource-id")
-	aiPRListCmd.Flags().Int64Var(&flagAIPRPageSize, "page-size", 0, "Maximum results per page")
+	_ = s.aiPRCreateCmd.MarkFlagRequired("persistent-resource-id")
+	s.aiPRListCmd.Flags().Int64Var(&s.flagAIPRPageSize, "page-size", 0, "Maximum results per page")
 
-	aiPRCmd.AddCommand(all...)
-	aiCmd.AddCommand(aiPRCmd)
+	s.aiPRCmd.AddCommand(all...)
+	s.aiCmd.AddCommand(s.aiPRCmd)
 }
 
-func aiPRParent() (string, error) { return aiParent(flagAIPRRegion) }
+func (s *aiCmds) aiPRParent() (string, error) { return s.aiParent(s.flagAIPRRegion) }
 
-func aiPRName(id string) (string, error) {
-	parent, err := aiPRParent()
+func (s *aiCmds) aiPRName(id string) (string, error) {
+	parent, err := s.aiPRParent()
 	if err != nil {
 		return "", err
 	}
 	return aiChild("persistentResources", id, parent), nil
 }
 
-func runAIPRCreate(cmd *cobra.Command, args []string) error {
-	parent, err := aiPRParent()
+func (s *aiCmds) runAIPRCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiPRParent()
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1PersistentResource{}
-	if err := loadYAMLOrJSONInto(flagAIPRConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIPRConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIPRRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIPRRegion)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.PersistentResources.Create(parent, body).
-		PersistentResourceId(flagAIPRPRId).Context(ctx).Do()
+		PersistentResourceId(s.flagAIPRPRId).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating persistent resource: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Create request issued for persistent resource [%s] (operation: %s).\n", flagAIPRPRId, op.Name)
-	return emitFormatted(op, flagAIPRFormat)
+	fmt.Fprintf(s.inv.stderr, "Create request issued for persistent resource [%s] (operation: %s).\n", s.flagAIPRPRId, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIPRFormat)
 }
 
-func runAIPRDelete(cmd *cobra.Command, args []string) error {
-	name, err := aiPRName(args[0])
+func (s *aiCmds) runAIPRDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.aiPRName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIPRRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIPRRegion)
 	if err != nil {
 		return err
 	}
@@ -113,17 +77,17 @@ func runAIPRDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting persistent resource: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Delete request issued for persistent resource [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAIPRFormat)
+	fmt.Fprintf(s.inv.stderr, "Delete request issued for persistent resource [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIPRFormat)
 }
 
-func runAIPRDescribe(cmd *cobra.Command, args []string) error {
-	name, err := aiPRName(args[0])
+func (s *aiCmds) runAIPRDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.aiPRName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIPRRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIPRRegion)
 	if err != nil {
 		return err
 	}
@@ -131,16 +95,16 @@ func runAIPRDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing persistent resource: %w", err)
 	}
-	return emitFormatted(got, flagAIPRFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIPRFormat)
 }
 
-func runAIPRList(cmd *cobra.Command, args []string) error {
-	parent, err := aiPRParent()
+func (s *aiCmds) runAIPRList(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiPRParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIPRRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIPRRegion)
 	if err != nil {
 		return err
 	}
@@ -148,8 +112,8 @@ func runAIPRList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.PersistentResources.List(parent).Context(ctx)
-		if flagAIPRPageSize > 0 {
-			call = call.PageSize(flagAIPRPageSize)
+		if s.flagAIPRPageSize > 0 {
+			call = call.PageSize(s.flagAIPRPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -164,16 +128,16 @@ func runAIPRList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAIPRFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAIPRFormat)
 }
 
-func runAIPRReboot(cmd *cobra.Command, args []string) error {
-	name, err := aiPRName(args[0])
+func (s *aiCmds) runAIPRReboot(cmd *cobra.Command, args []string) error {
+	name, err := s.aiPRName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIPRRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIPRRegion)
 	if err != nil {
 		return err
 	}
@@ -182,6 +146,6 @@ func runAIPRReboot(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("rebooting persistent resource: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Reboot request issued for persistent resource [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAIPRFormat)
+	fmt.Fprintf(s.inv.stderr, "Reboot request issued for persistent resource [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIPRFormat)
 }

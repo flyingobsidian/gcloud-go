@@ -1,12 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"slices"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
@@ -24,137 +21,88 @@ import (
 // `--agent-response-denial-message` on create/update (#1899) ports the
 // 587.0.0 addition that sets agentResponseCustomization.denialMessage.
 
-var aiSGPCmd = &cobra.Command{
-	Use:   "semantic-governance-policies",
-	Short: "Manage Vertex AI Semantic Governance policies",
-}
-
-var aiSGPECmd = &cobra.Command{
-	Use:   "semantic-governance-policy-engine",
-	Short: "Manage the Vertex AI Semantic Governance policy engine",
-}
-
-var (
-	flagAISGPRegion     string
-	flagAISGPFormat     string
-	flagAISGPConfigFile string
-	flagAISGPUpdateMask string
-	flagAISGPPolicyID   string
-	flagAISGPPageSize   int64
-
-	flagAISGPDenialMessage string
-)
-
 const aiSGPDenialMessageMask = "agentResponseCustomization.denialMessage"
 
-var (
-	aiSGPCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create a semantic governance policy",
-		Args: cobra.NoArgs, RunE: runAISGPCreate,
-	}
-	aiSGPDeleteCmd = &cobra.Command{
-		Use: "delete POLICY", Short: "Delete a semantic governance policy",
-		Args: cobra.ExactArgs(1), RunE: runAISGPDelete,
-	}
-	aiSGPDescribeCmd = &cobra.Command{
-		Use: "describe POLICY", Short: "Describe a semantic governance policy",
-		Args: cobra.ExactArgs(1), RunE: runAISGPDescribe,
-	}
-	aiSGPListCmd = &cobra.Command{
-		Use: "list", Short: "List semantic governance policies",
-		Args: cobra.NoArgs, RunE: runAISGPList,
-	}
-	aiSGPUpdateCmd = &cobra.Command{
-		Use: "update POLICY", Short: "Update a semantic governance policy",
-		Args: cobra.ExactArgs(1), RunE: runAISGPUpdate,
-	}
-
-	aiSGPEDeprovisionCmd = &cobra.Command{
-		Use: "deprovision", Short: "Tear down the semantic governance policy engine (tenant project, GKE cluster, PSC service attachments)",
-		Args: cobra.NoArgs, RunE: runAISGPEDeprovision,
-	}
-)
-
-func init() {
+func (s *aiCmds) initAiSemanticGovernance() {
 	policyCmds := []*cobra.Command{
-		aiSGPCreateCmd, aiSGPDeleteCmd, aiSGPDescribeCmd, aiSGPListCmd, aiSGPUpdateCmd,
+		s.aiSGPCreateCmd, s.aiSGPDeleteCmd, s.aiSGPDescribeCmd, s.aiSGPListCmd, s.aiSGPUpdateCmd,
 	}
-	engineCmds := []*cobra.Command{aiSGPEDeprovisionCmd}
+	engineCmds := []*cobra.Command{s.aiSGPEDeprovisionCmd}
 
 	for _, c := range append(policyCmds, engineCmds...) {
-		c.Flags().StringVar(&flagAISGPRegion, "region", "", "Region for the semantic governance resource (required)")
+		c.Flags().StringVar(&s.flagAISGPRegion, "region", "", "Region for the semantic governance resource (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagAISGPFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAISGPFormat, "format", "", "Output format")
 	}
 
-	aiSGPCreateCmd.Flags().StringVar(&flagAISGPConfigFile, "config-file", "",
+	s.aiSGPCreateCmd.Flags().StringVar(&s.flagAISGPConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the SemanticGovernancePolicy body (required)")
-	_ = aiSGPCreateCmd.MarkFlagRequired("config-file")
-	aiSGPCreateCmd.Flags().StringVar(&flagAISGPPolicyID, "policy-id", "",
+	_ = s.aiSGPCreateCmd.MarkFlagRequired("config-file")
+	s.aiSGPCreateCmd.Flags().StringVar(&s.flagAISGPPolicyID, "policy-id", "",
 		"Caller-supplied policy ID (required)")
-	_ = aiSGPCreateCmd.MarkFlagRequired("policy-id")
+	_ = s.aiSGPCreateCmd.MarkFlagRequired("policy-id")
 
-	aiSGPUpdateCmd.Flags().StringVar(&flagAISGPConfigFile, "config-file", "",
+	s.aiSGPUpdateCmd.Flags().StringVar(&s.flagAISGPConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the SemanticGovernancePolicy patch body")
-	aiSGPUpdateCmd.Flags().StringVar(&flagAISGPUpdateMask, "update-mask", "",
+	s.aiSGPUpdateCmd.Flags().StringVar(&s.flagAISGPUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 
-	for _, c := range []*cobra.Command{aiSGPCreateCmd, aiSGPUpdateCmd} {
-		c.Flags().StringVar(&flagAISGPDenialMessage, "agent-response-denial-message", "",
+	for _, c := range []*cobra.Command{s.aiSGPCreateCmd, s.aiSGPUpdateCmd} {
+		c.Flags().StringVar(&s.flagAISGPDenialMessage, "agent-response-denial-message", "",
 			"Sets agent_response_customization.denial_message on the policy: a custom message shown to the end user when the policy denies a request. Max 1000 characters.")
 	}
 
-	aiSGPListCmd.Flags().Int64Var(&flagAISGPPageSize, "page-size", 0, "Maximum results per page")
+	s.aiSGPListCmd.Flags().Int64Var(&s.flagAISGPPageSize, "page-size", 0, "Maximum results per page")
 
-	aiSGPCmd.AddCommand(policyCmds...)
-	aiSGPECmd.AddCommand(engineCmds...)
-	aiCmd.AddCommand(aiSGPCmd, aiSGPECmd)
+	s.aiSGPCmd.AddCommand(policyCmds...)
+	s.aiSGPECmd.AddCommand(engineCmds...)
+	s.aiCmd.AddCommand(s.aiSGPCmd, s.aiSGPECmd)
 }
 
-func aiSGPParent() (string, error) { return aiParent(flagAISGPRegion) }
+func (s *aiCmds) aiSGPParent() (string, error) { return s.aiParent(s.flagAISGPRegion) }
 
-func aiSGPName(id string) (string, error) {
-	parent, err := aiSGPParent()
+func (s *aiCmds) aiSGPName(id string) (string, error) {
+	parent, err := s.aiSGPParent()
 	if err != nil {
 		return "", err
 	}
 	return aiChild("semanticGovernancePolicies", id, parent), nil
 }
 
-func runAISGPCreate(cmd *cobra.Command, args []string) error {
-	parent, err := aiSGPParent()
+func (s *aiCmds) runAISGPCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiSGPParent()
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1SemanticGovernancePolicy{}
-	if err := loadYAMLOrJSONInto(flagAISGPConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAISGPConfigFile, body); err != nil {
 		return err
 	}
 	if cmd.Flags().Changed("agent-response-denial-message") {
-		aiSGPSetDenialMessage(body, flagAISGPDenialMessage)
+		aiSGPSetDenialMessage(body, s.flagAISGPDenialMessage)
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAISGPRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAISGPRegion)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.SemanticGovernancePolicies.Create(parent, body).
-		SemanticGovernancePolicyId(flagAISGPPolicyID).Context(ctx).Do()
+		SemanticGovernancePolicyId(s.flagAISGPPolicyID).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating semantic governance policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Create request issued for semantic governance policy [%s] (operation: %s).\n",
-		flagAISGPPolicyID, op.Name)
-	return emitFormatted(op, flagAISGPFormat)
+	fmt.Fprintf(s.inv.stderr, "Create request issued for semantic governance policy [%s] (operation: %s).\n",
+		s.flagAISGPPolicyID, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAISGPFormat)
 }
 
-func runAISGPDelete(cmd *cobra.Command, args []string) error {
-	name, err := aiSGPName(args[0])
+func (s *aiCmds) runAISGPDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.aiSGPName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAISGPRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAISGPRegion)
 	if err != nil {
 		return err
 	}
@@ -162,18 +110,18 @@ func runAISGPDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting semantic governance policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Delete request issued for semantic governance policy [%s] (operation: %s).\n",
+	fmt.Fprintf(s.inv.stderr, "Delete request issued for semantic governance policy [%s] (operation: %s).\n",
 		args[0], op.Name)
-	return emitFormatted(op, flagAISGPFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAISGPFormat)
 }
 
-func runAISGPDescribe(cmd *cobra.Command, args []string) error {
-	name, err := aiSGPName(args[0])
+func (s *aiCmds) runAISGPDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.aiSGPName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAISGPRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAISGPRegion)
 	if err != nil {
 		return err
 	}
@@ -181,16 +129,16 @@ func runAISGPDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing semantic governance policy: %w", err)
 	}
-	return emitFormatted(got, flagAISGPFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAISGPFormat)
 }
 
-func runAISGPList(cmd *cobra.Command, args []string) error {
-	parent, err := aiSGPParent()
+func (s *aiCmds) runAISGPList(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiSGPParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAISGPRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAISGPRegion)
 	if err != nil {
 		return err
 	}
@@ -198,8 +146,8 @@ func runAISGPList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.SemanticGovernancePolicies.List(parent).Context(ctx)
-		if flagAISGPPageSize > 0 {
-			call = call.PageSize(flagAISGPPageSize)
+		if s.flagAISGPPageSize > 0 {
+			call = call.PageSize(s.flagAISGPPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -214,33 +162,33 @@ func runAISGPList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAISGPFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAISGPFormat)
 }
 
-func runAISGPUpdate(cmd *cobra.Command, args []string) error {
-	name, err := aiSGPName(args[0])
+func (s *aiCmds) runAISGPUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.aiSGPName(args[0])
 	if err != nil {
 		return err
 	}
 	denialSet := cmd.Flags().Changed("agent-response-denial-message")
-	if flagAISGPConfigFile == "" && !denialSet {
+	if s.flagAISGPConfigFile == "" && !denialSet {
 		return fmt.Errorf("at least one of --config-file or --agent-response-denial-message must be specified")
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1SemanticGovernancePolicy{}
-	if flagAISGPConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagAISGPConfigFile, body); err != nil {
+	if s.flagAISGPConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagAISGPConfigFile, body); err != nil {
 			return err
 		}
 	}
-	mask := flagAISGPUpdateMask
+	mask := s.flagAISGPUpdateMask
 	if mask == "" {
 		mask = aiSGPUpdateMaskFor(body, denialSet)
 	}
 	if denialSet {
-		aiSGPSetDenialMessage(body, flagAISGPDenialMessage)
+		aiSGPSetDenialMessage(body, s.flagAISGPDenialMessage)
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAISGPRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAISGPRegion)
 	if err != nil {
 		return err
 	}
@@ -252,9 +200,9 @@ func runAISGPUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating semantic governance policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Update request issued for semantic governance policy [%s] (operation: %s).\n",
+	fmt.Fprintf(s.inv.stderr, "Update request issued for semantic governance policy [%s] (operation: %s).\n",
 		args[0], op.Name)
-	return emitFormatted(op, flagAISGPFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAISGPFormat)
 }
 
 // aiSGPSetDenialMessage sets agentResponseCustomization.denialMessage on body,
@@ -284,21 +232,21 @@ func aiSGPUpdateMaskFor(body *aiplatform.GoogleCloudAiplatformV1SemanticGovernan
 // aiSGPEName returns the fixed engine resource name for a region. The engine
 // is a singleton per (project, location) in the aiplatform v1 discovery
 // document.
-func aiSGPEName() (string, error) {
-	parent, err := aiSGPParent()
+func (s *aiCmds) aiSGPEName() (string, error) {
+	parent, err := s.aiSGPParent()
 	if err != nil {
 		return "", err
 	}
 	return parent + "/semanticGovernancePolicyEngine", nil
 }
 
-func runAISGPEDeprovision(cmd *cobra.Command, args []string) error {
-	name, err := aiSGPEName()
+func (s *aiCmds) runAISGPEDeprovision(cmd *cobra.Command, args []string) error {
+	name, err := s.aiSGPEName()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAISGPRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAISGPRegion)
 	if err != nil {
 		return err
 	}
@@ -308,7 +256,7 @@ func runAISGPEDeprovision(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deprovisioning semantic governance policy engine: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Deprovision request issued for semantic governance policy engine (operation: %s).\n",
+	fmt.Fprintf(s.inv.stderr, "Deprovision request issued for semantic governance policy engine (operation: %s).\n",
 		op.Name)
-	return emitFormatted(op, flagAISGPFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAISGPFormat)
 }

@@ -1,82 +1,50 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
 
 // --- gcloud ai tuning-jobs (#1462) ---
 
-var aiTJCmd = &cobra.Command{Use: "tuning-jobs", Short: "Manage Vertex AI GenAI tuning jobs"}
-
-var (
-	flagAITJRegion     string
-	flagAITJFormat     string
-	flagAITJConfigFile string
-	flagAITJFilter     string
-	flagAITJPageSize   int64
-)
-
-var (
-	aiTJCancelCmd = &cobra.Command{
-		Use: "cancel TUNING_JOB", Short: "Cancel a tuning job",
-		Args: cobra.ExactArgs(1), RunE: runAITJCancel,
-	}
-	aiTJCreateCmd = &cobra.Command{
-		Use: "create", Short: "Submit a tuning job",
-		Args: cobra.NoArgs, RunE: runAITJCreate,
-	}
-	aiTJDescribeCmd = &cobra.Command{
-		Use: "describe TUNING_JOB", Short: "Describe a tuning job",
-		Args: cobra.ExactArgs(1), RunE: runAITJDescribe,
-	}
-	aiTJListCmd = &cobra.Command{
-		Use: "list", Short: "List tuning jobs",
-		Args: cobra.NoArgs, RunE: runAITJList,
-	}
-)
-
-func init() {
+func (s *aiCmds) initAiTuningJobs() {
 	all := []*cobra.Command{
-		aiTJCancelCmd, aiTJCreateCmd, aiTJDescribeCmd, aiTJListCmd,
+		s.aiTJCancelCmd, s.aiTJCreateCmd, s.aiTJDescribeCmd, s.aiTJListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAITJRegion, "region", "", "Region where the tuning job lives (required)")
+		c.Flags().StringVar(&s.flagAITJRegion, "region", "", "Region where the tuning job lives (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagAITJFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAITJFormat, "format", "", "Output format")
 	}
-	aiTJCreateCmd.Flags().StringVar(&flagAITJConfigFile, "config-file", "",
+	s.aiTJCreateCmd.Flags().StringVar(&s.flagAITJConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the TuningJob body (required)")
-	_ = aiTJCreateCmd.MarkFlagRequired("config-file")
-	aiTJListCmd.Flags().StringVar(&flagAITJFilter, "filter", "", "Server-side filter expression")
-	aiTJListCmd.Flags().Int64Var(&flagAITJPageSize, "page-size", 0, "Maximum results per page")
+	_ = s.aiTJCreateCmd.MarkFlagRequired("config-file")
+	s.aiTJListCmd.Flags().StringVar(&s.flagAITJFilter, "filter", "", "Server-side filter expression")
+	s.aiTJListCmd.Flags().Int64Var(&s.flagAITJPageSize, "page-size", 0, "Maximum results per page")
 
-	aiTJCmd.AddCommand(all...)
-	aiCmd.AddCommand(aiTJCmd)
+	s.aiTJCmd.AddCommand(all...)
+	s.aiCmd.AddCommand(s.aiTJCmd)
 }
 
-func aiTJParent() (string, error) { return aiParent(flagAITJRegion) }
+func (s *aiCmds) aiTJParent() (string, error) { return s.aiParent(s.flagAITJRegion) }
 
-func aiTJName(id string) (string, error) {
-	parent, err := aiTJParent()
+func (s *aiCmds) aiTJName(id string) (string, error) {
+	parent, err := s.aiTJParent()
 	if err != nil {
 		return "", err
 	}
 	return aiChild("tuningJobs", id, parent), nil
 }
 
-func runAITJCancel(cmd *cobra.Command, args []string) error {
-	name, err := aiTJName(args[0])
+func (s *aiCmds) runAITJCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.aiTJName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAITJRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAITJRegion)
 	if err != nil {
 		return err
 	}
@@ -85,21 +53,21 @@ func runAITJCancel(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("cancelling tuning job: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Cancel request issued for tuning job [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stderr, "Cancel request issued for tuning job [%s].\n", args[0])
 	return nil
 }
 
-func runAITJCreate(cmd *cobra.Command, args []string) error {
-	parent, err := aiTJParent()
+func (s *aiCmds) runAITJCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiTJParent()
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1TuningJob{}
-	if err := loadYAMLOrJSONInto(flagAITJConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAITJConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAITJRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAITJRegion)
 	if err != nil {
 		return err
 	}
@@ -107,17 +75,17 @@ func runAITJCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating tuning job: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Created tuning job [%s].\n", got.Name)
-	return emitFormatted(got, flagAITJFormat)
+	fmt.Fprintf(s.inv.stderr, "Created tuning job [%s].\n", got.Name)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAITJFormat)
 }
 
-func runAITJDescribe(cmd *cobra.Command, args []string) error {
-	name, err := aiTJName(args[0])
+func (s *aiCmds) runAITJDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.aiTJName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAITJRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAITJRegion)
 	if err != nil {
 		return err
 	}
@@ -125,16 +93,16 @@ func runAITJDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing tuning job: %w", err)
 	}
-	return emitFormatted(got, flagAITJFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAITJFormat)
 }
 
-func runAITJList(cmd *cobra.Command, args []string) error {
-	parent, err := aiTJParent()
+func (s *aiCmds) runAITJList(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiTJParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAITJRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAITJRegion)
 	if err != nil {
 		return err
 	}
@@ -142,11 +110,11 @@ func runAITJList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.TuningJobs.List(parent).Context(ctx)
-		if flagAITJFilter != "" {
-			call = call.Filter(flagAITJFilter)
+		if s.flagAITJFilter != "" {
+			call = call.Filter(s.flagAITJFilter)
 		}
-		if flagAITJPageSize > 0 {
-			call = call.PageSize(flagAITJPageSize)
+		if s.flagAITJPageSize > 0 {
+			call = call.PageSize(s.flagAITJPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -161,5 +129,5 @@ func runAITJList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAITJFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAITJFormat)
 }

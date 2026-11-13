@@ -1,50 +1,36 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 )
 
 // --- gcloud ai operations (#1459) ---
 
-var aiOpsCmd = &cobra.Command{Use: "operations", Short: "Manage Vertex AI long-running operations"}
-
-var (
-	flagAIOpsRegion string
-	flagAIOpsFormat string
-)
-
-var aiOpsDescribeCmd = &cobra.Command{
-	Use: "describe OPERATION", Short: "Describe a Vertex AI long-running operation",
-	Args: cobra.ExactArgs(1), RunE: runAIOpsDescribe,
+func (s *aiCmds) initAiOperations() {
+	s.aiOpsDescribeCmd.Flags().StringVar(&s.flagAIOpsRegion, "region", "", "Region where the operation lives (required)")
+	_ = s.aiOpsDescribeCmd.MarkFlagRequired("region")
+	s.aiOpsDescribeCmd.Flags().StringVar(&s.flagAIOpsFormat, "format", "", "Output format")
+	s.aiOpsCmd.AddCommand(s.aiOpsDescribeCmd)
+	s.aiCmd.AddCommand(s.aiOpsCmd)
 }
 
-func init() {
-	aiOpsDescribeCmd.Flags().StringVar(&flagAIOpsRegion, "region", "", "Region where the operation lives (required)")
-	_ = aiOpsDescribeCmd.MarkFlagRequired("region")
-	aiOpsDescribeCmd.Flags().StringVar(&flagAIOpsFormat, "format", "", "Output format")
-	aiOpsCmd.AddCommand(aiOpsDescribeCmd)
-	aiCmd.AddCommand(aiOpsCmd)
-}
-
-func aiOpsName(id string) (string, error) {
-	parent, err := aiParent(flagAIOpsRegion)
+func (s *aiCmds) aiOpsName(id string) (string, error) {
+	parent, err := s.aiParent(s.flagAIOpsRegion)
 	if err != nil {
 		return "", err
 	}
 	return aiChild("operations", id, parent), nil
 }
 
-func runAIOpsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := aiOpsName(args[0])
+func (s *aiCmds) runAIOpsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.aiOpsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIOpsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIOpsRegion)
 	if err != nil {
 		return err
 	}
@@ -52,5 +38,5 @@ func runAIOpsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagAIOpsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIOpsFormat)
 }

@@ -8,8 +8,9 @@ import (
 )
 
 func TestAISGPDenialMessageFlag(t *testing.T) {
+	grp := newAiCmds(legacyTestInvocation())
 	for _, c := range []string{"create", "update"} {
-		cmd, _, err := aiSGPCmd.Find([]string{c})
+		cmd, _, err := grp.aiSGPCmd.Find([]string{c})
 		if err != nil || cmd.Name() != c {
 			t.Fatalf("semantic-governance-policies %s missing", c)
 		}

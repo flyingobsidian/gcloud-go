@@ -1,79 +1,51 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatformbeta "google.golang.org/api/aiplatform/v1beta1"
 )
 
 // --- gcloud ai model-garden (#1456) ---
 
-var aiMGCmd = &cobra.Command{Use: "model-garden", Short: "Interact with Vertex AI Model Garden"}
-var aiMGModelsCmd = &cobra.Command{Use: "models", Short: "Browse Model Garden publisher models"}
-
-var (
-	flagAIMGRegion    string
-	flagAIMGFormat    string
-	flagAIMGPublisher string
-	flagAIMGFilter    string
-	flagAIMGOrderBy   string
-	flagAIMGPageSize  int64
-	flagAIMGListAll   bool
-	flagAIMGView      string
-	flagAIMGLanguage  string
-)
-
-var (
-	aiMGListCmd = &cobra.Command{
-		Use: "list", Short: "List publisher models in Model Garden",
-		Args: cobra.NoArgs, RunE: runAIMGList,
-	}
-	aiMGDescribeCmd = &cobra.Command{
-		Use: "describe MODEL", Short: "Describe a publisher model in Model Garden",
-		Args: cobra.ExactArgs(1), RunE: runAIMGDescribe,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{aiMGListCmd, aiMGDescribeCmd}
+func (s *aiCmds) initAiModelGarden() {
+	all := []*cobra.Command{s.aiMGListCmd, s.aiMGDescribeCmd}
 	for _, c := range all {
 		// Model Garden is not per-region, but --region is required so we can
 		// route through a regional aiplatform endpoint.
-		c.Flags().StringVar(&flagAIMGRegion, "region", "", "Region for endpoint routing (required)")
+		c.Flags().StringVar(&s.flagAIMGRegion, "region", "", "Region for endpoint routing (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagAIMGFormat, "format", "", "Output format")
-		c.Flags().StringVar(&flagAIMGPublisher, "publisher", "google",
+		c.Flags().StringVar(&s.flagAIMGFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAIMGPublisher, "publisher", "google",
 			"Publisher whose models to browse (default: google)")
-		c.Flags().StringVar(&flagAIMGLanguage, "language-code", "",
+		c.Flags().StringVar(&s.flagAIMGLanguage, "language-code", "",
 			"BCP-47 language code for model text metadata (default: en)")
-		c.Flags().StringVar(&flagAIMGView, "view", "",
+		c.Flags().StringVar(&s.flagAIMGView, "view", "",
 			"PublisherModel view (PUBLISHER_MODEL_VIEW_BASIC | PUBLISHER_MODEL_VIEW_FULL)")
 	}
-	aiMGListCmd.Flags().StringVar(&flagAIMGFilter, "filter", "", "Server-side filter expression")
-	aiMGListCmd.Flags().StringVar(&flagAIMGOrderBy, "order-by", "", "Order-by expression")
-	aiMGListCmd.Flags().Int64Var(&flagAIMGPageSize, "page-size", 0, "Maximum results per page")
-	aiMGListCmd.Flags().BoolVar(&flagAIMGListAll, "list-all-versions", false,
+	s.aiMGListCmd.Flags().StringVar(&s.flagAIMGFilter, "filter", "", "Server-side filter expression")
+	s.aiMGListCmd.Flags().StringVar(&s.flagAIMGOrderBy, "order-by", "", "Order-by expression")
+	s.aiMGListCmd.Flags().Int64Var(&s.flagAIMGPageSize, "page-size", 0, "Maximum results per page")
+	s.aiMGListCmd.Flags().BoolVar(&s.flagAIMGListAll, "list-all-versions", false,
 		"List all versions of each publisher model")
 
-	aiMGModelsCmd.AddCommand(all...)
-	aiMGCmd.AddCommand(aiMGModelsCmd)
-	aiCmd.AddCommand(aiMGCmd)
+	s.aiMGModelsCmd.AddCommand(all...)
+	s.aiMGCmd.AddCommand(s.aiMGModelsCmd)
+	s.aiCmd.AddCommand(s.aiMGCmd)
 }
 
-func runAIMGList(cmd *cobra.Command, args []string) error {
-	if flagAIMGPublisher == "" {
-		flagAIMGPublisher = "google"
+func (s *aiCmds) runAIMGList(cmd *cobra.Command, args []string) error {
+	if s.flagAIMGPublisher == "" {
+		s.flagAIMGPublisher = "google"
 	}
-	if flagAIMGRegion == "" {
+	if s.flagAIMGRegion == "" {
 		return fmt.Errorf("--region is required")
 	}
-	parent := fmt.Sprintf("publishers/%s", flagAIMGPublisher)
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformBetaService(ctx, flagAccount, flagAIMGRegion)
+	parent := fmt.Sprintf("publishers/%s", s.flagAIMGPublisher)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatformBeta(ctx, s.flagAIMGRegion)
 	if err != nil {
 		return err
 	}
@@ -81,23 +53,23 @@ func runAIMGList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Publishers.Models.List(parent).Context(ctx)
-		if flagAIMGFilter != "" {
-			call = call.Filter(flagAIMGFilter)
+		if s.flagAIMGFilter != "" {
+			call = call.Filter(s.flagAIMGFilter)
 		}
-		if flagAIMGOrderBy != "" {
-			call = call.OrderBy(flagAIMGOrderBy)
+		if s.flagAIMGOrderBy != "" {
+			call = call.OrderBy(s.flagAIMGOrderBy)
 		}
-		if flagAIMGPageSize > 0 {
-			call = call.PageSize(flagAIMGPageSize)
+		if s.flagAIMGPageSize > 0 {
+			call = call.PageSize(s.flagAIMGPageSize)
 		}
-		if flagAIMGListAll {
+		if s.flagAIMGListAll {
 			call = call.ListAllVersions(true)
 		}
-		if flagAIMGLanguage != "" {
-			call = call.LanguageCode(flagAIMGLanguage)
+		if s.flagAIMGLanguage != "" {
+			call = call.LanguageCode(s.flagAIMGLanguage)
 		}
-		if flagAIMGView != "" {
-			call = call.View(flagAIMGView)
+		if s.flagAIMGView != "" {
+			call = call.View(s.flagAIMGView)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -112,35 +84,35 @@ func runAIMGList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAIMGFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAIMGFormat)
 }
 
-func runAIMGDescribe(cmd *cobra.Command, args []string) error {
-	if flagAIMGPublisher == "" {
-		flagAIMGPublisher = "google"
+func (s *aiCmds) runAIMGDescribe(cmd *cobra.Command, args []string) error {
+	if s.flagAIMGPublisher == "" {
+		s.flagAIMGPublisher = "google"
 	}
-	if flagAIMGRegion == "" {
+	if s.flagAIMGRegion == "" {
 		return fmt.Errorf("--region is required")
 	}
 	name := args[0]
 	if !strings.HasPrefix(name, "publishers/") {
-		name = fmt.Sprintf("publishers/%s/models/%s", flagAIMGPublisher, name)
+		name = fmt.Sprintf("publishers/%s/models/%s", s.flagAIMGPublisher, name)
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformBetaService(ctx, flagAccount, flagAIMGRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatformBeta(ctx, s.flagAIMGRegion)
 	if err != nil {
 		return err
 	}
 	call := svc.Publishers.Models.Get(name).Context(ctx)
-	if flagAIMGLanguage != "" {
-		call = call.LanguageCode(flagAIMGLanguage)
+	if s.flagAIMGLanguage != "" {
+		call = call.LanguageCode(s.flagAIMGLanguage)
 	}
-	if flagAIMGView != "" {
-		call = call.View(flagAIMGView)
+	if s.flagAIMGView != "" {
+		call = call.View(s.flagAIMGView)
 	}
 	got, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("describing publisher model: %w", err)
 	}
-	return emitFormatted(got, flagAIMGFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIMGFormat)
 }

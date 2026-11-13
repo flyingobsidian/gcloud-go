@@ -150,6 +150,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newSpannerCmd(inv),
 		newNetappCmd(inv),
 		newNetworkServicesCmd(inv),
+		newAiCmd(inv),
 	}
 }
 
