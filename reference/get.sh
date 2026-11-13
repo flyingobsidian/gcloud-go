@@ -23,7 +23,7 @@ get_source() {
 latest_version="$(get_latest_version)"
 echo "Latest version: $latest_version"
 
-v="582.0.0"
+v="589.0.0"
 
 if [[ "$v" != "$latest_version" ]]; then
     echo "Warning: $v is not the latest version. Latest version is $latest_version." >&2
