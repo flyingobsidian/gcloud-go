@@ -61,6 +61,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newWorkspaceAddOnsCmd(inv),
 		newBatchCmd(inv),
 		newIdsCmd(inv),
+		newTranscoderCmd(inv),
 	}
 }
 
