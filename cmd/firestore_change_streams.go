@@ -1,76 +1,38 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	firestore "google.golang.org/api/firestore/v1"
 )
 
 // --- gcloud firestore change-streams (#1929) ---
 
-var firestoreChangeStreamsCmd = &cobra.Command{
-	Use:   "change-streams",
-	Short: "Manage Cloud Firestore ChangeStreams",
-	Long: "Manage Cloud Firestore ChangeStreams.\n\n" +
-		"Change streams are only available on Enterprise edition databases.",
-}
-
-var (
-	fsCSCreateCmd = &cobra.Command{
-		Use: "create CHANGE_STREAM", Short: "Create a Cloud Firestore change stream",
-		Args: cobra.ExactArgs(1), RunE: runFSCSCreate,
-	}
-	fsCSDeleteCmd = &cobra.Command{
-		Use: "delete CHANGE_STREAM", Short: "Delete a Cloud Firestore change stream",
-		Args: cobra.ExactArgs(1), RunE: runFSCSDelete,
-	}
-	fsCSDescribeCmd = &cobra.Command{
-		Use: "describe CHANGE_STREAM", Short: "Describe a Cloud Firestore change stream",
-		Args: cobra.ExactArgs(1), RunE: runFSCSDescribe,
-	}
-	fsCSListCmd = &cobra.Command{
-		Use: "list", Short: "List change streams under a Firestore database",
-		Args: cobra.NoArgs, RunE: runFSCSList,
-	}
-)
-
-var (
-	flagFSCSDatabase        string
-	flagFSCSFormat          string
-	flagFSCSRetention       string
-	flagFSCSDatabaseScope   bool
-	flagFSCSCollectionGroup string
-	flagFSCSEtag            string
-)
-
-func init() {
-	fsCSCreateCmd.Flags().StringVar(&flagFSCSDatabase, "database", "(default)",
+func (g *firestoreCmds) initFirestoreChangeStreams() {
+	g.fsCSCreateCmd.Flags().StringVar(&g.flagFSCSDatabase, "database", "(default)",
 		"The database to operate on")
-	for _, c := range []*cobra.Command{fsCSDeleteCmd, fsCSDescribeCmd, fsCSListCmd} {
-		c.Flags().StringVar(&flagFSCSDatabase, "database", "", "The database to operate on")
+	for _, c := range []*cobra.Command{g.fsCSDeleteCmd, g.fsCSDescribeCmd, g.fsCSListCmd} {
+		c.Flags().StringVar(&g.flagFSCSDatabase, "database", "", "The database to operate on")
 		_ = c.MarkFlagRequired("database")
 	}
-	for _, c := range []*cobra.Command{fsCSCreateCmd, fsCSDeleteCmd, fsCSDescribeCmd, fsCSListCmd} {
-		c.Flags().StringVar(&flagFSCSFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{g.fsCSCreateCmd, g.fsCSDeleteCmd, g.fsCSDescribeCmd, g.fsCSListCmd} {
+		c.Flags().StringVar(&g.flagFSCSFormat, "format", "", "Output format")
 	}
-	fsCSCreateCmd.Flags().StringVar(&flagFSCSRetention, "retention", "7d",
+	g.fsCSCreateCmd.Flags().StringVar(&g.flagFSCSRetention, "retention", "7d",
 		"The retention period of the change stream (e.g. 1d, 7d). Must be between 1 and 7 days, in day granularity")
-	fsCSCreateCmd.Flags().BoolVar(&flagFSCSDatabaseScope, "database-scope", false,
+	g.fsCSCreateCmd.Flags().BoolVar(&g.flagFSCSDatabaseScope, "database-scope", false,
 		"Create a database-scoped change stream")
-	fsCSCreateCmd.Flags().StringVar(&flagFSCSCollectionGroup, "collection-group-scope", "",
+	g.fsCSCreateCmd.Flags().StringVar(&g.flagFSCSCollectionGroup, "collection-group-scope", "",
 		"Create a collection-group-scoped change stream for the specified collection group")
-	fsCSCreateCmd.MarkFlagsMutuallyExclusive("database-scope", "collection-group-scope")
-	fsCSCreateCmd.MarkFlagsOneRequired("database-scope", "collection-group-scope")
-	fsCSDeleteCmd.Flags().StringVar(&flagFSCSEtag, "etag", "",
+	g.fsCSCreateCmd.MarkFlagsMutuallyExclusive("database-scope", "collection-group-scope")
+	g.fsCSCreateCmd.MarkFlagsOneRequired("database-scope", "collection-group-scope")
+	g.fsCSDeleteCmd.Flags().StringVar(&g.flagFSCSEtag, "etag", "",
 		"The current etag of the change stream; deletion is blocked if it does not match")
 
-	firestoreChangeStreamsCmd.AddCommand(fsCSCreateCmd, fsCSDeleteCmd, fsCSDescribeCmd, fsCSListCmd)
-	firestoreCmd.AddCommand(firestoreChangeStreamsCmd)
+	g.firestoreChangeStreamsCmd.AddCommand(g.fsCSCreateCmd, g.fsCSDeleteCmd, g.fsCSDescribeCmd, g.fsCSListCmd)
+	g.firestoreCmd.AddCommand(g.firestoreChangeStreamsCmd)
 }
 
 func fsChangeStreamName(project, database, id string) string {
@@ -107,89 +69,89 @@ func fsChangeStreamBody(retention string, databaseScope bool, collectionGroupSet
 	return cs, nil
 }
 
-func runFSCSCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSCSCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	body, err := fsChangeStreamBody(flagFSCSRetention, flagFSCSDatabaseScope,
-		cmd.Flags().Changed("collection-group-scope"), flagFSCSCollectionGroup)
+	body, err := fsChangeStreamBody(g.flagFSCSRetention, g.flagFSCSDatabaseScope,
+		cmd.Flags().Changed("collection-group-scope"), g.flagFSCSCollectionGroup)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Databases.ChangeStreams.Create(firestoreDatabaseName(project, flagFSCSDatabase), body).
+	got, err := svc.Projects.Databases.ChangeStreams.Create(firestoreDatabaseName(project, g.flagFSCSDatabase), body).
 		ChangeStreamId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating change stream: %w", err)
 	}
 	// gcloud-python's create is a SilentCommand: no output unless --format.
-	if flagFSCSFormat != "" {
-		return emitFormatted(got, flagFSCSFormat)
+	if g.flagFSCSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, got, g.flagFSCSFormat)
 	}
 	return nil
 }
 
-func runFSCSDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSCSDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	name := fsChangeStreamName(project, flagFSCSDatabase, args[0])
-	if err := promptContinue(fmt.Sprintf("The change stream '%s' will be deleted.", name), ""); err != nil {
+	name := fsChangeStreamName(project, g.flagFSCSDatabase, args[0])
+	if err := g.inv.promptContinue(fmt.Sprintf("The change stream '%s' will be deleted.", name), ""); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Projects.Databases.ChangeStreams.Delete(name).Context(ctx)
-	if flagFSCSEtag != "" {
-		call = call.Etag(flagFSCSEtag)
+	if g.flagFSCSEtag != "" {
+		call = call.Etag(g.flagFSCSEtag)
 	}
 	got, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("deleting change stream: %w", err)
 	}
-	if flagFSCSFormat != "" {
-		return emitFormatted(got, flagFSCSFormat)
+	if g.flagFSCSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, got, g.flagFSCSFormat)
 	}
 	return nil
 }
 
-func runFSCSDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSCSDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Databases.ChangeStreams.Get(fsChangeStreamName(project, flagFSCSDatabase, args[0])).Context(ctx).Do()
+	got, err := svc.Projects.Databases.ChangeStreams.Get(fsChangeStreamName(project, g.flagFSCSDatabase, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing change stream: %w", err)
 	}
-	return emitFormatted(got, flagFSCSFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagFSCSFormat)
 }
 
-func runFSCSList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSCSList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Databases.ChangeStreams.List(firestoreDatabaseName(project, flagFSCSDatabase)).Context(ctx).Do()
+	resp, err := svc.Projects.Databases.ChangeStreams.List(firestoreDatabaseName(project, g.flagFSCSDatabase)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing change streams: %w", err)
 	}
@@ -197,11 +159,11 @@ func runFSCSList(cmd *cobra.Command, args []string) error {
 	if streams == nil {
 		streams = []*firestore.GoogleFirestoreAdminV1ChangeStream{}
 	}
-	if err := emitFormatted(streams, flagFSCSFormat); err != nil {
+	if err := emitFormattedTo(g.inv.stdout, streams, g.flagFSCSFormat); err != nil {
 		return err
 	}
-	if flagFSCSFormat == "" && len(streams) == 0 {
-		fmt.Fprintln(os.Stderr, "Listed 0 items.")
+	if g.flagFSCSFormat == "" && len(streams) == 0 {
+		fmt.Fprintln(g.inv.stderr, "Listed 0 items.")
 	}
 	return nil
 }

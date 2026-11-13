@@ -1,57 +1,30 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	firestore "google.golang.org/api/firestore/v1"
 )
 
-var firestoreLocationsCmd = &cobra.Command{
-	Use:   "locations",
-	Short: "Explore Cloud Firestore locations",
+func (g *firestoreCmds) initFirestoreLocations() {
+	g.fsLocListCmd.Flags().StringVar(&g.flagFSLocFormat, "format", "", "Output format")
+	g.fsLocListCmd.Flags().Int64Var(&g.flagFSLocPageSize, "page-size", 0, "Page size")
+	g.fsLocListCmd.Flags().Int64Var(&g.flagFSLocLimit, "limit", 0, "Cap total results (0 = no cap)")
+	g.fsLocDescribeCmd.Flags().StringVar(&g.flagFSLocFormat, "format", "", "Output format")
+
+	g.firestoreLocationsCmd.AddCommand(g.fsLocDescribeCmd, g.fsLocListCmd)
+	g.firestoreCmd.AddCommand(g.firestoreLocationsCmd)
 }
 
-var fsLocListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Firestore-enabled locations for the project",
-	Args:  cobra.NoArgs,
-	RunE:  runFSLocList,
-}
-
-var fsLocDescribeCmd = &cobra.Command{
-	Use:   "describe LOCATION",
-	Short: "Describe a Firestore location",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runFSLocDescribe,
-}
-
-var (
-	flagFSLocFormat   string
-	flagFSLocPageSize int64
-	flagFSLocLimit    int64
-)
-
-func init() {
-	fsLocListCmd.Flags().StringVar(&flagFSLocFormat, "format", "", "Output format")
-	fsLocListCmd.Flags().Int64Var(&flagFSLocPageSize, "page-size", 0, "Page size")
-	fsLocListCmd.Flags().Int64Var(&flagFSLocLimit, "limit", 0, "Cap total results (0 = no cap)")
-	fsLocDescribeCmd.Flags().StringVar(&flagFSLocFormat, "format", "", "Output format")
-
-	firestoreLocationsCmd.AddCommand(fsLocDescribeCmd, fsLocListCmd)
-	firestoreCmd.AddCommand(firestoreLocationsCmd)
-}
-
-func runFSLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSLocList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
@@ -59,8 +32,8 @@ func runFSLocList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
-		if flagFSLocPageSize > 0 {
-			call = call.PageSize(flagFSLocPageSize)
+		if g.flagFSLocPageSize > 0 {
+			call = call.PageSize(g.flagFSLocPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -70,8 +43,8 @@ func runFSLocList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing locations: %w", err)
 		}
 		all = append(all, resp.Locations...)
-		if flagFSLocLimit > 0 && int64(len(all)) >= flagFSLocLimit {
-			all = all[:flagFSLocLimit]
+		if g.flagFSLocLimit > 0 && int64(len(all)) >= g.flagFSLocLimit {
+			all = all[:g.flagFSLocLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -79,23 +52,23 @@ func runFSLocList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagFSLocFormat != "" {
-		return emitFormatted(all, flagFSLocFormat)
+	if g.flagFSLocFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagFSLocFormat)
 	}
-	printTableHeading(len(all), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range all {
-		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-20s %s\n", l.LocationId, l.DisplayName)
 	}
 	return nil
 }
 
-func runFSLocDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSLocDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
@@ -103,9 +76,9 @@ func runFSLocDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	if flagFSLocFormat != "" {
-		return emitFormatted(loc, flagFSLocFormat)
+	if g.flagFSLocFormat != "" {
+		return emitFormattedTo(g.inv.stdout, loc, g.flagFSLocFormat)
 	}
-	fmt.Printf("%s (%s)\n", path.Base(loc.Name), loc.DisplayName)
+	fmt.Fprintf(g.inv.stdout, "%s (%s)\n", path.Base(loc.Name), loc.DisplayName)
 	return nil
 }

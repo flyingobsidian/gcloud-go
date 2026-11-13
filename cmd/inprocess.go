@@ -132,6 +132,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newPrivatecaCmd(inv),
 		newVmwareCmd(inv),
 		newComposerCmd(inv),
+		newFirestoreCmd(inv),
 	}
 }
 

@@ -1,69 +1,26 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	firestore "google.golang.org/api/firestore/v1"
 )
 
-var firestoreUserCredsCmd = &cobra.Command{
-	Use:   "user-creds",
-	Short: "Manage Cloud Firestore user credentials",
-}
-
-var (
-	fsUCCreateCmd = &cobra.Command{
-		Use: "create USER_CREDS", Short: "Create a new set of user credentials",
-		Args: cobra.ExactArgs(1), RunE: runFSUCCreate,
-	}
-	fsUCDeleteCmd = &cobra.Command{
-		Use: "delete USER_CREDS", Short: "Delete user credentials",
-		Args: cobra.ExactArgs(1), RunE: runFSUCDelete,
-	}
-	fsUCDescribeCmd = &cobra.Command{
-		Use: "describe USER_CREDS", Short: "Describe user credentials",
-		Args: cobra.ExactArgs(1), RunE: runFSUCDescribe,
-	}
-	fsUCListCmd = &cobra.Command{
-		Use: "list", Short: "List user credentials for a database",
-		Args: cobra.NoArgs, RunE: runFSUCList,
-	}
-	fsUCEnableCmd = &cobra.Command{
-		Use: "enable USER_CREDS", Short: "Enable disabled user credentials",
-		Args: cobra.ExactArgs(1), RunE: runFSUCEnable,
-	}
-	fsUCDisableCmd = &cobra.Command{
-		Use: "disable USER_CREDS", Short: "Disable user credentials",
-		Args: cobra.ExactArgs(1), RunE: runFSUCDisable,
-	}
-	fsUCResetPasswordCmd = &cobra.Command{
-		Use: "reset-password USER_CREDS", Short: "Reset the password on user credentials",
-		Args: cobra.ExactArgs(1), RunE: runFSUCResetPassword,
-	}
-)
-
-var (
-	flagFSUCDatabase string
-	flagFSUCFormat   string
-)
-
-func init() {
+func (g *firestoreCmds) initFirestoreUserCreds() {
 	for _, c := range []*cobra.Command{
-		fsUCCreateCmd, fsUCDeleteCmd, fsUCDescribeCmd, fsUCListCmd,
-		fsUCEnableCmd, fsUCDisableCmd, fsUCResetPasswordCmd,
+		g.fsUCCreateCmd, g.fsUCDeleteCmd, g.fsUCDescribeCmd, g.fsUCListCmd,
+		g.fsUCEnableCmd, g.fsUCDisableCmd, g.fsUCResetPasswordCmd,
 	} {
-		firestoreAddDatabaseFlag(c, &flagFSUCDatabase, true)
+		firestoreAddDatabaseFlag(c, &g.flagFSUCDatabase, true)
 	}
-	fsUCDescribeCmd.Flags().StringVar(&flagFSUCFormat, "format", "", "Output format")
-	fsUCListCmd.Flags().StringVar(&flagFSUCFormat, "format", "", "Output format")
+	g.fsUCDescribeCmd.Flags().StringVar(&g.flagFSUCFormat, "format", "", "Output format")
+	g.fsUCListCmd.Flags().StringVar(&g.flagFSUCFormat, "format", "", "Output format")
 
-	firestoreUserCredsCmd.AddCommand(fsUCCreateCmd, fsUCDeleteCmd, fsUCDescribeCmd, fsUCListCmd, fsUCEnableCmd, fsUCDisableCmd, fsUCResetPasswordCmd)
-	firestoreCmd.AddCommand(firestoreUserCredsCmd)
+	g.firestoreUserCredsCmd.AddCommand(g.fsUCCreateCmd, g.fsUCDeleteCmd, g.fsUCDescribeCmd, g.fsUCListCmd, g.fsUCEnableCmd, g.fsUCDisableCmd, g.fsUCResetPasswordCmd)
+	g.firestoreCmd.AddCommand(g.firestoreUserCredsCmd)
 }
 
 func firestoreUserCredsName(id, project, db string) string {
@@ -73,129 +30,129 @@ func firestoreUserCredsName(id, project, db string) string {
 	return fmt.Sprintf("%s/userCreds/%s", firestoreDatabaseName(project, db), id)
 }
 
-func runFSUCCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSUCCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Databases.UserCreds.Create(firestoreDatabaseName(project, flagFSUCDatabase), &firestore.GoogleFirestoreAdminV1UserCreds{}).
+	got, err := svc.Projects.Databases.UserCreds.Create(firestoreDatabaseName(project, g.flagFSUCDatabase), &firestore.GoogleFirestoreAdminV1UserCreds{}).
 		UserCredsId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating user creds: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runFSUCDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSUCDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Databases.UserCreds.Delete(firestoreUserCredsName(args[0], project, flagFSUCDatabase)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Databases.UserCreds.Delete(firestoreUserCredsName(args[0], project, g.flagFSUCDatabase)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting user creds: %w", err)
 	}
-	fmt.Printf("Deleted user creds [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted user creds [%s].\n", args[0])
 	return nil
 }
 
-func runFSUCDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSUCDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Databases.UserCreds.Get(firestoreUserCredsName(args[0], project, flagFSUCDatabase)).Context(ctx).Do()
+	got, err := svc.Projects.Databases.UserCreds.Get(firestoreUserCredsName(args[0], project, g.flagFSUCDatabase)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing user creds: %w", err)
 	}
-	return emitFormatted(got, flagFSUCFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagFSUCFormat)
 }
 
-func runFSUCList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSUCList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Databases.UserCreds.List(firestoreDatabaseName(project, flagFSUCDatabase)).Context(ctx).Do()
+	resp, err := svc.Projects.Databases.UserCreds.List(firestoreDatabaseName(project, g.flagFSUCDatabase)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing user creds: %w", err)
 	}
-	if flagFSUCFormat != "" {
-		return emitFormatted(resp.UserCreds, flagFSUCFormat)
+	if g.flagFSUCFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.UserCreds, g.flagFSUCFormat)
 	}
-	printTableHeading(len(resp.UserCreds), "%-40s %s\n", "NAME", "STATE")
+	printTableHeadingTo(g.inv.stdout, len(resp.UserCreds), "%-40s %s\n", "NAME", "STATE")
 	for _, u := range resp.UserCreds {
-		fmt.Printf("%-40s %s\n", path.Base(u.Name), u.State)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(u.Name), u.State)
 	}
 	return nil
 }
 
-func runFSUCEnable(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSUCEnable(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Databases.UserCreds.Enable(firestoreUserCredsName(args[0], project, flagFSUCDatabase), &firestore.GoogleFirestoreAdminV1EnableUserCredsRequest{}).Context(ctx).Do()
+	got, err := svc.Projects.Databases.UserCreds.Enable(firestoreUserCredsName(args[0], project, g.flagFSUCDatabase), &firestore.GoogleFirestoreAdminV1EnableUserCredsRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("enabling user creds: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runFSUCDisable(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSUCDisable(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Databases.UserCreds.Disable(firestoreUserCredsName(args[0], project, flagFSUCDatabase), &firestore.GoogleFirestoreAdminV1DisableUserCredsRequest{}).Context(ctx).Do()
+	got, err := svc.Projects.Databases.UserCreds.Disable(firestoreUserCredsName(args[0], project, g.flagFSUCDatabase), &firestore.GoogleFirestoreAdminV1DisableUserCredsRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("disabling user creds: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runFSUCResetPassword(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSUCResetPassword(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Databases.UserCreds.ResetPassword(firestoreUserCredsName(args[0], project, flagFSUCDatabase), &firestore.GoogleFirestoreAdminV1ResetUserPasswordRequest{}).Context(ctx).Do()
+	got, err := svc.Projects.Databases.UserCreds.ResetPassword(firestoreUserCredsName(args[0], project, g.flagFSUCDatabase), &firestore.GoogleFirestoreAdminV1ResetUserPasswordRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("resetting user creds password: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
