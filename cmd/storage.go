@@ -70,7 +70,7 @@ func (s *storageCmds) initStorage() {
 	s.storageRsyncCmd.Flags().BoolVarP(&s.flagRsyncDryRun, "dry-run", "n", false, "Show what would be synced")
 
 	s.storageDuCmd.Flags().BoolVarP(&s.flagDuSummarize, "summarize", "s", false, "Show total only")
-	s.storageDuCmd.Flags().BoolVarP(&s.flagDuReadable, "readable", "h", false, "Human-readable sizes")
+	s.storageDuCmd.Flags().BoolVarP(&s.flagDuReadable, "readable-sizes", "r", false, "Human-readable sizes")
 
 	s.storageCmd.AddCommand(s.storageBucketsCmd)
 	s.storageCmd.AddCommand(s.storageCatCmd)
