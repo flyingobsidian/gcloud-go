@@ -9,7 +9,8 @@ import (
 )
 
 func alloydbSubgroup(name string) *cobra.Command {
-	for _, c := range alloydbCmd.Commands() {
+	grp := newAlloydbCmds(legacyTestInvocation())
+	for _, c := range grp.alloydbCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -53,29 +54,30 @@ func TestAlloydbInstancesSubcommands(t *testing.T) {
 // --update-labels / --remove-labels / --clear-labels apply the expected
 // mutations while producing the `labels` field-mask entry.
 func TestAlloydbInstanceLabelFlagsMerge(t *testing.T) {
+	grp := newAlloydbCmds(legacyTestInvocation())
 	t.Cleanup(func() {
-		flagADBLabels = nil
-		flagADBUpdateLabels = nil
-		flagADBRemoveLabels = nil
-		flagADBClearLabels = false
+		grp.flagADBLabels = nil
+		grp.flagADBUpdateLabels = nil
+		grp.flagADBRemoveLabels = nil
+		grp.flagADBClearLabels = false
 	})
 
 	// Create: config-file body has one label; --labels adds a second and
 	// overrides the first.
-	flagADBLabels = map[string]string{"team": "cloud", "env": "prod"}
+	grp.flagADBLabels = map[string]string{"team": "cloud", "env": "prod"}
 	inst := &alloydb.Instance{Labels: map[string]string{"team": "legacy"}}
-	adbApplyCreateLabels(inst)
+	grp.adbApplyCreateLabels(inst)
 	if inst.Labels["team"] != "cloud" || inst.Labels["env"] != "prod" {
 		t.Fatalf("create labels merge: got %v", inst.Labels)
 	}
 
 	// Update: clear, then re-add, then remove.
-	flagADBLabels = nil
-	flagADBClearLabels = true
-	flagADBUpdateLabels = map[string]string{"team": "cloud", "tier": "web"}
-	flagADBRemoveLabels = []string{"tier"}
+	grp.flagADBLabels = nil
+	grp.flagADBClearLabels = true
+	grp.flagADBUpdateLabels = map[string]string{"team": "cloud", "tier": "web"}
+	grp.flagADBRemoveLabels = []string{"tier"}
 	inst2 := &alloydb.Instance{Labels: map[string]string{"old": "value"}}
-	mask := adbApplyUpdateLabels(inst2)
+	mask := grp.adbApplyUpdateLabels(inst2)
 	if mask != "labels" {
 		t.Fatalf("update mask entry: got %q, want %q", mask, "labels")
 	}
@@ -93,34 +95,35 @@ func TestAlloydbInstanceLabelFlagsMerge(t *testing.T) {
 // TestAlloydbClusterRestoreBackupDR exercises the #1751 BackupDR wiring on
 // clusters restore.
 func TestAlloydbClusterRestoreBackupDR(t *testing.T) {
+	grp := newAlloydbCmds(legacyTestInvocation())
 	t.Cleanup(func() {
-		flagADBBackupDRBackup = ""
-		flagADBBackupDRDataSource = ""
+		grp.flagADBBackupDRBackup = ""
+		grp.flagADBBackupDRDataSource = ""
 	})
 
-	flagADBBackupDRBackup = "projects/p/locations/us/backupVaults/v/dataSources/d/backups/b"
-	flagADBBackupDRDataSource = ""
+	grp.flagADBBackupDRBackup = "projects/p/locations/us/backupVaults/v/dataSources/d/backups/b"
+	grp.flagADBBackupDRDataSource = ""
 	req := &alloydb.RestoreClusterRequest{}
-	if err := adbApplyClusterRestoreBackupDR(req); err != nil {
+	if err := grp.adbApplyClusterRestoreBackupDR(req); err != nil {
 		t.Fatalf("apply BackupDR backup: %v", err)
 	}
-	if req.BackupdrBackupSource == nil || req.BackupdrBackupSource.Backup != flagADBBackupDRBackup {
+	if req.BackupdrBackupSource == nil || req.BackupdrBackupSource.Backup != grp.flagADBBackupDRBackup {
 		t.Fatalf("BackupdrBackupSource: got %+v", req.BackupdrBackupSource)
 	}
 
-	flagADBBackupDRBackup = ""
-	flagADBBackupDRDataSource = "projects/p/locations/us/backupVaults/v/dataSources/d"
+	grp.flagADBBackupDRBackup = ""
+	grp.flagADBBackupDRDataSource = "projects/p/locations/us/backupVaults/v/dataSources/d"
 	req = &alloydb.RestoreClusterRequest{}
-	if err := adbApplyClusterRestoreBackupDR(req); err != nil {
+	if err := grp.adbApplyClusterRestoreBackupDR(req); err != nil {
 		t.Fatalf("apply BackupDR data-source: %v", err)
 	}
-	if req.BackupdrPitrSource == nil || req.BackupdrPitrSource.DataSource != flagADBBackupDRDataSource {
+	if req.BackupdrPitrSource == nil || req.BackupdrPitrSource.DataSource != grp.flagADBBackupDRDataSource {
 		t.Fatalf("BackupdrPitrSource: got %+v", req.BackupdrPitrSource)
 	}
 
-	flagADBBackupDRBackup = "projects/p/.../backups/b"
-	flagADBBackupDRDataSource = "projects/p/.../dataSources/d"
-	err := adbApplyClusterRestoreBackupDR(&alloydb.RestoreClusterRequest{})
+	grp.flagADBBackupDRBackup = "projects/p/.../backups/b"
+	grp.flagADBBackupDRDataSource = "projects/p/.../dataSources/d"
+	err := grp.adbApplyClusterRestoreBackupDR(&alloydb.RestoreClusterRequest{})
 	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Fatalf("mutually-exclusive flags: got err %v, want mutually-exclusive", err)
 	}
