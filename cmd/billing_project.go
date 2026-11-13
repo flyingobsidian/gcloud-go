@@ -51,16 +51,13 @@ func resolveBillingProject() string {
 			return props.Billing.QuotaProject
 		}
 	}
-	if q := adcQuotaProject(); q != "" {
-		return q
-	}
-	return ""
+	return quotaProjectFromADC(adcFilePath())
 }
 
-// adcQuotaProject returns the quota_project_id field of the Application
-// Default Credentials file at adcFilePath(), or "" if missing/unreadable.
-func adcQuotaProject() string {
-	data, err := os.ReadFile(adcFilePath())
+// quotaProjectFromADC returns the quota_project_id field of the Application
+// Default Credentials file at path, or "" if missing/unreadable.
+func quotaProjectFromADC(path string) string {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""
 	}

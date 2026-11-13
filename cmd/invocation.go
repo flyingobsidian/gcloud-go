@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/mattn/go-isatty"
+	"golang.org/x/oauth2"
 	"google.golang.org/api/option"
 )
 
@@ -37,6 +39,12 @@ type invocation struct {
 	// clientOptions are applied to every Google API client; tests use them
 	// to talk to fake servers.
 	clientOptions []option.ClientOption
+
+	// restTokenSource and restUserProject, when set, replace the
+	// credentials and billing project of the invocation's REST clients;
+	// tests use them.
+	restTokenSource func(ctx context.Context, scopes ...string) (oauth2.TokenSource, error)
+	restUserProject func() string
 
 	propsOnce sync.Once
 	props     *config.Properties
@@ -262,4 +270,48 @@ func (inv *invocation) yaml(v any) error {
 // printJSON writes v to stdout as indented JSON.
 func (inv *invocation) printJSON(v any) error {
 	return emitJSON(inv.stdout, v)
+}
+
+// restClient returns a REST client for endpoint that uses the invocation's
+// credentials, billing project and HTTP logging.
+func (inv *invocation) restClient(endpoint string) *restClient {
+	return inv.rest(newRESTClient(endpoint))
+}
+
+// rest returns a copy of c that uses the invocation's credentials, billing
+// project and HTTP logging.
+func (inv *invocation) rest(c *restClient) *restClient {
+	return &restClient{endpoint: c.endpoint, inv: inv}
+}
+
+// billingProject is resolveBillingProject for the invocation: the project
+// from --billing-project, billing/quota_project or the ADC file's
+// quota_project_id, or "".
+func (inv *invocation) billingProject() string {
+	if inv.flags.billingProject != "" {
+		return inv.flags.billingProject
+	}
+	if props, err := inv.properties(); err == nil && props != nil && props.Billing.QuotaProject != "" {
+		return props.Billing.QuotaProject
+	}
+	return quotaProjectFromADC(inv.adcFilePath())
+}
+
+// quotaProject returns the billing / quota project for the invocation's
+// REST calls.
+func (inv *invocation) quotaProject() string {
+	if inv.restUserProject != nil {
+		return inv.restUserProject()
+	}
+	return inv.billingProject()
+}
+
+// adcFilePath is adcFilePath for the invocation's environment.
+func (inv *invocation) adcFilePath() string {
+	configDir := inv.env.Getenv("CLOUDSDK_CONFIG")
+	if configDir == "" {
+		home, _ := inv.env.HomeDir()
+		configDir = filepath.Join(home, ".config", "gcloud")
+	}
+	return filepath.Join(configDir, "application_default_credentials.json")
 }
