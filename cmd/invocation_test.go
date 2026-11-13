@@ -171,20 +171,10 @@ func TestRootCmdSetsLegacyGlobals(t *testing.T) {
 	}
 }
 
-func TestRootCmdAdoptsLegacyGroupsOnlyWhenAsked(t *testing.T) {
-	inv, _, _ := newTestInvocation(t, nil, "")
-	has := func(root *cobra.Command) bool {
-		for _, c := range root.Commands() {
-			if c.Name() == "secrets" {
-				return true
-			}
-		}
-		return false
-	}
-	if has(newRootCmd(inv, false)) {
-		t.Error("root without legacy groups has the secrets group")
-	}
-	if !has(newRootCmd(inv, true)) {
-		t.Error("root with legacy groups lacks the secrets group")
+// Every command group is migrated (#2070): none is left on the legacy
+// rootCmd for newRootCmd to adopt.
+func TestNoLegacyGroupsLeft(t *testing.T) {
+	for _, c := range rootCmd.Commands() {
+		t.Errorf("command group %q is still registered on the legacy rootCmd", c.Name())
 	}
 }

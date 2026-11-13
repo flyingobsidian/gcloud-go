@@ -56,9 +56,7 @@ func TestSccFindingsListV2LogsCurl(t *testing.T) {
 	defer restoreQP()
 
 	var debug bytes.Buffer
-	saveOut, saveVerbosity := httpDebugOut, grp.inv.flags.verbosity
-	httpDebugOut, grp.inv.flags.verbosity = &debug, "debug"
-	defer func() { httpDebugOut, grp.inv.flags.verbosity = saveOut, saveVerbosity }()
+	grp.inv.stderr, grp.inv.flags.verbosity = &debug, "debug"
 
 	saveOrg, saveSrc, saveLoc, saveFmt, saveFilter := grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccFindingLocation, grp.flagSccFormat, grp.flagSccFilter
 	defer func() {
@@ -113,11 +111,7 @@ func TestSccFindingsListV2QuietByDefault(t *testing.T) {
 	defer restoreQP()
 
 	var debug bytes.Buffer
-	saveOut, saveVerbosity, saveLogHTTP := httpDebugOut, grp.inv.flags.verbosity, grp.inv.flags.logHTTP
-	httpDebugOut, grp.inv.flags.verbosity, grp.inv.flags.logHTTP = &debug, "warning", false
-	defer func() {
-		httpDebugOut, grp.inv.flags.verbosity, grp.inv.flags.logHTTP = saveOut, saveVerbosity, saveLogHTTP
-	}()
+	grp.inv.stderr, grp.inv.flags.verbosity, grp.inv.flags.logHTTP = &debug, "warning", false
 
 	saveOrg := grp.flagSccOrg
 	defer func() { grp.flagSccOrg = saveOrg }()

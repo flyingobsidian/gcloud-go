@@ -9,8 +9,7 @@ import (
 
 // setBTRestoreFlags sets restore flags for one test case and returns a
 // function that resets them (values and Changed state).
-func setBTRestoreFlags(t *testing.T, vals map[string]string) func() {
-	grp := newBigtableCmds(legacyTestInvocation())
+func setBTRestoreFlags(t *testing.T, grp *bigtableCmds, vals map[string]string) func() {
 	t.Helper()
 	fs := grp.bigtableTablesRestoreCmd.Flags()
 	for k, v := range vals {
@@ -88,7 +87,7 @@ func TestApplyBTRestoreTableProperties(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			defer setBTRestoreFlags(t, c.flags)()
+			defer setBTRestoreFlags(t, grp, c.flags)()
 			req := &bigtableadmin.RestoreTableRequest{}
 			if err := grp.applyBTRestoreTableProperties(grp.bigtableTablesRestoreCmd, req); err != nil {
 				t.Fatal(err)
@@ -105,7 +104,7 @@ func TestApplyBTRestoreTableProperties(t *testing.T) {
 
 func TestBTRestoreBadRetention(t *testing.T) {
 	grp := newBigtableCmds(legacyTestInvocation())
-	defer setBTRestoreFlags(t, map[string]string{"automated-backup-retention-period": "soon"})()
+	defer setBTRestoreFlags(t, grp, map[string]string{"automated-backup-retention-period": "soon"})()
 	if err := grp.applyBTRestoreTableProperties(grp.bigtableTablesRestoreCmd, &bigtableadmin.RestoreTableRequest{}); err == nil {
 		t.Error("expected error for malformed retention period")
 	}
