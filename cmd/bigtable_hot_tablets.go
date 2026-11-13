@@ -1,53 +1,35 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
 )
 
 // --- gcloud bigtable hot-tablets (#1305) ---
 
-var bigtableHotTabletsCmd = &cobra.Command{Use: "hot-tablets", Short: "Manage Bigtable hot tablets"}
+func (s *bigtableCmds) initBigtableHotTablets() {
+	s.bigtableHtListCmd.Flags().StringVar(&s.flagBtHtInstance, "instance", "", "Bigtable instance ID (required)")
+	_ = s.bigtableHtListCmd.MarkFlagRequired("instance")
+	s.bigtableHtListCmd.Flags().StringVar(&s.flagBtHtCluster, "cluster", "", "Bigtable cluster ID (required)")
+	_ = s.bigtableHtListCmd.MarkFlagRequired("cluster")
+	s.bigtableHtListCmd.Flags().StringVar(&s.flagBtHtFormat, "format", "", "Output format")
+	s.bigtableHtListCmd.Flags().Int64Var(&s.flagBtHtPageSize, "page-size", 0, "Maximum results per page")
+	s.bigtableHtListCmd.Flags().StringVar(&s.flagBtHtStartTime, "start-time", "", "RFC3339 timestamp for the start of the window")
+	s.bigtableHtListCmd.Flags().StringVar(&s.flagBtHtEndTime, "end-time", "", "RFC3339 timestamp for the end of the window")
 
-var (
-	flagBtHtInstance  string
-	flagBtHtCluster   string
-	flagBtHtFormat    string
-	flagBtHtPageSize  int64
-	flagBtHtStartTime string
-	flagBtHtEndTime   string
-)
-
-var bigtableHtListCmd = &cobra.Command{
-	Use: "list", Short: "List Bigtable hot tablets on a cluster",
-	Args: cobra.NoArgs, RunE: runBtHtList,
+	s.bigtableHotTabletsCmd.AddCommand(s.bigtableHtListCmd)
+	s.bigtableCmd.AddCommand(s.bigtableHotTabletsCmd)
 }
 
-func init() {
-	bigtableHtListCmd.Flags().StringVar(&flagBtHtInstance, "instance", "", "Bigtable instance ID (required)")
-	_ = bigtableHtListCmd.MarkFlagRequired("instance")
-	bigtableHtListCmd.Flags().StringVar(&flagBtHtCluster, "cluster", "", "Bigtable cluster ID (required)")
-	_ = bigtableHtListCmd.MarkFlagRequired("cluster")
-	bigtableHtListCmd.Flags().StringVar(&flagBtHtFormat, "format", "", "Output format")
-	bigtableHtListCmd.Flags().Int64Var(&flagBtHtPageSize, "page-size", 0, "Maximum results per page")
-	bigtableHtListCmd.Flags().StringVar(&flagBtHtStartTime, "start-time", "", "RFC3339 timestamp for the start of the window")
-	bigtableHtListCmd.Flags().StringVar(&flagBtHtEndTime, "end-time", "", "RFC3339 timestamp for the end of the window")
-
-	bigtableHotTabletsCmd.AddCommand(bigtableHtListCmd)
-	bigtableCmd.AddCommand(bigtableHotTabletsCmd)
-}
-
-func runBtHtList(cmd *cobra.Command, args []string) error {
-	parent, err := btClusterName(flagBtHtInstance, flagBtHtCluster)
+func (s *bigtableCmds) runBtHtList(cmd *cobra.Command, args []string) error {
+	parent, err := s.btClusterName(s.flagBtHtInstance, s.flagBtHtCluster)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -55,14 +37,14 @@ func runBtHtList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.Clusters.HotTablets.List(parent).Context(ctx)
-		if flagBtHtPageSize > 0 {
-			call = call.PageSize(flagBtHtPageSize)
+		if s.flagBtHtPageSize > 0 {
+			call = call.PageSize(s.flagBtHtPageSize)
 		}
-		if flagBtHtStartTime != "" {
-			call = call.StartTime(flagBtHtStartTime)
+		if s.flagBtHtStartTime != "" {
+			call = call.StartTime(s.flagBtHtStartTime)
 		}
-		if flagBtHtEndTime != "" {
-			call = call.EndTime(flagBtHtEndTime)
+		if s.flagBtHtEndTime != "" {
+			call = call.EndTime(s.flagBtHtEndTime)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -77,5 +59,5 @@ func runBtHtList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBtHtFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBtHtFormat)
 }

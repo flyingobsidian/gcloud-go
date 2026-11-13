@@ -1,94 +1,58 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
 )
 
 // --- gcloud bigtable authorized-views (#1302) ---
 
-var bigtableAuthorizedViewsCmd = &cobra.Command{Use: "authorized-views", Short: "Manage Bigtable authorized views"}
-
-var (
-	flagBtAvInstance   string
-	flagBtAvTable      string
-	flagBtAvFormat     string
-	flagBtAvConfigFile string
-	flagBtAvUpdateMask string
-	flagBtAvPageSize   int64
-)
-
-var (
-	bigtableAvCreateCmd = &cobra.Command{
-		Use: "create AUTHORIZED_VIEW", Short: "Create a Bigtable authorized view",
-		Args: cobra.ExactArgs(1), RunE: runBtAvCreate,
-	}
-	bigtableAvDeleteCmd = &cobra.Command{
-		Use: "delete AUTHORIZED_VIEW", Short: "Delete a Bigtable authorized view",
-		Args: cobra.ExactArgs(1), RunE: runBtAvDelete,
-	}
-	bigtableAvDescribeCmd = &cobra.Command{
-		Use: "describe AUTHORIZED_VIEW", Short: "Describe a Bigtable authorized view",
-		Args: cobra.ExactArgs(1), RunE: runBtAvDescribe,
-	}
-	bigtableAvListCmd = &cobra.Command{
-		Use: "list", Short: "List Bigtable authorized views on a table",
-		Args: cobra.NoArgs, RunE: runBtAvList,
-	}
-	bigtableAvUpdateCmd = &cobra.Command{
-		Use: "update AUTHORIZED_VIEW", Short: "Update a Bigtable authorized view",
-		Args: cobra.ExactArgs(1), RunE: runBtAvUpdate,
-	}
-)
-
-func init() {
+func (s *bigtableCmds) initBigtableAuthorizedViews() {
 	all := []*cobra.Command{
-		bigtableAvCreateCmd, bigtableAvDeleteCmd, bigtableAvDescribeCmd,
-		bigtableAvListCmd, bigtableAvUpdateCmd,
+		s.bigtableAvCreateCmd, s.bigtableAvDeleteCmd, s.bigtableAvDescribeCmd,
+		s.bigtableAvListCmd, s.bigtableAvUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagBtAvInstance, "instance", "", "Bigtable instance ID (required)")
+		c.Flags().StringVar(&s.flagBtAvInstance, "instance", "", "Bigtable instance ID (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagBtAvTable, "table", "", "Bigtable table ID (required)")
+		c.Flags().StringVar(&s.flagBtAvTable, "table", "", "Bigtable table ID (required)")
 		_ = c.MarkFlagRequired("table")
-		c.Flags().StringVar(&flagBtAvFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBtAvFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{bigtableAvCreateCmd, bigtableAvUpdateCmd} {
-		c.Flags().StringVar(&flagBtAvConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.bigtableAvCreateCmd, s.bigtableAvUpdateCmd} {
+		c.Flags().StringVar(&s.flagBtAvConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the AuthorizedView body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	bigtableAvUpdateCmd.Flags().StringVar(&flagBtAvUpdateMask, "update-mask", "",
+	s.bigtableAvUpdateCmd.Flags().StringVar(&s.flagBtAvUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	bigtableAvListCmd.Flags().Int64Var(&flagBtAvPageSize, "page-size", 0, "Maximum results per page")
+	s.bigtableAvListCmd.Flags().Int64Var(&s.flagBtAvPageSize, "page-size", 0, "Maximum results per page")
 
-	bigtableAuthorizedViewsCmd.AddCommand(all...)
-	bigtableCmd.AddCommand(bigtableAuthorizedViewsCmd)
+	s.bigtableAuthorizedViewsCmd.AddCommand(all...)
+	s.bigtableCmd.AddCommand(s.bigtableAuthorizedViewsCmd)
 }
 
-func btAvName(id string) (string, error) {
-	parent, err := btTableName(flagBtAvInstance, flagBtAvTable)
+func (s *bigtableCmds) btAvName(id string) (string, error) {
+	parent, err := s.btTableName(s.flagBtAvInstance, s.flagBtAvTable)
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/authorizedViews/%s", parent, id), nil
 }
 
-func runBtAvCreate(cmd *cobra.Command, args []string) error {
-	parent, err := btTableName(flagBtAvInstance, flagBtAvTable)
+func (s *bigtableCmds) runBtAvCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.btTableName(s.flagBtAvInstance, s.flagBtAvTable)
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.AuthorizedView{}
-	if err := loadYAMLOrJSONInto(flagBtAvConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBtAvConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -96,34 +60,34 @@ func runBtAvCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating authorized view: %w", err)
 	}
-	fmt.Printf("Create request issued for authorized view [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBtAvFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for authorized view [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBtAvFormat)
 }
 
-func runBtAvDelete(cmd *cobra.Command, args []string) error {
-	name, err := btAvName(args[0])
+func (s *bigtableCmds) runBtAvDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.btAvName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.Tables.AuthorizedViews.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting authorized view: %w", err)
 	}
-	fmt.Printf("Deleted authorized view [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted authorized view [%s].\n", args[0])
 	return nil
 }
 
-func runBtAvDescribe(cmd *cobra.Command, args []string) error {
-	name, err := btAvName(args[0])
+func (s *bigtableCmds) runBtAvDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.btAvName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -131,16 +95,16 @@ func runBtAvDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing authorized view: %w", err)
 	}
-	return emitFormatted(got, flagBtAvFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBtAvFormat)
 }
 
-func runBtAvList(cmd *cobra.Command, args []string) error {
-	parent, err := btTableName(flagBtAvInstance, flagBtAvTable)
+func (s *bigtableCmds) runBtAvList(cmd *cobra.Command, args []string) error {
+	parent, err := s.btTableName(s.flagBtAvInstance, s.flagBtAvTable)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -148,8 +112,8 @@ func runBtAvList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.Tables.AuthorizedViews.List(parent).Context(ctx)
-		if flagBtAvPageSize > 0 {
-			call = call.PageSize(flagBtAvPageSize)
+		if s.flagBtAvPageSize > 0 {
+			call = call.PageSize(s.flagBtAvPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -164,24 +128,24 @@ func runBtAvList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBtAvFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBtAvFormat)
 }
 
-func runBtAvUpdate(cmd *cobra.Command, args []string) error {
-	name, err := btAvName(args[0])
+func (s *bigtableCmds) runBtAvUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.btAvName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.AuthorizedView{}
-	if err := loadYAMLOrJSONInto(flagBtAvConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBtAvConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagBtAvUpdateMask
+	mask := s.flagBtAvUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -193,6 +157,6 @@ func runBtAvUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating authorized view: %w", err)
 	}
-	fmt.Printf("Update request issued for authorized view [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBtAvFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for authorized view [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBtAvFormat)
 }

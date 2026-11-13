@@ -1,78 +1,45 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
 )
 
 // --- gcloud bigtable clusters (#1304) ---
 
-var bigtableClustersCmd = &cobra.Command{Use: "clusters", Short: "Manage Bigtable clusters"}
-
-var (
-	flagBtClInstance   string
-	flagBtClFormat     string
-	flagBtClConfigFile string
-)
-
-var (
-	bigtableClCreateCmd = &cobra.Command{
-		Use: "create CLUSTER", Short: "Create a Bigtable cluster",
-		Args: cobra.ExactArgs(1), RunE: runBtClCreate,
-	}
-	bigtableClDeleteCmd = &cobra.Command{
-		Use: "delete CLUSTER", Short: "Delete a Bigtable cluster",
-		Args: cobra.ExactArgs(1), RunE: runBtClDelete,
-	}
-	bigtableClDescribeCmd = &cobra.Command{
-		Use: "describe CLUSTER", Short: "Describe a Bigtable cluster",
-		Args: cobra.ExactArgs(1), RunE: runBtClDescribe,
-	}
-	bigtableClListCmd = &cobra.Command{
-		Use: "list", Short: "List Bigtable clusters on an instance",
-		Args: cobra.NoArgs, RunE: runBtClList,
-	}
-	bigtableClUpdateCmd = &cobra.Command{
-		Use: "update CLUSTER", Short: "Update a Bigtable cluster",
-		Args: cobra.ExactArgs(1), RunE: runBtClUpdate,
-	}
-)
-
-func init() {
+func (s *bigtableCmds) initBigtableClusters() {
 	all := []*cobra.Command{
-		bigtableClCreateCmd, bigtableClDeleteCmd, bigtableClDescribeCmd,
-		bigtableClListCmd, bigtableClUpdateCmd,
+		s.bigtableClCreateCmd, s.bigtableClDeleteCmd, s.bigtableClDescribeCmd,
+		s.bigtableClListCmd, s.bigtableClUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagBtClInstance, "instance", "", "Bigtable instance ID (required)")
+		c.Flags().StringVar(&s.flagBtClInstance, "instance", "", "Bigtable instance ID (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagBtClFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBtClFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{bigtableClCreateCmd, bigtableClUpdateCmd} {
-		c.Flags().StringVar(&flagBtClConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.bigtableClCreateCmd, s.bigtableClUpdateCmd} {
+		c.Flags().StringVar(&s.flagBtClConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Cluster body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
 
-	bigtableClustersCmd.AddCommand(all...)
-	bigtableCmd.AddCommand(bigtableClustersCmd)
+	s.bigtableClustersCmd.AddCommand(all...)
+	s.bigtableCmd.AddCommand(s.bigtableClustersCmd)
 }
 
-func runBtClCreate(cmd *cobra.Command, args []string) error {
-	parent, err := btInstanceName(flagBtClInstance)
+func (s *bigtableCmds) runBtClCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.btInstanceName(s.flagBtClInstance)
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.Cluster{}
-	if err := loadYAMLOrJSONInto(flagBtClConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBtClConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -80,34 +47,34 @@ func runBtClCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating cluster: %w", err)
 	}
-	fmt.Printf("Create request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBtClFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBtClFormat)
 }
 
-func runBtClDelete(cmd *cobra.Command, args []string) error {
-	name, err := btClusterName(flagBtClInstance, args[0])
+func (s *bigtableCmds) runBtClDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.btClusterName(s.flagBtClInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.Clusters.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting cluster: %w", err)
 	}
-	fmt.Printf("Deleted cluster [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted cluster [%s].\n", args[0])
 	return nil
 }
 
-func runBtClDescribe(cmd *cobra.Command, args []string) error {
-	name, err := btClusterName(flagBtClInstance, args[0])
+func (s *bigtableCmds) runBtClDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.btClusterName(s.flagBtClInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,16 +82,16 @@ func runBtClDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing cluster: %w", err)
 	}
-	return emitFormatted(got, flagBtClFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBtClFormat)
 }
 
-func runBtClList(cmd *cobra.Command, args []string) error {
-	parent, err := btInstanceName(flagBtClInstance)
+func (s *bigtableCmds) runBtClList(cmd *cobra.Command, args []string) error {
+	parent, err := s.btInstanceName(s.flagBtClInstance)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -145,20 +112,20 @@ func runBtClList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBtClFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBtClFormat)
 }
 
-func runBtClUpdate(cmd *cobra.Command, args []string) error {
-	name, err := btClusterName(flagBtClInstance, args[0])
+func (s *bigtableCmds) runBtClUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.btClusterName(s.flagBtClInstance, args[0])
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.Cluster{}
-	if err := loadYAMLOrJSONInto(flagBtClConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBtClConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -166,6 +133,6 @@ func runBtClUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating cluster: %w", err)
 	}
-	fmt.Printf("Update request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBtClFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBtClFormat)
 }

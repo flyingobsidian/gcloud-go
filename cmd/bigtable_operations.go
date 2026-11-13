@@ -1,50 +1,29 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
 )
 
 // --- gcloud bigtable operations (#1488) ---
 
-var bigtableOpCmd = &cobra.Command{Use: "operations", Short: "Manage Cloud Bigtable operations"}
-
-var (
-	flagBTOpFormat   string
-	flagBTOpFilter   string
-	flagBTOpPageSize int64
-)
-
-var (
-	bigtableOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Bigtable operation",
-		Args: cobra.ExactArgs(1), RunE: runBTOpDescribe,
+func (s *bigtableCmds) initBigtableOperations() {
+	for _, c := range []*cobra.Command{s.bigtableOpDescribeCmd, s.bigtableOpListCmd} {
+		c.Flags().StringVar(&s.flagBTOpFormat, "format", "", "Output format")
 	}
-	bigtableOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Bigtable operations for the current project",
-		Args: cobra.NoArgs, RunE: runBTOpList,
-	}
-)
+	s.bigtableOpListCmd.Flags().StringVar(&s.flagBTOpFilter, "filter", "", "Server-side filter expression")
+	s.bigtableOpListCmd.Flags().Int64Var(&s.flagBTOpPageSize, "page-size", 0, "Maximum results per page")
 
-func init() {
-	for _, c := range []*cobra.Command{bigtableOpDescribeCmd, bigtableOpListCmd} {
-		c.Flags().StringVar(&flagBTOpFormat, "format", "", "Output format")
-	}
-	bigtableOpListCmd.Flags().StringVar(&flagBTOpFilter, "filter", "", "Server-side filter expression")
-	bigtableOpListCmd.Flags().Int64Var(&flagBTOpPageSize, "page-size", 0, "Maximum results per page")
-
-	bigtableOpCmd.AddCommand(bigtableOpDescribeCmd, bigtableOpListCmd)
-	bigtableCmd.AddCommand(bigtableOpCmd)
+	s.bigtableOpCmd.AddCommand(s.bigtableOpDescribeCmd, s.bigtableOpListCmd)
+	s.bigtableCmd.AddCommand(s.bigtableOpCmd)
 }
 
-func runBTOpDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+func (s *bigtableCmds) runBTOpDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -52,16 +31,16 @@ func runBTOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagBTOpFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBTOpFormat)
 }
 
-func runBTOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *bigtableCmds) runBTOpList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -70,11 +49,11 @@ func runBTOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Operations.Projects.Operations.List(name).Context(ctx)
-		if flagBTOpFilter != "" {
-			call = call.Filter(flagBTOpFilter)
+		if s.flagBTOpFilter != "" {
+			call = call.Filter(s.flagBTOpFilter)
 		}
-		if flagBTOpPageSize > 0 {
-			call = call.PageSize(flagBTOpPageSize)
+		if s.flagBTOpPageSize > 0 {
+			call = call.PageSize(s.flagBTOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -89,12 +68,12 @@ func runBTOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagBTOpFormat != "" {
-		return emitFormatted(all, flagBTOpFormat)
+	if s.flagBTOpFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagBTOpFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range all {
-		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(s.inv.stdout, "%-40s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }

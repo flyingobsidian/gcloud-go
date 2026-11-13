@@ -1,138 +1,78 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
 )
 
 // --- gcloud bigtable schema-bundles (#1489) ---
 
-var bigtableSBCmd = &cobra.Command{Use: "schema-bundles", Short: "Manage Cloud Bigtable schema bundles"}
-
-var (
-	flagBTSBInstance   string
-	flagBTSBTable      string
-	flagBTSBFormat     string
-	flagBTSBConfigFile string
-	flagBTSBUpdateMask string
-	flagBTSBPageSize   int64
-
-	flagBTSBIamMember   string
-	flagBTSBIamRole     string
-	flagBTSBIamCondExpr string
-	flagBTSBIamCondT    string
-	flagBTSBIamCondD    string
-	flagBTSBIamAllCond  bool
-)
-
-var (
-	bigtableSBCreateCmd = &cobra.Command{
-		Use: "create SCHEMA_BUNDLE", Short: "Create a schema bundle",
-		Args: cobra.ExactArgs(1), RunE: runBTSBCreate,
-	}
-	bigtableSBDeleteCmd = &cobra.Command{
-		Use: "delete SCHEMA_BUNDLE", Short: "Delete a schema bundle",
-		Args: cobra.ExactArgs(1), RunE: runBTSBDelete,
-	}
-	bigtableSBDescribeCmd = &cobra.Command{
-		Use: "describe SCHEMA_BUNDLE", Short: "Describe a schema bundle",
-		Args: cobra.ExactArgs(1), RunE: runBTSBDescribe,
-	}
-	bigtableSBListCmd = &cobra.Command{
-		Use: "list", Short: "List schema bundles on a table",
-		Args: cobra.NoArgs, RunE: runBTSBList,
-	}
-	bigtableSBUpdateCmd = &cobra.Command{
-		Use: "update SCHEMA_BUNDLE", Short: "Update a schema bundle",
-		Args: cobra.ExactArgs(1), RunE: runBTSBUpdate,
-	}
-	bigtableSBGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy SCHEMA_BUNDLE", Short: "Get the IAM policy for a schema bundle",
-		Args: cobra.ExactArgs(1), RunE: runBTSBGetIam,
-	}
-	bigtableSBSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy SCHEMA_BUNDLE POLICY_FILE", Short: "Set the IAM policy for a schema bundle",
-		Args: cobra.ExactArgs(2), RunE: runBTSBSetIam,
-	}
-	bigtableSBAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding SCHEMA_BUNDLE", Short: "Add an IAM policy binding to a schema bundle",
-		Args: cobra.ExactArgs(1), RunE: runBTSBAddIam,
-	}
-	bigtableSBRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding SCHEMA_BUNDLE", Short: "Remove an IAM policy binding from a schema bundle",
-		Args: cobra.ExactArgs(1), RunE: runBTSBRemoveIam,
-	}
-)
-
-func init() {
+func (s *bigtableCmds) initBigtableSchemaBundles() {
 	all := []*cobra.Command{
-		bigtableSBCreateCmd, bigtableSBDeleteCmd, bigtableSBDescribeCmd, bigtableSBListCmd, bigtableSBUpdateCmd,
-		bigtableSBGetIamCmd, bigtableSBSetIamCmd, bigtableSBAddIamCmd, bigtableSBRemoveIamCmd,
+		s.bigtableSBCreateCmd, s.bigtableSBDeleteCmd, s.bigtableSBDescribeCmd, s.bigtableSBListCmd, s.bigtableSBUpdateCmd,
+		s.bigtableSBGetIamCmd, s.bigtableSBSetIamCmd, s.bigtableSBAddIamCmd, s.bigtableSBRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagBTSBInstance, "instance", "", "Bigtable instance ID (required)")
+		c.Flags().StringVar(&s.flagBTSBInstance, "instance", "", "Bigtable instance ID (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagBTSBTable, "table", "", "Bigtable table ID (required)")
+		c.Flags().StringVar(&s.flagBTSBTable, "table", "", "Bigtable table ID (required)")
 		_ = c.MarkFlagRequired("table")
-		c.Flags().StringVar(&flagBTSBFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBTSBFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{bigtableSBCreateCmd, bigtableSBUpdateCmd} {
-		c.Flags().StringVar(&flagBTSBConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.bigtableSBCreateCmd, s.bigtableSBUpdateCmd} {
+		c.Flags().StringVar(&s.flagBTSBConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the SchemaBundle body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	bigtableSBUpdateCmd.Flags().StringVar(&flagBTSBUpdateMask, "update-mask", "",
+	s.bigtableSBUpdateCmd.Flags().StringVar(&s.flagBTSBUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	bigtableSBListCmd.Flags().Int64Var(&flagBTSBPageSize, "page-size", 0, "Maximum results per page")
+	s.bigtableSBListCmd.Flags().Int64Var(&s.flagBTSBPageSize, "page-size", 0, "Maximum results per page")
 
-	for _, c := range []*cobra.Command{bigtableSBAddIamCmd, bigtableSBRemoveIamCmd} {
-		c.Flags().StringVar(&flagBTSBIamMember, "member", "", "IAM member (required)")
-		c.Flags().StringVar(&flagBTSBIamRole, "role", "", "IAM role to bind (required)")
-		c.Flags().StringVar(&flagBTSBIamCondExpr, "condition-expression", "", "CEL condition expression")
-		c.Flags().StringVar(&flagBTSBIamCondT, "condition-title", "", "Condition title")
-		c.Flags().StringVar(&flagBTSBIamCondD, "condition-description", "", "Condition description")
+	for _, c := range []*cobra.Command{s.bigtableSBAddIamCmd, s.bigtableSBRemoveIamCmd} {
+		c.Flags().StringVar(&s.flagBTSBIamMember, "member", "", "IAM member (required)")
+		c.Flags().StringVar(&s.flagBTSBIamRole, "role", "", "IAM role to bind (required)")
+		c.Flags().StringVar(&s.flagBTSBIamCondExpr, "condition-expression", "", "CEL condition expression")
+		c.Flags().StringVar(&s.flagBTSBIamCondT, "condition-title", "", "Condition title")
+		c.Flags().StringVar(&s.flagBTSBIamCondD, "condition-description", "", "Condition description")
 		_ = c.MarkFlagRequired("member")
 		_ = c.MarkFlagRequired("role")
 	}
-	bigtableSBRemoveIamCmd.Flags().BoolVar(&flagBTSBIamAllCond, "all", false,
+	s.bigtableSBRemoveIamCmd.Flags().BoolVar(&s.flagBTSBIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	bigtableSBCmd.AddCommand(all...)
-	bigtableCmd.AddCommand(bigtableSBCmd)
+	s.bigtableSBCmd.AddCommand(all...)
+	s.bigtableCmd.AddCommand(s.bigtableSBCmd)
 }
 
-func btSBParent() (string, error) {
-	table, err := bigtableTableName(flagBTSBInstance, flagBTSBTable)
+func (s *bigtableCmds) btSBParent() (string, error) {
+	table, err := s.bigtableTableName(s.flagBTSBInstance, s.flagBTSBTable)
 	if err != nil {
 		return "", err
 	}
 	return table, nil
 }
 
-func btSBName(id string) (string, error) {
-	parent, err := btSBParent()
+func (s *bigtableCmds) btSBName(id string) (string, error) {
+	parent, err := s.btSBParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/schemaBundles/%s", parent, id), nil
 }
 
-func runBTSBCreate(cmd *cobra.Command, args []string) error {
-	parent, err := btSBParent()
+func (s *bigtableCmds) runBTSBCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.btSBParent()
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.SchemaBundle{}
-	if err := loadYAMLOrJSONInto(flagBTSBConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBTSBConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,34 +80,34 @@ func runBTSBCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating schema bundle: %w", err)
 	}
-	fmt.Printf("Create request issued for schema bundle [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBTSBFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for schema bundle [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBTSBFormat)
 }
 
-func runBTSBDelete(cmd *cobra.Command, args []string) error {
-	name, err := btSBName(args[0])
+func (s *bigtableCmds) runBTSBDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.btSBName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.Tables.SchemaBundles.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting schema bundle: %w", err)
 	}
-	fmt.Printf("Deleted schema bundle [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted schema bundle [%s].\n", args[0])
 	return nil
 }
 
-func runBTSBDescribe(cmd *cobra.Command, args []string) error {
-	name, err := btSBName(args[0])
+func (s *bigtableCmds) runBTSBDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.btSBName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -175,16 +115,16 @@ func runBTSBDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing schema bundle: %w", err)
 	}
-	return emitFormatted(got, flagBTSBFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBTSBFormat)
 }
 
-func runBTSBList(cmd *cobra.Command, args []string) error {
-	parent, err := btSBParent()
+func (s *bigtableCmds) runBTSBList(cmd *cobra.Command, args []string) error {
+	parent, err := s.btSBParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -192,8 +132,8 @@ func runBTSBList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.Tables.SchemaBundles.List(parent).Context(ctx)
-		if flagBTSBPageSize > 0 {
-			call = call.PageSize(flagBTSBPageSize)
+		if s.flagBTSBPageSize > 0 {
+			call = call.PageSize(s.flagBTSBPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -208,24 +148,24 @@ func runBTSBList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBTSBFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBTSBFormat)
 }
 
-func runBTSBUpdate(cmd *cobra.Command, args []string) error {
-	name, err := btSBName(args[0])
+func (s *bigtableCmds) runBTSBUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.btSBName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.SchemaBundle{}
-	if err := loadYAMLOrJSONInto(flagBTSBConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBTSBConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagBTSBUpdateMask
+	mask := s.flagBTSBUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -237,17 +177,17 @@ func runBTSBUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating schema bundle: %w", err)
 	}
-	fmt.Printf("Update request issued for schema bundle [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBTSBFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for schema bundle [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBTSBFormat)
 }
 
-func runBTSBGetIam(cmd *cobra.Command, args []string) error {
-	name, err := btSBName(args[0])
+func (s *bigtableCmds) runBTSBGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.btSBName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -257,11 +197,11 @@ func runBTSBGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagBTSBFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagBTSBFormat)
 }
 
-func runBTSBSetIam(cmd *cobra.Command, args []string) error {
-	name, err := btSBName(args[0])
+func (s *bigtableCmds) runBTSBSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.btSBName(args[0])
 	if err != nil {
 		return err
 	}
@@ -270,8 +210,8 @@ func runBTSBSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -279,17 +219,17 @@ func runBTSBSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for schema bundle [%s].\n", args[0])
-	return emitFormatted(updated, flagBTSBFormat)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for schema bundle [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, updated, s.flagBTSBFormat)
 }
 
-func runBTSBAddIam(cmd *cobra.Command, args []string) error {
-	name, err := btSBName(args[0])
+func (s *bigtableCmds) runBTSBAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.btSBName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -300,25 +240,25 @@ func runBTSBAddIam(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 	// Reuse bigtable IAM helpers from bigtable_tables.go.
-	bigtableAddBindingToPolicy(policy, flagBTSBIamRole, flagBTSBIamMember, &bigtableadmin.Expr{
-		Expression: flagBTSBIamCondExpr, Title: flagBTSBIamCondT, Description: flagBTSBIamCondD,
+	bigtableAddBindingToPolicy(policy, s.flagBTSBIamRole, s.flagBTSBIamMember, &bigtableadmin.Expr{
+		Expression: s.flagBTSBIamCondExpr, Title: s.flagBTSBIamCondT, Description: s.flagBTSBIamCondD,
 	})
 	policy.Version = 3
 	updated, err := svc.Projects.Instances.Tables.SchemaBundles.SetIamPolicy(name, &bigtableadmin.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for schema bundle [%s].\n", args[0])
-	return emitFormatted(updated, flagBTSBFormat)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for schema bundle [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, updated, s.flagBTSBFormat)
 }
 
-func runBTSBRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := btSBName(args[0])
+func (s *bigtableCmds) runBTSBRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.btSBName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -329,18 +269,18 @@ func runBTSBRemoveIam(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 	cond := &bigtableadmin.Expr{
-		Expression: flagBTSBIamCondExpr, Title: flagBTSBIamCondT, Description: flagBTSBIamCondD,
+		Expression: s.flagBTSBIamCondExpr, Title: s.flagBTSBIamCondT, Description: s.flagBTSBIamCondD,
 	}
-	if flagBTSBIamCondExpr == "" && flagBTSBIamCondT == "" && flagBTSBIamCondD == "" {
+	if s.flagBTSBIamCondExpr == "" && s.flagBTSBIamCondT == "" && s.flagBTSBIamCondD == "" {
 		cond = nil
 	}
-	if !bigtableRemoveBindingFromPolicy(policy, flagBTSBIamRole, flagBTSBIamMember, cond, flagBTSBIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagBTSBIamRole, flagBTSBIamMember)
+	if !bigtableRemoveBindingFromPolicy(policy, s.flagBTSBIamRole, s.flagBTSBIamMember, cond, s.flagBTSBIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagBTSBIamRole, s.flagBTSBIamMember)
 	}
 	updated, err := svc.Projects.Instances.Tables.SchemaBundles.SetIamPolicy(name, &bigtableadmin.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for schema bundle [%s].\n", args[0])
-	return emitFormatted(updated, flagBTSBFormat)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for schema bundle [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, updated, s.flagBTSBFormat)
 }

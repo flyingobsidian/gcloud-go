@@ -146,6 +146,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newPubsubCmd(inv),
 		newNetworkSecurityCmd(inv),
 		newApihubCmd(inv),
+		newBigtableCmd(inv),
 	}
 }
 
