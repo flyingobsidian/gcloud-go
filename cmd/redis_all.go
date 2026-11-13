@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	redis "google.golang.org/api/redis/v1"
 )
@@ -33,80 +31,44 @@ func redisWaitOp(ctx context.Context, svc *redis.Service, op *redis.Operation) (
 	return op, nil
 }
 
-func redisFinishOp(ctx context.Context, svc *redis.Service, op *redis.Operation, verb, name string, async bool) error {
+func (s *redisCmds) redisFinishOp(ctx context.Context, svc *redis.Service, op *redis.Operation, verb, name string, async bool) error {
 	if async {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, "")
+		fmt.Fprintf(s.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	final, err := redisWaitOp(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
+	fmt.Fprintf(s.inv.stderr, "%s [%s] completed.\n", verb, name)
 	if final.Response != nil {
-		return emitFormatted(final.Response, "")
+		return emitFormattedTo(s.inv.stdout, final.Response, "")
 	}
 	return nil
 }
 
 // --- redis acl-policies ---
 
-var redisAclPoliciesCmd = &cobra.Command{
-	Use:   "acl-policies",
-	Short: "Manage Redis Cluster ACL policies",
-}
-
-var (
-	redisACLCreateCmd = &cobra.Command{
-		Use: "create POLICY", Short: "Create an ACL policy from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runRedisACLCreate,
-	}
-	redisACLDeleteCmd = &cobra.Command{
-		Use: "delete POLICY", Short: "Delete an ACL policy",
-		Args: cobra.ExactArgs(1), RunE: runRedisACLDelete,
-	}
-	redisACLDescribeCmd = &cobra.Command{
-		Use: "describe POLICY", Short: "Describe an ACL policy",
-		Args: cobra.ExactArgs(1), RunE: runRedisACLDescribe,
-	}
-	redisACLListCmd = &cobra.Command{
-		Use: "list", Short: "List ACL policies in a region",
-		Args: cobra.NoArgs, RunE: runRedisACLList,
-	}
-	redisACLUpdateCmd = &cobra.Command{
-		Use: "update POLICY", Short: "Update an ACL policy from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runRedisACLUpdate,
-	}
-)
-
-var (
-	flagRedisACLRegion     string
-	flagRedisACLConfigFile string
-	flagRedisACLUpdateMask string
-	flagRedisACLFormat     string
-	flagRedisACLAsync      bool
-)
-
-func init() {
-	for _, c := range []*cobra.Command{redisACLCreateCmd, redisACLDeleteCmd, redisACLDescribeCmd, redisACLListCmd, redisACLUpdateCmd} {
-		c.Flags().StringVar(&flagRedisACLRegion, "region", "", "Region containing the ACL policy (required)")
+func (s *redisCmds) initRedisAll() {
+	for _, c := range []*cobra.Command{s.redisACLCreateCmd, s.redisACLDeleteCmd, s.redisACLDescribeCmd, s.redisACLListCmd, s.redisACLUpdateCmd} {
+		c.Flags().StringVar(&s.flagRedisACLRegion, "region", "", "Region containing the ACL policy (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	for _, c := range []*cobra.Command{redisACLCreateCmd, redisACLUpdateCmd} {
-		c.Flags().StringVar(&flagRedisACLConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.redisACLCreateCmd, s.redisACLUpdateCmd} {
+		c.Flags().StringVar(&s.flagRedisACLConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the AclPolicy message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	redisACLUpdateCmd.Flags().StringVar(&flagRedisACLUpdateMask, "update-mask", "",
+	s.redisACLUpdateCmd.Flags().StringVar(&s.flagRedisACLUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{redisACLCreateCmd, redisACLDeleteCmd, redisACLUpdateCmd} {
-		c.Flags().BoolVar(&flagRedisACLAsync, "async", false, "Return the long-running operation without waiting")
+	for _, c := range []*cobra.Command{s.redisACLCreateCmd, s.redisACLDeleteCmd, s.redisACLUpdateCmd} {
+		c.Flags().BoolVar(&s.flagRedisACLAsync, "async", false, "Return the long-running operation without waiting")
 	}
-	redisACLDescribeCmd.Flags().StringVar(&flagRedisACLFormat, "format", "", "Output format")
-	redisACLListCmd.Flags().StringVar(&flagRedisACLFormat, "format", "", "Output format")
+	s.redisACLDescribeCmd.Flags().StringVar(&s.flagRedisACLFormat, "format", "", "Output format")
+	s.redisACLListCmd.Flags().StringVar(&s.flagRedisACLFormat, "format", "", "Output format")
 
-	redisAclPoliciesCmd.AddCommand(redisACLCreateCmd, redisACLDeleteCmd, redisACLDescribeCmd, redisACLListCmd, redisACLUpdateCmd)
-	redisCmd.AddCommand(redisAclPoliciesCmd)
+	s.redisAclPoliciesCmd.AddCommand(s.redisACLCreateCmd, s.redisACLDeleteCmd, s.redisACLDescribeCmd, s.redisACLListCmd, s.redisACLUpdateCmd)
+	s.redisCmd.AddCommand(s.redisAclPoliciesCmd)
 }
 
 func redisACLName(id, project, region string) string {
@@ -116,228 +78,166 @@ func redisACLName(id, project, region string) string {
 	return fmt.Sprintf("%s/aclPolicies/%s", redisLocationParent(project, region), id)
 }
 
-func runRedisACLCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisACLCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	p := &redis.AclPolicy{}
-	if err := loadYAMLOrJSONInto(flagRedisACLConfigFile, p); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagRedisACLConfigFile, p); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	created, err := svc.Projects.Locations.AclPolicies.Create(redisLocationParent(project, flagRedisACLRegion), p).
+	created, err := svc.Projects.Locations.AclPolicies.Create(redisLocationParent(project, s.flagRedisACLRegion), p).
 		AclPolicyId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating ACL policy: %w", err)
 	}
-	return emitFormatted(created, "")
+	return emitFormattedTo(s.inv.stdout, created, "")
 }
 
-func runRedisACLDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisACLDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.AclPolicies.Delete(redisACLName(args[0], project, flagRedisACLRegion)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.AclPolicies.Delete(redisACLName(args[0], project, s.flagRedisACLRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting ACL policy: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Delete ACL policy", args[0], flagRedisACLAsync)
+	return s.redisFinishOp(ctx, svc, op, "Delete ACL policy", args[0], s.flagRedisACLAsync)
 }
 
-func runRedisACLDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisACLDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	p, err := svc.Projects.Locations.AclPolicies.Get(redisACLName(args[0], project, flagRedisACLRegion)).Context(ctx).Do()
+	p, err := svc.Projects.Locations.AclPolicies.Get(redisACLName(args[0], project, s.flagRedisACLRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing ACL policy: %w", err)
 	}
-	return emitFormatted(p, flagRedisACLFormat)
+	return emitFormattedTo(s.inv.stdout, p, s.flagRedisACLFormat)
 }
 
-func runRedisACLList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisACLList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.AclPolicies.List(redisLocationParent(project, flagRedisACLRegion)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.AclPolicies.List(redisLocationParent(project, s.flagRedisACLRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing ACL policies: %w", err)
 	}
-	if flagRedisACLFormat != "" {
-		return emitFormatted(resp.AclPolicies, flagRedisACLFormat)
+	if s.flagRedisACLFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.AclPolicies, s.flagRedisACLFormat)
 	}
-	printTableHeading(len(resp.AclPolicies), "%-40s\n", "NAME")
+	printTableHeadingTo(s.inv.stdout, len(resp.AclPolicies), "%-40s\n", "NAME")
 	for _, p := range resp.AclPolicies {
-		fmt.Println(path.Base(p.Name))
+		fmt.Fprintln(s.inv.stdout, path.Base(p.Name))
 	}
 	return nil
 }
 
-func runRedisACLUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisACLUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	p := &redis.AclPolicy{}
-	if err := loadYAMLOrJSONInto(flagRedisACLConfigFile, p); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagRedisACLConfigFile, p); err != nil {
 		return err
 	}
-	mask := flagRedisACLUpdateMask
+	mask := s.flagRedisACLUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(p))
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.AclPolicies.Patch(redisACLName(args[0], project, flagRedisACLRegion), p).
+	op, err := svc.Projects.Locations.AclPolicies.Patch(redisACLName(args[0], project, s.flagRedisACLRegion), p).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating ACL policy: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Update ACL policy", args[0], flagRedisACLAsync)
+	return s.redisFinishOp(ctx, svc, op, "Update ACL policy", args[0], s.flagRedisACLAsync)
 }
 
 // --- redis clusters ---
 
-var redisClustersCmd = &cobra.Command{
-	Use:   "clusters",
-	Short: "Manage Memorystore for Redis Cluster instances",
-}
-
-var (
-	redisClusterCreateCmd = &cobra.Command{
-		Use: "create CLUSTER", Short: "Create a Redis cluster from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runRedisClusterCreate,
-	}
-	redisClusterDeleteCmd = &cobra.Command{
-		Use: "delete CLUSTER", Short: "Delete a Redis cluster",
-		Args: cobra.ExactArgs(1), RunE: runRedisClusterDelete,
-	}
-	redisClusterDescribeCmd = &cobra.Command{
-		Use: "describe CLUSTER", Short: "Describe a Redis cluster",
-		Args: cobra.ExactArgs(1), RunE: runRedisClusterDescribe,
-	}
-	redisClusterListCmd = &cobra.Command{
-		Use: "list", Short: "List Redis clusters in a region",
-		Args: cobra.NoArgs, RunE: runRedisClusterList,
-	}
-	redisClusterUpdateCmd = &cobra.Command{
-		Use: "update CLUSTER", Short: "Update a Redis cluster from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runRedisClusterUpdate,
-	}
-	redisClusterCreateBackupCmd = &cobra.Command{
-		Use: "create-backup CLUSTER", Short: "Create an on-demand backup of a Redis cluster",
-		Args: cobra.ExactArgs(1), RunE: runRedisClusterBackup,
-	}
-	redisClusterGetCACmd = &cobra.Command{
-		Use: "get-cluster-certificate-authority CLUSTER", Short: "Get the CA certificates for a Redis cluster",
-		Args: cobra.ExactArgs(1), RunE: runRedisClusterGetCA,
-	}
-	redisClusterGetSharedCACmd = &cobra.Command{
-		Use: "get-shared-regional-certificate-authority", Short: "Get the shared regional CA for Redis clusters",
-		Args: cobra.NoArgs, RunE: runRedisClusterGetSharedCA,
-	}
-	redisClusterRescheduleMaintCmd = &cobra.Command{
-		Use: "reschedule-maintenance CLUSTER", Short: "Reschedule an upcoming maintenance window",
-		Args: cobra.ExactArgs(1), RunE: runRedisClusterRescheduleMaintenance,
-	}
-	redisClusterAddTokenAuthCmd = &cobra.Command{
-		Use: "add-token-auth-user CLUSTER", Short: "Add a token-auth user to a Redis cluster",
-		Args: cobra.ExactArgs(1), RunE: runRedisClusterAddTokenAuthUser,
-	}
-)
-
-var (
-	flagRedisClusterRegion        string
-	flagRedisClusterConfigFile    string
-	flagRedisClusterUpdateMask    string
-	flagRedisClusterFormat        string
-	flagRedisClusterAsync         bool
-	flagRedisClusterBackupID      string
-	flagRedisClusterBackupTTL     string
-	flagRedisClusterMaintTime     string
-	flagRedisClusterMaintType     string
-	flagRedisClusterTokenAuthUser string
-	flagRedisClusterZDCZones      []string
-)
-
-func init() {
+func (s *redisCmds) initRedisAll2() {
 	all := []*cobra.Command{
-		redisClusterCreateCmd, redisClusterDeleteCmd, redisClusterDescribeCmd,
-		redisClusterListCmd, redisClusterUpdateCmd, redisClusterCreateBackupCmd,
-		redisClusterGetCACmd, redisClusterGetSharedCACmd, redisClusterRescheduleMaintCmd,
-		redisClusterAddTokenAuthCmd,
+		s.redisClusterCreateCmd, s.redisClusterDeleteCmd, s.redisClusterDescribeCmd,
+		s.redisClusterListCmd, s.redisClusterUpdateCmd, s.redisClusterCreateBackupCmd,
+		s.redisClusterGetCACmd, s.redisClusterGetSharedCACmd, s.redisClusterRescheduleMaintCmd,
+		s.redisClusterAddTokenAuthCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagRedisClusterRegion, "region", "", "Region containing the Redis cluster (required)")
+		c.Flags().StringVar(&s.flagRedisClusterRegion, "region", "", "Region containing the Redis cluster (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	for _, c := range []*cobra.Command{redisClusterCreateCmd, redisClusterUpdateCmd} {
-		c.Flags().StringVar(&flagRedisClusterConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.redisClusterCreateCmd, s.redisClusterUpdateCmd} {
+		c.Flags().StringVar(&s.flagRedisClusterConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Cluster message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	redisClusterUpdateCmd.Flags().StringVar(&flagRedisClusterUpdateMask, "update-mask", "",
+	s.redisClusterUpdateCmd.Flags().StringVar(&s.flagRedisClusterUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 	for _, c := range []*cobra.Command{
-		redisClusterCreateCmd, redisClusterDeleteCmd, redisClusterUpdateCmd,
-		redisClusterCreateBackupCmd, redisClusterRescheduleMaintCmd, redisClusterAddTokenAuthCmd,
+		s.redisClusterCreateCmd, s.redisClusterDeleteCmd, s.redisClusterUpdateCmd,
+		s.redisClusterCreateBackupCmd, s.redisClusterRescheduleMaintCmd, s.redisClusterAddTokenAuthCmd,
 	} {
-		c.Flags().BoolVar(&flagRedisClusterAsync, "async", false, "Return the long-running operation without waiting")
+		c.Flags().BoolVar(&s.flagRedisClusterAsync, "async", false, "Return the long-running operation without waiting")
 	}
-	redisClusterDescribeCmd.Flags().StringVar(&flagRedisClusterFormat, "format", "", "Output format")
-	redisClusterListCmd.Flags().StringVar(&flagRedisClusterFormat, "format", "", "Output format")
-	redisClusterGetCACmd.Flags().StringVar(&flagRedisClusterFormat, "format", "", "Output format")
-	redisClusterGetSharedCACmd.Flags().StringVar(&flagRedisClusterFormat, "format", "", "Output format")
+	s.redisClusterDescribeCmd.Flags().StringVar(&s.flagRedisClusterFormat, "format", "", "Output format")
+	s.redisClusterListCmd.Flags().StringVar(&s.flagRedisClusterFormat, "format", "", "Output format")
+	s.redisClusterGetCACmd.Flags().StringVar(&s.flagRedisClusterFormat, "format", "", "Output format")
+	s.redisClusterGetSharedCACmd.Flags().StringVar(&s.flagRedisClusterFormat, "format", "", "Output format")
 
-	redisClusterCreateBackupCmd.Flags().StringVar(&flagRedisClusterBackupID, "backup-id", "",
+	s.redisClusterCreateBackupCmd.Flags().StringVar(&s.flagRedisClusterBackupID, "backup-id", "",
 		"ID for the new backup (required)")
-	redisClusterCreateBackupCmd.Flags().StringVar(&flagRedisClusterBackupTTL, "ttl", "",
+	s.redisClusterCreateBackupCmd.Flags().StringVar(&s.flagRedisClusterBackupTTL, "ttl", "",
 		"Retention duration for the backup, e.g. 24h")
-	_ = redisClusterCreateBackupCmd.MarkFlagRequired("backup-id")
+	_ = s.redisClusterCreateBackupCmd.MarkFlagRequired("backup-id")
 
-	redisClusterRescheduleMaintCmd.Flags().StringVar(&flagRedisClusterMaintType, "reschedule-type", "IMMEDIATE",
+	s.redisClusterRescheduleMaintCmd.Flags().StringVar(&s.flagRedisClusterMaintType, "reschedule-type", "IMMEDIATE",
 		"Reschedule type: IMMEDIATE or SPECIFIC_TIME")
-	redisClusterRescheduleMaintCmd.Flags().StringVar(&flagRedisClusterMaintTime, "schedule-time", "",
+	s.redisClusterRescheduleMaintCmd.Flags().StringVar(&s.flagRedisClusterMaintTime, "schedule-time", "",
 		"RFC3339 time (for --reschedule-type=SPECIFIC_TIME)")
 
-	redisClusterAddTokenAuthCmd.Flags().StringVar(&flagRedisClusterTokenAuthUser, "user", "",
+	s.redisClusterAddTokenAuthCmd.Flags().StringVar(&s.flagRedisClusterTokenAuthUser, "user", "",
 		"IAM identity of the token-auth user (required)")
-	_ = redisClusterAddTokenAuthCmd.MarkFlagRequired("user")
+	_ = s.redisClusterAddTokenAuthCmd.MarkFlagRequired("user")
 
 	// --zone-distribution-config-zones added in gcloud-python 574.0.0.
-	redisClusterCreateCmd.Flags().StringSliceVar(&flagRedisClusterZDCZones, "zone-distribution-config-zones", nil,
+	s.redisClusterCreateCmd.Flags().StringSliceVar(&s.flagRedisClusterZDCZones, "zone-distribution-config-zones", nil,
 		"Zones for a MULTI_ZONE cluster (comma-separated); overrides zoneDistributionConfig.zones from --config-file")
 
-	redisClustersCmd.AddCommand(all...)
-	registerRedisBackupCollections(redisClustersCmd)
-	registerRedisClusterBackups(redisClustersCmd)
-	redisCmd.AddCommand(redisClustersCmd)
+	s.redisClustersCmd.AddCommand(all...)
+	s.registerRedisBackupCollections(s.redisClustersCmd)
+	s.registerRedisClusterBackups(s.redisClustersCmd)
+	s.redisCmd.AddCommand(s.redisClustersCmd)
 }
 
 func redisClusterName(id, project, region string) string {
@@ -347,286 +247,242 @@ func redisClusterName(id, project, region string) string {
 	return fmt.Sprintf("%s/clusters/%s", redisLocationParent(project, region), id)
 }
 
-func runRedisClusterCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	c := &redis.Cluster{}
-	if err := loadYAMLOrJSONInto(flagRedisClusterConfigFile, c); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagRedisClusterConfigFile, c); err != nil {
 		return err
 	}
-	if len(flagRedisClusterZDCZones) > 0 {
+	if len(s.flagRedisClusterZDCZones) > 0 {
 		if c.ZoneDistributionConfig == nil {
 			c.ZoneDistributionConfig = &redis.ZoneDistributionConfig{}
 		}
-		c.ZoneDistributionConfig.Zones = append([]string(nil), flagRedisClusterZDCZones...)
+		c.ZoneDistributionConfig.Zones = append([]string(nil), s.flagRedisClusterZDCZones...)
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Clusters.Create(redisLocationParent(project, flagRedisClusterRegion), c).
+	op, err := svc.Projects.Locations.Clusters.Create(redisLocationParent(project, s.flagRedisClusterRegion), c).
 		ClusterId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating cluster: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Create cluster", args[0], flagRedisClusterAsync)
+	return s.redisFinishOp(ctx, svc, op, "Create cluster", args[0], s.flagRedisClusterAsync)
 }
 
-func runRedisClusterDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Clusters.Delete(redisClusterName(args[0], project, flagRedisClusterRegion)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Clusters.Delete(redisClusterName(args[0], project, s.flagRedisClusterRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting cluster: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Delete cluster", args[0], flagRedisClusterAsync)
+	return s.redisFinishOp(ctx, svc, op, "Delete cluster", args[0], s.flagRedisClusterAsync)
 }
 
-func runRedisClusterDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	c, err := svc.Projects.Locations.Clusters.Get(redisClusterName(args[0], project, flagRedisClusterRegion)).Context(ctx).Do()
+	c, err := svc.Projects.Locations.Clusters.Get(redisClusterName(args[0], project, s.flagRedisClusterRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing cluster: %w", err)
 	}
-	return emitFormatted(c, flagRedisClusterFormat)
+	return emitFormattedTo(s.inv.stdout, c, s.flagRedisClusterFormat)
 }
 
-func runRedisClusterList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Clusters.List(redisLocationParent(project, flagRedisClusterRegion)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Clusters.List(redisLocationParent(project, s.flagRedisClusterRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing clusters: %w", err)
 	}
-	if flagRedisClusterFormat != "" {
-		return emitFormatted(resp.Clusters, flagRedisClusterFormat)
+	if s.flagRedisClusterFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Clusters, s.flagRedisClusterFormat)
 	}
-	printTableHeading(len(resp.Clusters), "%-40s %-15s %s\n", "NAME", "STATE", "SIZE_GB")
+	printTableHeadingTo(s.inv.stdout, len(resp.Clusters), "%-40s %-15s %s\n", "NAME", "STATE", "SIZE_GB")
 	for _, c := range resp.Clusters {
-		fmt.Printf("%-40s %-15s %d\n", path.Base(c.Name), c.State, c.SizeGb)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-15s %d\n", path.Base(c.Name), c.State, c.SizeGb)
 	}
 	return nil
 }
 
-func runRedisClusterUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	c := &redis.Cluster{}
-	if err := loadYAMLOrJSONInto(flagRedisClusterConfigFile, c); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagRedisClusterConfigFile, c); err != nil {
 		return err
 	}
-	mask := flagRedisClusterUpdateMask
+	mask := s.flagRedisClusterUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(c))
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Clusters.Patch(redisClusterName(args[0], project, flagRedisClusterRegion), c).
+	op, err := svc.Projects.Locations.Clusters.Patch(redisClusterName(args[0], project, s.flagRedisClusterRegion), c).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating cluster: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Update cluster", args[0], flagRedisClusterAsync)
+	return s.redisFinishOp(ctx, svc, op, "Update cluster", args[0], s.flagRedisClusterAsync)
 }
 
-func runRedisClusterBackup(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterBackup(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	req := &redis.BackupClusterRequest{BackupId: flagRedisClusterBackupID, Ttl: flagRedisClusterBackupTTL}
-	op, err := svc.Projects.Locations.Clusters.Backup(redisClusterName(args[0], project, flagRedisClusterRegion), req).Context(ctx).Do()
+	req := &redis.BackupClusterRequest{BackupId: s.flagRedisClusterBackupID, Ttl: s.flagRedisClusterBackupTTL}
+	op, err := svc.Projects.Locations.Clusters.Backup(redisClusterName(args[0], project, s.flagRedisClusterRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("backing up cluster: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Backup cluster", args[0], flagRedisClusterAsync)
+	return s.redisFinishOp(ctx, svc, op, "Backup cluster", args[0], s.flagRedisClusterAsync)
 }
 
-func runRedisClusterGetCA(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterGetCA(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	ca, err := svc.Projects.Locations.Clusters.GetCertificateAuthority(redisClusterName(args[0], project, flagRedisClusterRegion)).Context(ctx).Do()
+	ca, err := svc.Projects.Locations.Clusters.GetCertificateAuthority(redisClusterName(args[0], project, s.flagRedisClusterRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting cluster CA: %w", err)
 	}
-	return emitFormatted(ca, flagRedisClusterFormat)
+	return emitFormattedTo(s.inv.stdout, ca, s.flagRedisClusterFormat)
 }
 
-func runRedisClusterGetSharedCA(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterGetSharedCA(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	ca, err := svc.Projects.Locations.GetSharedRegionalCertificateAuthority(redisLocationParent(project, flagRedisClusterRegion)).Context(ctx).Do()
+	ca, err := svc.Projects.Locations.GetSharedRegionalCertificateAuthority(redisLocationParent(project, s.flagRedisClusterRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting shared regional CA: %w", err)
 	}
-	return emitFormatted(ca, flagRedisClusterFormat)
+	return emitFormattedTo(s.inv.stdout, ca, s.flagRedisClusterFormat)
 }
 
-func runRedisClusterRescheduleMaintenance(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterRescheduleMaintenance(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
 	req := &redis.RescheduleClusterMaintenanceRequest{
-		RescheduleType: flagRedisClusterMaintType,
-		ScheduleTime:   flagRedisClusterMaintTime,
+		RescheduleType: s.flagRedisClusterMaintType,
+		ScheduleTime:   s.flagRedisClusterMaintTime,
 	}
-	op, err := svc.Projects.Locations.Clusters.RescheduleClusterMaintenance(redisClusterName(args[0], project, flagRedisClusterRegion), req).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Clusters.RescheduleClusterMaintenance(redisClusterName(args[0], project, s.flagRedisClusterRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("rescheduling maintenance: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Reschedule maintenance", args[0], flagRedisClusterAsync)
+	return s.redisFinishOp(ctx, svc, op, "Reschedule maintenance", args[0], s.flagRedisClusterAsync)
 }
 
-func runRedisClusterAddTokenAuthUser(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisClusterAddTokenAuthUser(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	req := &redis.AddTokenAuthUserRequest{TokenAuthUser: flagRedisClusterTokenAuthUser}
-	op, err := svc.Projects.Locations.Clusters.AddTokenAuthUser(redisClusterName(args[0], project, flagRedisClusterRegion), req).Context(ctx).Do()
+	req := &redis.AddTokenAuthUserRequest{TokenAuthUser: s.flagRedisClusterTokenAuthUser}
+	op, err := svc.Projects.Locations.Clusters.AddTokenAuthUser(redisClusterName(args[0], project, s.flagRedisClusterRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("adding token auth user: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Add token auth user", args[0], flagRedisClusterAsync)
+	return s.redisFinishOp(ctx, svc, op, "Add token auth user", args[0], s.flagRedisClusterAsync)
 }
 
 // --- redis clusters backup-collections + backups (nested) ---
 
-var (
-	redisBackupCollectionsCmd = &cobra.Command{
-		Use:   "backup-collections",
-		Short: "Manage backup collections for Redis clusters",
-	}
-	redisBCDescribeCmd = &cobra.Command{
-		Use: "describe COLLECTION", Short: "Describe a backup collection",
-		Args: cobra.ExactArgs(1), RunE: runRedisBCDescribe,
-	}
-	redisBCListCmd = &cobra.Command{
-		Use: "list", Short: "List backup collections in a region",
-		Args: cobra.NoArgs, RunE: runRedisBCList,
-	}
-
-	redisClusterBackupsCmd = &cobra.Command{
-		Use:   "backups",
-		Short: "Manage backups for a Redis cluster",
-	}
-	redisBackupsDescribeCmd = &cobra.Command{
-		Use: "describe BACKUP", Short: "Describe a Redis cluster backup",
-		Args: cobra.ExactArgs(1), RunE: runRedisBackupsDescribe,
-	}
-	redisBackupsDeleteCmd = &cobra.Command{
-		Use: "delete BACKUP", Short: "Delete a Redis cluster backup",
-		Args: cobra.ExactArgs(1), RunE: runRedisBackupsDelete,
-	}
-	redisBackupsListCmd = &cobra.Command{
-		Use: "list", Short: "List backups in a collection",
-		Args: cobra.NoArgs, RunE: runRedisBackupsList,
-	}
-	redisBackupsExportCmd = &cobra.Command{
-		Use: "export BACKUP", Short: "Export a Redis cluster backup to Cloud Storage",
-		Args: cobra.ExactArgs(1), RunE: runRedisBackupsExport,
-	}
-)
-
-var (
-	flagRedisBCRegion     string
-	flagRedisBCCollection string
-	flagRedisBCFormat     string
-	flagRedisBackupsGcs   string
-	flagRedisBackupsAsync bool
-)
-
-func registerRedisBackupCollections(parent *cobra.Command) {
-	for _, c := range []*cobra.Command{redisBCDescribeCmd, redisBCListCmd} {
-		c.Flags().StringVar(&flagRedisBCRegion, "region", "", "Region (required)")
+func (s *redisCmds) registerRedisBackupCollections(parent *cobra.Command) {
+	for _, c := range []*cobra.Command{s.redisBCDescribeCmd, s.redisBCListCmd} {
+		c.Flags().StringVar(&s.flagRedisBCRegion, "region", "", "Region (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	redisBCDescribeCmd.Flags().StringVar(&flagRedisBCFormat, "format", "", "Output format")
-	redisBCListCmd.Flags().StringVar(&flagRedisBCFormat, "format", "", "Output format")
+	s.redisBCDescribeCmd.Flags().StringVar(&s.flagRedisBCFormat, "format", "", "Output format")
+	s.redisBCListCmd.Flags().StringVar(&s.flagRedisBCFormat, "format", "", "Output format")
 
-	redisBackupCollectionsCmd.AddCommand(redisBCDescribeCmd, redisBCListCmd)
-	parent.AddCommand(redisBackupCollectionsCmd)
+	s.redisBackupCollectionsCmd.AddCommand(s.redisBCDescribeCmd, s.redisBCListCmd)
+	parent.AddCommand(s.redisBackupCollectionsCmd)
 }
 
-func registerRedisClusterBackups(parent *cobra.Command) {
-	for _, c := range []*cobra.Command{redisBackupsDescribeCmd, redisBackupsDeleteCmd, redisBackupsListCmd, redisBackupsExportCmd} {
-		c.Flags().StringVar(&flagRedisBCRegion, "region", "", "Region (required)")
-		c.Flags().StringVar(&flagRedisBCCollection, "backup-collection", "",
+func (s *redisCmds) registerRedisClusterBackups(parent *cobra.Command) {
+	for _, c := range []*cobra.Command{s.redisBackupsDescribeCmd, s.redisBackupsDeleteCmd, s.redisBackupsListCmd, s.redisBackupsExportCmd} {
+		c.Flags().StringVar(&s.flagRedisBCRegion, "region", "", "Region (required)")
+		c.Flags().StringVar(&s.flagRedisBCCollection, "backup-collection", "",
 			"Backup collection ID or fully qualified name (required)")
 		_ = c.MarkFlagRequired("region")
 		_ = c.MarkFlagRequired("backup-collection")
 	}
-	redisBackupsExportCmd.Flags().StringVar(&flagRedisBackupsGcs, "gcs-bucket", "",
+	s.redisBackupsExportCmd.Flags().StringVar(&s.flagRedisBackupsGcs, "gcs-bucket", "",
 		"Destination Cloud Storage bucket for export (required)")
-	_ = redisBackupsExportCmd.MarkFlagRequired("gcs-bucket")
-	for _, c := range []*cobra.Command{redisBackupsDeleteCmd, redisBackupsExportCmd} {
-		c.Flags().BoolVar(&flagRedisBackupsAsync, "async", false, "Return the long-running operation without waiting")
+	_ = s.redisBackupsExportCmd.MarkFlagRequired("gcs-bucket")
+	for _, c := range []*cobra.Command{s.redisBackupsDeleteCmd, s.redisBackupsExportCmd} {
+		c.Flags().BoolVar(&s.flagRedisBackupsAsync, "async", false, "Return the long-running operation without waiting")
 	}
-	redisBackupsDescribeCmd.Flags().StringVar(&flagRedisBCFormat, "format", "", "Output format")
-	redisBackupsListCmd.Flags().StringVar(&flagRedisBCFormat, "format", "", "Output format")
+	s.redisBackupsDescribeCmd.Flags().StringVar(&s.flagRedisBCFormat, "format", "", "Output format")
+	s.redisBackupsListCmd.Flags().StringVar(&s.flagRedisBCFormat, "format", "", "Output format")
 
-	redisClusterBackupsCmd.AddCommand(redisBackupsDeleteCmd, redisBackupsDescribeCmd, redisBackupsExportCmd, redisBackupsListCmd)
-	parent.AddCommand(redisClusterBackupsCmd)
+	s.redisClusterBackupsCmd.AddCommand(s.redisBackupsDeleteCmd, s.redisBackupsDescribeCmd, s.redisBackupsExportCmd, s.redisBackupsListCmd)
+	parent.AddCommand(s.redisClusterBackupsCmd)
 }
 
 func redisBackupCollectionName(id, project, region string) string {
@@ -643,162 +499,136 @@ func redisBackupName(id, project, region, collection string) string {
 	return fmt.Sprintf("%s/backups/%s", redisBackupCollectionName(collection, project, region), id)
 }
 
-func runRedisBCDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisBCDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	bc, err := svc.Projects.Locations.BackupCollections.Get(redisBackupCollectionName(args[0], project, flagRedisBCRegion)).Context(ctx).Do()
+	bc, err := svc.Projects.Locations.BackupCollections.Get(redisBackupCollectionName(args[0], project, s.flagRedisBCRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing backup collection: %w", err)
 	}
-	return emitFormatted(bc, flagRedisBCFormat)
+	return emitFormattedTo(s.inv.stdout, bc, s.flagRedisBCFormat)
 }
 
-func runRedisBCList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisBCList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.BackupCollections.List(redisLocationParent(project, flagRedisBCRegion)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.BackupCollections.List(redisLocationParent(project, s.flagRedisBCRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing backup collections: %w", err)
 	}
-	if flagRedisBCFormat != "" {
-		return emitFormatted(resp.BackupCollections, flagRedisBCFormat)
+	if s.flagRedisBCFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.BackupCollections, s.flagRedisBCFormat)
 	}
-	printTableHeading(len(resp.BackupCollections), "%-40s %s\n", "NAME", "CLUSTER")
+	printTableHeadingTo(s.inv.stdout, len(resp.BackupCollections), "%-40s %s\n", "NAME", "CLUSTER")
 	for _, bc := range resp.BackupCollections {
-		fmt.Printf("%-40s %s\n", path.Base(bc.Name), bc.Cluster)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(bc.Name), bc.Cluster)
 	}
 	return nil
 }
 
-func runRedisBackupsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisBackupsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	b, err := svc.Projects.Locations.BackupCollections.Backups.Get(redisBackupName(args[0], project, flagRedisBCRegion, flagRedisBCCollection)).Context(ctx).Do()
+	b, err := svc.Projects.Locations.BackupCollections.Backups.Get(redisBackupName(args[0], project, s.flagRedisBCRegion, s.flagRedisBCCollection)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing backup: %w", err)
 	}
-	return emitFormatted(b, flagRedisBCFormat)
+	return emitFormattedTo(s.inv.stdout, b, s.flagRedisBCFormat)
 }
 
-func runRedisBackupsDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisBackupsDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.BackupCollections.Backups.Delete(redisBackupName(args[0], project, flagRedisBCRegion, flagRedisBCCollection)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.BackupCollections.Backups.Delete(redisBackupName(args[0], project, s.flagRedisBCRegion, s.flagRedisBCCollection)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting backup: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Delete backup", args[0], flagRedisBackupsAsync)
+	return s.redisFinishOp(ctx, svc, op, "Delete backup", args[0], s.flagRedisBackupsAsync)
 }
 
-func runRedisBackupsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisBackupsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.BackupCollections.Backups.List(redisBackupCollectionName(flagRedisBCCollection, project, flagRedisBCRegion)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.BackupCollections.Backups.List(redisBackupCollectionName(s.flagRedisBCCollection, project, s.flagRedisBCRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing backups: %w", err)
 	}
-	if flagRedisBCFormat != "" {
-		return emitFormatted(resp.Backups, flagRedisBCFormat)
+	if s.flagRedisBCFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Backups, s.flagRedisBCFormat)
 	}
-	printTableHeading(len(resp.Backups), "%-40s %-15s %s\n", "NAME", "STATE", "CREATE_TIME")
+	printTableHeadingTo(s.inv.stdout, len(resp.Backups), "%-40s %-15s %s\n", "NAME", "STATE", "CREATE_TIME")
 	for _, b := range resp.Backups {
-		fmt.Printf("%-40s %-15s %s\n", path.Base(b.Name), b.State, b.CreateTime)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-15s %s\n", path.Base(b.Name), b.State, b.CreateTime)
 	}
 	return nil
 }
 
-func runRedisBackupsExport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisBackupsExport(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	req := &redis.ExportBackupRequest{GcsBucket: flagRedisBackupsGcs}
-	op, err := svc.Projects.Locations.BackupCollections.Backups.Export(redisBackupName(args[0], project, flagRedisBCRegion, flagRedisBCCollection), req).Context(ctx).Do()
+	req := &redis.ExportBackupRequest{GcsBucket: s.flagRedisBackupsGcs}
+	op, err := svc.Projects.Locations.BackupCollections.Backups.Export(redisBackupName(args[0], project, s.flagRedisBCRegion, s.flagRedisBCCollection), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("exporting backup: %w", err)
 	}
-	return redisFinishOp(ctx, svc, op, "Export backup", args[0], flagRedisBackupsAsync)
+	return s.redisFinishOp(ctx, svc, op, "Export backup", args[0], s.flagRedisBackupsAsync)
 }
 
 // --- redis operations ---
 
-var redisOperationsCmd = &cobra.Command{
-	Use:   "operations",
-	Short: "Manage Redis operations",
-}
-
-var (
-	redisOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a Redis operation",
-		Args: cobra.ExactArgs(1), RunE: runRedisOpCancel,
-	}
-	redisOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Redis operation",
-		Args: cobra.ExactArgs(1), RunE: runRedisOpDescribe,
-	}
-	redisOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Redis operations in a region",
-		Args: cobra.NoArgs, RunE: runRedisOpList,
-	}
-)
-
-var (
-	flagRedisOpRegion string
-	flagRedisOpFormat string
-	flagRedisOpFilter string
-)
-
-func init() {
-	for _, c := range []*cobra.Command{redisOpCancelCmd, redisOpDescribeCmd, redisOpListCmd} {
-		c.Flags().StringVar(&flagRedisOpRegion, "region", "", "Region containing the operation (required)")
+func (s *redisCmds) initRedisAll3() {
+	for _, c := range []*cobra.Command{s.redisOpCancelCmd, s.redisOpDescribeCmd, s.redisOpListCmd} {
+		c.Flags().StringVar(&s.flagRedisOpRegion, "region", "", "Region containing the operation (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	redisOpDescribeCmd.Flags().StringVar(&flagRedisOpFormat, "format", "", "Output format")
-	redisOpListCmd.Flags().StringVar(&flagRedisOpFormat, "format", "", "Output format")
-	redisOpListCmd.Flags().StringVar(&flagRedisOpFilter, "filter", "", "Server-side filter expression")
+	s.redisOpDescribeCmd.Flags().StringVar(&s.flagRedisOpFormat, "format", "", "Output format")
+	s.redisOpListCmd.Flags().StringVar(&s.flagRedisOpFormat, "format", "", "Output format")
+	s.redisOpListCmd.Flags().StringVar(&s.flagRedisOpFilter, "filter", "", "Server-side filter expression")
 
-	redisOperationsCmd.AddCommand(redisOpCancelCmd, redisOpDescribeCmd, redisOpListCmd)
-	redisCmd.AddCommand(redisOperationsCmd)
+	s.redisOperationsCmd.AddCommand(s.redisOpCancelCmd, s.redisOpDescribeCmd, s.redisOpListCmd)
+	s.redisCmd.AddCommand(s.redisOperationsCmd)
 }
 
 func redisOpName(id, project, region string) string {
@@ -808,116 +638,87 @@ func redisOpName(id, project, region string) string {
 	return fmt.Sprintf("%s/operations/%s", redisLocationParent(project, region), id)
 }
 
-func runRedisOpCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisOpCancel(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Operations.Cancel(redisOpName(args[0], project, flagRedisOpRegion)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Operations.Cancel(redisOpName(args[0], project, s.flagRedisOpRegion)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runRedisOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisOpDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Operations.Get(redisOpName(args[0], project, flagRedisOpRegion)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Operations.Get(redisOpName(args[0], project, s.flagRedisOpRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagRedisOpFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagRedisOpFormat)
 }
 
-func runRedisOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisOpList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
-	call := svc.Projects.Locations.Operations.List(redisLocationParent(project, flagRedisOpRegion)).Context(ctx)
-	if flagRedisOpFilter != "" {
-		call = call.Filter(flagRedisOpFilter)
+	call := svc.Projects.Locations.Operations.List(redisLocationParent(project, s.flagRedisOpRegion)).Context(ctx)
+	if s.flagRedisOpFilter != "" {
+		call = call.Filter(s.flagRedisOpFilter)
 	}
 	resp, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	if flagRedisOpFormat != "" {
-		return emitFormatted(resp.Operations, flagRedisOpFormat)
+	if s.flagRedisOpFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Operations, s.flagRedisOpFormat)
 	}
-	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
-		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(s.inv.stdout, "%-40s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }
 
 // --- redis regions + zones (both derived from Locations.List) ---
 
-var redisRegionsCmd = &cobra.Command{
-	Use:   "regions",
-	Short: "Explore Cloud Memorystore Redis regions",
+func (s *redisCmds) initRedisAll4() {
+	s.redisRegionsListCmd.Flags().StringVar(&s.flagRedisRZFormat, "format", "", "Output format")
+	s.redisRegionsDescribeCmd.Flags().StringVar(&s.flagRedisRZFormat, "format", "", "Output format")
+	s.redisZonesListCmd.Flags().StringVar(&s.flagRedisRZFormat, "format", "", "Output format")
+
+	s.redisRegionsCmd.AddCommand(s.redisRegionsDescribeCmd, s.redisRegionsListCmd)
+	s.redisZonesCmd.AddCommand(s.redisZonesListCmd)
+	s.redisCmd.AddCommand(s.redisRegionsCmd, s.redisZonesCmd)
 }
 
-var redisRegionsListCmd = &cobra.Command{
-	Use: "list", Short: "List Redis regions available to the project",
-	Args: cobra.NoArgs, RunE: runRedisRegionsList,
-}
-
-var redisRegionsDescribeCmd = &cobra.Command{
-	Use: "describe REGION", Short: "Describe a Redis region",
-	Args: cobra.ExactArgs(1), RunE: runRedisRegionsDescribe,
-}
-
-var redisZonesCmd = &cobra.Command{
-	Use:   "zones",
-	Short: "Explore Cloud Memorystore Redis zones",
-}
-
-var redisZonesListCmd = &cobra.Command{
-	Use: "list", Short: "List Redis zones available across all regions",
-	Args: cobra.NoArgs, RunE: runRedisZonesList,
-}
-
-var (
-	flagRedisRZFormat string
-)
-
-func init() {
-	redisRegionsListCmd.Flags().StringVar(&flagRedisRZFormat, "format", "", "Output format")
-	redisRegionsDescribeCmd.Flags().StringVar(&flagRedisRZFormat, "format", "", "Output format")
-	redisZonesListCmd.Flags().StringVar(&flagRedisRZFormat, "format", "", "Output format")
-
-	redisRegionsCmd.AddCommand(redisRegionsDescribeCmd, redisRegionsListCmd)
-	redisZonesCmd.AddCommand(redisZonesListCmd)
-	redisCmd.AddCommand(redisRegionsCmd, redisZonesCmd)
-}
-
-func runRedisRegionsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisRegionsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
@@ -925,23 +726,23 @@ func runRedisRegionsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing regions: %w", err)
 	}
-	if flagRedisRZFormat != "" {
-		return emitFormatted(resp.Locations, flagRedisRZFormat)
+	if s.flagRedisRZFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Locations, s.flagRedisRZFormat)
 	}
-	printTableHeading(len(resp.Locations), "%-20s %s\n", "REGION", "DISPLAY_NAME")
+	printTableHeadingTo(s.inv.stdout, len(resp.Locations), "%-20s %s\n", "REGION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
-		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
+		fmt.Fprintf(s.inv.stdout, "%-20s %s\n", l.LocationId, l.DisplayName)
 	}
 	return nil
 }
 
-func runRedisRegionsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisRegionsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
@@ -949,19 +750,19 @@ func runRedisRegionsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing region: %w", err)
 	}
-	return emitFormatted(loc, flagRedisRZFormat)
+	return emitFormattedTo(s.inv.stdout, loc, s.flagRedisRZFormat)
 }
 
 // runRedisZonesList extracts availableZones from every region's metadata
 // (the redis Locations API embeds them in Location.Metadata). This matches
 // gcloud-python's behaviour of aggregating zones across regions.
-func runRedisZonesList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *redisCmds) runRedisZonesList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RedisService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Redis(ctx)
 	if err != nil {
 		return err
 	}
@@ -988,12 +789,12 @@ func runRedisZonesList(cmd *cobra.Command, args []string) error {
 			zones = append(zones, zone{Zone: z, Region: loc.LocationId})
 		}
 	}
-	if flagRedisRZFormat != "" {
-		return emitFormatted(zones, flagRedisRZFormat)
+	if s.flagRedisRZFormat != "" {
+		return emitFormattedTo(s.inv.stdout, zones, s.flagRedisRZFormat)
 	}
-	printTableHeading(len(zones), "%-30s %s\n", "ZONE", "REGION")
+	printTableHeadingTo(s.inv.stdout, len(zones), "%-30s %s\n", "ZONE", "REGION")
 	for _, z := range zones {
-		fmt.Printf("%-30s %s\n", z.Zone, z.Region)
+		fmt.Fprintf(s.inv.stdout, "%-30s %s\n", z.Zone, z.Region)
 	}
 	return nil
 }
