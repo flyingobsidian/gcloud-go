@@ -1,86 +1,40 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	eventarc "google.golang.org/api/eventarc/v1"
 )
 
-var eventarcLocationsCmd = &cobra.Command{
-	Use:   "locations",
-	Short: "Explore Eventarc locations",
-}
+func (grp *eventarcCmds) initEventarcLocationsProviders() {
+	grp.eventarcLocationsListCmd.Flags().StringVar(&grp.flagEvLocFormat, "format", "", "Output format")
+	grp.eventarcLocationsListCmd.Flags().Int64Var(&grp.flagEvLocListPage, "page-size", 0, "Page size")
+	grp.eventarcLocationsListCmd.Flags().Int64Var(&grp.flagEvLocListLimit, "limit", 0, "Cap total results (0 = no cap)")
+	grp.eventarcLocationsCmd.AddCommand(grp.eventarcLocationsListCmd)
+	grp.eventarcCmd.AddCommand(grp.eventarcLocationsCmd)
 
-var eventarcLocationsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Eventarc-enabled locations for the project",
-	Args:  cobra.NoArgs,
-	RunE:  runEventarcLocationsList,
-}
-
-var eventarcProvidersCmd = &cobra.Command{
-	Use:   "providers",
-	Short: "Explore Eventarc event providers",
-}
-
-var evProvDescribeCmd = &cobra.Command{
-	Use:   "describe PROVIDER",
-	Short: "Describe an event provider",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runEvProvDescribe,
-}
-
-var evProvListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List event providers in a location",
-	Args:  cobra.NoArgs,
-	RunE:  runEvProvList,
-}
-
-var (
-	flagEvLocFormat    string
-	flagEvLocListLimit int64
-	flagEvLocListPage  int64
-
-	flagEvProvLocation   string
-	flagEvProvFormat     string
-	flagEvProvListLimit  int64
-	flagEvProvListPage   int64
-	flagEvProvListFilter string
-	flagEvProvListURI    bool
-)
-
-func init() {
-	eventarcLocationsListCmd.Flags().StringVar(&flagEvLocFormat, "format", "", "Output format")
-	eventarcLocationsListCmd.Flags().Int64Var(&flagEvLocListPage, "page-size", 0, "Page size")
-	eventarcLocationsListCmd.Flags().Int64Var(&flagEvLocListLimit, "limit", 0, "Cap total results (0 = no cap)")
-	eventarcLocationsCmd.AddCommand(eventarcLocationsListCmd)
-	eventarcCmd.AddCommand(eventarcLocationsCmd)
-
-	for _, c := range []*cobra.Command{evProvDescribeCmd, evProvListCmd} {
-		eventarcAddRegionFlag(c, &flagEvProvLocation, true)
+	for _, c := range []*cobra.Command{grp.evProvDescribeCmd, grp.evProvListCmd} {
+		eventarcAddRegionFlag(c, &grp.flagEvProvLocation, true)
 	}
-	evProvDescribeCmd.Flags().StringVar(&flagEvProvFormat, "format", "", "Output format")
-	evProvListCmd.Flags().StringVar(&flagEvProvFormat, "format", "", "Output format")
-	evProvListCmd.Flags().Int64Var(&flagEvProvListPage, "page-size", 0, "Page size")
-	evProvListCmd.Flags().Int64Var(&flagEvProvListLimit, "limit", 0, "Cap total results (0 = no cap)")
-	evProvListCmd.Flags().StringVar(&flagEvProvListFilter, "filter", "", "Server-side filter expression")
-	evProvListCmd.Flags().BoolVar(&flagEvProvListURI, "uri", false, "Print resource names only")
-	eventarcProvidersCmd.AddCommand(evProvDescribeCmd, evProvListCmd)
-	eventarcCmd.AddCommand(eventarcProvidersCmd)
+	grp.evProvDescribeCmd.Flags().StringVar(&grp.flagEvProvFormat, "format", "", "Output format")
+	grp.evProvListCmd.Flags().StringVar(&grp.flagEvProvFormat, "format", "", "Output format")
+	grp.evProvListCmd.Flags().Int64Var(&grp.flagEvProvListPage, "page-size", 0, "Page size")
+	grp.evProvListCmd.Flags().Int64Var(&grp.flagEvProvListLimit, "limit", 0, "Cap total results (0 = no cap)")
+	grp.evProvListCmd.Flags().StringVar(&grp.flagEvProvListFilter, "filter", "", "Server-side filter expression")
+	grp.evProvListCmd.Flags().BoolVar(&grp.flagEvProvListURI, "uri", false, "Print resource names only")
+	grp.eventarcProvidersCmd.AddCommand(grp.evProvDescribeCmd, grp.evProvListCmd)
+	grp.eventarcCmd.AddCommand(grp.eventarcProvidersCmd)
 }
 
-func runEventarcLocationsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEventarcLocationsList(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
@@ -88,8 +42,8 @@ func runEventarcLocationsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
-		if flagEvLocListPage > 0 {
-			call = call.PageSize(flagEvLocListPage)
+		if grp.flagEvLocListPage > 0 {
+			call = call.PageSize(grp.flagEvLocListPage)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -99,8 +53,8 @@ func runEventarcLocationsList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing locations: %w", err)
 		}
 		all = append(all, resp.Locations...)
-		if flagEvLocListLimit > 0 && int64(len(all)) >= flagEvLocListLimit {
-			all = all[:flagEvLocListLimit]
+		if grp.flagEvLocListLimit > 0 && int64(len(all)) >= grp.flagEvLocListLimit {
+			all = all[:grp.flagEvLocListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -108,53 +62,53 @@ func runEventarcLocationsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagEvLocFormat != "" {
-		return emitFormatted(all, flagEvLocFormat)
+	if grp.flagEvLocFormat != "" {
+		return emitFormattedTo(grp.inv.stdout, all, grp.flagEvLocFormat)
 	}
-	printTableHeading(len(all), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeadingTo(grp.inv.stdout, len(all), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range all {
-		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
+		fmt.Fprintf(grp.inv.stdout, "%-20s %s\n", l.LocationId, l.DisplayName)
 	}
 	return nil
 }
 
-func runEvProvDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvProvDescribe(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	p, err := svc.Projects.Locations.Providers.Get(eventarcResourceName("providers", args[0], project, flagEvProvLocation)).Context(ctx).Do()
+	p, err := svc.Projects.Locations.Providers.Get(eventarcResourceName("providers", args[0], project, grp.flagEvProvLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing provider: %w", err)
 	}
-	return emitFormatted(p, flagEvProvFormat)
+	return emitFormattedTo(grp.inv.stdout, p, grp.flagEvProvFormat)
 }
 
-func runEvProvList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvProvList(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	parent := eventarcLocationParent(project, flagEvProvLocation)
+	parent := eventarcLocationParent(project, grp.flagEvProvLocation)
 	var all []*eventarc.Provider
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Providers.List(parent).Context(ctx)
-		if flagEvProvListFilter != "" {
-			call = call.Filter(flagEvProvListFilter)
+		if grp.flagEvProvListFilter != "" {
+			call = call.Filter(grp.flagEvProvListFilter)
 		}
-		if flagEvProvListPage > 0 {
-			call = call.PageSize(flagEvProvListPage)
+		if grp.flagEvProvListPage > 0 {
+			call = call.PageSize(grp.flagEvProvListPage)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -164,8 +118,8 @@ func runEvProvList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing providers: %w", err)
 		}
 		all = append(all, resp.Providers...)
-		if flagEvProvListLimit > 0 && int64(len(all)) >= flagEvProvListLimit {
-			all = all[:flagEvProvListLimit]
+		if grp.flagEvProvListLimit > 0 && int64(len(all)) >= grp.flagEvProvListLimit {
+			all = all[:grp.flagEvProvListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -173,18 +127,18 @@ func runEvProvList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagEvProvListURI {
+	if grp.flagEvProvListURI {
 		for _, p := range all {
-			fmt.Println(p.Name)
+			fmt.Fprintln(grp.inv.stdout, p.Name)
 		}
 		return nil
 	}
-	if flagEvProvFormat != "" {
-		return emitFormatted(all, flagEvProvFormat)
+	if grp.flagEvProvFormat != "" {
+		return emitFormattedTo(grp.inv.stdout, all, grp.flagEvProvFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeadingTo(grp.inv.stdout, len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, p := range all {
-		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.DisplayName)
+		fmt.Fprintf(grp.inv.stdout, "%-40s %s\n", path.Base(p.Name), p.DisplayName)
 	}
 	return nil
 }

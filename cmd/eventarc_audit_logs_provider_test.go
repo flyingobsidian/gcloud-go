@@ -7,8 +7,9 @@ import (
 )
 
 func TestEventarcAuditLogsProviderRegistered(t *testing.T) {
+	grp := newEventarcCmds(legacyTestInvocation())
 	var alp *cobra.Command
-	for _, c := range eventarcCmd.Commands() {
+	for _, c := range grp.eventarcCmd.Commands() {
 		if c.Name() == "audit-logs-provider" {
 			alp = c
 			break
@@ -42,7 +43,8 @@ func TestEventarcAuditLogsProviderRegistered(t *testing.T) {
 }
 
 func TestEventarcAuditLogsMethodNamesRequiresServiceName(t *testing.T) {
-	f := eventarcAuditLogsMethodNamesListCmd.Flag("service-name")
+	grp := newEventarcCmds(legacyTestInvocation())
+	f := grp.eventarcAuditLogsMethodNamesListCmd.Flag("service-name")
 	if f == nil {
 		t.Fatal("--service-name flag not registered")
 	}
