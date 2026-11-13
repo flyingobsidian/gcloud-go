@@ -7,7 +7,8 @@ import (
 )
 
 func arSubgroup(name string) *cobra.Command {
-	for _, c := range agentRegistryCmd.Commands() {
+	grp := newAgentRegistryCmds(legacyTestInvocation())
+	for _, c := range grp.agentRegistryCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
