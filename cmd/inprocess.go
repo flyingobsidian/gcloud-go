@@ -34,6 +34,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newTasksCmd(inv),
 		newLustreCmd(inv),
 		newCloudShellCmd(inv),
+		newEssentialContactsCmd(inv),
 	}
 }
 
