@@ -3,7 +3,7 @@ package cmd
 import "testing"
 
 func TestInitCommandRegistered(t *testing.T) {
-	for _, c := range rootCmd.Commands() {
+	for _, c := range newRootCmd(legacyTestInvocation(), true).Commands() {
 		if c.Name() == "init" {
 			for _, name := range []string{"no-browser", "console-only", "no-launch-browser", "skip-diagnostics"} {
 				if c.Flags().Lookup(name) == nil {
