@@ -57,6 +57,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newInfoCmd(inv),
 		newComponentsCmd(inv),
 		newCloudLocationFinderCmd(inv),
+		newTelcoAutomationCmd(inv),
 	}
 }
 
