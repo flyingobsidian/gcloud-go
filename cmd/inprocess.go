@@ -55,6 +55,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newPubliccaCmd(inv),
 		newPolicyTroubleshootCmd(inv),
 		newInfoCmd(inv),
+		newComponentsCmd(inv),
 	}
 }
 

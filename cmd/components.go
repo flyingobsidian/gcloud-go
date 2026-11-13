@@ -17,44 +17,16 @@ import (
 // gcloud-go persists the same list so switching between the two binaries
 // stays consistent.
 
-var componentsCmd = &cobra.Command{Use: "components", Short: "Manage Google Cloud CLI components"}
-
-var componentsReposCmd = &cobra.Command{
-	Use:   "repositories",
-	Short: "Manage additional component repositories",
-}
-
-var componentsReposAddCmd = &cobra.Command{
-	Use:   "add URL [URL ...]",
-	Short: "Add one or more Trusted Tester component repositories",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runComponentsReposAdd,
-}
-
-var componentsReposListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List the configured additional component repositories",
-	Args:  cobra.NoArgs,
-	RunE:  runComponentsReposList,
-}
-
-var componentsReposRemoveCmd = &cobra.Command{
-	Use:   "remove URL [URL ...]",
-	Short: "Remove one or more previously-added component repositories",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runComponentsReposRemove,
-}
-
-func init() {
-	componentsReposCmd.AddCommand(componentsReposAddCmd, componentsReposListCmd, componentsReposRemoveCmd)
-	componentsCmd.AddCommand(componentsReposCmd)
+func (s *componentsCmds) initComponents() {
+	s.componentsReposCmd.AddCommand(s.componentsReposAddCmd, s.componentsReposListCmd, s.componentsReposRemoveCmd)
+	s.componentsCmd.AddCommand(s.componentsReposCmd)
 	for _, name := range []string{"install", "list", "reinstall", "remove", "update"} {
-		registerStubCommand(componentsCmd, name, "Not applicable to gcloud-go (single-binary distribution)")
+		registerStubCommand(s.componentsCmd, name, "Not applicable to gcloud-go (single-binary distribution)")
 	}
-	rootCmd.AddCommand(componentsCmd)
+
 }
 
-func runComponentsReposAdd(cmd *cobra.Command, args []string) error {
+func (s *componentsCmds) runComponentsReposAdd(cmd *cobra.Command, args []string) error {
 	repos, err := config.LoadAdditionalRepositories()
 	if err != nil {
 		return err
@@ -77,30 +49,30 @@ func runComponentsReposAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	for _, url := range added {
-		fmt.Printf("Added repository: [%s]\n", url)
+		fmt.Fprintf(s.inv.stdout, "Added repository: [%s]\n", url)
 	}
 	for _, url := range existing {
-		fmt.Printf("Repository already added, skipping: [%s]\n", url)
+		fmt.Fprintf(s.inv.stdout, "Repository already added, skipping: [%s]\n", url)
 	}
 	return nil
 }
 
-func runComponentsReposList(cmd *cobra.Command, args []string) error {
+func (s *componentsCmds) runComponentsReposList(cmd *cobra.Command, args []string) error {
 	repos, err := config.LoadAdditionalRepositories()
 	if err != nil {
 		return err
 	}
 	if len(repos) == 0 {
-		fmt.Println("No additional component repositories are configured.")
+		fmt.Fprintln(s.inv.stdout, "No additional component repositories are configured.")
 		return nil
 	}
 	for _, r := range repos {
-		fmt.Println(r)
+		fmt.Fprintln(s.inv.stdout, r)
 	}
 	return nil
 }
 
-func runComponentsReposRemove(cmd *cobra.Command, args []string) error {
+func (s *componentsCmds) runComponentsReposRemove(cmd *cobra.Command, args []string) error {
 	repos, err := config.LoadAdditionalRepositories()
 	if err != nil {
 		return err
@@ -134,7 +106,54 @@ func runComponentsReposRemove(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	for _, url := range removed {
-		fmt.Printf("Removed repository: [%s]\n", url)
+		fmt.Fprintf(s.inv.stdout, "Removed repository: [%s]\n", url)
 	}
 	return nil
+}
+
+// componentsCmds holds the commands and flag values of one invocation's "components"
+// command group, so invocations don't share state (#2070).
+type componentsCmds struct {
+	inv *invocation
+
+	componentsCmd            *cobra.Command
+	componentsReposCmd       *cobra.Command
+	componentsReposAddCmd    *cobra.Command
+	componentsReposListCmd   *cobra.Command
+	componentsReposRemoveCmd *cobra.Command
+}
+
+// newComponentsCmd returns the "components" command group for inv.
+func newComponentsCmd(inv *invocation) *cobra.Command {
+	return newComponentsCmds(inv).componentsCmd
+}
+
+// newComponentsCmds builds the "components" command group for inv and returns its state.
+func newComponentsCmds(inv *invocation) *componentsCmds {
+	s := &componentsCmds{inv: inv}
+	s.componentsCmd = &cobra.Command{Use: "components", Short: "Manage Google Cloud CLI components"}
+	s.componentsReposCmd = &cobra.Command{
+		Use:   "repositories",
+		Short: "Manage additional component repositories",
+	}
+	s.componentsReposAddCmd = &cobra.Command{
+		Use:   "add URL [URL ...]",
+		Short: "Add one or more Trusted Tester component repositories",
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  s.runComponentsReposAdd,
+	}
+	s.componentsReposListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List the configured additional component repositories",
+		Args:  cobra.NoArgs,
+		RunE:  s.runComponentsReposList,
+	}
+	s.componentsReposRemoveCmd = &cobra.Command{
+		Use:   "remove URL [URL ...]",
+		Short: "Remove one or more previously-added component repositories",
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  s.runComponentsReposRemove,
+	}
+	s.initComponents()
+	return s
 }
