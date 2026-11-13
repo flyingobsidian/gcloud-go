@@ -31,6 +31,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newSchedulerCmd(inv),
 		newStorageCmd(inv),
 		newWorkflowsCmd(inv),
+		newTasksCmd(inv),
 	}
 }
 

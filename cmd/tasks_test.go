@@ -7,7 +7,8 @@ import (
 )
 
 func tasksSubgroup(name string) *cobra.Command {
-	for _, c := range tasksCmd.Commands() {
+	grp := newTasksCmds(legacyTestInvocation())
+	for _, c := range grp.tasksCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
