@@ -7,7 +7,8 @@ import (
 )
 
 func dpmSubgroup(name string) *cobra.Command {
-	for _, c := range deploymentManagerCmd.Commands() {
+	grp := newDeploymentManagerCmds(legacyTestInvocation())
+	for _, c := range grp.deploymentManagerCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
