@@ -7,7 +7,8 @@ import (
 )
 
 func appSubgroup(name string) *cobra.Command {
-	for _, c := range appCmd.Commands() {
+	grp := newAppCmds(legacyTestInvocation())
+	for _, c := range grp.appCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
