@@ -1,100 +1,57 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 )
 
 // --- gcloud vmware private-clouds (#1123) ---
 
-var vmwarePrivateCloudsCmd = &cobra.Command{Use: "private-clouds", Short: "Manage VMware Engine private clouds"}
-
-var (
-	flagVmwarePcLocation   string
-	flagVmwarePcFormat     string
-	flagVmwarePcConfigFile string
-	flagVmwarePcUpdateMask string
-	flagVmwarePcPageSize   int64
-	flagVmwarePcClusterID  string
-	flagVmwarePcRequestID  string
-	flagVmwarePcEtag       string
-)
-
-var (
-	vmwarePcCreateCmd = &cobra.Command{
-		Use: "create PRIVATE_CLOUD", Short: "Create a VMware Engine private cloud",
-		Args: cobra.ExactArgs(1), RunE: runVmwarePcCreate,
-	}
-	vmwarePcDeleteCmd = &cobra.Command{
-		Use: "delete PRIVATE_CLOUD", Short: "Delete a VMware Engine private cloud",
-		Args: cobra.ExactArgs(1), RunE: runVmwarePcDelete,
-	}
-	vmwarePcDescribeCmd = &cobra.Command{
-		Use: "describe PRIVATE_CLOUD", Short: "Describe a VMware Engine private cloud",
-		Args: cobra.ExactArgs(1), RunE: runVmwarePcDescribe,
-	}
-	vmwarePcListCmd = &cobra.Command{
-		Use: "list", Short: "List VMware Engine private clouds in a location",
-		Args: cobra.NoArgs, RunE: runVmwarePcList,
-	}
-	vmwarePcUpdateCmd = &cobra.Command{
-		Use: "update PRIVATE_CLOUD", Short: "Update a VMware Engine private cloud",
-		Args: cobra.ExactArgs(1), RunE: runVmwarePcUpdate,
-	}
-	vmwarePcMigrateMgmtVmsCmd = &cobra.Command{
-		Use:   "migrate-management-vms PRIVATE_CLOUD",
-		Short: "Migrate management VMs from the current management cluster to a workload cluster",
-		Args:  cobra.ExactArgs(1), RunE: runVmwarePcMigrateMgmtVms,
-	}
-)
-
-func init() {
+func (s *vmwareCmds) initVmwarePrivateClouds() {
 	all := []*cobra.Command{
-		vmwarePcCreateCmd, vmwarePcDeleteCmd, vmwarePcDescribeCmd,
-		vmwarePcListCmd, vmwarePcUpdateCmd, vmwarePcMigrateMgmtVmsCmd,
+		s.vmwarePcCreateCmd, s.vmwarePcDeleteCmd, s.vmwarePcDescribeCmd,
+		s.vmwarePcListCmd, s.vmwarePcUpdateCmd, s.vmwarePcMigrateMgmtVmsCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagVmwarePcLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagVmwarePcLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagVmwarePcFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagVmwarePcFormat, "format", "", "Output format")
 	}
-	vmwarePcCreateCmd.Flags().StringVar(&flagVmwarePcConfigFile, "config-file", "", "YAML/JSON file with private cloud body (required)")
-	_ = vmwarePcCreateCmd.MarkFlagRequired("config-file")
-	vmwarePcUpdateCmd.Flags().StringVar(&flagVmwarePcConfigFile, "config-file", "", "YAML/JSON file with private cloud body (required)")
-	_ = vmwarePcUpdateCmd.MarkFlagRequired("config-file")
-	vmwarePcUpdateCmd.Flags().StringVar(&flagVmwarePcUpdateMask, "update-mask", "", "Update mask (comma-separated field paths)")
-	vmwarePcListCmd.Flags().Int64Var(&flagVmwarePcPageSize, "page-size", 0, "Maximum results per page")
-	vmwarePcMigrateMgmtVmsCmd.Flags().StringVar(&flagVmwarePcClusterID, "cluster-id", "",
+	s.vmwarePcCreateCmd.Flags().StringVar(&s.flagVmwarePcConfigFile, "config-file", "", "YAML/JSON file with private cloud body (required)")
+	_ = s.vmwarePcCreateCmd.MarkFlagRequired("config-file")
+	s.vmwarePcUpdateCmd.Flags().StringVar(&s.flagVmwarePcConfigFile, "config-file", "", "YAML/JSON file with private cloud body (required)")
+	_ = s.vmwarePcUpdateCmd.MarkFlagRequired("config-file")
+	s.vmwarePcUpdateCmd.Flags().StringVar(&s.flagVmwarePcUpdateMask, "update-mask", "", "Update mask (comma-separated field paths)")
+	s.vmwarePcListCmd.Flags().Int64Var(&s.flagVmwarePcPageSize, "page-size", 0, "Maximum results per page")
+	s.vmwarePcMigrateMgmtVmsCmd.Flags().StringVar(&s.flagVmwarePcClusterID, "cluster-id", "",
 		"ID of the destination workload cluster (must already exist in the private cloud) (required)")
-	_ = vmwarePcMigrateMgmtVmsCmd.MarkFlagRequired("cluster-id")
-	vmwarePcMigrateMgmtVmsCmd.Flags().StringVar(&flagVmwarePcRequestID, "request-id", "",
+	_ = s.vmwarePcMigrateMgmtVmsCmd.MarkFlagRequired("cluster-id")
+	s.vmwarePcMigrateMgmtVmsCmd.Flags().StringVar(&s.flagVmwarePcRequestID, "request-id", "",
 		"Optional idempotency UUID")
-	vmwarePcMigrateMgmtVmsCmd.Flags().StringVar(&flagVmwarePcEtag, "etag", "",
+	s.vmwarePcMigrateMgmtVmsCmd.Flags().StringVar(&s.flagVmwarePcEtag, "etag", "",
 		"Optional resource etag for optimistic concurrency")
 
-	vmwarePrivateCloudsCmd.AddCommand(all...)
-	vmwareCmd.AddCommand(vmwarePrivateCloudsCmd)
+	s.vmwarePrivateCloudsCmd.AddCommand(all...)
+	s.vmwareCmd.AddCommand(s.vmwarePrivateCloudsCmd)
 }
 
-func vmwarePcName(id string) (string, error) {
-	return vmwareResource(flagVmwarePcLocation, "privateClouds", id)
+func (s *vmwareCmds) vmwarePcName(id string) (string, error) {
+	return s.vmwareResource(s.flagVmwarePcLocation, "privateClouds", id)
 }
 
-func runVmwarePcCreate(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwarePcLocation)
+func (s *vmwareCmds) runVmwarePcCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwarePcLocation)
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.PrivateCloud{}
-	if err := loadYAMLOrJSONInto(flagVmwarePcConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwarePcConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -102,17 +59,17 @@ func runVmwarePcCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating private cloud: %w", err)
 	}
-	fmt.Printf("Create private cloud [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwarePcFormat)
+	fmt.Fprintf(s.inv.stdout, "Create private cloud [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwarePcFormat)
 }
 
-func runVmwarePcDelete(cmd *cobra.Command, args []string) error {
-	name, err := vmwarePcName(args[0])
+func (s *vmwareCmds) runVmwarePcDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwarePcName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,17 +77,17 @@ func runVmwarePcDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting private cloud: %w", err)
 	}
-	fmt.Printf("Delete private cloud [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwarePcFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete private cloud [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwarePcFormat)
 }
 
-func runVmwarePcDescribe(cmd *cobra.Command, args []string) error {
-	name, err := vmwarePcName(args[0])
+func (s *vmwareCmds) runVmwarePcDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwarePcName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -138,16 +95,16 @@ func runVmwarePcDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing private cloud: %w", err)
 	}
-	return emitFormatted(got, flagVmwarePcFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagVmwarePcFormat)
 }
 
-func runVmwarePcList(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwarePcLocation)
+func (s *vmwareCmds) runVmwarePcList(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwarePcLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -155,8 +112,8 @@ func runVmwarePcList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.PrivateClouds.List(parent).Context(ctx)
-		if flagVmwarePcPageSize > 0 {
-			call = call.PageSize(flagVmwarePcPageSize)
+		if s.flagVmwarePcPageSize > 0 {
+			call = call.PageSize(s.flagVmwarePcPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -171,48 +128,48 @@ func runVmwarePcList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagVmwarePcFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagVmwarePcFormat)
 }
 
-func runVmwarePcMigrateMgmtVms(cmd *cobra.Command, args []string) error {
-	name, err := vmwarePcName(args[0])
+func (s *vmwareCmds) runVmwarePcMigrateMgmtVms(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwarePcName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
 	req := &vmwareengine.MigrateManagementVmsRequest{
-		ClusterId: flagVmwarePcClusterID,
-		RequestId: flagVmwarePcRequestID,
-		Etag:      flagVmwarePcEtag,
+		ClusterId: s.flagVmwarePcClusterID,
+		RequestId: s.flagVmwarePcRequestID,
+		Etag:      s.flagVmwarePcEtag,
 	}
 	op, err := svc.Projects.Locations.PrivateClouds.MigrateManagementVms(name, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("migrating management VMs: %w", err)
 	}
-	fmt.Printf("Migrate management VMs on private cloud [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwarePcFormat)
+	fmt.Fprintf(s.inv.stdout, "Migrate management VMs on private cloud [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwarePcFormat)
 }
 
-func runVmwarePcUpdate(cmd *cobra.Command, args []string) error {
-	name, err := vmwarePcName(args[0])
+func (s *vmwareCmds) runVmwarePcUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwarePcName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.PrivateCloud{}
-	if err := loadYAMLOrJSONInto(flagVmwarePcConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwarePcConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagVmwarePcUpdateMask
+	mask := s.flagVmwarePcUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -220,6 +177,6 @@ func runVmwarePcUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating private cloud: %w", err)
 	}
-	fmt.Printf("Update private cloud [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwarePcFormat)
+	fmt.Fprintf(s.inv.stdout, "Update private cloud [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwarePcFormat)
 }

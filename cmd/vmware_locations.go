@@ -1,55 +1,34 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 )
 
 // --- gcloud vmware locations (#1117) ---
 
-var vmwareLocationsCmd = &cobra.Command{Use: "locations", Short: "List VMware Engine locations"}
-
-var (
-	flagVmwareLocFormat   string
-	flagVmwareLocFilter   string
-	flagVmwareLocPageSize int64
-)
-
-var (
-	vmwareLocDescribeCmd = &cobra.Command{
-		Use: "describe LOCATION", Short: "Describe a VMware Engine location",
-		Args: cobra.ExactArgs(1), RunE: runVmwareLocDescribe,
-	}
-	vmwareLocListCmd = &cobra.Command{
-		Use: "list", Short: "List VMware Engine locations",
-		Args: cobra.NoArgs, RunE: runVmwareLocList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{vmwareLocDescribeCmd, vmwareLocListCmd}
+func (s *vmwareCmds) initVmwareLocations() {
+	all := []*cobra.Command{s.vmwareLocDescribeCmd, s.vmwareLocListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagVmwareLocFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagVmwareLocFormat, "format", "", "Output format")
 	}
-	vmwareLocListCmd.Flags().StringVar(&flagVmwareLocFilter, "filter", "", "Server-side filter expression")
-	vmwareLocListCmd.Flags().Int64Var(&flagVmwareLocPageSize, "page-size", 0, "Maximum results per page")
+	s.vmwareLocListCmd.Flags().StringVar(&s.flagVmwareLocFilter, "filter", "", "Server-side filter expression")
+	s.vmwareLocListCmd.Flags().Int64Var(&s.flagVmwareLocPageSize, "page-size", 0, "Maximum results per page")
 
-	vmwareLocationsCmd.AddCommand(all...)
-	vmwareCmd.AddCommand(vmwareLocationsCmd)
+	s.vmwareLocationsCmd.AddCommand(all...)
+	s.vmwareCmd.AddCommand(s.vmwareLocationsCmd)
 }
 
-func runVmwareLocDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *vmwareCmds) runVmwareLocDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	name := fmt.Sprintf("projects/%s/locations/%s", project, args[0])
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -57,17 +36,17 @@ func runVmwareLocDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(got, flagVmwareLocFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagVmwareLocFormat)
 }
 
-func runVmwareLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *vmwareCmds) runVmwareLocList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	parent := fmt.Sprintf("projects/%s", project)
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -75,11 +54,11 @@ func runVmwareLocList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.List(parent).Context(ctx)
-		if flagVmwareLocFilter != "" {
-			call = call.Filter(flagVmwareLocFilter)
+		if s.flagVmwareLocFilter != "" {
+			call = call.Filter(s.flagVmwareLocFilter)
 		}
-		if flagVmwareLocPageSize > 0 {
-			call = call.PageSize(flagVmwareLocPageSize)
+		if s.flagVmwareLocPageSize > 0 {
+			call = call.PageSize(s.flagVmwareLocPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -94,5 +73,5 @@ func runVmwareLocList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagVmwareLocFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagVmwareLocFormat)
 }

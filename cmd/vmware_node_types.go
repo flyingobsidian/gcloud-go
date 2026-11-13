@@ -1,59 +1,38 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 )
 
 // --- gcloud vmware node-types (#1121) ---
 
-var vmwareNodeTypesCmd = &cobra.Command{Use: "node-types", Short: "Show VMware Engine node types"}
-
-var (
-	flagVmwareNtLocation string
-	flagVmwareNtFormat   string
-	flagVmwareNtPageSize int64
-)
-
-var (
-	vmwareNtDescribeCmd = &cobra.Command{
-		Use: "describe NODE_TYPE", Short: "Describe a VMware Engine node type",
-		Args: cobra.ExactArgs(1), RunE: runVmwareNtDescribe,
-	}
-	vmwareNtListCmd = &cobra.Command{
-		Use: "list", Short: "List VMware Engine node types in a location",
-		Args: cobra.NoArgs, RunE: runVmwareNtList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{vmwareNtDescribeCmd, vmwareNtListCmd}
+func (s *vmwareCmds) initVmwareNodeTypes() {
+	all := []*cobra.Command{s.vmwareNtDescribeCmd, s.vmwareNtListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagVmwareNtLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagVmwareNtLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagVmwareNtFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagVmwareNtFormat, "format", "", "Output format")
 	}
-	vmwareNtListCmd.Flags().Int64Var(&flagVmwareNtPageSize, "page-size", 0, "Maximum results per page")
+	s.vmwareNtListCmd.Flags().Int64Var(&s.flagVmwareNtPageSize, "page-size", 0, "Maximum results per page")
 
-	vmwareNodeTypesCmd.AddCommand(all...)
-	vmwareCmd.AddCommand(vmwareNodeTypesCmd)
+	s.vmwareNodeTypesCmd.AddCommand(all...)
+	s.vmwareCmd.AddCommand(s.vmwareNodeTypesCmd)
 }
 
-func vmwareNtName(id string) (string, error) {
-	return vmwareResource(flagVmwareNtLocation, "nodeTypes", id)
+func (s *vmwareCmds) vmwareNtName(id string) (string, error) {
+	return s.vmwareResource(s.flagVmwareNtLocation, "nodeTypes", id)
 }
 
-func runVmwareNtDescribe(cmd *cobra.Command, args []string) error {
-	name, err := vmwareNtName(args[0])
+func (s *vmwareCmds) runVmwareNtDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareNtName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -61,16 +40,16 @@ func runVmwareNtDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing node type: %w", err)
 	}
-	return emitFormatted(got, flagVmwareNtFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagVmwareNtFormat)
 }
 
-func runVmwareNtList(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwareNtLocation)
+func (s *vmwareCmds) runVmwareNtList(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwareNtLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -78,8 +57,8 @@ func runVmwareNtList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.NodeTypes.List(parent).Context(ctx)
-		if flagVmwareNtPageSize > 0 {
-			call = call.PageSize(flagVmwareNtPageSize)
+		if s.flagVmwareNtPageSize > 0 {
+			call = call.PageSize(s.flagVmwareNtPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -94,5 +73,5 @@ func runVmwareNtList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagVmwareNtFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagVmwareNtFormat)
 }

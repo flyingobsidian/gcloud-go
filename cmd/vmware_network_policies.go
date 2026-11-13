@@ -1,85 +1,50 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 )
 
 // --- gcloud vmware network-policies (#1119) ---
 
-var vmwareNetworkPoliciesCmd = &cobra.Command{Use: "network-policies", Short: "Manage VMware Engine network policies"}
-
-var (
-	flagVmwareNpolLocation   string
-	flagVmwareNpolFormat     string
-	flagVmwareNpolConfigFile string
-	flagVmwareNpolUpdateMask string
-	flagVmwareNpolPageSize   int64
-)
-
-var (
-	vmwareNpolCreateCmd = &cobra.Command{
-		Use: "create POLICY", Short: "Create a VMware Engine network policy",
-		Args: cobra.ExactArgs(1), RunE: runVmwareNpolCreate,
-	}
-	vmwareNpolDeleteCmd = &cobra.Command{
-		Use: "delete POLICY", Short: "Delete a VMware Engine network policy",
-		Args: cobra.ExactArgs(1), RunE: runVmwareNpolDelete,
-	}
-	vmwareNpolDescribeCmd = &cobra.Command{
-		Use: "describe POLICY", Short: "Describe a VMware Engine network policy",
-		Args: cobra.ExactArgs(1), RunE: runVmwareNpolDescribe,
-	}
-	vmwareNpolListCmd = &cobra.Command{
-		Use: "list", Short: "List VMware Engine network policies in a location",
-		Args: cobra.NoArgs, RunE: runVmwareNpolList,
-	}
-	vmwareNpolUpdateCmd = &cobra.Command{
-		Use: "update POLICY", Short: "Update a VMware Engine network policy",
-		Args: cobra.ExactArgs(1), RunE: runVmwareNpolUpdate,
-	}
-)
-
-func init() {
+func (s *vmwareCmds) initVmwareNetworkPolicies() {
 	all := []*cobra.Command{
-		vmwareNpolCreateCmd, vmwareNpolDeleteCmd, vmwareNpolDescribeCmd,
-		vmwareNpolListCmd, vmwareNpolUpdateCmd,
+		s.vmwareNpolCreateCmd, s.vmwareNpolDeleteCmd, s.vmwareNpolDescribeCmd,
+		s.vmwareNpolListCmd, s.vmwareNpolUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagVmwareNpolLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagVmwareNpolLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagVmwareNpolFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagVmwareNpolFormat, "format", "", "Output format")
 	}
-	vmwareNpolCreateCmd.Flags().StringVar(&flagVmwareNpolConfigFile, "config-file", "", "YAML/JSON file with network policy body (required)")
-	_ = vmwareNpolCreateCmd.MarkFlagRequired("config-file")
-	vmwareNpolUpdateCmd.Flags().StringVar(&flagVmwareNpolConfigFile, "config-file", "", "YAML/JSON file with network policy body (required)")
-	_ = vmwareNpolUpdateCmd.MarkFlagRequired("config-file")
-	vmwareNpolUpdateCmd.Flags().StringVar(&flagVmwareNpolUpdateMask, "update-mask", "", "Update mask (comma-separated field paths)")
-	vmwareNpolListCmd.Flags().Int64Var(&flagVmwareNpolPageSize, "page-size", 0, "Maximum results per page")
+	s.vmwareNpolCreateCmd.Flags().StringVar(&s.flagVmwareNpolConfigFile, "config-file", "", "YAML/JSON file with network policy body (required)")
+	_ = s.vmwareNpolCreateCmd.MarkFlagRequired("config-file")
+	s.vmwareNpolUpdateCmd.Flags().StringVar(&s.flagVmwareNpolConfigFile, "config-file", "", "YAML/JSON file with network policy body (required)")
+	_ = s.vmwareNpolUpdateCmd.MarkFlagRequired("config-file")
+	s.vmwareNpolUpdateCmd.Flags().StringVar(&s.flagVmwareNpolUpdateMask, "update-mask", "", "Update mask (comma-separated field paths)")
+	s.vmwareNpolListCmd.Flags().Int64Var(&s.flagVmwareNpolPageSize, "page-size", 0, "Maximum results per page")
 
-	vmwareNetworkPoliciesCmd.AddCommand(all...)
-	vmwareCmd.AddCommand(vmwareNetworkPoliciesCmd)
+	s.vmwareNetworkPoliciesCmd.AddCommand(all...)
+	s.vmwareCmd.AddCommand(s.vmwareNetworkPoliciesCmd)
 }
 
-func vmwareNpolName(id string) (string, error) {
-	return vmwareResource(flagVmwareNpolLocation, "networkPolicies", id)
+func (s *vmwareCmds) vmwareNpolName(id string) (string, error) {
+	return s.vmwareResource(s.flagVmwareNpolLocation, "networkPolicies", id)
 }
 
-func runVmwareNpolCreate(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwareNpolLocation)
+func (s *vmwareCmds) runVmwareNpolCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwareNpolLocation)
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.NetworkPolicy{}
-	if err := loadYAMLOrJSONInto(flagVmwareNpolConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwareNpolConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -87,17 +52,17 @@ func runVmwareNpolCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating network policy: %w", err)
 	}
-	fmt.Printf("Create network policy [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwareNpolFormat)
+	fmt.Fprintf(s.inv.stdout, "Create network policy [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareNpolFormat)
 }
 
-func runVmwareNpolDelete(cmd *cobra.Command, args []string) error {
-	name, err := vmwareNpolName(args[0])
+func (s *vmwareCmds) runVmwareNpolDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareNpolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -105,17 +70,17 @@ func runVmwareNpolDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting network policy: %w", err)
 	}
-	fmt.Printf("Delete network policy [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwareNpolFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete network policy [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareNpolFormat)
 }
 
-func runVmwareNpolDescribe(cmd *cobra.Command, args []string) error {
-	name, err := vmwareNpolName(args[0])
+func (s *vmwareCmds) runVmwareNpolDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareNpolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -123,16 +88,16 @@ func runVmwareNpolDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing network policy: %w", err)
 	}
-	return emitFormatted(got, flagVmwareNpolFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagVmwareNpolFormat)
 }
 
-func runVmwareNpolList(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwareNpolLocation)
+func (s *vmwareCmds) runVmwareNpolList(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwareNpolLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,8 +105,8 @@ func runVmwareNpolList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.NetworkPolicies.List(parent).Context(ctx)
-		if flagVmwareNpolPageSize > 0 {
-			call = call.PageSize(flagVmwareNpolPageSize)
+		if s.flagVmwareNpolPageSize > 0 {
+			call = call.PageSize(s.flagVmwareNpolPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -156,25 +121,25 @@ func runVmwareNpolList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagVmwareNpolFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagVmwareNpolFormat)
 }
 
-func runVmwareNpolUpdate(cmd *cobra.Command, args []string) error {
-	name, err := vmwareNpolName(args[0])
+func (s *vmwareCmds) runVmwareNpolUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareNpolName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.NetworkPolicy{}
-	if err := loadYAMLOrJSONInto(flagVmwareNpolConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwareNpolConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagVmwareNpolUpdateMask
+	mask := s.flagVmwareNpolUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -182,6 +147,6 @@ func runVmwareNpolUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating network policy: %w", err)
 	}
-	fmt.Printf("Update network policy [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwareNpolFormat)
+	fmt.Fprintf(s.inv.stdout, "Update network policy [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareNpolFormat)
 }

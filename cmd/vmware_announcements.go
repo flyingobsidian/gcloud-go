@@ -1,59 +1,38 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 )
 
 // --- gcloud vmware announcements (#1114) ---
 
-var vmwareAnnouncementsCmd = &cobra.Command{Use: "announcements", Short: "Manage VMware Engine announcements"}
-
-var (
-	flagVmwareAnnLocation string
-	flagVmwareAnnFormat   string
-	flagVmwareAnnPageSize int64
-)
-
-var (
-	vmwareAnnDescribeCmd = &cobra.Command{
-		Use: "describe ANNOUNCEMENT", Short: "Describe a VMware Engine announcement",
-		Args: cobra.ExactArgs(1), RunE: runVmwareAnnDescribe,
-	}
-	vmwareAnnListCmd = &cobra.Command{
-		Use: "list", Short: "List VMware Engine announcements in a location",
-		Args: cobra.NoArgs, RunE: runVmwareAnnList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{vmwareAnnDescribeCmd, vmwareAnnListCmd}
+func (s *vmwareCmds) initVmwareAnnouncements() {
+	all := []*cobra.Command{s.vmwareAnnDescribeCmd, s.vmwareAnnListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagVmwareAnnLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagVmwareAnnLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagVmwareAnnFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagVmwareAnnFormat, "format", "", "Output format")
 	}
-	vmwareAnnListCmd.Flags().Int64Var(&flagVmwareAnnPageSize, "page-size", 0, "Maximum results per page")
+	s.vmwareAnnListCmd.Flags().Int64Var(&s.flagVmwareAnnPageSize, "page-size", 0, "Maximum results per page")
 
-	vmwareAnnouncementsCmd.AddCommand(all...)
-	vmwareCmd.AddCommand(vmwareAnnouncementsCmd)
+	s.vmwareAnnouncementsCmd.AddCommand(all...)
+	s.vmwareCmd.AddCommand(s.vmwareAnnouncementsCmd)
 }
 
-func vmwareAnnName(id string) (string, error) {
-	return vmwareResource(flagVmwareAnnLocation, "announcements", id)
+func (s *vmwareCmds) vmwareAnnName(id string) (string, error) {
+	return s.vmwareResource(s.flagVmwareAnnLocation, "announcements", id)
 }
 
-func runVmwareAnnDescribe(cmd *cobra.Command, args []string) error {
-	name, err := vmwareAnnName(args[0])
+func (s *vmwareCmds) runVmwareAnnDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareAnnName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -61,16 +40,16 @@ func runVmwareAnnDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing announcement: %w", err)
 	}
-	return emitFormatted(got, flagVmwareAnnFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagVmwareAnnFormat)
 }
 
-func runVmwareAnnList(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwareAnnLocation)
+func (s *vmwareCmds) runVmwareAnnList(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwareAnnLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -78,8 +57,8 @@ func runVmwareAnnList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Announcements.List(parent).Context(ctx)
-		if flagVmwareAnnPageSize > 0 {
-			call = call.PageSize(flagVmwareAnnPageSize)
+		if s.flagVmwareAnnPageSize > 0 {
+			call = call.PageSize(s.flagVmwareAnnPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -94,5 +73,5 @@ func runVmwareAnnList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagVmwareAnnFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagVmwareAnnFormat)
 }

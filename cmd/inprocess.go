@@ -130,6 +130,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newAccessContextManagerCmd(inv),
 		newAssetCmd(inv),
 		newPrivatecaCmd(inv),
+		newVmwareCmd(inv),
 	}
 }
 

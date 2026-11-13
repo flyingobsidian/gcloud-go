@@ -1,85 +1,50 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 )
 
 // --- gcloud vmware networks (#1120) ---
 
-var vmwareNetworksCmd = &cobra.Command{Use: "networks", Short: "Manage VMware Engine networks"}
-
-var (
-	flagVmwareNetLocation   string
-	flagVmwareNetFormat     string
-	flagVmwareNetConfigFile string
-	flagVmwareNetUpdateMask string
-	flagVmwareNetPageSize   int64
-)
-
-var (
-	vmwareNetCreateCmd = &cobra.Command{
-		Use: "create NETWORK", Short: "Create a VMware Engine network",
-		Args: cobra.ExactArgs(1), RunE: runVmwareNetCreate,
-	}
-	vmwareNetDeleteCmd = &cobra.Command{
-		Use: "delete NETWORK", Short: "Delete a VMware Engine network",
-		Args: cobra.ExactArgs(1), RunE: runVmwareNetDelete,
-	}
-	vmwareNetDescribeCmd = &cobra.Command{
-		Use: "describe NETWORK", Short: "Describe a VMware Engine network",
-		Args: cobra.ExactArgs(1), RunE: runVmwareNetDescribe,
-	}
-	vmwareNetListCmd = &cobra.Command{
-		Use: "list", Short: "List VMware Engine networks in a location",
-		Args: cobra.NoArgs, RunE: runVmwareNetList,
-	}
-	vmwareNetUpdateCmd = &cobra.Command{
-		Use: "update NETWORK", Short: "Update a VMware Engine network",
-		Args: cobra.ExactArgs(1), RunE: runVmwareNetUpdate,
-	}
-)
-
-func init() {
+func (s *vmwareCmds) initVmwareNetworks() {
 	all := []*cobra.Command{
-		vmwareNetCreateCmd, vmwareNetDeleteCmd, vmwareNetDescribeCmd,
-		vmwareNetListCmd, vmwareNetUpdateCmd,
+		s.vmwareNetCreateCmd, s.vmwareNetDeleteCmd, s.vmwareNetDescribeCmd,
+		s.vmwareNetListCmd, s.vmwareNetUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagVmwareNetLocation, "location", "", "Location (required, typically \"global\")")
+		c.Flags().StringVar(&s.flagVmwareNetLocation, "location", "", "Location (required, typically \"global\")")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagVmwareNetFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagVmwareNetFormat, "format", "", "Output format")
 	}
-	vmwareNetCreateCmd.Flags().StringVar(&flagVmwareNetConfigFile, "config-file", "", "YAML/JSON file with VMware Engine network body (required)")
-	_ = vmwareNetCreateCmd.MarkFlagRequired("config-file")
-	vmwareNetUpdateCmd.Flags().StringVar(&flagVmwareNetConfigFile, "config-file", "", "YAML/JSON file with VMware Engine network body (required)")
-	_ = vmwareNetUpdateCmd.MarkFlagRequired("config-file")
-	vmwareNetUpdateCmd.Flags().StringVar(&flagVmwareNetUpdateMask, "update-mask", "", "Update mask (comma-separated field paths)")
-	vmwareNetListCmd.Flags().Int64Var(&flagVmwareNetPageSize, "page-size", 0, "Maximum results per page")
+	s.vmwareNetCreateCmd.Flags().StringVar(&s.flagVmwareNetConfigFile, "config-file", "", "YAML/JSON file with VMware Engine network body (required)")
+	_ = s.vmwareNetCreateCmd.MarkFlagRequired("config-file")
+	s.vmwareNetUpdateCmd.Flags().StringVar(&s.flagVmwareNetConfigFile, "config-file", "", "YAML/JSON file with VMware Engine network body (required)")
+	_ = s.vmwareNetUpdateCmd.MarkFlagRequired("config-file")
+	s.vmwareNetUpdateCmd.Flags().StringVar(&s.flagVmwareNetUpdateMask, "update-mask", "", "Update mask (comma-separated field paths)")
+	s.vmwareNetListCmd.Flags().Int64Var(&s.flagVmwareNetPageSize, "page-size", 0, "Maximum results per page")
 
-	vmwareNetworksCmd.AddCommand(all...)
-	vmwareCmd.AddCommand(vmwareNetworksCmd)
+	s.vmwareNetworksCmd.AddCommand(all...)
+	s.vmwareCmd.AddCommand(s.vmwareNetworksCmd)
 }
 
-func vmwareNetName(id string) (string, error) {
-	return vmwareResource(flagVmwareNetLocation, "vmwareEngineNetworks", id)
+func (s *vmwareCmds) vmwareNetName(id string) (string, error) {
+	return s.vmwareResource(s.flagVmwareNetLocation, "vmwareEngineNetworks", id)
 }
 
-func runVmwareNetCreate(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwareNetLocation)
+func (s *vmwareCmds) runVmwareNetCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwareNetLocation)
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.VmwareEngineNetwork{}
-	if err := loadYAMLOrJSONInto(flagVmwareNetConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwareNetConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -87,17 +52,17 @@ func runVmwareNetCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating vmware engine network: %w", err)
 	}
-	fmt.Printf("Create vmware engine network [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwareNetFormat)
+	fmt.Fprintf(s.inv.stdout, "Create vmware engine network [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareNetFormat)
 }
 
-func runVmwareNetDelete(cmd *cobra.Command, args []string) error {
-	name, err := vmwareNetName(args[0])
+func (s *vmwareCmds) runVmwareNetDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareNetName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -105,17 +70,17 @@ func runVmwareNetDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting vmware engine network: %w", err)
 	}
-	fmt.Printf("Delete vmware engine network [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwareNetFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete vmware engine network [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareNetFormat)
 }
 
-func runVmwareNetDescribe(cmd *cobra.Command, args []string) error {
-	name, err := vmwareNetName(args[0])
+func (s *vmwareCmds) runVmwareNetDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareNetName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -123,16 +88,16 @@ func runVmwareNetDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing vmware engine network: %w", err)
 	}
-	return emitFormatted(got, flagVmwareNetFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagVmwareNetFormat)
 }
 
-func runVmwareNetList(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwareNetLocation)
+func (s *vmwareCmds) runVmwareNetList(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwareNetLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,8 +105,8 @@ func runVmwareNetList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.VmwareEngineNetworks.List(parent).Context(ctx)
-		if flagVmwareNetPageSize > 0 {
-			call = call.PageSize(flagVmwareNetPageSize)
+		if s.flagVmwareNetPageSize > 0 {
+			call = call.PageSize(s.flagVmwareNetPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -156,25 +121,25 @@ func runVmwareNetList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagVmwareNetFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagVmwareNetFormat)
 }
 
-func runVmwareNetUpdate(cmd *cobra.Command, args []string) error {
-	name, err := vmwareNetName(args[0])
+func (s *vmwareCmds) runVmwareNetUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareNetName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.VmwareEngineNetwork{}
-	if err := loadYAMLOrJSONInto(flagVmwareNetConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwareNetConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagVmwareNetUpdateMask
+	mask := s.flagVmwareNetUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -182,6 +147,6 @@ func runVmwareNetUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating vmware engine network: %w", err)
 	}
-	fmt.Printf("Update vmware engine network [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwareNetFormat)
+	fmt.Fprintf(s.inv.stdout, "Update vmware engine network [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareNetFormat)
 }

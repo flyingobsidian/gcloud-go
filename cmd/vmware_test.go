@@ -7,7 +7,8 @@ import (
 )
 
 func vmwareSubgroup(name string) *cobra.Command {
-	for _, c := range vmwareCmd.Commands() {
+	grp := newVmwareCmds(legacyTestInvocation())
+	for _, c := range grp.vmwareCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

@@ -1,82 +1,56 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 )
 
 // --- gcloud vmware operations (#1122) ---
 
-var vmwareOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage VMware Engine long-running operations"}
-
-var (
-	flagVmwareOpLocation string
-	flagVmwareOpFormat   string
-	flagVmwareOpFilter   string
-	flagVmwareOpPageSize int64
-)
-
-var (
-	vmwareOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete a VMware Engine operation",
-		Args: cobra.ExactArgs(1), RunE: runVmwareOpDelete,
-	}
-	vmwareOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a VMware Engine operation",
-		Args: cobra.ExactArgs(1), RunE: runVmwareOpDescribe,
-	}
-	vmwareOpListCmd = &cobra.Command{
-		Use: "list", Short: "List VMware Engine operations in a location",
-		Args: cobra.NoArgs, RunE: runVmwareOpList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{vmwareOpDeleteCmd, vmwareOpDescribeCmd, vmwareOpListCmd}
+func (s *vmwareCmds) initVmwareOperations() {
+	all := []*cobra.Command{s.vmwareOpDeleteCmd, s.vmwareOpDescribeCmd, s.vmwareOpListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagVmwareOpLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagVmwareOpLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagVmwareOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagVmwareOpFormat, "format", "", "Output format")
 	}
-	vmwareOpListCmd.Flags().StringVar(&flagVmwareOpFilter, "filter", "", "Server-side filter expression")
-	vmwareOpListCmd.Flags().Int64Var(&flagVmwareOpPageSize, "page-size", 0, "Maximum results per page")
+	s.vmwareOpListCmd.Flags().StringVar(&s.flagVmwareOpFilter, "filter", "", "Server-side filter expression")
+	s.vmwareOpListCmd.Flags().Int64Var(&s.flagVmwareOpPageSize, "page-size", 0, "Maximum results per page")
 
-	vmwareOperationsCmd.AddCommand(all...)
-	vmwareCmd.AddCommand(vmwareOperationsCmd)
+	s.vmwareOperationsCmd.AddCommand(all...)
+	s.vmwareCmd.AddCommand(s.vmwareOperationsCmd)
 }
 
-func vmwareOpName(id string) (string, error) {
-	return vmwareResource(flagVmwareOpLocation, "operations", id)
+func (s *vmwareCmds) vmwareOpName(id string) (string, error) {
+	return s.vmwareResource(s.flagVmwareOpLocation, "operations", id)
 }
 
-func runVmwareOpDelete(cmd *cobra.Command, args []string) error {
-	name, err := vmwareOpName(args[0])
+func (s *vmwareCmds) runVmwareOpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runVmwareOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := vmwareOpName(args[0])
+func (s *vmwareCmds) runVmwareOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -84,16 +58,16 @@ func runVmwareOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagVmwareOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagVmwareOpFormat)
 }
 
-func runVmwareOpList(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwareOpLocation)
+func (s *vmwareCmds) runVmwareOpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwareOpLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,11 +75,11 @@ func runVmwareOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Operations.List(parent).Context(ctx)
-		if flagVmwareOpFilter != "" {
-			call = call.Filter(flagVmwareOpFilter)
+		if s.flagVmwareOpFilter != "" {
+			call = call.Filter(s.flagVmwareOpFilter)
 		}
-		if flagVmwareOpPageSize > 0 {
-			call = call.PageSize(flagVmwareOpPageSize)
+		if s.flagVmwareOpPageSize > 0 {
+			call = call.PageSize(s.flagVmwareOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -120,5 +94,5 @@ func runVmwareOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagVmwareOpFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagVmwareOpFormat)
 }
