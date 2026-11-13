@@ -9,7 +9,9 @@ import "github.com/spf13/cobra"
 // endpoints (keysets, origins, services) are reached via the shared restClient
 // against edgeCacheRest so subcommand files can call them uniformly.
 
-var edgeCacheRest = newRESTClient("https://networkservices.googleapis.com/v1")
+func edgeCacheRest() *restClient {
+	return newRESTClient("https://networkservices.googleapis.com/v1")
+}
 
 func (s *edgeCacheCmds) initEdgeCache() {
 

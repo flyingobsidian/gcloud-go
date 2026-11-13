@@ -410,7 +410,9 @@ func runSchedulerJobsList(ctx context.Context, inv *invocation, f *schedulerJobF
 
 // schedulerJobsTableHeaders are the columns of gcloud's default
 // `scheduler jobs list` table.
-var schedulerJobsTableHeaders = []string{"ID", "LOCATION", "SCHEDULE (TZ)", "TARGET_TYPE", "STATE"}
+func schedulerJobsTableHeaders() []string {
+	return []string{"ID", "LOCATION", "SCHEDULE (TZ)", "TARGET_TYPE", "STATE"}
+}
 
 // schedulerJobsTableRow renders j as a row of gcloud's default table.
 func schedulerJobsTableRow(j *cloudscheduler.Job) []string {
@@ -438,11 +440,11 @@ func emitSchedulerJobsTable(w, errW io.Writer, jobs []*cloudscheduler.Job) error
 		_, err := fmt.Fprintln(errW, "Listed 0 items.")
 		return err
 	}
-	rows := [][]string{schedulerJobsTableHeaders}
+	rows := [][]string{schedulerJobsTableHeaders()}
 	for _, j := range jobs {
 		rows = append(rows, schedulerJobsTableRow(j))
 	}
-	widths := make([]int, len(schedulerJobsTableHeaders))
+	widths := make([]int, len(schedulerJobsTableHeaders()))
 	for _, row := range rows {
 		for i, cell := range row {
 			widths[i] = max(widths[i], utf8.RuneCountInString(cell))

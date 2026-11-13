@@ -23,21 +23,21 @@ func (s *computeCmds) initComputeLists() {
 		name, short string
 		list        *cobra.Command
 	}{
-		{"instance-templates", "Manage instance templates", newComputeListCmd(s.inv, "List Compute Engine instance templates", instanceTemplatesLister)},
-		{"snapshots", "Manage disk snapshots", newComputeListCmd(s.inv, "List Compute Engine snapshots", snapshotsLister)},
-		{"firewall-rules", "Manage VPC firewall rules", newComputeListCmd(s.inv, "List Compute Engine firewall rules", firewallRulesLister)},
-		{"routers", "Manage Cloud Routers", newComputeListCmd(s.inv, "List Compute Engine routers", routersLister)},
-		{"backend-services", "Manage backend services", newComputeListCmd(s.inv, "List backend services", backendServicesLister)},
-		{"health-checks", "Manage health checks", newComputeListCmd(s.inv, "List health checks", healthChecksLister)},
-		{"url-maps", "Manage URL maps", newComputeListCmd(s.inv, "List URL maps", urlMapsLister)},
-		{"ssl-certificates", "Manage SSL certificates", newComputeListCmd(s.inv, "List Compute Engine SSL certificates", sslCertificatesLister)},
+		{"instance-templates", "Manage instance templates", newComputeListCmd(s.inv, "List Compute Engine instance templates", instanceTemplatesLister())},
+		{"snapshots", "Manage disk snapshots", newComputeListCmd(s.inv, "List Compute Engine snapshots", snapshotsLister())},
+		{"firewall-rules", "Manage VPC firewall rules", newComputeListCmd(s.inv, "List Compute Engine firewall rules", firewallRulesLister())},
+		{"routers", "Manage Cloud Routers", newComputeListCmd(s.inv, "List Compute Engine routers", routersLister())},
+		{"backend-services", "Manage backend services", newComputeListCmd(s.inv, "List backend services", backendServicesLister())},
+		{"health-checks", "Manage health checks", newComputeListCmd(s.inv, "List health checks", healthChecksLister())},
+		{"url-maps", "Manage URL maps", newComputeListCmd(s.inv, "List URL maps", urlMapsLister())},
+		{"ssl-certificates", "Manage SSL certificates", newComputeListCmd(s.inv, "List Compute Engine SSL certificates", sslCertificatesLister())},
 	} {
 		group := &cobra.Command{Use: g.name, Short: g.short}
 		group.AddCommand(g.list)
 		registerStubCommand(group, "describe", "Not yet implemented")
 		s.computeCmd.AddCommand(group)
 	}
-	s.disksCmd.AddCommand(newComputeListCmd(s.inv, "List Compute Engine disks", disksLister))
+	s.disksCmd.AddCommand(newComputeListCmd(s.inv, "List Compute Engine disks", disksLister()))
 }
 
 // --- default-table transforms, after api_lib/compute/transforms.py ---
@@ -145,122 +145,128 @@ func computeYesNo(b bool, yes, no string) string {
 
 // --- instance-templates ---
 
-var instanceTemplatesLister = computeLister[*compute.InstanceTemplate]{
-	noun: "instance templates",
-	aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.InstanceTemplate, error) {
-		var out []*compute.InstanceTemplate
-		err := svc.InstanceTemplates.AggregatedList(project).Pages(ctx, func(r *compute.InstanceTemplateAggregatedList) error {
-			for _, k := range sortedScopes(r.Items) {
-				out = append(out, r.Items[k].InstanceTemplates...)
+func instanceTemplatesLister() computeLister[*compute.InstanceTemplate] {
+	return computeLister[*compute.InstanceTemplate]{
+		noun: "instance templates",
+		aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.InstanceTemplate, error) {
+			var out []*compute.InstanceTemplate
+			err := svc.InstanceTemplates.AggregatedList(project).Pages(ctx, func(r *compute.InstanceTemplateAggregatedList) error {
+				for _, k := range sortedScopes(r.Items) {
+					out = append(out, r.Items[k].InstanceTemplates...)
+				}
+				return nil
+			})
+			return out, err
+		},
+		regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.InstanceTemplate, error) {
+			var out []*compute.InstanceTemplate
+			err := svc.RegionInstanceTemplates.List(project, region).Pages(ctx, func(r *compute.InstanceTemplateList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.InstanceTemplate, error) {
+			var out []*compute.InstanceTemplate
+			err := svc.InstanceTemplates.List(project).Pages(ctx, func(r *compute.InstanceTemplateList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		location:    func(t *compute.InstanceTemplate) (string, string) { return "", t.Region },
+		selfLink:    func(t *compute.InstanceTemplate) string { return t.SelfLink },
+		tableFormat: "table(name,machineType,preemptible,creationTimestamp)",
+		tableRow: func(t *compute.InstanceTemplate) map[string]any {
+			machineType, preemptible := "", ""
+			if p := t.Properties; p != nil {
+				machineType = computeMachineType(p.MachineType)
+				if p.Scheduling != nil {
+					preemptible = computeYesNo(p.Scheduling.Preemptible, "true", "")
+				}
 			}
-			return nil
-		})
-		return out, err
-	},
-	regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.InstanceTemplate, error) {
-		var out []*compute.InstanceTemplate
-		err := svc.RegionInstanceTemplates.List(project, region).Pages(ctx, func(r *compute.InstanceTemplateList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.InstanceTemplate, error) {
-		var out []*compute.InstanceTemplate
-		err := svc.InstanceTemplates.List(project).Pages(ctx, func(r *compute.InstanceTemplateList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	location:    func(t *compute.InstanceTemplate) (string, string) { return "", t.Region },
-	selfLink:    func(t *compute.InstanceTemplate) string { return t.SelfLink },
-	tableFormat: "table(name,machineType,preemptible,creationTimestamp)",
-	tableRow: func(t *compute.InstanceTemplate) map[string]any {
-		machineType, preemptible := "", ""
-		if p := t.Properties; p != nil {
-			machineType = computeMachineType(p.MachineType)
-			if p.Scheduling != nil {
-				preemptible = computeYesNo(p.Scheduling.Preemptible, "true", "")
+			return map[string]any{
+				"name":              t.Name,
+				"machineType":       machineType,
+				"preemptible":       preemptible,
+				"creationTimestamp": t.CreationTimestamp,
 			}
-		}
-		return map[string]any{
-			"name":              t.Name,
-			"machineType":       machineType,
-			"preemptible":       preemptible,
-			"creationTimestamp": t.CreationTimestamp,
-		}
-	},
+		},
+	}
 }
 
 // --- disks ---
 
-var disksLister = computeLister[*compute.Disk]{
-	noun: "disks",
-	aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.Disk, error) {
-		var out []*compute.Disk
-		err := svc.Disks.AggregatedList(project).Pages(ctx, func(r *compute.DiskAggregatedList) error {
-			for _, k := range sortedScopes(r.Items) {
-				out = append(out, r.Items[k].Disks...)
+func disksLister() computeLister[*compute.Disk] {
+	return computeLister[*compute.Disk]{
+		noun: "disks",
+		aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.Disk, error) {
+			var out []*compute.Disk
+			err := svc.Disks.AggregatedList(project).Pages(ctx, func(r *compute.DiskAggregatedList) error {
+				for _, k := range sortedScopes(r.Items) {
+					out = append(out, r.Items[k].Disks...)
+				}
+				return nil
+			})
+			return out, err
+		},
+		zonalList: func(ctx context.Context, svc *compute.Service, project, zone string) ([]*compute.Disk, error) {
+			var out []*compute.Disk
+			err := svc.Disks.List(project, zone).Pages(ctx, func(r *compute.DiskList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.Disk, error) {
+			var out []*compute.Disk
+			err := svc.RegionDisks.List(project, region).Pages(ctx, func(r *compute.DiskList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		location:    func(d *compute.Disk) (string, string) { return d.Zone, d.Region },
+		selfLink:    func(d *compute.Disk) string { return d.SelfLink },
+		tableFormat: "table(name,location,locationScope,sizeGb,type,status)",
+		tableRow: func(d *compute.Disk) map[string]any {
+			return map[string]any{
+				"name":          d.Name,
+				"location":      computeLocation(d.Zone, d.Region),
+				"locationScope": computeLocationScope(d.Zone, d.Region),
+				"sizeGb":        strconv.FormatInt(d.SizeGb, 10),
+				"type":          computeBasename(d.Type),
+				"status":        d.Status,
 			}
-			return nil
-		})
-		return out, err
-	},
-	zonalList: func(ctx context.Context, svc *compute.Service, project, zone string) ([]*compute.Disk, error) {
-		var out []*compute.Disk
-		err := svc.Disks.List(project, zone).Pages(ctx, func(r *compute.DiskList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.Disk, error) {
-		var out []*compute.Disk
-		err := svc.RegionDisks.List(project, region).Pages(ctx, func(r *compute.DiskList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	location:    func(d *compute.Disk) (string, string) { return d.Zone, d.Region },
-	selfLink:    func(d *compute.Disk) string { return d.SelfLink },
-	tableFormat: "table(name,location,locationScope,sizeGb,type,status)",
-	tableRow: func(d *compute.Disk) map[string]any {
-		return map[string]any{
-			"name":          d.Name,
-			"location":      computeLocation(d.Zone, d.Region),
-			"locationScope": computeLocationScope(d.Zone, d.Region),
-			"sizeGb":        strconv.FormatInt(d.SizeGb, 10),
-			"type":          computeBasename(d.Type),
-			"status":        d.Status,
-		}
-	},
+		},
+	}
 }
 
 // --- snapshots (global only in gcloud GA) ---
 
-var snapshotsLister = computeLister[*compute.Snapshot]{
-	noun: "snapshots",
-	globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.Snapshot, error) {
-		var out []*compute.Snapshot
-		err := svc.Snapshots.List(project).Pages(ctx, func(r *compute.SnapshotList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	location:    func(s *compute.Snapshot) (string, string) { return "", "" },
-	selfLink:    func(s *compute.Snapshot) string { return s.SelfLink },
-	tableFormat: "table(name,diskSizeGb,srcDisk,status)",
-	tableRow: func(s *compute.Snapshot) map[string]any {
-		return map[string]any{
-			"name":       s.Name,
-			"diskSizeGb": strconv.FormatInt(s.DiskSizeGb, 10),
-			"srcDisk":    computeScope(s.SourceDisk),
-			"status":     s.Status,
-		}
-	},
+func snapshotsLister() computeLister[*compute.Snapshot] {
+	return computeLister[*compute.Snapshot]{
+		noun: "snapshots",
+		globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.Snapshot, error) {
+			var out []*compute.Snapshot
+			err := svc.Snapshots.List(project).Pages(ctx, func(r *compute.SnapshotList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		location:    func(s *compute.Snapshot) (string, string) { return "", "" },
+		selfLink:    func(s *compute.Snapshot) string { return s.SelfLink },
+		tableFormat: "table(name,diskSizeGb,srcDisk,status)",
+		tableRow: func(s *compute.Snapshot) map[string]any {
+			return map[string]any{
+				"name":       s.Name,
+				"diskSizeGb": strconv.FormatInt(s.DiskSizeGb, 10),
+				"srcDisk":    computeScope(s.SourceDisk),
+				"status":     s.Status,
+			}
+		},
+	}
 }
 
 // --- firewall-rules (global) ---
@@ -269,263 +275,275 @@ var snapshotsLister = computeLister[*compute.Snapshot]{
 const firewallRulesListNotice = "\nTo show all fields of the firewall, please show in JSON format: --format=json\n" +
 	"To show all fields in table format, please see the examples in --help.\n\n"
 
-var firewallRulesLister = computeLister[*compute.Firewall]{
-	noun: "firewall rules",
-	globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.Firewall, error) {
-		var out []*compute.Firewall
-		err := svc.Firewalls.List(project).Pages(ctx, func(r *compute.FirewallList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	location:    func(f *compute.Firewall) (string, string) { return "", "" },
-	selfLink:    func(f *compute.Firewall) string { return f.SelfLink },
-	tableFormat: "table(name,network,direction,priority,allow,deny,disabled)",
-	notice:      firewallRulesListNotice,
-	tableRow: func(f *compute.Firewall) map[string]any {
-		var allow, deny []string
-		for _, a := range f.Allowed {
-			allow = append(allow, computeFirewallRule(a.IPProtocol, a.Ports))
-		}
-		for _, d := range f.Denied {
-			deny = append(deny, computeFirewallRule(d.IPProtocol, d.Ports))
-		}
-		return map[string]any{
-			"name":      f.Name,
-			"network":   computeBasename(f.Network),
-			"direction": f.Direction,
-			"priority":  strconv.FormatInt(f.Priority, 10),
-			"allow":     strings.Join(allow, ","),
-			"deny":      strings.Join(deny, ","),
-			"disabled":  strconv.FormatBool(f.Disabled),
-		}
-	},
+func firewallRulesLister() computeLister[*compute.Firewall] {
+	return computeLister[*compute.Firewall]{
+		noun: "firewall rules",
+		globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.Firewall, error) {
+			var out []*compute.Firewall
+			err := svc.Firewalls.List(project).Pages(ctx, func(r *compute.FirewallList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		location:    func(f *compute.Firewall) (string, string) { return "", "" },
+		selfLink:    func(f *compute.Firewall) string { return f.SelfLink },
+		tableFormat: "table(name,network,direction,priority,allow,deny,disabled)",
+		notice:      firewallRulesListNotice,
+		tableRow: func(f *compute.Firewall) map[string]any {
+			var allow, deny []string
+			for _, a := range f.Allowed {
+				allow = append(allow, computeFirewallRule(a.IPProtocol, a.Ports))
+			}
+			for _, d := range f.Denied {
+				deny = append(deny, computeFirewallRule(d.IPProtocol, d.Ports))
+			}
+			return map[string]any{
+				"name":      f.Name,
+				"network":   computeBasename(f.Network),
+				"direction": f.Direction,
+				"priority":  strconv.FormatInt(f.Priority, 10),
+				"allow":     strings.Join(allow, ","),
+				"deny":      strings.Join(deny, ","),
+				"disabled":  strconv.FormatBool(f.Disabled),
+			}
+		},
+	}
 }
 
 // --- routers (regional) ---
 
-var routersLister = computeLister[*compute.Router]{
-	noun: "routers",
-	aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.Router, error) {
-		var out []*compute.Router
-		err := svc.Routers.AggregatedList(project).Pages(ctx, func(r *compute.RouterAggregatedList) error {
-			for _, k := range sortedScopes(r.Items) {
-				out = append(out, r.Items[k].Routers...)
+func routersLister() computeLister[*compute.Router] {
+	return computeLister[*compute.Router]{
+		noun: "routers",
+		aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.Router, error) {
+			var out []*compute.Router
+			err := svc.Routers.AggregatedList(project).Pages(ctx, func(r *compute.RouterAggregatedList) error {
+				for _, k := range sortedScopes(r.Items) {
+					out = append(out, r.Items[k].Routers...)
+				}
+				return nil
+			})
+			return out, err
+		},
+		regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.Router, error) {
+			var out []*compute.Router
+			err := svc.Routers.List(project, region).Pages(ctx, func(r *compute.RouterList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		location:    func(r *compute.Router) (string, string) { return "", r.Region },
+		selfLink:    func(r *compute.Router) string { return r.SelfLink },
+		tableFormat: "table(name,region,network)",
+		tableRow: func(r *compute.Router) map[string]any {
+			network := computeBasename(r.Network)
+			if network == "" {
+				network = "N/A"
 			}
-			return nil
-		})
-		return out, err
-	},
-	regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.Router, error) {
-		var out []*compute.Router
-		err := svc.Routers.List(project, region).Pages(ctx, func(r *compute.RouterList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	location:    func(r *compute.Router) (string, string) { return "", r.Region },
-	selfLink:    func(r *compute.Router) string { return r.SelfLink },
-	tableFormat: "table(name,region,network)",
-	tableRow: func(r *compute.Router) map[string]any {
-		network := computeBasename(r.Network)
-		if network == "" {
-			network = "N/A"
-		}
-		return map[string]any{
-			"name":    r.Name,
-			"region":  computeBasename(r.Region),
-			"network": network,
-		}
-	},
+			return map[string]any{
+				"name":    r.Name,
+				"region":  computeBasename(r.Region),
+				"network": network,
+			}
+		},
+	}
 }
 
 // --- backend-services (global and regional) ---
 
-var backendServicesLister = computeLister[*compute.BackendService]{
-	noun: "backend services",
-	aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.BackendService, error) {
-		var out []*compute.BackendService
-		err := svc.BackendServices.AggregatedList(project).Pages(ctx, func(r *compute.BackendServiceAggregatedList) error {
-			for _, k := range sortedScopes(r.Items) {
-				out = append(out, r.Items[k].BackendServices...)
+func backendServicesLister() computeLister[*compute.BackendService] {
+	return computeLister[*compute.BackendService]{
+		noun: "backend services",
+		aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.BackendService, error) {
+			var out []*compute.BackendService
+			err := svc.BackendServices.AggregatedList(project).Pages(ctx, func(r *compute.BackendServiceAggregatedList) error {
+				for _, k := range sortedScopes(r.Items) {
+					out = append(out, r.Items[k].BackendServices...)
+				}
+				return nil
+			})
+			return out, err
+		},
+		regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.BackendService, error) {
+			var out []*compute.BackendService
+			err := svc.RegionBackendServices.List(project, region).Pages(ctx, func(r *compute.BackendServiceList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.BackendService, error) {
+			var out []*compute.BackendService
+			err := svc.BackendServices.List(project).Pages(ctx, func(r *compute.BackendServiceList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		location:    func(b *compute.BackendService) (string, string) { return "", b.Region },
+		selfLink:    func(b *compute.BackendService) string { return b.SelfLink },
+		tableFormat: "table(name,backends,protocol)",
+		tableRow: func(b *compute.BackendService) map[string]any {
+			var backends []string
+			for _, be := range b.Backends {
+				backends = append(backends, computeScopedSuffix(be.Group))
 			}
-			return nil
-		})
-		return out, err
-	},
-	regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.BackendService, error) {
-		var out []*compute.BackendService
-		err := svc.RegionBackendServices.List(project, region).Pages(ctx, func(r *compute.BackendServiceList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.BackendService, error) {
-		var out []*compute.BackendService
-		err := svc.BackendServices.List(project).Pages(ctx, func(r *compute.BackendServiceList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	location:    func(b *compute.BackendService) (string, string) { return "", b.Region },
-	selfLink:    func(b *compute.BackendService) string { return b.SelfLink },
-	tableFormat: "table(name,backends,protocol)",
-	tableRow: func(b *compute.BackendService) map[string]any {
-		var backends []string
-		for _, be := range b.Backends {
-			backends = append(backends, computeScopedSuffix(be.Group))
-		}
-		sort.Strings(backends)
-		return map[string]any{
-			"name":     b.Name,
-			"backends": strings.Join(backends, ","),
-			"protocol": b.Protocol,
-		}
-	},
+			sort.Strings(backends)
+			return map[string]any{
+				"name":     b.Name,
+				"backends": strings.Join(backends, ","),
+				"protocol": b.Protocol,
+			}
+		},
+	}
 }
 
 // --- health-checks (global and regional) ---
 
-var healthChecksLister = computeLister[*compute.HealthCheck]{
-	noun: "health checks",
-	aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.HealthCheck, error) {
-		var out []*compute.HealthCheck
-		err := svc.HealthChecks.AggregatedList(project).Pages(ctx, func(r *compute.HealthChecksAggregatedList) error {
-			for _, k := range sortedScopes(r.Items) {
-				out = append(out, r.Items[k].HealthChecks...)
+func healthChecksLister() computeLister[*compute.HealthCheck] {
+	return computeLister[*compute.HealthCheck]{
+		noun: "health checks",
+		aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.HealthCheck, error) {
+			var out []*compute.HealthCheck
+			err := svc.HealthChecks.AggregatedList(project).Pages(ctx, func(r *compute.HealthChecksAggregatedList) error {
+				for _, k := range sortedScopes(r.Items) {
+					out = append(out, r.Items[k].HealthChecks...)
+				}
+				return nil
+			})
+			return out, err
+		},
+		regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.HealthCheck, error) {
+			var out []*compute.HealthCheck
+			err := svc.RegionHealthChecks.List(project, region).Pages(ctx, func(r *compute.HealthCheckList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.HealthCheck, error) {
+			var out []*compute.HealthCheck
+			err := svc.HealthChecks.List(project).Pages(ctx, func(r *compute.HealthCheckList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		location:    func(h *compute.HealthCheck) (string, string) { return "", h.Region },
+		selfLink:    func(h *compute.HealthCheck) string { return h.SelfLink },
+		tableFormat: "table(name,region,protocol)",
+		tableRow: func(h *compute.HealthCheck) map[string]any {
+			return map[string]any{
+				"name":     h.Name,
+				"region":   computeBasename(h.Region),
+				"protocol": h.Type,
 			}
-			return nil
-		})
-		return out, err
-	},
-	regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.HealthCheck, error) {
-		var out []*compute.HealthCheck
-		err := svc.RegionHealthChecks.List(project, region).Pages(ctx, func(r *compute.HealthCheckList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.HealthCheck, error) {
-		var out []*compute.HealthCheck
-		err := svc.HealthChecks.List(project).Pages(ctx, func(r *compute.HealthCheckList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	location:    func(h *compute.HealthCheck) (string, string) { return "", h.Region },
-	selfLink:    func(h *compute.HealthCheck) string { return h.SelfLink },
-	tableFormat: "table(name,region,protocol)",
-	tableRow: func(h *compute.HealthCheck) map[string]any {
-		return map[string]any{
-			"name":     h.Name,
-			"region":   computeBasename(h.Region),
-			"protocol": h.Type,
-		}
-	},
+		},
+	}
 }
 
 // --- url-maps (global and regional) ---
 
-var urlMapsLister = computeLister[*compute.UrlMap]{
-	noun: "URL maps",
-	aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.UrlMap, error) {
-		var out []*compute.UrlMap
-		err := svc.UrlMaps.AggregatedList(project).Pages(ctx, func(r *compute.UrlMapsAggregatedList) error {
-			for _, k := range sortedScopes(r.Items) {
-				out = append(out, r.Items[k].UrlMaps...)
+func urlMapsLister() computeLister[*compute.UrlMap] {
+	return computeLister[*compute.UrlMap]{
+		noun: "URL maps",
+		aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.UrlMap, error) {
+			var out []*compute.UrlMap
+			err := svc.UrlMaps.AggregatedList(project).Pages(ctx, func(r *compute.UrlMapsAggregatedList) error {
+				for _, k := range sortedScopes(r.Items) {
+					out = append(out, r.Items[k].UrlMaps...)
+				}
+				return nil
+			})
+			return out, err
+		},
+		regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.UrlMap, error) {
+			var out []*compute.UrlMap
+			err := svc.RegionUrlMaps.List(project, region).Pages(ctx, func(r *compute.UrlMapList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.UrlMap, error) {
+			var out []*compute.UrlMap
+			err := svc.UrlMaps.List(project).Pages(ctx, func(r *compute.UrlMapList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		location:    func(u *compute.UrlMap) (string, string) { return "", u.Region },
+		selfLink:    func(u *compute.UrlMap) string { return u.SelfLink },
+		tableFormat: "table(name,defaultService)",
+		tableRow: func(u *compute.UrlMap) map[string]any {
+			defaultService := ""
+			if u.DefaultService != "" {
+				defaultService = computeTypeSuffix(u.DefaultService)
 			}
-			return nil
-		})
-		return out, err
-	},
-	regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.UrlMap, error) {
-		var out []*compute.UrlMap
-		err := svc.RegionUrlMaps.List(project, region).Pages(ctx, func(r *compute.UrlMapList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.UrlMap, error) {
-		var out []*compute.UrlMap
-		err := svc.UrlMaps.List(project).Pages(ctx, func(r *compute.UrlMapList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	location:    func(u *compute.UrlMap) (string, string) { return "", u.Region },
-	selfLink:    func(u *compute.UrlMap) string { return u.SelfLink },
-	tableFormat: "table(name,defaultService)",
-	tableRow: func(u *compute.UrlMap) map[string]any {
-		defaultService := ""
-		if u.DefaultService != "" {
-			defaultService = computeTypeSuffix(u.DefaultService)
-		}
-		return map[string]any{
-			"name":           u.Name,
-			"defaultService": defaultService,
-		}
-	},
+			return map[string]any{
+				"name":           u.Name,
+				"defaultService": defaultService,
+			}
+		},
+	}
 }
 
 // --- ssl-certificates (global and regional) ---
 
-var sslCertificatesLister = computeLister[*compute.SslCertificate]{
-	noun: "SSL certificates",
-	aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.SslCertificate, error) {
-		var out []*compute.SslCertificate
-		err := svc.SslCertificates.AggregatedList(project).Pages(ctx, func(r *compute.SslCertificateAggregatedList) error {
-			for _, k := range sortedScopes(r.Items) {
-				out = append(out, r.Items[k].SslCertificates...)
+func sslCertificatesLister() computeLister[*compute.SslCertificate] {
+	return computeLister[*compute.SslCertificate]{
+		noun: "SSL certificates",
+		aggregated: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.SslCertificate, error) {
+			var out []*compute.SslCertificate
+			err := svc.SslCertificates.AggregatedList(project).Pages(ctx, func(r *compute.SslCertificateAggregatedList) error {
+				for _, k := range sortedScopes(r.Items) {
+					out = append(out, r.Items[k].SslCertificates...)
+				}
+				return nil
+			})
+			return out, err
+		},
+		regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.SslCertificate, error) {
+			var out []*compute.SslCertificate
+			err := svc.RegionSslCertificates.List(project, region).Pages(ctx, func(r *compute.SslCertificateList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.SslCertificate, error) {
+			var out []*compute.SslCertificate
+			err := svc.SslCertificates.List(project).Pages(ctx, func(r *compute.SslCertificateList) error {
+				out = append(out, r.Items...)
+				return nil
+			})
+			return out, err
+		},
+		location:    func(c *compute.SslCertificate) (string, string) { return "", c.Region },
+		selfLink:    func(c *compute.SslCertificate) string { return c.SelfLink },
+		tableFormat: "table(name,type,creationTimestamp,expireTime,region,managedStatus,domainStatus)",
+		tableRow: func(c *compute.SslCertificate) map[string]any {
+			managedStatus, domainStatus := "", ""
+			if c.Managed != nil {
+				managedStatus = c.Managed.Status
+				domains := make([]string, 0, len(c.Managed.DomainStatus))
+				for _, d := range sortedScopes(c.Managed.DomainStatus) {
+					domains = append(domains, d+": "+c.Managed.DomainStatus[d])
+				}
+				domainStatus = strings.Join(domains, ", ")
 			}
-			return nil
-		})
-		return out, err
-	},
-	regionalList: func(ctx context.Context, svc *compute.Service, project, region string) ([]*compute.SslCertificate, error) {
-		var out []*compute.SslCertificate
-		err := svc.RegionSslCertificates.List(project, region).Pages(ctx, func(r *compute.SslCertificateList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	globalList: func(ctx context.Context, svc *compute.Service, project string) ([]*compute.SslCertificate, error) {
-		var out []*compute.SslCertificate
-		err := svc.SslCertificates.List(project).Pages(ctx, func(r *compute.SslCertificateList) error {
-			out = append(out, r.Items...)
-			return nil
-		})
-		return out, err
-	},
-	location:    func(c *compute.SslCertificate) (string, string) { return "", c.Region },
-	selfLink:    func(c *compute.SslCertificate) string { return c.SelfLink },
-	tableFormat: "table(name,type,creationTimestamp,expireTime,region,managedStatus,domainStatus)",
-	tableRow: func(c *compute.SslCertificate) map[string]any {
-		managedStatus, domainStatus := "", ""
-		if c.Managed != nil {
-			managedStatus = c.Managed.Status
-			domains := make([]string, 0, len(c.Managed.DomainStatus))
-			for _, d := range sortedScopes(c.Managed.DomainStatus) {
-				domains = append(domains, d+": "+c.Managed.DomainStatus[d])
+			return map[string]any{
+				"name":              c.Name,
+				"type":              c.Type,
+				"creationTimestamp": c.CreationTimestamp,
+				"expireTime":        c.ExpireTime,
+				"region":            computeBasename(c.Region),
+				"managedStatus":     managedStatus,
+				"domainStatus":      domainStatus,
 			}
-			domainStatus = strings.Join(domains, ", ")
-		}
-		return map[string]any{
-			"name":              c.Name,
-			"type":              c.Type,
-			"creationTimestamp": c.CreationTimestamp,
-			"expireTime":        c.ExpireTime,
-			"region":            computeBasename(c.Region),
-			"managedStatus":     managedStatus,
-			"domainStatus":      domainStatus,
-		}
-	},
+		},
+	}
 }

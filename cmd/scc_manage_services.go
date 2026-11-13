@@ -50,22 +50,24 @@ type sccService struct {
 //
 // Keep this in sync with upstream; new services land here as a one-liner
 // per release.
-var sccSupportedServices = []sccService{
-	{Name: "security-health-analytics", Abbrev: "sha"},
-	{Name: "event-threat-detection", Abbrev: "etd"},
-	{Name: "container-threat-detection", Abbrev: "ctd"},
-	{Name: "vm-threat-detection", Abbrev: "vmtd"},
-	{Name: "web-security-scanner", Abbrev: "wss"},
-	{Name: "vm-threat-detection-aws", Abbrev: "vmtd-aws"},
-	{Name: "cloud-run-threat-detection", Abbrev: "crtd"},
-	// external-exposure (ee) was added upstream at gcloud-python 572.0.0.
-	{Name: "external-exposure", Abbrev: "ee"},
-	{Name: "vm-manager", Abbrev: "vmm"},
-	{Name: "ec2-vulnerability-assessment", Abbrev: "ec2-va"},
-	{Name: "gce-vulnerability-assessment", Abbrev: "gce-va"},
-	{Name: "azure-vulnerability-assessment", Abbrev: "azure-va"},
-	{Name: "notebook-security-scanner", Abbrev: "nss"},
-	{Name: "agent-engine-threat-detection", Abbrev: "aetd"},
+func sccSupportedServices() []sccService {
+	return []sccService{
+		{Name: "security-health-analytics", Abbrev: "sha"},
+		{Name: "event-threat-detection", Abbrev: "etd"},
+		{Name: "container-threat-detection", Abbrev: "ctd"},
+		{Name: "vm-threat-detection", Abbrev: "vmtd"},
+		{Name: "web-security-scanner", Abbrev: "wss"},
+		{Name: "vm-threat-detection-aws", Abbrev: "vmtd-aws"},
+		{Name: "cloud-run-threat-detection", Abbrev: "crtd"},
+		// external-exposure (ee) was added upstream at gcloud-python 572.0.0.
+		{Name: "external-exposure", Abbrev: "ee"},
+		{Name: "vm-manager", Abbrev: "vmm"},
+		{Name: "ec2-vulnerability-assessment", Abbrev: "ec2-va"},
+		{Name: "gce-vulnerability-assessment", Abbrev: "gce-va"},
+		{Name: "azure-vulnerability-assessment", Abbrev: "azure-va"},
+		{Name: "notebook-security-scanner", Abbrev: "nss"},
+		{Name: "agent-engine-threat-detection", Abbrev: "aetd"},
+	}
 }
 
 // sccResolveServiceName maps a full name or abbreviation (case-insensitive)
@@ -77,7 +79,7 @@ func sccResolveServiceName(input string) string {
 	if lower == "" {
 		return ""
 	}
-	for _, s := range sccSupportedServices {
+	for _, s := range sccSupportedServices() {
 		if s.Name == lower {
 			return s.Name
 		}
@@ -92,8 +94,8 @@ func sccResolveServiceName(input string) string {
 // --help text, alphabetised for stable output, with abbreviations shown in
 // parentheses when present.
 func sccSupportedServicesForHelp() string {
-	names := make([]string, 0, len(sccSupportedServices))
-	for _, s := range sccSupportedServices {
+	names := make([]string, 0, len(sccSupportedServices()))
+	for _, s := range sccSupportedServices() {
 		if s.Abbrev != "" {
 			names = append(names, fmt.Sprintf("%s (%s)", s.Name, s.Abbrev))
 		} else {

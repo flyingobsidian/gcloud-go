@@ -13,12 +13,14 @@ import (
 // artRepoModeChoices maps the user-facing --mode value to the wire enum value.
 // CONNECTOR-REPOSITORY is remote-mode on the wire but presented as a separate
 // choice (gcloud-python 577.0.0).
-var artRepoModeChoices = map[string]string{
-	"NONE":                 "MODE_UNSPECIFIED",
-	"STANDARD-REPOSITORY":  "STANDARD_REPOSITORY",
-	"VIRTUAL-REPOSITORY":   "VIRTUAL_REPOSITORY",
-	"REMOTE-REPOSITORY":    "REMOTE_REPOSITORY",
-	"CONNECTOR-REPOSITORY": "REMOTE_REPOSITORY",
+func artRepoModeChoices() map[string]string {
+	return map[string]string{
+		"NONE":                 "MODE_UNSPECIFIED",
+		"STANDARD-REPOSITORY":  "STANDARD_REPOSITORY",
+		"VIRTUAL-REPOSITORY":   "VIRTUAL_REPOSITORY",
+		"REMOTE-REPOSITORY":    "REMOTE_REPOSITORY",
+		"CONNECTOR-REPOSITORY": "REMOTE_REPOSITORY",
+	}
 }
 
 func (s *artifactsCmds) initArtifactsRepositories() {
@@ -109,7 +111,7 @@ func artRepoApplyMode(body *artifactregistry.Repository, flag string) error {
 		return nil
 	}
 	up := strings.ToUpper(flag)
-	wire, ok := artRepoModeChoices[up]
+	wire, ok := artRepoModeChoices()[up]
 	if !ok {
 		return fmt.Errorf("invalid --mode %q: expected one of NONE, STANDARD-REPOSITORY, "+
 			"VIRTUAL-REPOSITORY, REMOTE-REPOSITORY, CONNECTOR-REPOSITORY", flag)

@@ -63,15 +63,15 @@ func TestFunctionsRuntimesSubcommands(t *testing.T) {
 }
 
 func TestFunctionsEventTypesListStatic(t *testing.T) {
-	if len(gen1TriggerEvents) == 0 {
+	if len(gen1TriggerEvents()) == 0 {
 		t.Fatal("gen1TriggerEvents must not be empty")
 	}
-	if len(gen2TriggerEvents) == 0 {
+	if len(gen2TriggerEvents()) == 0 {
 		t.Fatal("gen2TriggerEvents must not be empty")
 	}
 	// Sanity: expected canonical events must be present.
 	seen := map[string]bool{}
-	for _, e := range gen1TriggerEvents {
+	for _, e := range gen1TriggerEvents() {
 		seen[e.EventType] = true
 	}
 	for _, w := range []string{

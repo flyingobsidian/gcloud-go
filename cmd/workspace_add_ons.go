@@ -13,7 +13,9 @@ import (
 // exposed by google.golang.org/api; subgroups use the shared restClient from
 // rest_helpers.go with a per-service endpoint.
 
-var workspaceAddOnsRest = newRESTClient("https://gsuiteaddons.googleapis.com/v1")
+func workspaceAddOnsRest() *restClient {
+	return newRESTClient("https://gsuiteaddons.googleapis.com/v1")
+}
 
 func (s *workspaceAddOnsCmds) initWorkspaceAddOns() {
 	s.workspaceAddOnsGetAuthCmd.Flags().StringVar(&s.flagWAOGetAuthFormat, "format", "", "Output format")
@@ -28,7 +30,7 @@ func (s *workspaceAddOnsCmds) runWAOGetAuthorization(cmd *cobra.Command, args []
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(workspaceAddOnsRest).do(ctx, http.MethodGet, fmt.Sprintf("/projects/%s/authorization", project), nil, nil, &got); err != nil {
+	if err := s.inv.rest(workspaceAddOnsRest()).do(ctx, http.MethodGet, fmt.Sprintf("/projects/%s/authorization", project), nil, nil, &got); err != nil {
 		return fmt.Errorf("getting workspace add-ons authorization: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagWAOGetAuthFormat)

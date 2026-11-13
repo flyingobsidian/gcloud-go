@@ -19,9 +19,6 @@ import (
 // --- gcloud app (#299, #865-#874) ---
 
 // Shared flags for the app subcommands.
-var (
-	flagAppDomainDisplayName string
-)
 
 // appResolveApp returns the App Engine application id (the project) and validates a project
 // has been selected.
@@ -743,7 +740,9 @@ func appListInstances(ctx context.Context, svc *appengine.APIService, app, servi
 // logs implementations
 // -----------------------------------------------------------------------------
 
-var defaultAppLogIDs = []string{"stdout", "stderr", "crash.log", "nginx.request", "appengine.googleapis.com%2Frequest_log"}
+func defaultAppLogIDs() []string {
+	return []string{"stdout", "stderr", "crash.log", "nginx.request", "appengine.googleapis.com%2Frequest_log"}
+}
 
 func (g *appCmds) buildAppLogFilter(project string) string {
 	parts := []string{`resource.type="gae_app"`}
@@ -756,7 +755,7 @@ func (g *appCmds) buildAppLogFilter(project string) string {
 	if g.flagAppLevel != "" && !strings.EqualFold(g.flagAppLevel, "any") {
 		parts = append(parts, fmt.Sprintf(`severity>=%s`, strings.ToUpper(g.flagAppLevel)))
 	}
-	logs := defaultAppLogIDs
+	logs := defaultAppLogIDs()
 	if g.flagAppLogs != "" {
 		logs = strings.Split(g.flagAppLogs, ",")
 	}

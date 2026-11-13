@@ -35,10 +35,12 @@ type runExecStage struct {
 	condition string
 }
 
-var runExecStages = []runExecStage{
-	{label: "Provisioning resources...", condition: "ResourcesAvailable"},
-	{label: "Starting execution...", condition: "Started"},
-	{label: "Running execution...", condition: runExecCondCompleted},
+func runExecStages() []runExecStage {
+	return []runExecStage{
+		{label: "Provisioning resources...", condition: "ResourcesAvailable"},
+		{label: "Starting execution...", condition: "Started"},
+		{label: "Running execution...", condition: runExecCondCompleted},
+	}
 }
 
 // runExecutionGetter fetches the current state of the execution being waited on.
@@ -72,8 +74,8 @@ func runJobsWaitForExecution(ctx context.Context, w io.Writer, get runExecutionG
 		if err != nil {
 			return nil, fmt.Errorf("polling execution: %w", err)
 		}
-		for next < len(runExecStages) {
-			stage := runExecStages[next]
+		for next < len(runExecStages()) {
+			stage := runExecStages()[next]
 			cond := runExecCondition(exec, stage.condition)
 			if cond == nil || cond.State != runCondSucceeded {
 				break
@@ -81,12 +83,12 @@ func runJobsWaitForExecution(ctx context.Context, w io.Writer, get runExecutionG
 			fmt.Fprintf(w, "  ✓ %s %s\n", stage.label, runExecStageMessage(exec, stage, cond))
 			next++
 		}
-		if next == len(runExecStages) {
+		if next == len(runExecStages()) {
 			fmt.Fprintln(w, "Done.")
 			return exec, nil
 		}
 		if cond := runExecFailedCondition(exec); cond != nil {
-			fmt.Fprintf(w, "  X %s %s\n", runExecStages[next].label, cond.Message)
+			fmt.Fprintf(w, "  X %s %s\n", runExecStages()[next].label, cond.Message)
 			fmt.Fprintln(w, "Executing job failed")
 			return exec, errRunExecutionFailed
 		}
@@ -109,7 +111,7 @@ func runExecCondition(exec *runv2.GoogleCloudRunV2Execution, condType string) *r
 
 // runExecFailedCondition returns the first stage condition that has failed, if any.
 func runExecFailedCondition(exec *runv2.GoogleCloudRunV2Execution) *runv2.GoogleCloudRunV2Condition {
-	for _, stage := range runExecStages {
+	for _, stage := range runExecStages() {
 		if c := runExecCondition(exec, stage.condition); c != nil && c.State == runCondFailed {
 			return c
 		}

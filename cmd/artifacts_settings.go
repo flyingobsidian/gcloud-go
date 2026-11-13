@@ -34,7 +34,7 @@ func (s *artifactsCmds) runArtifactsSettingsDescribe(cmd *cobra.Command, args []
 		return err
 	}
 	var out map[string]any
-	if err := s.inv.rest(artifactsRest).do(cmd.Context(), http.MethodGet, "/"+s.artSettingsName(project), nil, nil, &out); err != nil {
+	if err := s.inv.rest(artifactsRest()).do(cmd.Context(), http.MethodGet, "/"+s.artSettingsName(project), nil, nil, &out); err != nil {
 		return fmt.Errorf("describing settings: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, out, s.flagArtSettingsFormat)
@@ -57,7 +57,7 @@ func (s *artifactsCmds) patchSettingsRedirection(state string) error {
 	q := url.Values{}
 	q.Set("updateMask", "legacyRedirectionState")
 	var out map[string]any
-	if err := s.inv.rest(artifactsRest).do(s.inv.context(), http.MethodPatch, "/"+s.artSettingsName(project), q, body, &out); err != nil {
+	if err := s.inv.rest(artifactsRest()).do(s.inv.context(), http.MethodPatch, "/"+s.artSettingsName(project), q, body, &out); err != nil {
 		return fmt.Errorf("updating settings: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, out, s.flagArtSettingsFormat)

@@ -39,7 +39,7 @@ func (s *memorystoreCmds) runMemstoreLocDescribe(cmd *cobra.Command, args []stri
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreLocFormat)
@@ -51,7 +51,7 @@ func (s *memorystoreCmds) runMemstoreLocList(cmd *cobra.Command, args []string) 
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(memorystoreRest).paginate(ctx, fmt.Sprintf("/projects/%s/locations", project), nil, "locations", s.flagMemstoreLocPageSize)
+	items, err := s.inv.rest(memorystoreRest()).paginate(ctx, fmt.Sprintf("/projects/%s/locations", project), nil, "locations", s.flagMemstoreLocPageSize)
 	if err != nil {
 		return fmt.Errorf("listing locations: %w", err)
 	}

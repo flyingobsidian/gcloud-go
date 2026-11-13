@@ -19,7 +19,9 @@ import (
 // artifactsRest is used for the handful of Artifact Registry surfaces that are
 // not (yet) exposed by the generated Go client, e.g. imageStreamingCaches,
 // per-location settings, SBOM export/load, and vulnerabilities.
-var artifactsRest = newRESTClient("https://artifactregistry.googleapis.com/v1")
+func artifactsRest() *restClient {
+	return newRESTClient("https://artifactregistry.googleapis.com/v1")
+}
 
 // --- shared parent resolution helpers ---
 

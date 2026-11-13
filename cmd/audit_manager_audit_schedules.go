@@ -17,12 +17,16 @@ import (
 // errAuditManagerStopPaging ends Pages iteration once --limit is reached.
 var errAuditManagerStopPaging = errors.New("stop paging")
 
-var auditManagerFrequencies = map[string]string{
-	"daily": "DAILY", "weekly": "WEEKLY", "monthly": "MONTHLY", "quarterly": "QUARTERLY", "annually": "ANNUALLY",
+func auditManagerFrequencies() map[string]string {
+	return map[string]string{
+		"daily": "DAILY", "weekly": "WEEKLY", "monthly": "MONTHLY", "quarterly": "QUARTERLY", "annually": "ANNUALLY",
+	}
 }
 
-var auditManagerScheduleStates = map[string]string{
-	"active": "SCHEDULE_STATE_ACTIVE", "paused": "SCHEDULE_STATE_PAUSED", "deleted": "SCHEDULE_STATE_DELETED",
+func auditManagerScheduleStates() map[string]string {
+	return map[string]string{
+		"active": "SCHEDULE_STATE_ACTIVE", "paused": "SCHEDULE_STATE_PAUSED", "deleted": "SCHEDULE_STATE_DELETED",
+	}
 }
 
 func (g *auditManagerCmds) initAuditManagerAuditSchedules() {
@@ -122,7 +126,7 @@ func (g *auditManagerCmds) auditManagerBuildSchedule() (*auditmanager.AuditSched
 	if err != nil {
 		return nil, err
 	}
-	freq, err := auditManagerChoice("frequency", g.flagAMFrequency, auditManagerFrequencies)
+	freq, err := auditManagerChoice("frequency", g.flagAMFrequency, auditManagerFrequencies())
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +226,7 @@ func emitAuditSchedules(w, errW io.Writer, all []*auditmanager.AuditSchedule, fo
 }
 
 func (g *auditManagerCmds) runAuditManagerSchedulesUpdate(cmd *cobra.Command, args []string) error {
-	state, err := auditManagerChoice("state", g.flagAMState, auditManagerScheduleStates)
+	state, err := auditManagerChoice("state", g.flagAMState, auditManagerScheduleStates())
 	if err != nil {
 		return err
 	}

@@ -96,7 +96,7 @@ func (s *pamCmds) runPAMGrantApprove(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(pamRest).do(ctx, http.MethodPost, "/"+name+":approve", nil, s.pamGrantReasonBody(), &got); err != nil {
+	if err := s.inv.rest(pamRest()).do(ctx, http.MethodPost, "/"+name+":approve", nil, s.pamGrantReasonBody(), &got); err != nil {
 		return fmt.Errorf("approving grant: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Approved grant [%s].\n", args[0])
@@ -116,7 +116,7 @@ func (s *pamCmds) runPAMGrantCreate(cmd *cobra.Command, args []string) error {
 	q.Set("grantId", args[0])
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(pamRest).do(ctx, http.MethodPost, "/"+parent+"/grants", q, body, &got); err != nil {
+	if err := s.inv.rest(pamRest()).do(ctx, http.MethodPost, "/"+parent+"/grants", q, body, &got); err != nil {
 		return fmt.Errorf("creating grant: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Created grant [%s].\n", args[0])
@@ -130,7 +130,7 @@ func (s *pamCmds) runPAMGrantDeny(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(pamRest).do(ctx, http.MethodPost, "/"+name+":deny", nil, s.pamGrantReasonBody(), &got); err != nil {
+	if err := s.inv.rest(pamRest()).do(ctx, http.MethodPost, "/"+name+":deny", nil, s.pamGrantReasonBody(), &got); err != nil {
 		return fmt.Errorf("denying grant: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Denied grant [%s].\n", args[0])
@@ -144,7 +144,7 @@ func (s *pamCmds) runPAMGrantDescribe(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(pamRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(pamRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing grant: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagPAMGrantFormat)
@@ -156,7 +156,7 @@ func (s *pamCmds) runPAMGrantList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(pamRest).paginate(ctx, "/"+parent+"/grants", nil, "grants", s.flagPAMGrantPageSize)
+	items, err := s.inv.rest(pamRest()).paginate(ctx, "/"+parent+"/grants", nil, "grants", s.flagPAMGrantPageSize)
 	if err != nil {
 		return fmt.Errorf("listing grants: %w", err)
 	}
@@ -170,7 +170,7 @@ func (s *pamCmds) runPAMGrantRevoke(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(pamRest).do(ctx, http.MethodPost, "/"+name+":revoke", nil, s.pamGrantReasonBody(), &got); err != nil {
+	if err := s.inv.rest(pamRest()).do(ctx, http.MethodPost, "/"+name+":revoke", nil, s.pamGrantReasonBody(), &got); err != nil {
 		return fmt.Errorf("revoking grant: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Revoked grant [%s].\n", args[0])
@@ -189,7 +189,7 @@ func (s *pamCmds) runPAMGrantSearch(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	base := url.Values{}
 	base.Set("callerRelationship", rel)
-	items, err := s.inv.rest(pamRest).paginate(ctx, "/"+parent+":searchGrants", base, "grants", s.flagPAMGrantPageSize)
+	items, err := s.inv.rest(pamRest()).paginate(ctx, "/"+parent+":searchGrants", base, "grants", s.flagPAMGrantPageSize)
 	if err != nil {
 		return fmt.Errorf("searching grants: %w", err)
 	}

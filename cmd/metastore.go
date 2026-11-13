@@ -53,12 +53,6 @@ func (g *metastoreCmds) msFinishOp(ctx context.Context, svc *metastore.APIServic
 	return nil
 }
 
-var (
-	flagMSBackup string
-
-	flagMSDBType string
-)
-
 // --- federations ---
 
 // --- locations ---

@@ -225,11 +225,13 @@ func funcGeneration(rec map[string]any) string {
 
 // funcStorageEventTypes are the Cloud Storage event types gcloud's trigger()
 // shows as a bucket.
-var funcStorageEventTypes = map[string]bool{
-	"google.cloud.storage.object.v1.archived":        true,
-	"google.cloud.storage.object.v1.deleted":         true,
-	"google.cloud.storage.object.v1.finalized":       true,
-	"google.cloud.storage.object.v1.metadataUpdated": true,
+func funcStorageEventTypes() map[string]bool {
+	return map[string]bool{
+		"google.cloud.storage.object.v1.archived":        true,
+		"google.cloud.storage.object.v1.deleted":         true,
+		"google.cloud.storage.object.v1.finalized":       true,
+		"google.cloud.storage.object.v1.metadataUpdated": true,
+	}
 }
 
 // funcTrigger is gcloud's trigger(): a short description of how the function
@@ -259,7 +261,7 @@ func funcTrigger(rec map[string]any) string {
 		if eventType == "google.cloud.audit.log.v1.written" {
 			return "Cloud Audit Log"
 		}
-		if funcStorageEventTypes[eventType] {
+		if funcStorageEventTypes()[eventType] {
 			filters, _ := trigger["eventFilters"].([]any)
 			for _, f := range filters {
 				if m, _ := f.(map[string]any); m["attribute"] == "bucket" {

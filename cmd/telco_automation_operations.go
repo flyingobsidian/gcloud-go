@@ -43,7 +43,7 @@ func (s *telcoAutomationCmds) runTAOpDescribe(cmd *cobra.Command, args []string)
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(telcoAutomationRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(telcoAutomationRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagTAOpFormat)
@@ -55,7 +55,7 @@ func (s *telcoAutomationCmds) runTAOpWait(cmd *cobra.Command, args []string) err
 		return err
 	}
 	ctx := cmd.Context()
-	op, err := s.inv.rest(telcoAutomationRest).waitOperation(ctx, name, s.flagTAOpTimeout)
+	op, err := s.inv.rest(telcoAutomationRest()).waitOperation(ctx, name, s.flagTAOpTimeout)
 	if err != nil {
 		return err
 	}

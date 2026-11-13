@@ -46,7 +46,7 @@ func (s *designCenterCmds) runDCOpCancel(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Cancel request issued for operation %s.\n", args[0])
@@ -59,7 +59,7 @@ func (s *designCenterCmds) runDCOpDelete(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Deleted operation %s.\n", args[0])
@@ -73,7 +73,7 @@ func (s *designCenterCmds) runDCOpDescribe(cmd *cobra.Command, args []string) er
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagDCOpFormat)
@@ -90,7 +90,7 @@ func (s *designCenterCmds) runDCOpList(cmd *cobra.Command, args []string) error 
 	}
 	ctx := cmd.Context()
 	parent := fmt.Sprintf("%s/operations", dcLocationName(project, s.flagDCOpLocation))
-	items, err := s.inv.rest(designCenterRest).paginate(ctx, "/"+parent, base, "operations", s.flagDCOpPageSize)
+	items, err := s.inv.rest(designCenterRest()).paginate(ctx, "/"+parent, base, "operations", s.flagDCOpPageSize)
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
@@ -112,7 +112,7 @@ func (s *designCenterCmds) runDCOpWait(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	op, err := s.inv.rest(designCenterRest).waitOperation(ctx, name, s.flagDCOpTimeout)
+	op, err := s.inv.rest(designCenterRest()).waitOperation(ctx, name, s.flagDCOpTimeout)
 	if err != nil {
 		return err
 	}

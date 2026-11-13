@@ -11,7 +11,7 @@ import (
 )
 
 // Version is set at build time via -ldflags.
-var Version = "dev"
+var Version = "dev" //nolint:gochecknoglobals // set by the linker (-X), never at run time
 
 // newRootCmd returns the root command for inv, with the global flags bound
 // to inv.flags and the command groups (see migratedGroups).

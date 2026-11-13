@@ -8,7 +8,9 @@ import "github.com/spf13/cobra"
 // this file wires the top-level command up and hands its subcommands a shared
 // REST client that talks directly to the memorystore endpoint.
 
-var memorystoreRest = newRESTClient("https://memorystore.googleapis.com/v1beta")
+func memorystoreRest() *restClient {
+	return newRESTClient("https://memorystore.googleapis.com/v1beta")
+}
 
 func (s *memorystoreCmds) initMemorystore() {
 

@@ -19,7 +19,7 @@ import (
 // variables in vars, and writes to the returned buffers. Its gcloud
 // configuration directory is a fresh temporary directory unless vars sets
 // CLOUDSDK_CONFIG.
-func newTestInvocation(t *testing.T, vars map[string]string, stdin string) (*invocation, *bytes.Buffer, *bytes.Buffer) {
+func newTestInvocation(t testing.TB, vars map[string]string, stdin string) (*invocation, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	all := map[string]string{"CLOUDSDK_CONFIG": t.TempDir()}
 	for k, v := range vars {

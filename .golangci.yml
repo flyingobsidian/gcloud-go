@@ -1,0 +1,21 @@
+version: "2"
+
+# Package-level state is forbidden (#2063): gcloud-go runs commands
+# concurrently in one process (gcloud.Runner), so every command keeps its
+# state in its invocation. Use a function for a read-only table and a const
+# for a constant.
+linters:
+  default: none
+  enable:
+    - gochecknoglobals
+    - gochecknoinits
+  exclusions:
+    rules:
+      # Tests may keep fixtures and hooks in package variables.
+      - path: _test\.go
+        linters:
+          - gochecknoglobals
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -9,10 +9,6 @@ import (
 
 // --- gcloud colab runtime-templates (#1499) ---
 
-var (
-	flagColabRTTUpdateMask string
-)
-
 func (s *colabCmds) initColabRuntimeTemplates() {
 	all := []*cobra.Command{
 		s.colabRTTCreateCmd, s.colabRTTDeleteCmd, s.colabRTTDescribeCmd, s.colabRTTListCmd,

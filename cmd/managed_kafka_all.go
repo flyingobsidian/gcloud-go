@@ -63,10 +63,6 @@ func (s *managedKafkaCmds) mkFinishOp(ctx context.Context, svc *managedkafka.Ser
 
 // --- clusters ---
 
-var (
-	flagMKAclOp string
-)
-
 func (s *managedKafkaCmds) initManagedKafkaAll() {
 	all := []*cobra.Command{s.mkClusterCreateCmd, s.mkClusterDeleteCmd, s.mkClusterDescribeCmd, s.mkClusterListCmd, s.mkClusterUpdateCmd}
 	for _, c := range all {
@@ -1014,4 +1010,3 @@ func (s *managedKafkaCmds) runMKOpList(cmd *cobra.Command, args []string) error 
 }
 
 // silence linter about the placeholder var (used by ACL commands).
-var _ = flagMKAclOp

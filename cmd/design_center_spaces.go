@@ -67,7 +67,7 @@ func (s *designCenterCmds) runDCSpaceCreate(cmd *cobra.Command, args []string) e
 	q := url.Values{}
 	q.Set("spaceId", args[0])
 	var op map[string]any
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodPost, "/"+parent+"/spaces", q, body, &op); err != nil {
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodPost, "/"+parent+"/spaces", q, body, &op); err != nil {
 		return fmt.Errorf("creating space: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Create request issued for space [%s].\n", args[0])
@@ -85,7 +85,7 @@ func (s *designCenterCmds) runDCSpaceDelete(cmd *cobra.Command, args []string) e
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodDelete, "/"+name, q, nil, &op); err != nil {
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodDelete, "/"+name, q, nil, &op); err != nil {
 		return fmt.Errorf("deleting space: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Delete request issued for space [%s].\n", args[0])
@@ -99,7 +99,7 @@ func (s *designCenterCmds) runDCSpaceDescribe(cmd *cobra.Command, args []string)
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing space: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagDCSpaceFormat)
@@ -115,7 +115,7 @@ func (s *designCenterCmds) runDCSpaceList(cmd *cobra.Command, args []string) err
 		base.Set("filter", s.flagDCSpaceFilter)
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(designCenterRest).paginate(ctx, "/"+parent+"/spaces", base, "spaces", s.flagDCSpacePageSize)
+	items, err := s.inv.rest(designCenterRest()).paginate(ctx, "/"+parent+"/spaces", base, "spaces", s.flagDCSpacePageSize)
 	if err != nil {
 		return fmt.Errorf("listing spaces: %w", err)
 	}
@@ -141,7 +141,7 @@ func (s *designCenterCmds) runDCSpaceUpdate(cmd *cobra.Command, args []string) e
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating space: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Update request issued for space [%s].\n", args[0])
@@ -157,7 +157,7 @@ func (s *designCenterCmds) runDCSpaceGetIam(cmd *cobra.Command, args []string) e
 	q.Set("options.requestedPolicyVersion", "3")
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodGet, "/"+name+":getIamPolicy", q, nil, &got); err != nil {
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodGet, "/"+name+":getIamPolicy", q, nil, &got); err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagDCSpaceFormat)
@@ -175,7 +175,7 @@ func (s *designCenterCmds) runDCSpaceSetIam(cmd *cobra.Command, args []string) e
 	policy["version"] = 3
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodPost, "/"+name+":setIamPolicy", nil, map[string]any{"policy": policy}, &got); err != nil {
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodPost, "/"+name+":setIamPolicy", nil, map[string]any{"policy": policy}, &got); err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagDCSpaceFormat)
@@ -188,7 +188,7 @@ func (s *designCenterCmds) runDCSpaceTestIam(cmd *cobra.Command, args []string) 
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(designCenterRest).do(ctx, http.MethodPost, "/"+name+":testIamPermissions", nil, map[string]any{
+	if err := s.inv.rest(designCenterRest()).do(ctx, http.MethodPost, "/"+name+":testIamPermissions", nil, map[string]any{
 		"permissions": s.flagDCSpaceTestPerms,
 	}, &got); err != nil {
 		return fmt.Errorf("testing IAM permissions: %w", err)

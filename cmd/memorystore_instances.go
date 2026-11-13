@@ -89,7 +89,7 @@ func (s *memorystoreCmds) runMemstoreInstCreate(cmd *cobra.Command, args []strin
 	q.Set("instanceId", args[0])
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+parent+"/instances", q, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+parent+"/instances", q, body, &op); err != nil {
 		return fmt.Errorf("creating instance: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Create request issued for instance [%s].\n", args[0])
@@ -122,7 +122,7 @@ func (s *memorystoreCmds) runMemstoreInstDelete(cmd *cobra.Command, args []strin
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting instance: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Delete request issued for instance [%s].\n", args[0])
@@ -136,7 +136,7 @@ func (s *memorystoreCmds) runMemstoreInstDescribe(cmd *cobra.Command, args []str
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing instance: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreInstFormat)
@@ -148,7 +148,7 @@ func (s *memorystoreCmds) runMemstoreInstList(cmd *cobra.Command, args []string)
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+parent+"/instances", nil, "instances", s.flagMemstoreInstPageSize)
+	items, err := s.inv.rest(memorystoreRest()).paginate(ctx, "/"+parent+"/instances", nil, "instances", s.flagMemstoreInstPageSize)
 	if err != nil {
 		return fmt.Errorf("listing instances: %w", err)
 	}
@@ -174,7 +174,7 @@ func (s *memorystoreCmds) runMemstoreInstUpdate(cmd *cobra.Command, args []strin
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating instance: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Update request issued for instance [%s].\n", args[0])
@@ -192,7 +192,7 @@ func (s *memorystoreCmds) runMemstoreInstBackup(cmd *cobra.Command, args []strin
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":backup", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+name+":backup", nil, body, &op); err != nil {
 		return fmt.Errorf("backing up instance: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Backup request issued for instance [%s].\n", args[0])
@@ -210,7 +210,7 @@ func (s *memorystoreCmds) runMemstoreInstFinishMigration(cmd *cobra.Command, arg
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":finishMigration", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+name+":finishMigration", nil, body, &op); err != nil {
 		return fmt.Errorf("finishing migration for instance: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Finish-migration request issued for instance [%s].\n", args[0])
@@ -228,7 +228,7 @@ func (s *memorystoreCmds) runMemstoreInstStartMigration(cmd *cobra.Command, args
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":startMigration", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+name+":startMigration", nil, body, &op); err != nil {
 		return fmt.Errorf("starting migration for instance: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Start-migration request issued for instance [%s].\n", args[0])
@@ -242,7 +242,7 @@ func (s *memorystoreCmds) runMemstoreInstGetCA(cmd *cobra.Command, args []string
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name+"/certificateAuthority", nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+name+"/certificateAuthority", nil, nil, &got); err != nil {
 		return fmt.Errorf("getting certificate authority: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreInstFormat)
@@ -255,7 +255,7 @@ func (s *memorystoreCmds) runMemstoreInstGetSharedCA(cmd *cobra.Command, args []
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+parent+":getSharedRegionalCertificateAuthority", nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+parent+":getSharedRegionalCertificateAuthority", nil, nil, &got); err != nil {
 		return fmt.Errorf("getting shared regional certificate authority: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreInstFormat)
@@ -272,7 +272,7 @@ func (s *memorystoreCmds) runMemstoreInstRescheduleMaint(cmd *cobra.Command, arg
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":rescheduleMaintenance", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+name+":rescheduleMaintenance", nil, body, &op); err != nil {
 		return fmt.Errorf("rescheduling maintenance: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Reschedule-maintenance request issued for instance [%s].\n", args[0])

@@ -137,7 +137,7 @@ func (s *memorystoreCmds) memstoreTAUWait(ctx context.Context, op map[string]any
 	for done, _ := op["done"].(bool); !done; done, _ = op["done"].(bool) {
 		time.Sleep(time.Second)
 		op = map[string]any{}
-		if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+opName, nil, nil, &op); err != nil {
+		if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+opName, nil, nil, &op); err != nil {
 			fmt.Fprintln(s.inv.stderr, "failed.")
 			return nil, fmt.Errorf("polling operation %s: %w", opName, err)
 		}
@@ -194,7 +194,7 @@ func (s *memorystoreCmds) runMemstoreCreateTAU(cmd *cobra.Command, args []string
 	ctx := cmd.Context()
 	var op map[string]any
 	body := map[string]any{"tokenAuthUser": s.flagMemstoreTAUUser}
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":addTokenAuthUser", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+name+":addTokenAuthUser", nil, body, &op); err != nil {
 		return fmt.Errorf("creating token auth user: %w", err)
 	}
 	return s.memstoreTAUGenericResult(ctx, op, id)
@@ -207,7 +207,7 @@ func (s *memorystoreCmds) runMemstoreTAUCreateToken(cmd *cobra.Command, args []s
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":addAuthToken", nil, map[string]any{}, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+name+":addAuthToken", nil, map[string]any{}, &op); err != nil {
 		return fmt.Errorf("creating auth token: %w", err)
 	}
 	return s.memstoreTAUGenericResult(ctx, op, id)
@@ -227,7 +227,7 @@ func (s *memorystoreCmds) runMemstoreTAUDelete(cmd *cobra.Command, args []string
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodDelete, "/"+name, q, nil, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodDelete, "/"+name, q, nil, &op); err != nil {
 		return fmt.Errorf("deleting token auth user: %w", err)
 	}
 	return s.memstoreTAUDeleteResult(ctx, op, "tokenAuthUser", id)
@@ -240,7 +240,7 @@ func (s *memorystoreCmds) runMemstoreTAUDescribe(cmd *cobra.Command, args []stri
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing token auth user: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreTAUFormat)
@@ -255,7 +255,7 @@ func (s *memorystoreCmds) runMemstoreTAUList(cmd *cobra.Command, args []string) 
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+parent+"/tokenAuthUsers", nil, "tokenAuthUsers", s.flagMemstoreTAUPageSize)
+	items, err := s.inv.rest(memorystoreRest()).paginate(ctx, "/"+parent+"/tokenAuthUsers", nil, "tokenAuthUsers", s.flagMemstoreTAUPageSize)
 	if err != nil {
 		return fmt.Errorf("listing token auth users: %w", err)
 	}
@@ -269,7 +269,7 @@ func (s *memorystoreCmds) runMemstoreATDelete(cmd *cobra.Command, args []string)
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting auth token: %w", err)
 	}
 	return s.memstoreTAUDeleteResult(ctx, op, "authToken", id)
@@ -282,7 +282,7 @@ func (s *memorystoreCmds) runMemstoreATDescribe(cmd *cobra.Command, args []strin
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing auth token: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreTAUFormat)
@@ -297,7 +297,7 @@ func (s *memorystoreCmds) runMemstoreATList(cmd *cobra.Command, args []string) e
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+parent+"/authTokens", nil, "authTokens", s.flagMemstoreTAUPageSize)
+	items, err := s.inv.rest(memorystoreRest()).paginate(ctx, "/"+parent+"/authTokens", nil, "authTokens", s.flagMemstoreTAUPageSize)
 	if err != nil {
 		return fmt.Errorf("listing auth tokens: %w", err)
 	}

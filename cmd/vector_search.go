@@ -17,18 +17,15 @@ import (
 // google.golang.org/api. Both subgroups use the shared restClient from
 // rest_helpers.go with a per-service endpoint.
 
-var vectorSearchRest = newRESTClient("https://vectorsearch.googleapis.com/v1")
+func vectorSearchRest() *restClient {
+	return newRESTClient("https://vectorsearch.googleapis.com/v1")
+}
 
 func (s *vectorSearchCmds) initVectorSearch() {
 
 }
 
 // --- vector-search collections (#1432) ---
-
-var (
-	flagVSCollImportFile string
-	flagVSCollExportFile string
-)
 
 func (s *vectorSearchCmds) initVectorSearch1() {
 	all := []*cobra.Command{
@@ -85,7 +82,7 @@ func (s *vectorSearchCmds) runVSCollCreate(cmd *cobra.Command, args []string) er
 	q.Set("collectionId", args[0])
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(vectorSearchRest).do(ctx, http.MethodPost, "/"+parent+"/collections", q, body, &op); err != nil {
+	if err := s.inv.rest(vectorSearchRest()).do(ctx, http.MethodPost, "/"+parent+"/collections", q, body, &op); err != nil {
 		return fmt.Errorf("creating collection: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Create request issued for collection [%s].\n", args[0])
@@ -99,7 +96,7 @@ func (s *vectorSearchCmds) runVSCollDelete(cmd *cobra.Command, args []string) er
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(vectorSearchRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(vectorSearchRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting collection: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Delete request issued for collection [%s].\n", args[0])
@@ -113,7 +110,7 @@ func (s *vectorSearchCmds) runVSCollDescribe(cmd *cobra.Command, args []string) 
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(vectorSearchRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(vectorSearchRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing collection: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagVSCollFormat)
@@ -125,7 +122,7 @@ func (s *vectorSearchCmds) runVSCollList(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(vectorSearchRest).paginate(ctx, "/"+parent+"/collections", nil, "collections", s.flagVSCollPageSize)
+	items, err := s.inv.rest(vectorSearchRest()).paginate(ctx, "/"+parent+"/collections", nil, "collections", s.flagVSCollPageSize)
 	if err != nil {
 		return fmt.Errorf("listing collections: %w", err)
 	}
@@ -151,7 +148,7 @@ func (s *vectorSearchCmds) runVSCollUpdate(cmd *cobra.Command, args []string) er
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(vectorSearchRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := s.inv.rest(vectorSearchRest()).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating collection: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Update request issued for collection [%s].\n", args[0])
@@ -169,7 +166,7 @@ func (s *vectorSearchCmds) runVSCollImportData(cmd *cobra.Command, args []string
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(vectorSearchRest).do(ctx, http.MethodPost, "/"+name+":importDataObjects", nil, body, &op); err != nil {
+	if err := s.inv.rest(vectorSearchRest()).do(ctx, http.MethodPost, "/"+name+":importDataObjects", nil, body, &op); err != nil {
 		return fmt.Errorf("importing data objects: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, op, s.flagVSCollFormat)
@@ -186,7 +183,7 @@ func (s *vectorSearchCmds) runVSCollExportData(cmd *cobra.Command, args []string
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(vectorSearchRest).do(ctx, http.MethodPost, "/"+name+":exportDataObjects", nil, body, &op); err != nil {
+	if err := s.inv.rest(vectorSearchRest()).do(ctx, http.MethodPost, "/"+name+":exportDataObjects", nil, body, &op); err != nil {
 		return fmt.Errorf("exporting data objects: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, op, s.flagVSCollFormat)
@@ -227,7 +224,7 @@ func (s *vectorSearchCmds) runVSOpCancel(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(vectorSearchRest).do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
+	if err := s.inv.rest(vectorSearchRest()).do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Cancel request issued for operation %s.\n", args[0])
@@ -240,7 +237,7 @@ func (s *vectorSearchCmds) runVSOpDelete(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(vectorSearchRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	if err := s.inv.rest(vectorSearchRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Deleted operation %s.\n", args[0])
@@ -254,7 +251,7 @@ func (s *vectorSearchCmds) runVSOpDescribe(cmd *cobra.Command, args []string) er
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(vectorSearchRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(vectorSearchRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagVSOpFormat)
@@ -271,7 +268,7 @@ func (s *vectorSearchCmds) runVSOpList(cmd *cobra.Command, args []string) error 
 	}
 	ctx := cmd.Context()
 	parent := fmt.Sprintf("projects/%s/locations/%s/operations", project, s.flagVSOpLocation)
-	items, err := s.inv.rest(vectorSearchRest).paginate(ctx, "/"+parent, base, "operations", s.flagVSOpPageSize)
+	items, err := s.inv.rest(vectorSearchRest()).paginate(ctx, "/"+parent, base, "operations", s.flagVSOpPageSize)
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
@@ -293,7 +290,7 @@ func (s *vectorSearchCmds) runVSOpWait(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	op, err := s.inv.rest(vectorSearchRest).waitOperation(ctx, name, s.flagVSOpTimeout)
+	op, err := s.inv.rest(vectorSearchRest()).waitOperation(ctx, name, s.flagVSOpTimeout)
 	if err != nil {
 		return err
 	}

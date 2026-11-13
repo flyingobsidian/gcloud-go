@@ -88,7 +88,7 @@ func (s *biglakeCmds) runBLICCreate(cmd *cobra.Command, args []string) error {
 	q.Set("iceberg-catalog-id", args[0])
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(biglakeIcebergRest).do(ctx, http.MethodPost, path, q, body, &got); err != nil {
+	if err := s.inv.rest(biglakeIcebergRest()).do(ctx, http.MethodPost, path, q, body, &got); err != nil {
 		return fmt.Errorf("creating catalog: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Created BigLake Iceberg catalog [%s].\n", args[0])
@@ -101,7 +101,7 @@ func (s *biglakeCmds) runBLICDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(biglakeIcebergRest).do(ctx, http.MethodDelete, path, nil, nil, nil); err != nil {
+	if err := s.inv.rest(biglakeIcebergRest()).do(ctx, http.MethodDelete, path, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting catalog: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Deleted BigLake Iceberg catalog [%s].\n", args[0])
@@ -115,7 +115,7 @@ func (s *biglakeCmds) runBLICDescribe(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(biglakeIcebergRest).do(ctx, http.MethodGet, path, nil, nil, &got); err != nil {
+	if err := s.inv.rest(biglakeIcebergRest()).do(ctx, http.MethodGet, path, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing catalog: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagBLICFormat)
@@ -128,7 +128,7 @@ func (s *biglakeCmds) runBLICList(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var raw map[string]any
-	if err := s.inv.rest(biglakeIcebergRest).do(ctx, http.MethodGet, path, nil, nil, &raw); err != nil {
+	if err := s.inv.rest(biglakeIcebergRest()).do(ctx, http.MethodGet, path, nil, nil, &raw); err != nil {
 		return fmt.Errorf("listing catalogs: %w", err)
 	}
 	// The Iceberg REST list may return either {"catalogs": [...]} or a raw
@@ -160,7 +160,7 @@ func (s *biglakeCmds) runBLICUpdate(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(biglakeIcebergRest).do(ctx, http.MethodPatch, path, q, body, &got); err != nil {
+	if err := s.inv.rest(biglakeIcebergRest()).do(ctx, http.MethodPatch, path, q, body, &got); err != nil {
 		return fmt.Errorf("updating catalog: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Updated BigLake Iceberg catalog [%s].\n", args[0])
@@ -180,7 +180,7 @@ func (s *biglakeCmds) runBLICFailover(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(biglakeIcebergRest).do(ctx, http.MethodPost, path+":failover", nil, body, &got); err != nil {
+	if err := s.inv.rest(biglakeIcebergRest()).do(ctx, http.MethodPost, path+":failover", nil, body, &got); err != nil {
 		return fmt.Errorf("failing over catalog: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Failover request issued for BigLake Iceberg catalog [%s].\n", args[0])
@@ -194,7 +194,7 @@ func (s *biglakeCmds) runBLICGetIam(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(biglakeStandardRest).do(ctx, http.MethodGet, "/"+name+":getIamPolicy", nil, nil, &got); err != nil {
+	if err := s.inv.rest(biglakeStandardRest()).do(ctx, http.MethodGet, "/"+name+":getIamPolicy", nil, nil, &got); err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagBLICFormat)
@@ -211,7 +211,7 @@ func (s *biglakeCmds) runBLICSetIam(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(biglakeStandardRest).do(ctx, http.MethodPost, "/"+name+":setIamPolicy", nil, map[string]any{"policy": policy}, &got); err != nil {
+	if err := s.inv.rest(biglakeStandardRest()).do(ctx, http.MethodPost, "/"+name+":setIamPolicy", nil, map[string]any{"policy": policy}, &got); err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagBLICFormat)

@@ -12,7 +12,9 @@ import (
 // exposed by google.golang.org/api; subgroups use the shared restClient from
 // rest_helpers.go with a per-service endpoint.
 
-var telcoAutomationRest = newRESTClient("https://telcoautomation.googleapis.com/v1")
+func telcoAutomationRest() *restClient {
+	return newRESTClient("https://telcoautomation.googleapis.com/v1")
+}
 
 func (s *telcoAutomationCmds) initTelcoAutomation() {
 

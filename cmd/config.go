@@ -64,14 +64,16 @@ func (s *configCmds) runConfigGet(cmd *cobra.Command, args []string) error {
 
 // configListKnown are the properties `config list --all` shows even when
 // unset.
-var configListKnown = map[string][]string{
-	"core":      {"account", "project"},
-	"compute":   {"region", "zone"},
-	"billing":   {"quota_project"},
-	"dataflow":  {"region"},
-	"run":       {"region"},
-	"redis":     {"region"},
-	"functions": {"region"},
+func configListKnown() map[string][]string {
+	return map[string][]string{
+		"core":      {"account", "project"},
+		"compute":   {"region", "zone"},
+		"billing":   {"quota_project"},
+		"dataflow":  {"region"},
+		"run":       {"region"},
+		"redis":     {"region"},
+		"functions": {"region"},
+	}
 }
 
 func (s *configCmds) runConfigList(cmd *cobra.Command, args []string) error {
@@ -81,7 +83,7 @@ func (s *configCmds) runConfigList(cmd *cobra.Command, args []string) error {
 	}
 
 	if s.flagConfigListAll {
-		for section, keys := range configListKnown {
+		for section, keys := range configListKnown() {
 			if props[section] == nil {
 				props[section] = map[string]string{}
 			}

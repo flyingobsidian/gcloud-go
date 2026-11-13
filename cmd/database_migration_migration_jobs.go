@@ -10,10 +10,6 @@ import (
 	datamigration "google.golang.org/api/datamigration/v1"
 )
 
-var (
-	flagDMMJRestartSkipVal bool
-)
-
 func (s *databaseMigrationCmds) initDatabaseMigrationMigrationJobs() {
 	all := []*cobra.Command{
 		s.dmMJCreateCmd, s.dmMJDeleteCmd, s.dmMJDescribeCmd, s.dmMJUpdateCmd, s.dmMJListCmd,

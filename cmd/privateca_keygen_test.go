@@ -66,7 +66,7 @@ func ecCurve(name string) func(*testing.T, any) {
 }
 
 func TestValidatePCAKeyAlgorithm(t *testing.T) {
-	for _, a := range pcaKeyAlgorithms {
+	for _, a := range pcaKeyAlgorithms() {
 		if err := validatePCAKeyAlgorithm(a); err != nil {
 			t.Errorf("%s: %v", a, err)
 		}

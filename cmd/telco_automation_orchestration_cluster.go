@@ -59,7 +59,7 @@ func (s *telcoAutomationCmds) runTAOCCreate(cmd *cobra.Command, args []string) e
 	q.Set("orchestrationClusterId", args[0])
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(telcoAutomationRest).do(ctx, http.MethodPost, "/"+parent+"/orchestrationClusters", q, body, &op); err != nil {
+	if err := s.inv.rest(telcoAutomationRest()).do(ctx, http.MethodPost, "/"+parent+"/orchestrationClusters", q, body, &op); err != nil {
 		return fmt.Errorf("creating orchestration cluster: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Create request issued for orchestration cluster [%s].\n", args[0])
@@ -73,7 +73,7 @@ func (s *telcoAutomationCmds) runTAOCDelete(cmd *cobra.Command, args []string) e
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(telcoAutomationRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(telcoAutomationRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting orchestration cluster: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Delete request issued for orchestration cluster [%s].\n", args[0])
@@ -87,7 +87,7 @@ func (s *telcoAutomationCmds) runTAOCDescribe(cmd *cobra.Command, args []string)
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(telcoAutomationRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(telcoAutomationRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing orchestration cluster: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagTAOCFormat)
@@ -99,7 +99,7 @@ func (s *telcoAutomationCmds) runTAOCList(cmd *cobra.Command, args []string) err
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(telcoAutomationRest).paginate(ctx, "/"+parent+"/orchestrationClusters", nil, "orchestrationClusters", s.flagTAOCPageSize)
+	items, err := s.inv.rest(telcoAutomationRest()).paginate(ctx, "/"+parent+"/orchestrationClusters", nil, "orchestrationClusters", s.flagTAOCPageSize)
 	if err != nil {
 		return fmt.Errorf("listing orchestration clusters: %w", err)
 	}

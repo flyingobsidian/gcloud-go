@@ -29,13 +29,16 @@ import (
 // with the other API version (gcloud-python's V1_ONLY_*/V2_ONLY_* tables).
 type assuredVersionFlag struct{ name, remediation string }
 
-var (
-	assuredV1OnlyCreateFlags = []assuredVersionFlag{
+func assuredV1OnlyCreateFlags() []assuredVersionFlag {
+	return []assuredVersionFlag{
 		{"compliance-regime", "Use '--framework' when creating V2 workloads."},
 		{"billing-account", "Configure billing within '--new-project-config' or '--cloud-control-config' when creating V2 workloads."},
 		{"display-name", "Configure folder/project display names within '--new-folder-config' or '--new-project-config'."},
 	}
-	assuredV2OnlyCreateFlags = []assuredVersionFlag{
+}
+
+func assuredV2OnlyCreateFlags() []assuredVersionFlag {
+	return []assuredVersionFlag{
 		{"framework", "Use '--compliance-regime' when creating V1 workloads."},
 		{"framework-major-revision", "Major revision is only applicable to V2 frameworks."},
 		{"target-project", "Target resources are only supported in V2 workloads."},
@@ -50,16 +53,22 @@ var (
 		{"workload-id", "Explicit workload-id is only supported in V2 workloads."},
 		{"async", "Asynchronous operations are only supported on V2 workloads."},
 	}
-	assuredV1OnlyUpdateFlags = []assuredVersionFlag{
+}
+
+func assuredV1OnlyUpdateFlags() []assuredVersionFlag {
+	return []assuredVersionFlag{
 		{"display-name", "Display name is only supported on V1 workloads."},
 	}
-	assuredV2OnlyUpdateFlags = []assuredVersionFlag{
+}
+
+func assuredV2OnlyUpdateFlags() []assuredVersionFlag {
+	return []assuredVersionFlag{
 		{"framework-major-revision", "Framework major revision is only supported on V2 workloads."},
 		{"cloud-control-config", "Cloud control configs are only supported on V2 workloads."},
 		{"cloud-control-configs-from-file", "Cloud control configs are only supported on V2 workloads."},
 		{"async", "Asynchronous operations are only supported on V2 workloads."},
 	}
-)
+}
 
 func (g *assuredCmds) initAssuredV2() {
 	for _, c := range []*cobra.Command{g.assuredWorkloadCreateCmd, g.assuredWorkloadDeleteCmd,
@@ -134,7 +143,7 @@ func assuredValidateVersionFlags(cmd *cobra.Command, version string, v1Only, v2O
 }
 
 func assuredValidateCreateFlags(cmd *cobra.Command, args []string, version string) error {
-	if err := assuredValidateVersionFlags(cmd, version, assuredV1OnlyCreateFlags, assuredV2OnlyCreateFlags); err != nil {
+	if err := assuredValidateVersionFlags(cmd, version, assuredV1OnlyCreateFlags(), assuredV2OnlyCreateFlags()); err != nil {
 		return err
 	}
 	if len(args) > 0 && (cmd.Flags().Changed("workload-id") || cmd.Flags().Changed("external-identifier")) {
@@ -166,7 +175,7 @@ func assuredValidateCreateFlags(cmd *cobra.Command, args []string, version strin
 }
 
 func assuredValidateUpdateFlags(cmd *cobra.Command, version string) error {
-	if err := assuredValidateVersionFlags(cmd, version, assuredV1OnlyUpdateFlags, assuredV2OnlyUpdateFlags); err != nil {
+	if err := assuredValidateVersionFlags(cmd, version, assuredV1OnlyUpdateFlags(), assuredV2OnlyUpdateFlags()); err != nil {
 		return err
 	}
 	changed := cmd.Flags().Changed

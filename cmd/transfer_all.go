@@ -18,10 +18,6 @@ import (
 
 // --- Shared helpers for the Storage Transfer surface (#887-#891) ---
 
-var (
-	flagXferPageSize int64
-)
-
 // xferAgentPoolName returns the fully-qualified agent-pool resource name.
 // The Storage Transfer API expects "projects/PROJECT_ID/agentPools/POOL_ID".
 func xferAgentPoolName(project, pool string) string {
@@ -890,19 +886,22 @@ func (s *transferCmds) runXferOpResume(cmd *cobra.Command, args []string) error 
 
 // --- authorize impl ---
 
-var (
-	xferExpectedUserRoles = []string{
+func xferExpectedUserRoles() []string {
+	return []string{
 		"roles/owner",
 		"roles/storagetransfer.admin",
 		"roles/storagetransfer.transferAgent",
 		"roles/storage.objectAdmin",
 		"roles/pubsub.editor",
 	}
-	xferExpectedP4SARoles = []string{
+}
+
+func xferExpectedP4SARoles() []string {
+	return []string{
 		"roles/storage.admin",
 		"roles/storagetransfer.serviceAgent",
 	}
-)
+}
 
 func (s *transferCmds) runXferAuthorize(cmd *cobra.Command, args []string) error {
 	project, err := s.inv.project()
@@ -931,7 +930,7 @@ func (s *transferCmds) runXferAuthorize(cmd *cobra.Command, args []string) error
 		return fmt.Errorf("fetching project IAM policy: %w", err)
 	}
 
-	missingUser := xferMissingRoles(policy, userMember, xferExpectedUserRoles)
+	missingUser := xferMissingRoles(policy, userMember, xferExpectedUserRoles())
 	fmt.Fprintf(s.inv.stderr, "User %s missing roles: %v\n", accountEmail, missingUser)
 
 	p4sa, err := xfer.GoogleServiceAccounts.Get(project).Context(ctx).Do()
@@ -939,7 +938,7 @@ func (s *transferCmds) runXferAuthorize(cmd *cobra.Command, args []string) error
 		return fmt.Errorf("fetching transfer service account: %w", err)
 	}
 	p4saMember := xferIamMemberFor(p4sa.AccountEmail, true)
-	missingP4SA := xferMissingRoles(policy, p4saMember, xferExpectedP4SARoles)
+	missingP4SA := xferMissingRoles(policy, p4saMember, xferExpectedP4SARoles())
 	fmt.Fprintf(s.inv.stderr, "Transfer service account %s missing roles: %v\n", p4sa.AccountEmail, missingP4SA)
 
 	toAdd := map[string][]string{

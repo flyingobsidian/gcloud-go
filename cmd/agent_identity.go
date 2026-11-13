@@ -23,10 +23,6 @@ import (
 
 // --- shared flags ---
 
-var (
-	flagAIAuthProviderID string
-)
-
 // --- agent-identity auth-providers ---
 
 // --- agent-identity access-summaries ---

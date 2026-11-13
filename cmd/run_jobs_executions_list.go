@@ -171,7 +171,9 @@ const (
 
 // runJobsExecTableHeaders are gcloud's default executions list columns; the
 // first (ready symbol) column has no label.
-var runJobsExecTableHeaders = []string{"", "JOB", "EXECUTION", "REGION", "RUNNING", "COMPLETE", "CREATED", "RUN BY"}
+func runJobsExecTableHeaders() []string {
+	return []string{"", "JOB", "EXECUTION", "REGION", "RUNNING", "COMPLETE", "CREATED", "RUN BY"}
+}
 
 // runJobsExecReadySymbol mirrors gcloud's ready_symbol for executions, whose
 // ready condition is Completed: … while unknown, ✔ on success, X on failure.
@@ -229,11 +231,11 @@ func emitRunJobsExecTable(w, errW io.Writer, execs []*runv1.Execution, loc *time
 		_, err := fmt.Fprintln(errW, "Listed 0 items.")
 		return err
 	}
-	rows := [][]string{runJobsExecTableHeaders}
+	rows := [][]string{runJobsExecTableHeaders()}
 	for _, e := range execs {
 		rows = append(rows, runJobsExecTableRow(e, loc))
 	}
-	widths := make([]int, len(runJobsExecTableHeaders))
+	widths := make([]int, len(runJobsExecTableHeaders()))
 	for _, row := range rows {
 		for i, cell := range row {
 			widths[i] = max(widths[i], utf8.RuneCountInString(cell))

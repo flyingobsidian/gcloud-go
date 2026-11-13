@@ -24,7 +24,9 @@ import (
 // restClient. Locations default to "global" for domains and resources-graph,
 // matching gcloud-python's DefaultToGlobal fallthrough.
 
-var appTopologyRest = newRESTClient("https://apptopology.googleapis.com/v1")
+func appTopologyRest() *restClient {
+	return newRESTClient("https://apptopology.googleapis.com/v1")
+}
 
 func (s *appTopologyCmds) initAppTopology() {
 	for _, c := range []*cobra.Command{s.appTopologyDomainsListCmd, s.appTopologyDomainsDescribeCmd,
@@ -94,7 +96,7 @@ func (s *appTopologyCmds) runAppTopologyDomainsDescribe(cmd *cobra.Command, args
 		return err
 	}
 	var got map[string]any
-	if err := s.inv.rest(appTopologyRest).do(cmd.Context(), http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(appTopologyRest()).do(cmd.Context(), http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing domain: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagATFormat)
@@ -117,7 +119,7 @@ func (s *appTopologyCmds) runAppTopologySchemaDescribe(cmd *cobra.Command, args 
 		return err
 	}
 	var got map[string]any
-	if err := s.inv.rest(appTopologyRest).do(cmd.Context(), http.MethodGet, "/"+appTopologySchemaName(name), nil, nil, &got); err != nil {
+	if err := s.inv.rest(appTopologyRest()).do(cmd.Context(), http.MethodGet, "/"+appTopologySchemaName(name), nil, nil, &got); err != nil {
 		return fmt.Errorf("describing domain schema: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagATFormat)
@@ -129,7 +131,7 @@ func (s *appTopologyCmds) runAppTopologyLocDescribe(cmd *cobra.Command, args []s
 		return err
 	}
 	var got map[string]any
-	if err := s.inv.rest(appTopologyRest).do(cmd.Context(), http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(appTopologyRest()).do(cmd.Context(), http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagATFormat)
@@ -140,7 +142,7 @@ func (s *appTopologyCmds) runAppTopologyDomainsList(cmd *cobra.Command, args []s
 	if err != nil {
 		return err
 	}
-	all, err := s.inv.rest(appTopologyRest).paginate(cmd.Context(), "/"+parent+"/domains", nil, "domains", s.flagATPageSize)
+	all, err := s.inv.rest(appTopologyRest()).paginate(cmd.Context(), "/"+parent+"/domains", nil, "domains", s.flagATPageSize)
 	if err != nil {
 		return fmt.Errorf("listing domains: %w", err)
 	}
@@ -163,7 +165,7 @@ func (s *appTopologyCmds) runAppTopologyLocList(cmd *cobra.Command, args []strin
 	if !strings.HasPrefix(parent, "projects/") {
 		parent = "projects/" + parent
 	}
-	all, err := s.inv.rest(appTopologyRest).paginate(cmd.Context(), "/"+parent+"/locations", nil, "locations", s.flagATPageSize)
+	all, err := s.inv.rest(appTopologyRest()).paginate(cmd.Context(), "/"+parent+"/locations", nil, "locations", s.flagATPageSize)
 	if err != nil {
 		return fmt.Errorf("listing locations: %w", err)
 	}
@@ -388,7 +390,7 @@ func (s *appTopologyCmds) runAppTopologyGraphGenerate(cmd *cobra.Command, args [
 	}
 	var resp map[string]any
 	path := "/" + location + "/discoveredResourcesTopology:generate"
-	if err := s.inv.rest(appTopologyRest).do(cmd.Context(), http.MethodPost, path, url.Values{}, body, &resp); err != nil {
+	if err := s.inv.rest(appTopologyRest()).do(cmd.Context(), http.MethodPost, path, url.Values{}, body, &resp); err != nil {
 		return fmt.Errorf("generating resource topology: %w", err)
 	}
 	graph := resp["graph"]

@@ -11,7 +11,9 @@ MEM := $(shell echo $$(( $$(free -b | awk '/Mem:/{print $$2}') / 2 )))
 GO := systemd-run --user --scope --quiet -p CPUQuota=$(CPU_QUOTA) -p MemoryMax=$(MEM) -p MemorySwapMax=0 \
 	env GOMAXPROCS=$(CPUS) GOMEMLIMIT=$(MEM) GOFLAGS=-p=$(CPUS) go
 
-.PHONY: build test test-v clean
+GOLANGCI_LINT := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+
+.PHONY: build test test-v lint clean
 
 build:
 	CGO_ENABLED=0 $(GO) build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) .
@@ -27,6 +29,10 @@ test-v:
 
 vet:
 	$(GO) vet ./...
+
+# Linters are configured in .golangci.yml.
+lint:
+	$(GO) run $(GOLANGCI_LINT) run -j $(CPUS) ./...
 
 clean:
 	rm -f bin/$(BINARY)

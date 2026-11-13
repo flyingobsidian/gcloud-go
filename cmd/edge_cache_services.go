@@ -70,7 +70,7 @@ func (s *edgeCacheCmds) runEdgeCacheServicesDelete(cmd *cobra.Command, args []st
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting edge-cache service: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Delete request issued for edge-cache service [%s].\n", args[0])
@@ -84,7 +84,7 @@ func (s *edgeCacheCmds) runEdgeCacheServicesDescribe(cmd *cobra.Command, args []
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing edge-cache service: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagEdgeCacheServicesFormat)
@@ -97,7 +97,7 @@ func (s *edgeCacheCmds) runEdgeCacheServicesExport(cmd *cobra.Command, args []st
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("exporting edge-cache service: %w", err)
 	}
 	if s.flagEdgeCacheServicesDestination == "" {
@@ -127,7 +127,7 @@ func (s *edgeCacheCmds) runEdgeCacheServicesImport(cmd *cobra.Command, args []st
 	if mask := joinMask(dcTopLevelKeys(body)); mask != "" {
 		q.Set("updateMask", mask)
 	}
-	err = s.inv.rest(edgeCacheRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op)
+	err = s.inv.rest(edgeCacheRest()).do(ctx, http.MethodPatch, "/"+name, q, body, &op)
 	if err == nil {
 		fmt.Fprintf(s.inv.stdout, "Import (update) request issued for edge-cache service [%s].\n", args[0])
 		return emitFormattedTo(s.inv.stdout, op, s.flagEdgeCacheServicesFormat)
@@ -142,7 +142,7 @@ func (s *edgeCacheCmds) runEdgeCacheServicesImport(cmd *cobra.Command, args []st
 	}
 	createQ := url.Values{}
 	createQ.Set("edgeCacheServiceId", args[0])
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodPost, "/"+parent+"/edgeCacheServices", createQ, body, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodPost, "/"+parent+"/edgeCacheServices", createQ, body, &op); err != nil {
 		return fmt.Errorf("importing edge-cache service: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Import (create) request issued for edge-cache service [%s].\n", args[0])
@@ -160,7 +160,7 @@ func (s *edgeCacheCmds) runEdgeCacheServicesInvalidate(cmd *cobra.Command, args 
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodPost, "/"+name+":invalidateCache", nil, body, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodPost, "/"+name+":invalidateCache", nil, body, &op); err != nil {
 		return fmt.Errorf("invalidating edge-cache service cache: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Invalidate-cache request issued for edge-cache service [%s].\n", args[0])
@@ -173,7 +173,7 @@ func (s *edgeCacheCmds) runEdgeCacheServicesList(cmd *cobra.Command, args []stri
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(edgeCacheRest).paginate(ctx, "/"+parent+"/edgeCacheServices", nil, "edgeCacheServices", s.flagEdgeCacheServicesPageSize)
+	items, err := s.inv.rest(edgeCacheRest()).paginate(ctx, "/"+parent+"/edgeCacheServices", nil, "edgeCacheServices", s.flagEdgeCacheServicesPageSize)
 	if err != nil {
 		return fmt.Errorf("listing edge-cache services: %w", err)
 	}
@@ -199,7 +199,7 @@ func (s *edgeCacheCmds) runEdgeCacheServicesUpdate(cmd *cobra.Command, args []st
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating edge-cache service: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Update request issued for edge-cache service [%s].\n", args[0])

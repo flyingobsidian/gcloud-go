@@ -15,11 +15,9 @@ import (
 // --- gcloud dataflow flex-template / snapshots / yaml (#936, #937, #938) ---
 
 var (
-	// flex-template flags
-	flagDFFTJobName string
+// flex-template flags
 
-	// flex-template build flags
-	flagDFFTBuildTemplateFileGCS string
+// flex-template build flags
 )
 
 func (s *dataflowCmds) registerDataflowExtras(parent *cobra.Command) {

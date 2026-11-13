@@ -18,7 +18,9 @@ import (
 
 // netmgmtMonRest talks to the v1beta1 REST surface of
 // networkmanagement.googleapis.com which exposes networkMonitoringProviders.
-var netmgmtMonRest = newRESTClient("https://networkmanagement.googleapis.com/v1beta1")
+func netmgmtMonRest() *restClient {
+	return newRESTClient("https://networkmanagement.googleapis.com/v1beta1")
+}
 
 // --- Connectivity tests ---
 

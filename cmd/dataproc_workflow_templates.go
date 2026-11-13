@@ -9,10 +9,6 @@ import (
 
 // --- gcloud dataproc workflow-templates (#1516) ---
 
-var (
-	flagDPWFRemoveJob string
-)
-
 func (s *dataprocCmds) initDataprocWorkflowTemplates() {
 	all := []*cobra.Command{
 		s.dpWFCreateCmd, s.dpWFDeleteCmd, s.dpWFDescribeCmd, s.dpWFExportCmd, s.dpWFImportCmd,

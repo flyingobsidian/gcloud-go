@@ -17,12 +17,14 @@ import (
 // IapIamResourceTypes lists the IAM resource types accepted by
 // `gcloud iap web` IAM commands. `agent-registry` was promoted to GA in
 // gcloud-python 576.0.0 (#1781), so it is included here regardless of track.
-var IapIamResourceTypes = []string{
-	"app-engine",
-	"backend-services",
-	"forwarding-rule",
-	"cloud-run",
-	"agent-registry",
+func IapIamResourceTypes() []string {
+	return []string{
+		"app-engine",
+		"backend-services",
+		"forwarding-rule",
+		"cloud-run",
+		"agent-registry",
+	}
 }
 
 func (s *iapCmds) initIap() {
@@ -46,7 +48,7 @@ func (s *iapCmds) initIap() {
 }
 
 func addIapWebIamStubFlags(c *cobra.Command) {
-	c.Flags().String("resource-type", "", "Resource type of the IAP resource. One of: "+strings.Join(IapIamResourceTypes, ", "))
+	c.Flags().String("resource-type", "", "Resource type of the IAP resource. One of: "+strings.Join(IapIamResourceTypes(), ", "))
 	c.Flags().String("service", "", "Service name")
 	c.Flags().String("region", "", "Region name")
 	c.Flags().String("version", "", "Service version (app-engine only)")

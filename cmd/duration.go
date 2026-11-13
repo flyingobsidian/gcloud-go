@@ -8,11 +8,13 @@ import (
 )
 
 // gcloudDurationUnits maps shorthand duration suffixes to their length.
-var gcloudDurationUnits = map[byte]time.Duration{
-	'd': 24 * time.Hour,
-	'h': time.Hour,
-	'm': time.Minute,
-	's': time.Second,
+func gcloudDurationUnits() map[byte]time.Duration {
+	return map[byte]time.Duration{
+		'd': 24 * time.Hour,
+		'h': time.Hour,
+		'm': time.Minute,
+		's': time.Second,
+	}
 }
 
 // parseGcloudDuration parses a duration as accepted by Python gcloud's
@@ -53,7 +55,7 @@ func parseGcloudDuration(s string) (time.Duration, error) {
 		if err != nil || n < 0 {
 			return 0, fmt.Errorf("invalid duration %q", s)
 		}
-		total += time.Duration(n * float64(gcloudDurationUnits[str[i]]))
+		total += time.Duration(n * float64(gcloudDurationUnits()[str[i]]))
 		str = str[i+1:]
 	}
 	return total, nil

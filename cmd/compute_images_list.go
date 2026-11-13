@@ -14,17 +14,19 @@ import (
 
 // computePublicImageProjects is gcloud's constants.PUBLIC_IMAGE_PROJECTS: the
 // projects whose images --standard-images (the default) adds to the list.
-var computePublicImageProjects = []string{
-	"cos-cloud", "debian-cloud", "rocky-linux-cloud", "ubuntu-os-cloud",
-	"almalinux-cloud", "centos-cloud", "fedora-coreos-cloud", "opensuse-cloud",
-	"oracle-linux-cloud", "rhel-cloud", "rhel-sap-cloud", "rocky-linux-accelerator-cloud",
-	"suse-cloud", "suse-sap-cloud", "ubuntu-os-accelerator-images", "ubuntu-os-pro-cloud",
-	"windows-cloud", "windows-sql-cloud",
+func computePublicImageProjects() []string {
+	return []string{
+		"cos-cloud", "debian-cloud", "rocky-linux-cloud", "ubuntu-os-cloud",
+		"almalinux-cloud", "centos-cloud", "fedora-coreos-cloud", "opensuse-cloud",
+		"oracle-linux-cloud", "rhel-cloud", "rhel-sap-cloud", "rocky-linux-accelerator-cloud",
+		"suse-cloud", "suse-sap-cloud", "ubuntu-os-accelerator-images", "ubuntu-os-pro-cloud",
+		"windows-cloud", "windows-sql-cloud",
+	}
 }
 
 // computePreviewImageProjects is gcloud's constants.PREVIEW_IMAGE_PROJECTS,
 // added by --preview-images. It is currently empty in gcloud too.
-var computePreviewImageProjects []string
+func computePreviewImageProjects() []string { return nil }
 
 func (s *computeCmds) initComputeImagesList() {
 	list := &cobra.Command{
@@ -55,10 +57,10 @@ func (s *computeCmds) initComputeImagesList() {
 func computeImageProjects(project string, standard, preview bool) []string {
 	var extra []string
 	if standard {
-		extra = append(extra, computePublicImageProjects...)
+		extra = append(extra, computePublicImageProjects()...)
 	}
 	if preview {
-		extra = append(extra, computePreviewImageProjects...)
+		extra = append(extra, computePreviewImageProjects()...)
 	}
 	sort.Strings(extra)
 	projects := []string{project}
@@ -78,23 +80,25 @@ func computeImageDeprecated(img *compute.Image) bool {
 
 // imagesLister supplies the default table and --uri for `images list`; images
 // are fetched by runComputeImagesList across several projects.
-var imagesLister = computeLister[*compute.Image]{
-	noun:        "images",
-	selfLink:    func(img *compute.Image) string { return img.SelfLink },
-	tableFormat: "table(name,project,family,deprecated,status)",
-	tableRow: func(img *compute.Image) map[string]any {
-		deprecated := ""
-		if img.Deprecated != nil {
-			deprecated = img.Deprecated.State
-		}
-		return map[string]any{
-			"name":       img.Name,
-			"project":    computeImageProject(img.SelfLink),
-			"family":     img.Family,
-			"deprecated": deprecated,
-			"status":     img.Status,
-		}
-	},
+func imagesLister() computeLister[*compute.Image] {
+	return computeLister[*compute.Image]{
+		noun:        "images",
+		selfLink:    func(img *compute.Image) string { return img.SelfLink },
+		tableFormat: "table(name,project,family,deprecated,status)",
+		tableRow: func(img *compute.Image) map[string]any {
+			deprecated := ""
+			if img.Deprecated != nil {
+				deprecated = img.Deprecated.State
+			}
+			return map[string]any{
+				"name":       img.Name,
+				"project":    computeImageProject(img.SelfLink),
+				"family":     img.Family,
+				"deprecated": deprecated,
+				"status":     img.Status,
+			}
+		},
+	}
 }
 
 // computeImageProject is gcloud's selfLink.scope(projects).segment(0): the
@@ -151,5 +155,5 @@ func (s *computeCmds) runComputeImagesList(cmd *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
-	return imagesLister.emit(s.inv.stdout, s.inv.stderr, images, s.inv.flags.format, s.flagImagesListURI)
+	return imagesLister().emit(s.inv.stdout, s.inv.stderr, images, s.inv.flags.format, s.flagImagesListURI)
 }

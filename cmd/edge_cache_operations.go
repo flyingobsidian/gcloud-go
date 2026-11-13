@@ -49,7 +49,7 @@ func (s *edgeCacheCmds) runEdgeCacheOperationsDescribe(cmd *cobra.Command, args 
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing edge-cache operation: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagEdgeCacheOperationsFormat)
@@ -61,7 +61,7 @@ func (s *edgeCacheCmds) runEdgeCacheOperationsList(cmd *cobra.Command, args []st
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(edgeCacheRest).paginate(ctx, "/"+parent+"/operations", nil, "operations", s.flagEdgeCacheOperationsPageSize)
+	items, err := s.inv.rest(edgeCacheRest()).paginate(ctx, "/"+parent+"/operations", nil, "operations", s.flagEdgeCacheOperationsPageSize)
 	if err != nil {
 		return fmt.Errorf("listing edge-cache operations: %w", err)
 	}

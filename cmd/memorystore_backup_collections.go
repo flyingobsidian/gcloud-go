@@ -89,7 +89,7 @@ func (s *memorystoreCmds) runMemstoreBCDescribe(cmd *cobra.Command, args []strin
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing backup collection: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreBCFormat)
@@ -101,7 +101,7 @@ func (s *memorystoreCmds) runMemstoreBCList(cmd *cobra.Command, args []string) e
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+parent+"/backupCollections", nil, "backupCollections", s.flagMemstoreBCPageSize)
+	items, err := s.inv.rest(memorystoreRest()).paginate(ctx, "/"+parent+"/backupCollections", nil, "backupCollections", s.flagMemstoreBCPageSize)
 	if err != nil {
 		return fmt.Errorf("listing backup collections: %w", err)
 	}
@@ -115,7 +115,7 @@ func (s *memorystoreCmds) runMemstoreBCBackupDescribe(cmd *cobra.Command, args [
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing backup: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreBCFormat)
@@ -127,7 +127,7 @@ func (s *memorystoreCmds) runMemstoreBCBackupList(cmd *cobra.Command, args []str
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+bc+"/backups", nil, "backups", s.flagMemstoreBCPageSize)
+	items, err := s.inv.rest(memorystoreRest()).paginate(ctx, "/"+bc+"/backups", nil, "backups", s.flagMemstoreBCPageSize)
 	if err != nil {
 		return fmt.Errorf("listing backups: %w", err)
 	}
@@ -141,7 +141,7 @@ func (s *memorystoreCmds) runMemstoreBCBackupDelete(cmd *cobra.Command, args []s
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting backup: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Delete request issued for backup [%s].\n", args[0])
@@ -159,7 +159,7 @@ func (s *memorystoreCmds) runMemstoreBCBackupExport(cmd *cobra.Command, args []s
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":export", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+name+":export", nil, body, &op); err != nil {
 		return fmt.Errorf("exporting backup: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Export request issued for backup [%s].\n", args[0])

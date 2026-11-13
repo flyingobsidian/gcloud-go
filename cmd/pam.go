@@ -14,7 +14,9 @@ import (
 // google.golang.org/api; subgroups use the shared restClient from
 // rest_helpers.go with a per-service endpoint.
 
-var pamRest = newRESTClient("https://privilegedaccessmanager.googleapis.com/v1")
+func pamRest() *restClient {
+	return newRESTClient("https://privilegedaccessmanager.googleapis.com/v1")
+}
 
 // --- pam check-onboarding-status (#965) ---
 
@@ -69,7 +71,7 @@ func (s *pamCmds) runPAMCheckOnboardingStatus(cmd *cobra.Command, args []string)
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(pamRest).do(ctx, http.MethodPost, "/"+parent+":checkOnboardingStatus", nil, map[string]any{}, &got); err != nil {
+	if err := s.inv.rest(pamRest()).do(ctx, http.MethodPost, "/"+parent+":checkOnboardingStatus", nil, map[string]any{}, &got); err != nil {
 		return fmt.Errorf("checking onboarding status: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagPAMCheckFormat)

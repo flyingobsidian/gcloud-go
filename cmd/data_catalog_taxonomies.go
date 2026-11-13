@@ -10,12 +10,6 @@ import (
 
 // --- gcloud data-catalog taxonomies (#1509) ---
 
-var (
-	flagDCTaxConfigFile   string
-	flagDCTaxUpdateMask   string
-	flagDCTaxImportSource string
-)
-
 func (s *dataCatalogCmds) initDataCatalogTaxonomies() {
 	all := []*cobra.Command{
 		s.dcTaxDescribeCmd, s.dcTaxListCmd, s.dcTaxExportCmd, s.dcTaxImportCmd,

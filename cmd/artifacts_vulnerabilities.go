@@ -34,7 +34,7 @@ func (s *artifactsCmds) runArtifactsVulnerabilitiesList(cmd *cobra.Command, args
 		return err
 	}
 	var out map[string]any
-	if err := s.inv.rest(artifactsRest).do(cmd.Context(), http.MethodPost, "/"+name+":listVulnerabilities", nil, map[string]any{}, &out); err != nil {
+	if err := s.inv.rest(artifactsRest()).do(cmd.Context(), http.MethodPost, "/"+name+":listVulnerabilities", nil, map[string]any{}, &out); err != nil {
 		return fmt.Errorf("listing vulnerabilities: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, out, s.flagArtVulnFormat)
@@ -51,7 +51,7 @@ func (s *artifactsCmds) runArtifactsVulnerabilitiesLoadVex(cmd *cobra.Command, a
 	}
 	parent := artRepoParent(project, s.flagArtVulnLocation, s.flagArtVulnRepository)
 	var out map[string]any
-	if err := s.inv.rest(artifactsRest).do(cmd.Context(), http.MethodPost, "/"+parent+":loadVex", nil, body, &out); err != nil {
+	if err := s.inv.rest(artifactsRest()).do(cmd.Context(), http.MethodPost, "/"+parent+":loadVex", nil, body, &out); err != nil {
 		return fmt.Errorf("loading VEX: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, out, s.flagArtVulnFormat)

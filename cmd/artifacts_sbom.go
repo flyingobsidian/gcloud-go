@@ -54,7 +54,7 @@ func (s *artifactsCmds) runArtifactsSbomExport(cmd *cobra.Command, args []string
 		body["destination"] = s.flagArtSbomDestination
 	}
 	var out map[string]any
-	if err := s.inv.rest(artifactsRest).do(ctx, http.MethodPost, "/"+name+":exportSbom", nil, body, &out); err != nil {
+	if err := s.inv.rest(artifactsRest()).do(ctx, http.MethodPost, "/"+name+":exportSbom", nil, body, &out); err != nil {
 		return fmt.Errorf("exporting SBOM: %w", err)
 	}
 	_ = svc // reserved for future in-client method
@@ -147,7 +147,7 @@ func (s *artifactsCmds) runArtifactsSbomLoad(cmd *cobra.Command, args []string) 
 		return err
 	}
 	var out map[string]any
-	if err := s.inv.rest(artifactsRest).do(ctx, http.MethodPost, "/"+name+":loadSbom", nil, body, &out); err != nil {
+	if err := s.inv.rest(artifactsRest()).do(ctx, http.MethodPost, "/"+name+":loadSbom", nil, body, &out); err != nil {
 		return fmt.Errorf("loading SBOM: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, out, s.flagArtSbomFormat)

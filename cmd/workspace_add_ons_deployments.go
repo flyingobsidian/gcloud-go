@@ -62,7 +62,7 @@ func (s *workspaceAddOnsCmds) runWAODepCreate(cmd *cobra.Command, args []string)
 	q.Set("deploymentId", args[0])
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(workspaceAddOnsRest).do(ctx, http.MethodPost, "/"+parent+"/deployments", q, body, &got); err != nil {
+	if err := s.inv.rest(workspaceAddOnsRest()).do(ctx, http.MethodPost, "/"+parent+"/deployments", q, body, &got); err != nil {
 		return fmt.Errorf("creating deployment: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Created deployment [%s].\n", args[0])
@@ -75,7 +75,7 @@ func (s *workspaceAddOnsCmds) runWAODepDelete(cmd *cobra.Command, args []string)
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(workspaceAddOnsRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	if err := s.inv.rest(workspaceAddOnsRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting deployment: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Deleted deployment [%s].\n", args[0])
@@ -89,7 +89,7 @@ func (s *workspaceAddOnsCmds) runWAODepDescribe(cmd *cobra.Command, args []strin
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(workspaceAddOnsRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(workspaceAddOnsRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing deployment: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagWAODepFormat)
@@ -101,7 +101,7 @@ func (s *workspaceAddOnsCmds) runWAODepList(cmd *cobra.Command, args []string) e
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(workspaceAddOnsRest).paginate(ctx, "/"+parent+"/deployments", nil, "deployments", s.flagWAODepPageSize)
+	items, err := s.inv.rest(workspaceAddOnsRest()).paginate(ctx, "/"+parent+"/deployments", nil, "deployments", s.flagWAODepPageSize)
 	if err != nil {
 		return fmt.Errorf("listing deployments: %w", err)
 	}
@@ -119,7 +119,7 @@ func (s *workspaceAddOnsCmds) runWAODepReplace(cmd *cobra.Command, args []string
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(workspaceAddOnsRest).do(ctx, http.MethodPut, "/"+name, nil, body, &got); err != nil {
+	if err := s.inv.rest(workspaceAddOnsRest()).do(ctx, http.MethodPut, "/"+name, nil, body, &got); err != nil {
 		return fmt.Errorf("replacing deployment: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Replaced deployment [%s].\n", args[0])
@@ -132,7 +132,7 @@ func (s *workspaceAddOnsCmds) runWAODepInstall(cmd *cobra.Command, args []string
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(workspaceAddOnsRest).do(ctx, http.MethodPost, "/"+name+":install", nil, map[string]any{}, nil); err != nil {
+	if err := s.inv.rest(workspaceAddOnsRest()).do(ctx, http.MethodPost, "/"+name+":install", nil, map[string]any{}, nil); err != nil {
 		return fmt.Errorf("installing deployment: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Installed deployment [%s].\n", args[0])
@@ -145,7 +145,7 @@ func (s *workspaceAddOnsCmds) runWAODepUninstall(cmd *cobra.Command, args []stri
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(workspaceAddOnsRest).do(ctx, http.MethodPost, "/"+name+":uninstall", nil, map[string]any{}, nil); err != nil {
+	if err := s.inv.rest(workspaceAddOnsRest()).do(ctx, http.MethodPost, "/"+name+":uninstall", nil, map[string]any{}, nil); err != nil {
 		return fmt.Errorf("uninstalling deployment: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Uninstalled deployment [%s].\n", args[0])
@@ -159,7 +159,7 @@ func (s *workspaceAddOnsCmds) runWAODepInstallStatus(cmd *cobra.Command, args []
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(workspaceAddOnsRest).do(ctx, http.MethodGet, "/"+name+"/installStatus", nil, nil, &got); err != nil {
+	if err := s.inv.rest(workspaceAddOnsRest()).do(ctx, http.MethodGet, "/"+name+"/installStatus", nil, nil, &got); err != nil {
 		return fmt.Errorf("getting deployment install status: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagWAODepFormat)

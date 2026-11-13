@@ -74,7 +74,7 @@ func (s *edgeCacheCmds) runEdgeCacheKeysetsCreate(cmd *cobra.Command, args []str
 	q.Set("edgeCacheKeysetId", args[0])
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodPost, "/"+parent+"/edgeCacheKeysets", q, body, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodPost, "/"+parent+"/edgeCacheKeysets", q, body, &op); err != nil {
 		return fmt.Errorf("creating edge-cache keyset: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Create request issued for edge-cache keyset [%s].\n", args[0])
@@ -88,7 +88,7 @@ func (s *edgeCacheCmds) runEdgeCacheKeysetsDelete(cmd *cobra.Command, args []str
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting edge-cache keyset: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Delete request issued for edge-cache keyset [%s].\n", args[0])
@@ -102,7 +102,7 @@ func (s *edgeCacheCmds) runEdgeCacheKeysetsDescribe(cmd *cobra.Command, args []s
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing edge-cache keyset: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagEdgeCacheKeysetsFormat)
@@ -115,7 +115,7 @@ func (s *edgeCacheCmds) runEdgeCacheKeysetsExport(cmd *cobra.Command, args []str
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("exporting edge-cache keyset: %w", err)
 	}
 	if s.flagEdgeCacheKeysetsDestination == "" {
@@ -145,7 +145,7 @@ func (s *edgeCacheCmds) runEdgeCacheKeysetsImport(cmd *cobra.Command, args []str
 	if mask := joinMask(dcTopLevelKeys(body)); mask != "" {
 		q.Set("updateMask", mask)
 	}
-	err = s.inv.rest(edgeCacheRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op)
+	err = s.inv.rest(edgeCacheRest()).do(ctx, http.MethodPatch, "/"+name, q, body, &op)
 	if err == nil {
 		fmt.Fprintf(s.inv.stdout, "Import (update) request issued for edge-cache keyset [%s].\n", args[0])
 		return emitFormattedTo(s.inv.stdout, op, s.flagEdgeCacheKeysetsFormat)
@@ -160,7 +160,7 @@ func (s *edgeCacheCmds) runEdgeCacheKeysetsImport(cmd *cobra.Command, args []str
 	}
 	createQ := url.Values{}
 	createQ.Set("edgeCacheKeysetId", args[0])
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodPost, "/"+parent+"/edgeCacheKeysets", createQ, body, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodPost, "/"+parent+"/edgeCacheKeysets", createQ, body, &op); err != nil {
 		return fmt.Errorf("importing edge-cache keyset: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Import (create) request issued for edge-cache keyset [%s].\n", args[0])
@@ -173,7 +173,7 @@ func (s *edgeCacheCmds) runEdgeCacheKeysetsList(cmd *cobra.Command, args []strin
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(edgeCacheRest).paginate(ctx, "/"+parent+"/edgeCacheKeysets", nil, "edgeCacheKeysets", s.flagEdgeCacheKeysetsPageSize)
+	items, err := s.inv.rest(edgeCacheRest()).paginate(ctx, "/"+parent+"/edgeCacheKeysets", nil, "edgeCacheKeysets", s.flagEdgeCacheKeysetsPageSize)
 	if err != nil {
 		return fmt.Errorf("listing edge-cache keysets: %w", err)
 	}
@@ -199,7 +199,7 @@ func (s *edgeCacheCmds) runEdgeCacheKeysetsUpdate(cmd *cobra.Command, args []str
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest()).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating edge-cache keyset: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Update request issued for edge-cache keyset [%s].\n", args[0])

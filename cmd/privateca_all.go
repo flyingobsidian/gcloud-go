@@ -411,7 +411,7 @@ func (s *privatecaCmds) initPrivatecaAll4() {
 		"The path where the generated private key file should be written (in PEM format).")
 	s.pcaCertCreateCmd.Flags().StringVar(&s.flagPCACertKeyAlgorithm, "key-algorithm", "rsa-2048",
 		"The crypto algorithm to use for generating the client-side private key. "+
-			"KEY_ALGORITHM must be one of: "+strings.Join(pcaKeyAlgorithms, ", ")+".")
+			"KEY_ALGORITHM must be one of: "+strings.Join(pcaKeyAlgorithms(), ", ")+".")
 	s.pcaCertRevokeCmd.Flags().StringVar(&s.flagPCACertRevokeReason, "reason", "REVOCATION_REASON_UNSPECIFIED",
 		"Reason for revocation (see the ReasonForRevocation enum)")
 	s.pcaCertExportCmd.Flags().StringVar(&s.flagPCACertOutputFile, "output-file", "",

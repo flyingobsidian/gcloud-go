@@ -9,10 +9,6 @@ import (
 
 // --- gcloud active-directory domains (#1448) ---
 
-var (
-	flagADDomainTargetName string
-)
-
 // --- backups subgroup ---
 
 // --- trusts subgroup ---
@@ -116,7 +112,6 @@ func (s *activeDirectoryCmds) initActiveDirectoryDomains() {
 	s.activeDirectoryCmd.AddCommand(s.adDomainsCmd)
 
 	// silence linter about currently-unused flag holder
-	_ = flagADDomainTargetName
 }
 
 func adDomainParent(project string) string {

@@ -13,11 +13,6 @@ import (
 
 // --- gcloud composer environments (#1502) ---
 
-var (
-	flagComposerEnvRunCommand    string
-	flagComposerEnvRunSubcommand string
-)
-
 func (s *composerCmds) initComposerEnvironments() {
 	all := []*cobra.Command{
 		s.composerEnvCreateCmd, s.composerEnvDeleteCmd, s.composerEnvDescribeCmd,

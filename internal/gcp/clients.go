@@ -524,7 +524,9 @@ const apigeeGlobalHost = "apigee.googleapis.com"
 // apigeeMREPRegions mirrors SUPPORTED_MREP_REGIONS in gcloud-python's
 // command_lib/apigee/request.py ("ch" added in 586.0.0 for the Switzerland
 // data residency zone).
-var apigeeMREPRegions = map[string]bool{"us": true, "eu": true, "in": true, "sa": true, "ch": true}
+func apigeeMREPRegions() map[string]bool {
+	return map[string]bool{"us": true, "eu": true, "in": true, "sa": true, "ch": true}
+}
 
 // ApigeeHostForLocation returns the Apigee API host for an organization
 // location: the global host for "" or "global", the multi-region REP host
@@ -534,7 +536,7 @@ func ApigeeHostForLocation(location string) string {
 	switch {
 	case location == "" || location == "global":
 		return apigeeGlobalHost
-	case apigeeMREPRegions[location]:
+	case apigeeMREPRegions()[location]:
 		return fmt.Sprintf("apigee.%s.rep.googleapis.com", location)
 	default:
 		return fmt.Sprintf("%s-apigee.googleapis.com", location)

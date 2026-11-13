@@ -19,9 +19,6 @@ import (
 // Common flags shared across all scc groups. Callers must set exactly one of
 // --organization, --folder, or --project; if none are set the resolved active
 // project is used.
-var (
-	flagSccLocation string
-)
 
 // --- scope resolution ---
 

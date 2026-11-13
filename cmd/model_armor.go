@@ -15,7 +15,9 @@ import (
 // google.golang.org/api; both subgroups use the shared restClient from
 // rest_helpers.go with a per-service endpoint.
 
-var modelArmorRest = newRESTClient("https://modelarmor.googleapis.com/v1")
+func modelArmorRest() *restClient {
+	return newRESTClient("https://modelarmor.googleapis.com/v1")
+}
 
 func (s *modelArmorCmds) initModelArmor() {
 
@@ -43,7 +45,7 @@ func (s *modelArmorCmds) initModelArmor1() {
 func (s *modelArmorCmds) runMAFSDescribe(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodGet, "/"+strings.TrimPrefix(s.flagMAFSFullURI, "/"), nil, nil, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest()).do(ctx, http.MethodGet, "/"+strings.TrimPrefix(s.flagMAFSFullURI, "/"), nil, nil, &got); err != nil {
 		return fmt.Errorf("describing floor setting: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMAFSFormat)
@@ -64,7 +66,7 @@ func (s *modelArmorCmds) runMAFSUpdate(cmd *cobra.Command, args []string) error 
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPatch, "/"+strings.TrimPrefix(s.flagMAFSFullURI, "/"), q, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest()).do(ctx, http.MethodPatch, "/"+strings.TrimPrefix(s.flagMAFSFullURI, "/"), q, body, &got); err != nil {
 		return fmt.Errorf("updating floor setting: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Updated floor setting [%s].\n", s.flagMAFSFullURI)
@@ -133,7 +135,7 @@ func (s *modelArmorCmds) runMATplCreate(cmd *cobra.Command, args []string) error
 	q.Set("templateId", args[0])
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPost, "/"+parent+"/templates", q, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest()).do(ctx, http.MethodPost, "/"+parent+"/templates", q, body, &got); err != nil {
 		return fmt.Errorf("creating template: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Created template [%s].\n", args[0])
@@ -146,7 +148,7 @@ func (s *modelArmorCmds) runMATplDelete(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	if err := s.inv.rest(modelArmorRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting template: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Deleted template [%s].\n", args[0])
@@ -160,7 +162,7 @@ func (s *modelArmorCmds) runMATplDescribe(cmd *cobra.Command, args []string) err
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing template: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMATplFormat)
@@ -176,7 +178,7 @@ func (s *modelArmorCmds) runMATplList(cmd *cobra.Command, args []string) error {
 		base.Set("filter", s.flagMATplFilter)
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(modelArmorRest).paginate(ctx, "/"+parent+"/templates", base, "templates", s.flagMATplPageSize)
+	items, err := s.inv.rest(modelArmorRest()).paginate(ctx, "/"+parent+"/templates", base, "templates", s.flagMATplPageSize)
 	if err != nil {
 		return fmt.Errorf("listing templates: %w", err)
 	}
@@ -202,7 +204,7 @@ func (s *modelArmorCmds) runMATplUpdate(cmd *cobra.Command, args []string) error
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPatch, "/"+name, q, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest()).do(ctx, http.MethodPatch, "/"+name, q, body, &got); err != nil {
 		return fmt.Errorf("updating template: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Updated template [%s].\n", args[0])
@@ -220,7 +222,7 @@ func (s *modelArmorCmds) runMATplSanitizeModel(cmd *cobra.Command, args []string
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPost, "/"+name+":sanitizeModelResponse", nil, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest()).do(ctx, http.MethodPost, "/"+name+":sanitizeModelResponse", nil, body, &got); err != nil {
 		return fmt.Errorf("sanitizing model response: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMATplFormat)
@@ -237,7 +239,7 @@ func (s *modelArmorCmds) runMATplSanitizeUser(cmd *cobra.Command, args []string)
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPost, "/"+name+":sanitizeUserPrompt", nil, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest()).do(ctx, http.MethodPost, "/"+name+":sanitizeUserPrompt", nil, body, &got); err != nil {
 		return fmt.Errorf("sanitizing user prompt: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMATplFormat)

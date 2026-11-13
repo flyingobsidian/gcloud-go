@@ -15,10 +15,6 @@ import (
 
 // --- Shared helpers for the Endpoints surface (#892-#894) ---
 
-var (
-	flagEPPolicyFile string
-)
-
 func (g *endpointsCmds) endpointsService(ctx context.Context) (*servicemanagement.APIService, error) {
 	return g.inv.clients().ServiceManagement(ctx)
 }

@@ -12,10 +12,6 @@ import (
 
 // --- gcloud secrets IAM, replication, locations (#546) ---
 
-var (
-	flagSecretsLocListLocation string
-)
-
 // --- IAM ---
 
 // --- replication ---

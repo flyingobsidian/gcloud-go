@@ -22,10 +22,6 @@ const (
 
 // --- subordinates ---
 
-var (
-	flagPCACAOutputFile string
-)
-
 func (s *privatecaCmds) initPrivatecaCertificateAuthorities() {
 	s.privatecaRootsCmd.AddCommand(s.pcaCASubcommands(pcaCATypeRoot)...)
 	s.privatecaSubordinatesCmd.AddCommand(s.pcaCASubcommands(pcaCATypeSubordinate)...)

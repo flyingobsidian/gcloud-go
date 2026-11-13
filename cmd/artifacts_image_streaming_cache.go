@@ -51,7 +51,7 @@ func (s *artifactsCmds) runArtifactsISCCreate(cmd *cobra.Command, args []string)
 	q.Set("imageStreamingCacheId", args[0])
 	path := "/" + s.artISCParent(project) + "/imageStreamingCaches"
 	var out map[string]any
-	if err := s.inv.rest(artifactsRest).do(cmd.Context(), http.MethodPost, path, q, body, &out); err != nil {
+	if err := s.inv.rest(artifactsRest()).do(cmd.Context(), http.MethodPost, path, q, body, &out); err != nil {
 		return fmt.Errorf("creating imageStreamingCache: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, out, s.flagArtISCFormat)
@@ -64,7 +64,7 @@ func (s *artifactsCmds) runArtifactsISCDelete(cmd *cobra.Command, args []string)
 	}
 	path := "/" + s.artISCName(project, args[0])
 	var out map[string]any
-	if err := s.inv.rest(artifactsRest).do(cmd.Context(), http.MethodDelete, path, nil, nil, &out); err != nil {
+	if err := s.inv.rest(artifactsRest()).do(cmd.Context(), http.MethodDelete, path, nil, nil, &out); err != nil {
 		return fmt.Errorf("deleting imageStreamingCache: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, out, s.flagArtISCFormat)
@@ -77,7 +77,7 @@ func (s *artifactsCmds) runArtifactsISCDescribe(cmd *cobra.Command, args []strin
 	}
 	path := "/" + s.artISCName(project, args[0])
 	var out map[string]any
-	if err := s.inv.rest(artifactsRest).do(cmd.Context(), http.MethodGet, path, nil, nil, &out); err != nil {
+	if err := s.inv.rest(artifactsRest()).do(cmd.Context(), http.MethodGet, path, nil, nil, &out); err != nil {
 		return fmt.Errorf("describing imageStreamingCache: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, out, s.flagArtISCFormat)
@@ -89,7 +89,7 @@ func (s *artifactsCmds) runArtifactsISCList(cmd *cobra.Command, args []string) e
 		return err
 	}
 	path := "/" + s.artISCParent(project) + "/imageStreamingCaches"
-	items, err := s.inv.rest(artifactsRest).paginate(cmd.Context(), path, nil, "imageStreamingCaches", 0)
+	items, err := s.inv.rest(artifactsRest()).paginate(cmd.Context(), path, nil, "imageStreamingCaches", 0)
 	if err != nil {
 		return fmt.Errorf("listing imageStreamingCaches: %w", err)
 	}

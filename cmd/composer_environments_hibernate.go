@@ -20,20 +20,23 @@ type composerPowerAction struct {
 	call               func(ctx context.Context, svc *composerbeta.Service, name string) (*composerbeta.Operation, error)
 }
 
-var (
-	composerHibernate = composerPowerAction{
+func composerHibernate() composerPowerAction {
+	return composerPowerAction{
 		participle: "hibernated", gerund: "hibernating",
 		call: func(ctx context.Context, svc *composerbeta.Service, name string) (*composerbeta.Operation, error) {
 			return svc.Projects.Locations.Environments.Hibernate(name, &composerbeta.HibernateEnvironmentRequest{}).Context(ctx).Do()
 		},
 	}
-	composerResume = composerPowerAction{
+}
+
+func composerResume() composerPowerAction {
+	return composerPowerAction{
 		participle: "resumed", gerund: "resuming",
 		call: func(ctx context.Context, svc *composerbeta.Service, name string) (*composerbeta.Operation, error) {
 			return svc.Projects.Locations.Environments.Resume(name, &composerbeta.ResumeEnvironmentRequest{}).Context(ctx).Do()
 		},
 	}
-)
+}
 
 func (s *composerCmds) initComposerEnvironmentsHibernate() {
 	for _, c := range []*cobra.Command{s.composerEnvHibernateCmd, s.composerEnvResumeCmd} {
@@ -48,7 +51,7 @@ func (s *composerCmds) initComposerEnvironmentsHibernate() {
 
 // composerOpPollInterval is the initial delay between operation polls; it
 // doubles up to gcloud-python's 15s ceiling.
-var composerOpPollInterval = 2 * time.Second
+const composerOpPollInterval = 2 * time.Second
 
 func (s *composerCmds) composerEnvPowerFn(a composerPowerAction) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
@@ -70,7 +73,7 @@ func (s *composerCmds) composerEnvPowerFn(a composerPowerAction) func(*cobra.Com
 			return emitFormattedTo(s.inv.stdout, op, s.flagComposerEnvFormat)
 		}
 		fmt.Fprintf(s.inv.stderr, "Waiting for [%s] to be %s with [%s]...", name, a.participle, op.Name)
-		if err := composerBetaWaitOp(ctx, svc, op); err != nil {
+		if err := composerBetaWaitOp(ctx, svc, op, composerOpPollInterval); err != nil {
 			fmt.Fprintln(s.inv.stderr, "failed.")
 			return fmt.Errorf("Error %s environment [%s]: %w", a.gerund, name, err)
 		}
@@ -81,9 +84,8 @@ func (s *composerCmds) composerEnvPowerFn(a composerPowerAction) func(*cobra.Com
 
 // composerBetaWaitOp polls op until done (at most one hour, as in Python)
 // and returns gcloud-python's OperationError text on failure.
-func composerBetaWaitOp(ctx context.Context, svc *composerbeta.Service, op *composerbeta.Operation) error {
+func composerBetaWaitOp(ctx context.Context, svc *composerbeta.Service, op *composerbeta.Operation, interval time.Duration) error {
 	deadline := time.Now().Add(time.Hour)
-	interval := composerOpPollInterval
 	for !op.Done {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("Operation [%s] timed out", op.Name)

@@ -15,22 +15,6 @@ import (
 
 // --- Shared helpers for the Cloud SQL surface (#875-#886) ---
 
-var (
-	flagSQLPageSize      int64
-	flagSQLProjectLevel  bool
-	flagSQLURI           string
-	flagSQLDatabases     []string
-	flagSQLCommonName    string
-	flagSQLCertKeyOutput string
-	flagSQLSha1          string
-	flagSQLVersion       string
-	flagSQLSSHUser       string
-	flagSQLStripeCount   int64
-	flagSQLExportUsers   []string
-	flagSQLStartTime     string
-	flagSQLCACertPath    string
-)
-
 // sqlWaitOp polls a Cloud SQL operation until Status == "DONE".
 func sqlWaitOp(ctx context.Context, svc *sqladmin.Service, project string, op *sqladmin.Operation) (*sqladmin.Operation, error) {
 	for op.Status != "DONE" {

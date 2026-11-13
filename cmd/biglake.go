@@ -11,10 +11,13 @@ import "github.com/spf13/cobra"
 // `biglakeStandardRest` is the standard biglake/v1 endpoint used for IAM
 // operations that live under the normal REST tree.
 
-var (
-	biglakeIcebergRest  = newRESTClient("https://biglake.googleapis.com/iceberg/v1/restcatalog/extensions")
-	biglakeStandardRest = newRESTClient("https://biglake.googleapis.com/v1")
-)
+func biglakeIcebergRest() *restClient {
+	return newRESTClient("https://biglake.googleapis.com/iceberg/v1/restcatalog/extensions")
+}
+
+func biglakeStandardRest() *restClient {
+	return newRESTClient("https://biglake.googleapis.com/v1")
+}
 
 func (s *biglakeCmds) initBiglake() {
 	s.biglakeCmd.AddCommand(s.biglakeIcebergCmd)

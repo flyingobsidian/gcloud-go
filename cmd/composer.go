@@ -182,11 +182,11 @@ func newComposerCmds(inv *invocation) *composerCmds {
 	}
 	s.composerEnvHibernateCmd = &cobra.Command{
 		Use: "hibernate ENVIRONMENT", Short: "Hibernate a Cloud Composer environment",
-		Args: cobra.ExactArgs(1), RunE: s.composerEnvPowerFn(composerHibernate),
+		Args: cobra.ExactArgs(1), RunE: s.composerEnvPowerFn(composerHibernate()),
 	}
 	s.composerEnvResumeCmd = &cobra.Command{
 		Use: "resume ENVIRONMENT", Short: "Resume a Cloud Composer environment",
-		Args: cobra.ExactArgs(1), RunE: s.composerEnvPowerFn(composerResume),
+		Args: cobra.ExactArgs(1), RunE: s.composerEnvPowerFn(composerResume()),
 	}
 	s.composerEnvSnapshotsCmd = &cobra.Command{Use: "snapshots", Short: "Save and load Composer environment snapshots"}
 	s.composerEnvSnapSaveCmd = &cobra.Command{

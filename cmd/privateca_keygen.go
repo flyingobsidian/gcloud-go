@@ -19,7 +19,9 @@ import (
 // pcaKeyAlgorithms lists the --key-algorithm choices of
 // `gcloud privateca certificates create --generate-key`, in the order of
 // gcloud-python's key_generation.KeyAlgorithm enum (588.0.0).
-var pcaKeyAlgorithms = []string{"rsa-2048", "rsa-3072", "rsa-4096", "ec-p256", "ec-p384"}
+func pcaKeyAlgorithms() []string {
+	return []string{"rsa-2048", "rsa-3072", "rsa-4096", "ec-p256", "ec-p384"}
+}
 
 // pcaKeyOutputWarning mirrors key_generation.KEY_OUTPUT_WARNING.
 const pcaKeyOutputWarning = `A private key was exported to %s.
@@ -75,13 +77,13 @@ func pcaGenerateKeyPair(algorithm string) (privPEM, pubPEM []byte, err error) {
 // validatePCAKeyAlgorithm rejects --key-algorithm values outside the choice
 // list with gcloud's argparse wording.
 func validatePCAKeyAlgorithm(algorithm string) error {
-	for _, a := range pcaKeyAlgorithms {
+	for _, a := range pcaKeyAlgorithms() {
 		if a == algorithm {
 			return nil
 		}
 	}
 	return fmt.Errorf("argument --key-algorithm: Invalid choice: '%s'. Valid choices are [%s].",
-		algorithm, strings.Join(pcaKeyAlgorithms, ", "))
+		algorithm, strings.Join(pcaKeyAlgorithms(), ", "))
 }
 
 // exportPCAPrivateKey writes the private key owner-read-only and prints

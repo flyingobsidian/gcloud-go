@@ -43,8 +43,6 @@ type auditLogCatalog struct {
 	Services []auditLogService `json:"services"`
 }
 
-var httpGetAuditLogCatalog = fetchAuditLogCatalog
-
 func fetchAuditLogCatalog(ctx context.Context) ([]auditLogService, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, eventarcAuditLogsCatalogURL, nil)
 	if err != nil {
@@ -85,7 +83,7 @@ func findAuditLogMethods(services []auditLogService, serviceName string) ([]audi
 
 func (grp *eventarcCmds) runEventarcAuditLogsServiceNamesList(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	services, err := httpGetAuditLogCatalog(ctx)
+	services, err := fetchAuditLogCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,7 +99,7 @@ func (grp *eventarcCmds) runEventarcAuditLogsServiceNamesList(cmd *cobra.Command
 
 func (grp *eventarcCmds) runEventarcAuditLogsMethodNamesList(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	services, err := httpGetAuditLogCatalog(ctx)
+	services, err := fetchAuditLogCatalog(ctx)
 	if err != nil {
 		return err
 	}

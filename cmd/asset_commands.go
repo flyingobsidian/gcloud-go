@@ -9,10 +9,6 @@ import (
 
 // --- Top-level asset commands ---
 
-var (
-	flagAssetReadTime string
-)
-
 func (s *assetCmds) initAssetCommands() {
 	scopeFlags := func(c *cobra.Command) {
 		c.Flags().StringVar(&s.flagAssetProject, "project", "", "Project ID (mutually exclusive with --folder and --organization)")

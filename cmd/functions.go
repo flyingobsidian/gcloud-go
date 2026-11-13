@@ -15,9 +15,6 @@ import (
 // --- gcloud functions (#342, #860-#864) ---
 
 // Shared flags for the IAM-policy, event-types, logs, regions, runtimes subcommands.
-var (
-	flagFuncPolicyFile string
-)
 
 // --- top-level IAM commands ---
 
@@ -312,26 +309,28 @@ type funcTriggerEventRow struct {
 	ResourceOption string `json:"resource_optional,omitempty"`
 }
 
-var gen1TriggerEvents = []funcTriggerEventRow{
-	{Provider: "cloud.pubsub", EventType: "google.pubsub.topic.publish", Default: "Yes", ResourceType: "topic"},
-	{Provider: "cloud.pubsub", EventType: "providers/cloud.pubsub/eventTypes/topic.publish", ResourceType: "topic"},
-	{Provider: "cloud.storage", EventType: "google.storage.object.finalize", Default: "Yes", ResourceType: "bucket"},
-	{Provider: "cloud.storage", EventType: "providers/cloud.storage/eventTypes/object.change", ResourceType: "bucket"},
-	{Provider: "cloud.storage", EventType: "google.storage.object.archive", ResourceType: "bucket"},
-	{Provider: "cloud.storage", EventType: "google.storage.object.delete", ResourceType: "bucket"},
-	{Provider: "cloud.storage", EventType: "google.storage.object.metadataUpdate", ResourceType: "bucket"},
-	{Provider: "google.firebase.database.ref", EventType: "providers/google.firebase.database/eventTypes/ref.create", Default: "Yes", ResourceType: "firebase database"},
-	{Provider: "google.firebase.database.ref", EventType: "providers/google.firebase.database/eventTypes/ref.update", ResourceType: "firebase database"},
-	{Provider: "google.firebase.database.ref", EventType: "providers/google.firebase.database/eventTypes/ref.delete", ResourceType: "firebase database"},
-	{Provider: "google.firebase.database.ref", EventType: "providers/google.firebase.database/eventTypes/ref.write", ResourceType: "firebase database"},
-	{Provider: "google.firestore.document", EventType: "providers/cloud.firestore/eventTypes/document.create", Default: "Yes", ResourceType: "firestore document"},
-	{Provider: "google.firestore.document", EventType: "providers/cloud.firestore/eventTypes/document.update", ResourceType: "firestore document"},
-	{Provider: "google.firestore.document", EventType: "providers/cloud.firestore/eventTypes/document.delete", ResourceType: "firestore document"},
-	{Provider: "google.firestore.document", EventType: "providers/cloud.firestore/eventTypes/document.write", ResourceType: "firestore document"},
-	{Provider: "google.firebase.analytics.event", EventType: "providers/google.firebase.analytics/eventTypes/event.log", Default: "Yes", ResourceType: "firebase analytics"},
-	{Provider: "google.firebase.remoteConfig", EventType: "google.firebase.remoteconfig.update", Default: "Yes", ResourceType: "project", ResourceOption: "Yes"},
-	{Provider: "firebase.auth", EventType: "providers/firebase.auth/eventTypes/user.create", Default: "Yes", ResourceType: "project", ResourceOption: "Yes"},
-	{Provider: "firebase.auth", EventType: "providers/firebase.auth/eventTypes/user.delete", ResourceType: "project", ResourceOption: "Yes"},
+func gen1TriggerEvents() []funcTriggerEventRow {
+	return []funcTriggerEventRow{
+		{Provider: "cloud.pubsub", EventType: "google.pubsub.topic.publish", Default: "Yes", ResourceType: "topic"},
+		{Provider: "cloud.pubsub", EventType: "providers/cloud.pubsub/eventTypes/topic.publish", ResourceType: "topic"},
+		{Provider: "cloud.storage", EventType: "google.storage.object.finalize", Default: "Yes", ResourceType: "bucket"},
+		{Provider: "cloud.storage", EventType: "providers/cloud.storage/eventTypes/object.change", ResourceType: "bucket"},
+		{Provider: "cloud.storage", EventType: "google.storage.object.archive", ResourceType: "bucket"},
+		{Provider: "cloud.storage", EventType: "google.storage.object.delete", ResourceType: "bucket"},
+		{Provider: "cloud.storage", EventType: "google.storage.object.metadataUpdate", ResourceType: "bucket"},
+		{Provider: "google.firebase.database.ref", EventType: "providers/google.firebase.database/eventTypes/ref.create", Default: "Yes", ResourceType: "firebase database"},
+		{Provider: "google.firebase.database.ref", EventType: "providers/google.firebase.database/eventTypes/ref.update", ResourceType: "firebase database"},
+		{Provider: "google.firebase.database.ref", EventType: "providers/google.firebase.database/eventTypes/ref.delete", ResourceType: "firebase database"},
+		{Provider: "google.firebase.database.ref", EventType: "providers/google.firebase.database/eventTypes/ref.write", ResourceType: "firebase database"},
+		{Provider: "google.firestore.document", EventType: "providers/cloud.firestore/eventTypes/document.create", Default: "Yes", ResourceType: "firestore document"},
+		{Provider: "google.firestore.document", EventType: "providers/cloud.firestore/eventTypes/document.update", ResourceType: "firestore document"},
+		{Provider: "google.firestore.document", EventType: "providers/cloud.firestore/eventTypes/document.delete", ResourceType: "firestore document"},
+		{Provider: "google.firestore.document", EventType: "providers/cloud.firestore/eventTypes/document.write", ResourceType: "firestore document"},
+		{Provider: "google.firebase.analytics.event", EventType: "providers/google.firebase.analytics/eventTypes/event.log", Default: "Yes", ResourceType: "firebase analytics"},
+		{Provider: "google.firebase.remoteConfig", EventType: "google.firebase.remoteconfig.update", Default: "Yes", ResourceType: "project", ResourceOption: "Yes"},
+		{Provider: "firebase.auth", EventType: "providers/firebase.auth/eventTypes/user.create", Default: "Yes", ResourceType: "project", ResourceOption: "Yes"},
+		{Provider: "firebase.auth", EventType: "providers/firebase.auth/eventTypes/user.delete", ResourceType: "project", ResourceOption: "Yes"},
+	}
 }
 
 type funcGen2EventRow struct {
@@ -341,36 +340,38 @@ type funcGen2EventRow struct {
 
 // gen2TriggerEvents mirrors the Eventarc-backed events surfaced by
 // `gcloud functions event-types list --gen2`.
-var gen2TriggerEvents = []funcGen2EventRow{
-	{Name: "google.cloud.pubsub.topic.v1.messagePublished", Description: "A Pub/Sub message is published to a topic."},
-	{Name: "google.cloud.storage.object.v1.finalized", Description: "An object is created or overwritten in a Cloud Storage bucket."},
-	{Name: "google.cloud.storage.object.v1.deleted", Description: "An object is deleted from a Cloud Storage bucket."},
-	{Name: "google.cloud.storage.object.v1.archived", Description: "An object is archived in a Cloud Storage bucket."},
-	{Name: "google.cloud.storage.object.v1.metadataUpdated", Description: "An object's metadata is updated in a Cloud Storage bucket."},
-	{Name: "google.cloud.firestore.document.v1.created", Description: "A Firestore document is created."},
-	{Name: "google.cloud.firestore.document.v1.updated", Description: "A Firestore document is updated."},
-	{Name: "google.cloud.firestore.document.v1.deleted", Description: "A Firestore document is deleted."},
-	{Name: "google.cloud.firestore.document.v1.written", Description: "A Firestore document is written (create, update, or delete)."},
-	{Name: "google.cloud.audit.log.v1.written", Description: "An audit log entry is written."},
+func gen2TriggerEvents() []funcGen2EventRow {
+	return []funcGen2EventRow{
+		{Name: "google.cloud.pubsub.topic.v1.messagePublished", Description: "A Pub/Sub message is published to a topic."},
+		{Name: "google.cloud.storage.object.v1.finalized", Description: "An object is created or overwritten in a Cloud Storage bucket."},
+		{Name: "google.cloud.storage.object.v1.deleted", Description: "An object is deleted from a Cloud Storage bucket."},
+		{Name: "google.cloud.storage.object.v1.archived", Description: "An object is archived in a Cloud Storage bucket."},
+		{Name: "google.cloud.storage.object.v1.metadataUpdated", Description: "An object's metadata is updated in a Cloud Storage bucket."},
+		{Name: "google.cloud.firestore.document.v1.created", Description: "A Firestore document is created."},
+		{Name: "google.cloud.firestore.document.v1.updated", Description: "A Firestore document is updated."},
+		{Name: "google.cloud.firestore.document.v1.deleted", Description: "A Firestore document is deleted."},
+		{Name: "google.cloud.firestore.document.v1.written", Description: "A Firestore document is written (create, update, or delete)."},
+		{Name: "google.cloud.audit.log.v1.written", Description: "An audit log entry is written."},
+	}
 }
 
 func (s *functionsCmds) runFuncEventTypesList(cmd *cobra.Command, args []string) error {
 	if s.flagFuncGen2 {
 		if s.flagFuncFormat != "" {
-			return emitFormattedTo(s.inv.stdout, gen2TriggerEvents, s.flagFuncFormat)
+			return emitFormattedTo(s.inv.stdout, gen2TriggerEvents(), s.flagFuncFormat)
 		}
-		printTableHeadingTo(s.inv.stdout, len(gen2TriggerEvents), "%-60s %s\n", "NAME", "DESCRIPTION")
-		for _, e := range gen2TriggerEvents {
+		printTableHeadingTo(s.inv.stdout, len(gen2TriggerEvents()), "%-60s %s\n", "NAME", "DESCRIPTION")
+		for _, e := range gen2TriggerEvents() {
 			fmt.Fprintf(s.inv.stdout, "%-60s %s\n", e.Name, e.Description)
 		}
 		return nil
 	}
 	if s.flagFuncFormat != "" {
-		return emitFormattedTo(s.inv.stdout, gen1TriggerEvents, s.flagFuncFormat)
+		return emitFormattedTo(s.inv.stdout, gen1TriggerEvents(), s.flagFuncFormat)
 	}
 	fmt.Fprintf(s.inv.stdout, "%-32s %-60s %-18s %-22s %s\n",
 		"EVENT_PROVIDER", "EVENT_TYPE", "EVENT_TYPE_DEFAULT", "RESOURCE_TYPE", "RESOURCE_OPTIONAL")
-	for _, e := range gen1TriggerEvents {
+	for _, e := range gen1TriggerEvents() {
 		fmt.Fprintf(s.inv.stdout, "%-32s %-60s %-18s %-22s %s\n",
 			e.Provider, e.EventType, e.Default, e.ResourceType, e.ResourceOption)
 	}

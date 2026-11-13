@@ -72,7 +72,7 @@ func (s *networkManagementCmds) runNMMonCreate(cmd *cobra.Command, args []string
 	q.Set("networkMonitoringProviderId", args[0])
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodPost, "/"+parent+"/networkMonitoringProviders", q, body, &op); err != nil {
+	if err := s.inv.rest(netmgmtMonRest()).do(ctx, http.MethodPost, "/"+parent+"/networkMonitoringProviders", q, body, &op); err != nil {
 		return fmt.Errorf("creating network monitoring provider: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Create request issued for network monitoring provider [%s].\n", args[0])
@@ -86,7 +86,7 @@ func (s *networkManagementCmds) runNMMonDelete(cmd *cobra.Command, args []string
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(netmgmtMonRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting network monitoring provider: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Delete request issued for network monitoring provider [%s].\n", args[0])
@@ -100,7 +100,7 @@ func (s *networkManagementCmds) runNMMonDescribe(cmd *cobra.Command, args []stri
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(netmgmtMonRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing network monitoring provider: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagNMMonFormat)
@@ -117,7 +117,7 @@ func (s *networkManagementCmds) runNMMonGenMPConfig(cmd *cobra.Command, args []s
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodPost, "/"+name+":generateMonitoringPointConfig", nil, body, &got); err != nil {
+	if err := s.inv.rest(netmgmtMonRest()).do(ctx, http.MethodPost, "/"+name+":generateMonitoringPointConfig", nil, body, &got); err != nil {
 		return fmt.Errorf("generating monitoring point config: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagNMMonFormat)
@@ -134,7 +134,7 @@ func (s *networkManagementCmds) runNMMonGenAccessToken(cmd *cobra.Command, args 
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodPost, "/"+name+":generateProviderAccessToken", nil, body, &got); err != nil {
+	if err := s.inv.rest(netmgmtMonRest()).do(ctx, http.MethodPost, "/"+name+":generateProviderAccessToken", nil, body, &got); err != nil {
 		return fmt.Errorf("generating provider access token: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagNMMonFormat)
@@ -146,7 +146,7 @@ func (s *networkManagementCmds) runNMMonList(cmd *cobra.Command, args []string) 
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(netmgmtMonRest).paginate(ctx, "/"+parent+"/networkMonitoringProviders", nil, "networkMonitoringProviders", s.flagNMMonPageSize)
+	items, err := s.inv.rest(netmgmtMonRest()).paginate(ctx, "/"+parent+"/networkMonitoringProviders", nil, "networkMonitoringProviders", s.flagNMMonPageSize)
 	if err != nil {
 		return fmt.Errorf("listing network monitoring providers: %w", err)
 	}

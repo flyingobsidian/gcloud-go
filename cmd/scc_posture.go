@@ -16,10 +16,6 @@ import (
 // Backed by the Security Posture v1 API (securityposture.googleapis.com),
 // which only exposes organization-scoped endpoints.
 
-var (
-	flagPostureExtractID string
-)
-
 func (g *sccCmds) postureParent() (string, error) {
 	if g.flagPostureOrg == "" {
 		return "", fmt.Errorf("--organization is required")

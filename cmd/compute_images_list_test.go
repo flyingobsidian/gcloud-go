@@ -15,13 +15,13 @@ func TestComputeImageProjects(t *testing.T) {
 		t.Errorf("--no-standard-images: got %v, want only the project", got)
 	}
 	got := computeImageProjects("mine", true, false)
-	if got[0] != "mine" || len(got) != 1+len(computePublicImageProjects) {
+	if got[0] != "mine" || len(got) != 1+len(computePublicImageProjects()) {
 		t.Fatalf("standard: got %v", got)
 	}
 	if got[1] != "almalinux-cloud" || got[len(got)-1] != "windows-sql-cloud" {
 		t.Errorf("public projects not sorted: %v", got)
 	}
-	if dup := computeImageProjects("debian-cloud", true, false); len(dup) != len(computePublicImageProjects) {
+	if dup := computeImageProjects("debian-cloud", true, false); len(dup) != len(computePublicImageProjects()) {
 		t.Errorf("project listed twice when it is a public image project: %v", dup)
 	}
 }
@@ -72,7 +72,7 @@ func TestComputeImagesDefaultTable(t *testing.T) {
 		SelfLink: "https://www.googleapis.com/compute/v1/projects/mine/global/images/app-v1",
 	}}
 	var out bytes.Buffer
-	if err := imagesLister.emit(&out, &bytes.Buffer{}, imgs, "", false); err != nil {
+	if err := imagesLister().emit(&out, &bytes.Buffer{}, imgs, "", false); err != nil {
 		t.Fatal(err)
 	}
 	want := "NAME    PROJECT  FAMILY  DEPRECATED  STATUS\napp-v1  mine     app                 READY\n"

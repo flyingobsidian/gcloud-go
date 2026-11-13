@@ -9,10 +9,6 @@ import (
 
 // --- gcloud colab runtimes (#1498) ---
 
-var (
-	flagColabRTAssignUser string
-)
-
 func (s *colabCmds) initColabRuntimes() {
 	all := []*cobra.Command{
 		s.colabRTCreateCmd, s.colabRTDeleteCmd, s.colabRTDescribeCmd, s.colabRTListCmd,

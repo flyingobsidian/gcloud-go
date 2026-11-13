@@ -64,16 +64,13 @@ func TestMemstoreCreateTAUAsync(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"name": "projects/p/locations/l/operations/op1"})
 	}))
 	defer server.Close()
-	orig := memorystoreRest
-	memorystoreRest = newRESTClient(server.URL + "/v1beta")
-	defer func() { memorystoreRest = orig }()
 	defer SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}))()
 	defer SetRestUserProjectForTest("qp")()
 
 	grp.flagMemstoreTAUUser, grp.flagMemstoreTAUAsync, grp.flagMemstoreTAUFormat = "alice", true, "json"
 	defer func() { grp.flagMemstoreTAUUser, grp.flagMemstoreTAUAsync, grp.flagMemstoreTAUFormat = "", false, "" }()
 	var op map[string]any
-	if err := grp.inv.rest(memorystoreRest).do(context.Background(), http.MethodPost,
+	if err := grp.inv.rest(newRESTClient(server.URL+"/v1beta")).do(context.Background(), http.MethodPost,
 		"/projects/p/locations/l/instances/i:addTokenAuthUser", nil, map[string]any{"tokenAuthUser": grp.flagMemstoreTAUUser}, &op); err != nil {
 		t.Fatal(err)
 	}

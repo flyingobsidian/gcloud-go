@@ -39,7 +39,7 @@ func TestSubnetsDefaultTable(t *testing.T) {
 		Network: "https://x/projects/p/global/networks/default", IpCidrRange: "10.154.0.0/20", StackType: "IPV4_ONLY",
 	}}
 	var out bytes.Buffer
-	if err := subnetsLister.emit(&out, &bytes.Buffer{}, subnets, "", false); err != nil {
+	if err := subnetsLister().emit(&out, &bytes.Buffer{}, subnets, "", false); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")

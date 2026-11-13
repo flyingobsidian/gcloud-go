@@ -54,7 +54,7 @@ func (s *pamCmds) runPAMOpDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(pamRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	if err := s.inv.rest(pamRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Deleted operation [%s].\n", args[0])
@@ -68,7 +68,7 @@ func (s *pamCmds) runPAMOpDescribe(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(pamRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(pamRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagPAMOpFormat)
@@ -80,7 +80,7 @@ func (s *pamCmds) runPAMOpList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(pamRest).paginate(ctx, "/"+parent+"/operations", nil, "operations", s.flagPAMOpPageSize)
+	items, err := s.inv.rest(pamRest()).paginate(ctx, "/"+parent+"/operations", nil, "operations", s.flagPAMOpPageSize)
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
@@ -93,7 +93,7 @@ func (s *pamCmds) runPAMOpWait(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	op, err := s.inv.rest(pamRest).waitOperation(ctx, name, s.flagPAMOpTimeout)
+	op, err := s.inv.rest(pamRest()).waitOperation(ctx, name, s.flagPAMOpTimeout)
 	if err != nil {
 		return err
 	}

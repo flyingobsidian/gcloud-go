@@ -14,7 +14,9 @@ import (
 // exposed by google.golang.org/api. Uses the shared restClient from
 // rest_helpers.go with a per-service endpoint.
 
-var designCenterRest = newRESTClient("https://designcenter.googleapis.com/v1alpha")
+func designCenterRest() *restClient {
+	return newRESTClient("https://designcenter.googleapis.com/v1alpha")
+}
 
 func (s *designCenterCmds) initDesignCenter() {
 

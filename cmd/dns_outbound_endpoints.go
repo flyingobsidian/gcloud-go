@@ -111,7 +111,7 @@ func dnsOEFormatSubnetwork(subnetwork, project, location string) string {
 }
 
 // dnsOEPollInterval is the initial operation poll delay (doubled per poll).
-var dnsOEPollInterval = 2 * time.Second
+const dnsOEPollInterval = 2 * time.Second
 
 // dnsOEWait polls a DNS operation with gcloud's "<progress>...done." line.
 func (s *dnsCmds) dnsOEWait(ctx context.Context, svc *dns.Service, op *dns.GoogleLongrunningOperation, progress string) error {

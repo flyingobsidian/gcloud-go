@@ -63,7 +63,7 @@ func (s *memorystoreCmds) runMemstoreACLCreate(cmd *cobra.Command, args []string
 	q.Set("aclPolicyId", args[0])
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+parent+"/aclPolicies", q, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+parent+"/aclPolicies", q, body, &op); err != nil {
 		return fmt.Errorf("creating ACL policy: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Create request issued for ACL policy [%s].\n", args[0])
@@ -77,7 +77,7 @@ func (s *memorystoreCmds) runMemstoreACLDelete(cmd *cobra.Command, args []string
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting ACL policy: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Delete request issued for ACL policy [%s].\n", args[0])
@@ -91,7 +91,7 @@ func (s *memorystoreCmds) runMemstoreACLDescribe(cmd *cobra.Command, args []stri
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing ACL policy: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreACLFormat)
@@ -103,7 +103,7 @@ func (s *memorystoreCmds) runMemstoreACLList(cmd *cobra.Command, args []string) 
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+parent+"/aclPolicies", nil, "aclPolicies", s.flagMemstoreACLPageSize)
+	items, err := s.inv.rest(memorystoreRest()).paginate(ctx, "/"+parent+"/aclPolicies", nil, "aclPolicies", s.flagMemstoreACLPageSize)
 	if err != nil {
 		return fmt.Errorf("listing ACL policies: %w", err)
 	}
@@ -129,7 +129,7 @@ func (s *memorystoreCmds) runMemstoreACLUpdate(cmd *cobra.Command, args []string
 	}
 	ctx := cmd.Context()
 	var op map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating ACL policy: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Update request issued for ACL policy [%s].\n", args[0])

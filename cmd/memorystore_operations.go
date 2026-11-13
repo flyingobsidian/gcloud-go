@@ -48,7 +48,7 @@ func (s *memorystoreCmds) runMemstoreOpCancel(cmd *cobra.Command, args []string)
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Cancel request issued for operation [%s].\n", args[0])
@@ -61,7 +61,7 @@ func (s *memorystoreCmds) runMemstoreOpDelete(cmd *cobra.Command, args []string)
 		return err
 	}
 	ctx := cmd.Context()
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Deleted operation [%s].\n", args[0])
@@ -75,7 +75,7 @@ func (s *memorystoreCmds) runMemstoreOpDescribe(cmd *cobra.Command, args []strin
 	}
 	ctx := cmd.Context()
 	var got map[string]any
-	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest()).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
 	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreOpFormat)
@@ -87,7 +87,7 @@ func (s *memorystoreCmds) runMemstoreOpList(cmd *cobra.Command, args []string) e
 		return err
 	}
 	ctx := cmd.Context()
-	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+parent+"/operations", nil, "operations", s.flagMemstoreOpPageSize)
+	items, err := s.inv.rest(memorystoreRest()).paginate(ctx, "/"+parent+"/operations", nil, "operations", s.flagMemstoreOpPageSize)
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}

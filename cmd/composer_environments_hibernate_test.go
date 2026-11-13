@@ -30,9 +30,6 @@ func TestComposerHibernateResumeRegistered(t *testing.T) {
 }
 
 func TestComposerBetaWaitOp(t *testing.T) {
-	defer func(d time.Duration) { composerOpPollInterval = d }(composerOpPollInterval)
-	composerOpPollInterval = time.Millisecond
-
 	polls, failNext := 0, false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		polls++
@@ -57,7 +54,7 @@ func TestComposerBetaWaitOp(t *testing.T) {
 		t.Fatal(err)
 	}
 	op := &composerbeta.Operation{Name: "projects/p/locations/l/operations/op1"}
-	if err := composerBetaWaitOp(context.Background(), svc, op); err != nil {
+	if err := composerBetaWaitOp(context.Background(), svc, op, time.Millisecond); err != nil {
 		t.Fatalf("wait: %v", err)
 	}
 	if polls != 2 {
@@ -65,7 +62,7 @@ func TestComposerBetaWaitOp(t *testing.T) {
 	}
 
 	polls, failNext = 2, true
-	err = composerBetaWaitOp(context.Background(), svc, op)
+	err = composerBetaWaitOp(context.Background(), svc, op, time.Millisecond)
 	want := "Operation [projects/p/locations/l/operations/op1] failed: boom"
 	if err == nil || err.Error() != want {
 		t.Errorf("got %v, want %q", err, want)

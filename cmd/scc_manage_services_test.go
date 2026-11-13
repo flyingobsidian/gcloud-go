@@ -64,7 +64,7 @@ func TestSccResolveServiceName(t *testing.T) {
 // mirror.
 func TestSccSupportedServicesIncludesExternalExposure(t *testing.T) {
 	found := false
-	for _, s := range sccSupportedServices {
+	for _, s := range sccSupportedServices() {
 		if s.Name == "external-exposure" {
 			if s.Abbrev != "ee" {
 				t.Errorf("external-exposure abbreviation = %q, want %q", s.Abbrev, "ee")

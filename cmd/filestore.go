@@ -15,9 +15,6 @@ import (
 // under a location (either a region or a zone); users identify them either
 // with --location plus a short id, or by passing the fully-qualified resource
 // name.
-var (
-	flagFSBackupSourceBackup string
-)
 
 // --- Backups ---
 
@@ -558,9 +555,11 @@ func (s *filestoreCmds) runFSLocationsList(cmd *cobra.Command, args []string) er
 // --filter/--page-size/--limit flags.
 // fsNetworkKeys are the --network dict keys accepted by gcloud-python's v1
 // track (network_arg_spec_beta_v1).
-var fsNetworkKeys = []string{
-	"address-mode", "connect-mode", "name", "psc-endpoint-project",
-	"psc-requested-ip-address", "reserved-ip-range",
+func fsNetworkKeys() []string {
+	return []string{
+		"address-mode", "connect-mode", "name", "psc-endpoint-project",
+		"psc-requested-ip-address", "reserved-ip-range",
+	}
 }
 
 // fsParseNetwork builds a NetworkConfig from the --network dict, mirroring
@@ -577,7 +576,7 @@ func fsParseNetwork(spec string) (*filestore.NetworkConfig, error) {
 				return nil, fmt.Errorf("argument --network: Bad syntax for dict arg: [%s]", part)
 			}
 			valid := false
-			for _, key := range fsNetworkKeys {
+			for _, key := range fsNetworkKeys() {
 				if k == key {
 					valid = true
 					break
@@ -585,7 +584,7 @@ func fsParseNetwork(spec string) (*filestore.NetworkConfig, error) {
 			}
 			if !valid {
 				return nil, fmt.Errorf("argument --network: valid keys are [%s]; received: %s",
-					strings.Join(fsNetworkKeys, ", "), k)
+					strings.Join(fsNetworkKeys(), ", "), k)
 			}
 			vals[k] = v
 		}
