@@ -5,88 +5,58 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservices "google.golang.org/api/networkservices/v1"
 )
 
 // --- gcloud network-services operations (#1000) ---
 
-var networkServicesOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Network Services long-running operations"}
-
-var (
-	flagNsOpLocation string
-	flagNsOpFormat   string
-	flagNsOpFilter   string
-	flagNsOpPageSize int64
-	flagNsOpTimeout  time.Duration
-)
-
-var (
-	networkServicesOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a Network Services operation",
-		Args: cobra.ExactArgs(1), RunE: runNsOpCancel,
-	}
-	networkServicesOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Network Services operation",
-		Args: cobra.ExactArgs(1), RunE: runNsOpDescribe,
-	}
-	networkServicesOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Network Services operations in a location",
-		Args: cobra.NoArgs, RunE: runNsOpList,
-	}
-	networkServicesOpWaitCmd = &cobra.Command{
-		Use: "wait OPERATION", Short: "Wait for a Network Services operation to complete",
-		Args: cobra.ExactArgs(1), RunE: runNsOpWait,
-	}
-)
-
-func init() {
+func (s *networkServicesCmds) initNetworkServicesOperations() {
 	all := []*cobra.Command{
-		networkServicesOpCancelCmd, networkServicesOpDescribeCmd,
-		networkServicesOpListCmd, networkServicesOpWaitCmd,
+		s.networkServicesOpCancelCmd, s.networkServicesOpDescribeCmd,
+		s.networkServicesOpListCmd, s.networkServicesOpWaitCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNsOpLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNsOpLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNsOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNsOpFormat, "format", "", "Output format")
 	}
-	networkServicesOpListCmd.Flags().StringVar(&flagNsOpFilter, "filter", "", "Server-side filter expression")
-	networkServicesOpListCmd.Flags().Int64Var(&flagNsOpPageSize, "page-size", 0, "Maximum results per page")
-	networkServicesOpWaitCmd.Flags().DurationVar(&flagNsOpTimeout, "timeout", 30*time.Minute, "Maximum time to wait for the operation to finish")
+	s.networkServicesOpListCmd.Flags().StringVar(&s.flagNsOpFilter, "filter", "", "Server-side filter expression")
+	s.networkServicesOpListCmd.Flags().Int64Var(&s.flagNsOpPageSize, "page-size", 0, "Maximum results per page")
+	s.networkServicesOpWaitCmd.Flags().DurationVar(&s.flagNsOpTimeout, "timeout", 30*time.Minute, "Maximum time to wait for the operation to finish")
 
-	networkServicesOperationsCmd.AddCommand(all...)
-	networkServicesCmd.AddCommand(networkServicesOperationsCmd)
+	s.networkServicesOperationsCmd.AddCommand(all...)
+	s.networkServicesCmd.AddCommand(s.networkServicesOperationsCmd)
 }
 
-func nsOpName(id string) (string, error) {
-	return nsResourceName(flagNsOpLocation, "operations", id)
+func (s *networkServicesCmds) nsOpName(id string) (string, error) {
+	return s.nsResourceName(s.flagNsOpLocation, "operations", id)
 }
 
-func runNsOpCancel(cmd *cobra.Command, args []string) error {
-	name, err := nsOpName(args[0])
+func (s *networkServicesCmds) runNsOpCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.nsOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Cancel(name, &networkservices.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runNsOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := nsOpName(args[0])
+func (s *networkServicesCmds) runNsOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.nsOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -94,16 +64,16 @@ func runNsOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagNsOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNsOpFormat)
 }
 
-func runNsOpList(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsOpLocation)
+func (s *networkServicesCmds) runNsOpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsOpLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -111,11 +81,11 @@ func runNsOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Operations.List(parent).Context(ctx)
-		if flagNsOpFilter != "" {
-			call = call.Filter(flagNsOpFilter)
+		if s.flagNsOpFilter != "" {
+			call = call.Filter(s.flagNsOpFilter)
 		}
-		if flagNsOpPageSize > 0 {
-			call = call.PageSize(flagNsOpPageSize)
+		if s.flagNsOpPageSize > 0 {
+			call = call.PageSize(s.flagNsOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -130,17 +100,17 @@ func runNsOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNsOpFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNsOpFormat)
 }
 
-func runNsOpWait(cmd *cobra.Command, args []string) error {
-	name, err := nsOpName(args[0])
+func (s *networkServicesCmds) runNsOpWait(cmd *cobra.Command, args []string) error {
+	name, err := s.nsOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), flagNsOpTimeout)
+	ctx, cancel := context.WithTimeout(cmd.Context(), s.flagNsOpTimeout)
 	defer cancel()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -154,7 +124,7 @@ func runNsOpWait(cmd *cobra.Command, args []string) error {
 			if op.Error != nil {
 				return fmt.Errorf("operation failed: %s (code %d)", op.Error.Message, op.Error.Code)
 			}
-			return emitFormatted(op, flagNsOpFormat)
+			return emitFormattedTo(s.inv.stdout, op, s.flagNsOpFormat)
 		}
 		select {
 		case <-ctx.Done():

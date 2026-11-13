@@ -1,79 +1,44 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservices "google.golang.org/api/networkservices/v1"
 )
 
 // --- gcloud network-services tcp-routes (#1004) ---
 
-var networkServicesTcpRoutesCmd = &cobra.Command{Use: "tcp-routes", Short: "Manage TCP routes"}
-
-var (
-	flagNsTcLocation    string
-	flagNsTcFormat      string
-	flagNsTcDestination string
-	flagNsTcSource      string
-	flagNsTcPageSize    int64
-)
-
-var (
-	networkServicesTcDeleteCmd = &cobra.Command{
-		Use: "delete ROUTE", Short: "Delete a TCP route",
-		Args: cobra.ExactArgs(1), RunE: runNsTcDelete,
-	}
-	networkServicesTcDescribeCmd = &cobra.Command{
-		Use: "describe ROUTE", Short: "Describe a TCP route",
-		Args: cobra.ExactArgs(1), RunE: runNsTcDescribe,
-	}
-	networkServicesTcExportCmd = &cobra.Command{
-		Use: "export ROUTE", Short: "Export a TCP route to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsTcExport,
-	}
-	networkServicesTcImportCmd = &cobra.Command{
-		Use: "import ROUTE", Short: "Import a TCP route from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsTcImport,
-	}
-	networkServicesTcListCmd = &cobra.Command{
-		Use: "list", Short: "List TCP routes in a location",
-		Args: cobra.NoArgs, RunE: runNsTcList,
-	}
-)
-
-func init() {
+func (s *networkServicesCmds) initNetworkServicesTcpRoutes() {
 	all := []*cobra.Command{
-		networkServicesTcDeleteCmd, networkServicesTcDescribeCmd,
-		networkServicesTcExportCmd, networkServicesTcImportCmd,
-		networkServicesTcListCmd,
+		s.networkServicesTcDeleteCmd, s.networkServicesTcDescribeCmd,
+		s.networkServicesTcExportCmd, s.networkServicesTcImportCmd,
+		s.networkServicesTcListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNsTcLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNsTcLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNsTcFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNsTcFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(networkServicesTcExportCmd, &flagNsTcDestination)
-	nsBindImportFlags(networkServicesTcImportCmd, &flagNsTcSource)
-	networkServicesTcListCmd.Flags().Int64Var(&flagNsTcPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(s.networkServicesTcExportCmd, &s.flagNsTcDestination)
+	nsBindImportFlags(s.networkServicesTcImportCmd, &s.flagNsTcSource)
+	s.networkServicesTcListCmd.Flags().Int64Var(&s.flagNsTcPageSize, "page-size", 0, "Maximum results per page")
 
-	networkServicesTcpRoutesCmd.AddCommand(all...)
-	networkServicesCmd.AddCommand(networkServicesTcpRoutesCmd)
+	s.networkServicesTcpRoutesCmd.AddCommand(all...)
+	s.networkServicesCmd.AddCommand(s.networkServicesTcpRoutesCmd)
 }
 
-func nsTcName(id string) (string, error) {
-	return nsResourceName(flagNsTcLocation, "tcpRoutes", id)
+func (s *networkServicesCmds) nsTcName(id string) (string, error) {
+	return s.nsResourceName(s.flagNsTcLocation, "tcpRoutes", id)
 }
 
-func runNsTcDelete(cmd *cobra.Command, args []string) error {
-	name, err := nsTcName(args[0])
+func (s *networkServicesCmds) runNsTcDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.nsTcName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -81,17 +46,17 @@ func runNsTcDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting TCP route: %w", err)
 	}
-	fmt.Printf("Delete TCP route [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsTcFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete TCP route [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsTcFormat)
 }
 
-func runNsTcDescribe(cmd *cobra.Command, args []string) error {
-	name, err := nsTcName(args[0])
+func (s *networkServicesCmds) runNsTcDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.nsTcName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,16 +64,16 @@ func runNsTcDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing TCP route: %w", err)
 	}
-	return emitFormatted(got, flagNsTcFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNsTcFormat)
 }
 
-func runNsTcExport(cmd *cobra.Command, args []string) error {
-	name, err := nsTcName(args[0])
+func (s *networkServicesCmds) runNsTcExport(cmd *cobra.Command, args []string) error {
+	name, err := s.nsTcName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -116,25 +81,25 @@ func runNsTcExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting TCP route: %w", err)
 	}
-	return saveAsYAML(flagNsTcDestination, got)
+	return saveAsYAML(s.flagNsTcDestination, got)
 }
 
-func runNsTcImport(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsTcLocation)
+func (s *networkServicesCmds) runNsTcImport(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsTcLocation)
 	if err != nil {
 		return err
 	}
-	name, err := nsTcName(args[0])
+	name, err := s.nsTcName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &networkservices.TcpRoute{}
-	if err := loadYAMLOrJSONInto(flagNsTcSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNsTcSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,24 +108,24 @@ func runNsTcImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating TCP route: %w", err)
 		}
-		fmt.Printf("Create TCP route [%s] initiated (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagNsTcFormat)
+		fmt.Fprintf(s.inv.stdout, "Create TCP route [%s] initiated (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagNsTcFormat)
 	}
 	op, err := svc.Projects.Locations.TcpRoutes.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating TCP route: %w", err)
 	}
-	fmt.Printf("Update TCP route [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsTcFormat)
+	fmt.Fprintf(s.inv.stdout, "Update TCP route [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsTcFormat)
 }
 
-func runNsTcList(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsTcLocation)
+func (s *networkServicesCmds) runNsTcList(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsTcLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -168,8 +133,8 @@ func runNsTcList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.TcpRoutes.List(parent).Context(ctx)
-		if flagNsTcPageSize > 0 {
-			call = call.PageSize(flagNsTcPageSize)
+		if s.flagNsTcPageSize > 0 {
+			call = call.PageSize(s.flagNsTcPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -184,5 +149,5 @@ func runNsTcList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNsTcFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNsTcFormat)
 }

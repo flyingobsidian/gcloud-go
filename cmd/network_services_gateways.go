@@ -1,79 +1,44 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservices "google.golang.org/api/networkservices/v1"
 )
 
 // --- gcloud network-services gateways (#989) ---
 
-var networkServicesGatewaysCmd = &cobra.Command{Use: "gateways", Short: "Manage gateways"}
-
-var (
-	flagNsGwLocation    string
-	flagNsGwFormat      string
-	flagNsGwDestination string
-	flagNsGwSource      string
-	flagNsGwPageSize    int64
-)
-
-var (
-	networkServicesGwDeleteCmd = &cobra.Command{
-		Use: "delete GATEWAY", Short: "Delete a gateway",
-		Args: cobra.ExactArgs(1), RunE: runNsGwDelete,
-	}
-	networkServicesGwDescribeCmd = &cobra.Command{
-		Use: "describe GATEWAY", Short: "Describe a gateway",
-		Args: cobra.ExactArgs(1), RunE: runNsGwDescribe,
-	}
-	networkServicesGwExportCmd = &cobra.Command{
-		Use: "export GATEWAY", Short: "Export a gateway to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsGwExport,
-	}
-	networkServicesGwImportCmd = &cobra.Command{
-		Use: "import GATEWAY", Short: "Import a gateway from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsGwImport,
-	}
-	networkServicesGwListCmd = &cobra.Command{
-		Use: "list", Short: "List gateways in a location",
-		Args: cobra.NoArgs, RunE: runNsGwList,
-	}
-)
-
-func init() {
+func (s *networkServicesCmds) initNetworkServicesGateways() {
 	all := []*cobra.Command{
-		networkServicesGwDeleteCmd, networkServicesGwDescribeCmd,
-		networkServicesGwExportCmd, networkServicesGwImportCmd,
-		networkServicesGwListCmd,
+		s.networkServicesGwDeleteCmd, s.networkServicesGwDescribeCmd,
+		s.networkServicesGwExportCmd, s.networkServicesGwImportCmd,
+		s.networkServicesGwListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNsGwLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNsGwLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNsGwFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNsGwFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(networkServicesGwExportCmd, &flagNsGwDestination)
-	nsBindImportFlags(networkServicesGwImportCmd, &flagNsGwSource)
-	networkServicesGwListCmd.Flags().Int64Var(&flagNsGwPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(s.networkServicesGwExportCmd, &s.flagNsGwDestination)
+	nsBindImportFlags(s.networkServicesGwImportCmd, &s.flagNsGwSource)
+	s.networkServicesGwListCmd.Flags().Int64Var(&s.flagNsGwPageSize, "page-size", 0, "Maximum results per page")
 
-	networkServicesGatewaysCmd.AddCommand(all...)
-	networkServicesCmd.AddCommand(networkServicesGatewaysCmd)
+	s.networkServicesGatewaysCmd.AddCommand(all...)
+	s.networkServicesCmd.AddCommand(s.networkServicesGatewaysCmd)
 }
 
-func nsGwName(id string) (string, error) {
-	return nsResourceName(flagNsGwLocation, "gateways", id)
+func (s *networkServicesCmds) nsGwName(id string) (string, error) {
+	return s.nsResourceName(s.flagNsGwLocation, "gateways", id)
 }
 
-func runNsGwDelete(cmd *cobra.Command, args []string) error {
-	name, err := nsGwName(args[0])
+func (s *networkServicesCmds) runNsGwDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.nsGwName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -81,17 +46,17 @@ func runNsGwDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting gateway: %w", err)
 	}
-	fmt.Printf("Delete gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsGwFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsGwFormat)
 }
 
-func runNsGwDescribe(cmd *cobra.Command, args []string) error {
-	name, err := nsGwName(args[0])
+func (s *networkServicesCmds) runNsGwDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.nsGwName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,16 +64,16 @@ func runNsGwDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing gateway: %w", err)
 	}
-	return emitFormatted(got, flagNsGwFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNsGwFormat)
 }
 
-func runNsGwExport(cmd *cobra.Command, args []string) error {
-	name, err := nsGwName(args[0])
+func (s *networkServicesCmds) runNsGwExport(cmd *cobra.Command, args []string) error {
+	name, err := s.nsGwName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -116,25 +81,25 @@ func runNsGwExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting gateway: %w", err)
 	}
-	return saveAsYAML(flagNsGwDestination, got)
+	return saveAsYAML(s.flagNsGwDestination, got)
 }
 
-func runNsGwImport(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsGwLocation)
+func (s *networkServicesCmds) runNsGwImport(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsGwLocation)
 	if err != nil {
 		return err
 	}
-	name, err := nsGwName(args[0])
+	name, err := s.nsGwName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &networkservices.Gateway{}
-	if err := loadYAMLOrJSONInto(flagNsGwSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNsGwSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,24 +108,24 @@ func runNsGwImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating gateway: %w", err)
 		}
-		fmt.Printf("Create gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagNsGwFormat)
+		fmt.Fprintf(s.inv.stdout, "Create gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagNsGwFormat)
 	}
 	op, err := svc.Projects.Locations.Gateways.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating gateway: %w", err)
 	}
-	fmt.Printf("Update gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsGwFormat)
+	fmt.Fprintf(s.inv.stdout, "Update gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsGwFormat)
 }
 
-func runNsGwList(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsGwLocation)
+func (s *networkServicesCmds) runNsGwList(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsGwLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -168,8 +133,8 @@ func runNsGwList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Gateways.List(parent).Context(ctx)
-		if flagNsGwPageSize > 0 {
-			call = call.PageSize(flagNsGwPageSize)
+		if s.flagNsGwPageSize > 0 {
+			call = call.PageSize(s.flagNsGwPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -184,5 +149,5 @@ func runNsGwList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNsGwFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNsGwFormat)
 }

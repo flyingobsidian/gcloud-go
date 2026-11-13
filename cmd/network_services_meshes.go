@@ -1,79 +1,44 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservices "google.golang.org/api/networkservices/v1"
 )
 
 // --- gcloud network-services meshes (#992) ---
 
-var networkServicesMeshesCmd = &cobra.Command{Use: "meshes", Short: "Manage service meshes"}
-
-var (
-	flagNsMeshLocation    string
-	flagNsMeshFormat      string
-	flagNsMeshDestination string
-	flagNsMeshSource      string
-	flagNsMeshPageSize    int64
-)
-
-var (
-	networkServicesMeshDeleteCmd = &cobra.Command{
-		Use: "delete MESH", Short: "Delete a service mesh",
-		Args: cobra.ExactArgs(1), RunE: runNsMeshDelete,
-	}
-	networkServicesMeshDescribeCmd = &cobra.Command{
-		Use: "describe MESH", Short: "Describe a service mesh",
-		Args: cobra.ExactArgs(1), RunE: runNsMeshDescribe,
-	}
-	networkServicesMeshExportCmd = &cobra.Command{
-		Use: "export MESH", Short: "Export a service mesh to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsMeshExport,
-	}
-	networkServicesMeshImportCmd = &cobra.Command{
-		Use: "import MESH", Short: "Import a service mesh from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsMeshImport,
-	}
-	networkServicesMeshListCmd = &cobra.Command{
-		Use: "list", Short: "List service meshes in a location",
-		Args: cobra.NoArgs, RunE: runNsMeshList,
-	}
-)
-
-func init() {
+func (s *networkServicesCmds) initNetworkServicesMeshes() {
 	all := []*cobra.Command{
-		networkServicesMeshDeleteCmd, networkServicesMeshDescribeCmd,
-		networkServicesMeshExportCmd, networkServicesMeshImportCmd,
-		networkServicesMeshListCmd,
+		s.networkServicesMeshDeleteCmd, s.networkServicesMeshDescribeCmd,
+		s.networkServicesMeshExportCmd, s.networkServicesMeshImportCmd,
+		s.networkServicesMeshListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNsMeshLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNsMeshLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNsMeshFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNsMeshFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(networkServicesMeshExportCmd, &flagNsMeshDestination)
-	nsBindImportFlags(networkServicesMeshImportCmd, &flagNsMeshSource)
-	networkServicesMeshListCmd.Flags().Int64Var(&flagNsMeshPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(s.networkServicesMeshExportCmd, &s.flagNsMeshDestination)
+	nsBindImportFlags(s.networkServicesMeshImportCmd, &s.flagNsMeshSource)
+	s.networkServicesMeshListCmd.Flags().Int64Var(&s.flagNsMeshPageSize, "page-size", 0, "Maximum results per page")
 
-	networkServicesMeshesCmd.AddCommand(all...)
-	networkServicesCmd.AddCommand(networkServicesMeshesCmd)
+	s.networkServicesMeshesCmd.AddCommand(all...)
+	s.networkServicesCmd.AddCommand(s.networkServicesMeshesCmd)
 }
 
-func nsMeshName(id string) (string, error) {
-	return nsResourceName(flagNsMeshLocation, "meshes", id)
+func (s *networkServicesCmds) nsMeshName(id string) (string, error) {
+	return s.nsResourceName(s.flagNsMeshLocation, "meshes", id)
 }
 
-func runNsMeshDelete(cmd *cobra.Command, args []string) error {
-	name, err := nsMeshName(args[0])
+func (s *networkServicesCmds) runNsMeshDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.nsMeshName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -81,17 +46,17 @@ func runNsMeshDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting mesh: %w", err)
 	}
-	fmt.Printf("Delete mesh [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsMeshFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete mesh [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsMeshFormat)
 }
 
-func runNsMeshDescribe(cmd *cobra.Command, args []string) error {
-	name, err := nsMeshName(args[0])
+func (s *networkServicesCmds) runNsMeshDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.nsMeshName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,16 +64,16 @@ func runNsMeshDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing mesh: %w", err)
 	}
-	return emitFormatted(got, flagNsMeshFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNsMeshFormat)
 }
 
-func runNsMeshExport(cmd *cobra.Command, args []string) error {
-	name, err := nsMeshName(args[0])
+func (s *networkServicesCmds) runNsMeshExport(cmd *cobra.Command, args []string) error {
+	name, err := s.nsMeshName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -116,25 +81,25 @@ func runNsMeshExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting mesh: %w", err)
 	}
-	return saveAsYAML(flagNsMeshDestination, got)
+	return saveAsYAML(s.flagNsMeshDestination, got)
 }
 
-func runNsMeshImport(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsMeshLocation)
+func (s *networkServicesCmds) runNsMeshImport(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsMeshLocation)
 	if err != nil {
 		return err
 	}
-	name, err := nsMeshName(args[0])
+	name, err := s.nsMeshName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &networkservices.Mesh{}
-	if err := loadYAMLOrJSONInto(flagNsMeshSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNsMeshSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,24 +108,24 @@ func runNsMeshImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating mesh: %w", err)
 		}
-		fmt.Printf("Create mesh [%s] initiated (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagNsMeshFormat)
+		fmt.Fprintf(s.inv.stdout, "Create mesh [%s] initiated (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagNsMeshFormat)
 	}
 	op, err := svc.Projects.Locations.Meshes.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating mesh: %w", err)
 	}
-	fmt.Printf("Update mesh [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsMeshFormat)
+	fmt.Fprintf(s.inv.stdout, "Update mesh [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsMeshFormat)
 }
 
-func runNsMeshList(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsMeshLocation)
+func (s *networkServicesCmds) runNsMeshList(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsMeshLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -168,8 +133,8 @@ func runNsMeshList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Meshes.List(parent).Context(ctx)
-		if flagNsMeshPageSize > 0 {
-			call = call.PageSize(flagNsMeshPageSize)
+		if s.flagNsMeshPageSize > 0 {
+			call = call.PageSize(s.flagNsMeshPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -184,5 +149,5 @@ func runNsMeshList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNsMeshFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNsMeshFormat)
 }

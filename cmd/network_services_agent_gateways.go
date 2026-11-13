@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservicesbeta "google.golang.org/api/networkservices/v1beta1"
 )
@@ -15,69 +13,36 @@ import (
 // so this file uses gcp.NetworkServicesBetaService rather than the v1
 // client used by its siblings.
 
-var networkServicesAgentGatewaysCmd = &cobra.Command{Use: "agent-gateways", Short: "Manage agent gateways"}
-
-var (
-	flagNsAgLocation    string
-	flagNsAgFormat      string
-	flagNsAgDestination string
-	flagNsAgSource      string
-	flagNsAgPageSize    int64
-)
-
-var (
-	networkServicesAgDeleteCmd = &cobra.Command{
-		Use: "delete GATEWAY", Short: "Delete an agent gateway",
-		Args: cobra.ExactArgs(1), RunE: runNsAgDelete,
-	}
-	networkServicesAgDescribeCmd = &cobra.Command{
-		Use: "describe GATEWAY", Short: "Describe an agent gateway",
-		Args: cobra.ExactArgs(1), RunE: runNsAgDescribe,
-	}
-	networkServicesAgExportCmd = &cobra.Command{
-		Use: "export GATEWAY", Short: "Export an agent gateway to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsAgExport,
-	}
-	networkServicesAgImportCmd = &cobra.Command{
-		Use: "import GATEWAY", Short: "Import an agent gateway from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsAgImport,
-	}
-	networkServicesAgListCmd = &cobra.Command{
-		Use: "list", Short: "List agent gateways in a location",
-		Args: cobra.NoArgs, RunE: runNsAgList,
-	}
-)
-
-func init() {
+func (s *networkServicesCmds) initNetworkServicesAgentGateways() {
 	all := []*cobra.Command{
-		networkServicesAgDeleteCmd, networkServicesAgDescribeCmd,
-		networkServicesAgExportCmd, networkServicesAgImportCmd,
-		networkServicesAgListCmd,
+		s.networkServicesAgDeleteCmd, s.networkServicesAgDescribeCmd,
+		s.networkServicesAgExportCmd, s.networkServicesAgImportCmd,
+		s.networkServicesAgListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNsAgLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNsAgLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNsAgFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNsAgFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(networkServicesAgExportCmd, &flagNsAgDestination)
-	nsBindImportFlags(networkServicesAgImportCmd, &flagNsAgSource)
-	networkServicesAgListCmd.Flags().Int64Var(&flagNsAgPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(s.networkServicesAgExportCmd, &s.flagNsAgDestination)
+	nsBindImportFlags(s.networkServicesAgImportCmd, &s.flagNsAgSource)
+	s.networkServicesAgListCmd.Flags().Int64Var(&s.flagNsAgPageSize, "page-size", 0, "Maximum results per page")
 
-	networkServicesAgentGatewaysCmd.AddCommand(all...)
-	networkServicesCmd.AddCommand(networkServicesAgentGatewaysCmd)
+	s.networkServicesAgentGatewaysCmd.AddCommand(all...)
+	s.networkServicesCmd.AddCommand(s.networkServicesAgentGatewaysCmd)
 }
 
-func nsAgName(id string) (string, error) {
-	return nsResourceName(flagNsAgLocation, "agentGateways", id)
+func (s *networkServicesCmds) nsAgName(id string) (string, error) {
+	return s.nsResourceName(s.flagNsAgLocation, "agentGateways", id)
 }
 
-func runNsAgDelete(cmd *cobra.Command, args []string) error {
-	name, err := nsAgName(args[0])
+func (s *networkServicesCmds) runNsAgDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.nsAgName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesBetaService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServicesBeta(ctx)
 	if err != nil {
 		return err
 	}
@@ -85,17 +50,17 @@ func runNsAgDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting agent gateway: %w", err)
 	}
-	fmt.Printf("Delete agent gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsAgFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete agent gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsAgFormat)
 }
 
-func runNsAgDescribe(cmd *cobra.Command, args []string) error {
-	name, err := nsAgName(args[0])
+func (s *networkServicesCmds) runNsAgDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.nsAgName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesBetaService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServicesBeta(ctx)
 	if err != nil {
 		return err
 	}
@@ -103,16 +68,16 @@ func runNsAgDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing agent gateway: %w", err)
 	}
-	return emitFormatted(got, flagNsAgFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNsAgFormat)
 }
 
-func runNsAgExport(cmd *cobra.Command, args []string) error {
-	name, err := nsAgName(args[0])
+func (s *networkServicesCmds) runNsAgExport(cmd *cobra.Command, args []string) error {
+	name, err := s.nsAgName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesBetaService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServicesBeta(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,25 +85,25 @@ func runNsAgExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting agent gateway: %w", err)
 	}
-	return saveAsYAML(flagNsAgDestination, got)
+	return saveAsYAML(s.flagNsAgDestination, got)
 }
 
-func runNsAgImport(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsAgLocation)
+func (s *networkServicesCmds) runNsAgImport(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsAgLocation)
 	if err != nil {
 		return err
 	}
-	name, err := nsAgName(args[0])
+	name, err := s.nsAgName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &networkservicesbeta.AgentGateway{}
-	if err := loadYAMLOrJSONInto(flagNsAgSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNsAgSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesBetaService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServicesBeta(ctx)
 	if err != nil {
 		return err
 	}
@@ -147,24 +112,24 @@ func runNsAgImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating agent gateway: %w", err)
 		}
-		fmt.Printf("Create agent gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagNsAgFormat)
+		fmt.Fprintf(s.inv.stdout, "Create agent gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagNsAgFormat)
 	}
 	op, err := svc.Projects.Locations.AgentGateways.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating agent gateway: %w", err)
 	}
-	fmt.Printf("Update agent gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsAgFormat)
+	fmt.Fprintf(s.inv.stdout, "Update agent gateway [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsAgFormat)
 }
 
-func runNsAgList(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsAgLocation)
+func (s *networkServicesCmds) runNsAgList(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsAgLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesBetaService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServicesBeta(ctx)
 	if err != nil {
 		return err
 	}
@@ -172,8 +137,8 @@ func runNsAgList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.AgentGateways.List(parent).Context(ctx)
-		if flagNsAgPageSize > 0 {
-			call = call.PageSize(flagNsAgPageSize)
+		if s.flagNsAgPageSize > 0 {
+			call = call.PageSize(s.flagNsAgPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -188,5 +153,5 @@ func runNsAgList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNsAgFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNsAgFormat)
 }

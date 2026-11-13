@@ -1,79 +1,44 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservices "google.golang.org/api/networkservices/v1"
 )
 
 // --- gcloud network-services http-routes (#991) ---
 
-var networkServicesHttpRoutesCmd = &cobra.Command{Use: "http-routes", Short: "Manage HTTP routes"}
-
-var (
-	flagNsHrLocation    string
-	flagNsHrFormat      string
-	flagNsHrDestination string
-	flagNsHrSource      string
-	flagNsHrPageSize    int64
-)
-
-var (
-	networkServicesHrDeleteCmd = &cobra.Command{
-		Use: "delete ROUTE", Short: "Delete an HTTP route",
-		Args: cobra.ExactArgs(1), RunE: runNsHrDelete,
-	}
-	networkServicesHrDescribeCmd = &cobra.Command{
-		Use: "describe ROUTE", Short: "Describe an HTTP route",
-		Args: cobra.ExactArgs(1), RunE: runNsHrDescribe,
-	}
-	networkServicesHrExportCmd = &cobra.Command{
-		Use: "export ROUTE", Short: "Export an HTTP route to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsHrExport,
-	}
-	networkServicesHrImportCmd = &cobra.Command{
-		Use: "import ROUTE", Short: "Import an HTTP route from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsHrImport,
-	}
-	networkServicesHrListCmd = &cobra.Command{
-		Use: "list", Short: "List HTTP routes in a location",
-		Args: cobra.NoArgs, RunE: runNsHrList,
-	}
-)
-
-func init() {
+func (s *networkServicesCmds) initNetworkServicesHttpRoutes() {
 	all := []*cobra.Command{
-		networkServicesHrDeleteCmd, networkServicesHrDescribeCmd,
-		networkServicesHrExportCmd, networkServicesHrImportCmd,
-		networkServicesHrListCmd,
+		s.networkServicesHrDeleteCmd, s.networkServicesHrDescribeCmd,
+		s.networkServicesHrExportCmd, s.networkServicesHrImportCmd,
+		s.networkServicesHrListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNsHrLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNsHrLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNsHrFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNsHrFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(networkServicesHrExportCmd, &flagNsHrDestination)
-	nsBindImportFlags(networkServicesHrImportCmd, &flagNsHrSource)
-	networkServicesHrListCmd.Flags().Int64Var(&flagNsHrPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(s.networkServicesHrExportCmd, &s.flagNsHrDestination)
+	nsBindImportFlags(s.networkServicesHrImportCmd, &s.flagNsHrSource)
+	s.networkServicesHrListCmd.Flags().Int64Var(&s.flagNsHrPageSize, "page-size", 0, "Maximum results per page")
 
-	networkServicesHttpRoutesCmd.AddCommand(all...)
-	networkServicesCmd.AddCommand(networkServicesHttpRoutesCmd)
+	s.networkServicesHttpRoutesCmd.AddCommand(all...)
+	s.networkServicesCmd.AddCommand(s.networkServicesHttpRoutesCmd)
 }
 
-func nsHrName(id string) (string, error) {
-	return nsResourceName(flagNsHrLocation, "httpRoutes", id)
+func (s *networkServicesCmds) nsHrName(id string) (string, error) {
+	return s.nsResourceName(s.flagNsHrLocation, "httpRoutes", id)
 }
 
-func runNsHrDelete(cmd *cobra.Command, args []string) error {
-	name, err := nsHrName(args[0])
+func (s *networkServicesCmds) runNsHrDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.nsHrName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -81,17 +46,17 @@ func runNsHrDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting HTTP route: %w", err)
 	}
-	fmt.Printf("Delete HTTP route [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsHrFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete HTTP route [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsHrFormat)
 }
 
-func runNsHrDescribe(cmd *cobra.Command, args []string) error {
-	name, err := nsHrName(args[0])
+func (s *networkServicesCmds) runNsHrDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.nsHrName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,16 +64,16 @@ func runNsHrDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing HTTP route: %w", err)
 	}
-	return emitFormatted(got, flagNsHrFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNsHrFormat)
 }
 
-func runNsHrExport(cmd *cobra.Command, args []string) error {
-	name, err := nsHrName(args[0])
+func (s *networkServicesCmds) runNsHrExport(cmd *cobra.Command, args []string) error {
+	name, err := s.nsHrName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -116,25 +81,25 @@ func runNsHrExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting HTTP route: %w", err)
 	}
-	return saveAsYAML(flagNsHrDestination, got)
+	return saveAsYAML(s.flagNsHrDestination, got)
 }
 
-func runNsHrImport(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsHrLocation)
+func (s *networkServicesCmds) runNsHrImport(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsHrLocation)
 	if err != nil {
 		return err
 	}
-	name, err := nsHrName(args[0])
+	name, err := s.nsHrName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &networkservices.HttpRoute{}
-	if err := loadYAMLOrJSONInto(flagNsHrSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNsHrSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,24 +108,24 @@ func runNsHrImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating HTTP route: %w", err)
 		}
-		fmt.Printf("Create HTTP route [%s] initiated (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagNsHrFormat)
+		fmt.Fprintf(s.inv.stdout, "Create HTTP route [%s] initiated (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagNsHrFormat)
 	}
 	op, err := svc.Projects.Locations.HttpRoutes.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating HTTP route: %w", err)
 	}
-	fmt.Printf("Update HTTP route [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsHrFormat)
+	fmt.Fprintf(s.inv.stdout, "Update HTTP route [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsHrFormat)
 }
 
-func runNsHrList(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsHrLocation)
+func (s *networkServicesCmds) runNsHrList(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsHrLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -168,8 +133,8 @@ func runNsHrList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.HttpRoutes.List(parent).Context(ctx)
-		if flagNsHrPageSize > 0 {
-			call = call.PageSize(flagNsHrPageSize)
+		if s.flagNsHrPageSize > 0 {
+			call = call.PageSize(s.flagNsHrPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -184,5 +149,5 @@ func runNsHrList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNsHrFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNsHrFormat)
 }

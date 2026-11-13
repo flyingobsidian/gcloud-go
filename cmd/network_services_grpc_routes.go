@@ -1,79 +1,44 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservices "google.golang.org/api/networkservices/v1"
 )
 
 // --- gcloud network-services grpc-routes (#990) ---
 
-var networkServicesGrpcRoutesCmd = &cobra.Command{Use: "grpc-routes", Short: "Manage gRPC routes"}
-
-var (
-	flagNsGrLocation    string
-	flagNsGrFormat      string
-	flagNsGrDestination string
-	flagNsGrSource      string
-	flagNsGrPageSize    int64
-)
-
-var (
-	networkServicesGrDeleteCmd = &cobra.Command{
-		Use: "delete ROUTE", Short: "Delete a gRPC route",
-		Args: cobra.ExactArgs(1), RunE: runNsGrDelete,
-	}
-	networkServicesGrDescribeCmd = &cobra.Command{
-		Use: "describe ROUTE", Short: "Describe a gRPC route",
-		Args: cobra.ExactArgs(1), RunE: runNsGrDescribe,
-	}
-	networkServicesGrExportCmd = &cobra.Command{
-		Use: "export ROUTE", Short: "Export a gRPC route to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsGrExport,
-	}
-	networkServicesGrImportCmd = &cobra.Command{
-		Use: "import ROUTE", Short: "Import a gRPC route from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runNsGrImport,
-	}
-	networkServicesGrListCmd = &cobra.Command{
-		Use: "list", Short: "List gRPC routes in a location",
-		Args: cobra.NoArgs, RunE: runNsGrList,
-	}
-)
-
-func init() {
+func (s *networkServicesCmds) initNetworkServicesGrpcRoutes() {
 	all := []*cobra.Command{
-		networkServicesGrDeleteCmd, networkServicesGrDescribeCmd,
-		networkServicesGrExportCmd, networkServicesGrImportCmd,
-		networkServicesGrListCmd,
+		s.networkServicesGrDeleteCmd, s.networkServicesGrDescribeCmd,
+		s.networkServicesGrExportCmd, s.networkServicesGrImportCmd,
+		s.networkServicesGrListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNsGrLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagNsGrLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNsGrFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNsGrFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(networkServicesGrExportCmd, &flagNsGrDestination)
-	nsBindImportFlags(networkServicesGrImportCmd, &flagNsGrSource)
-	networkServicesGrListCmd.Flags().Int64Var(&flagNsGrPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(s.networkServicesGrExportCmd, &s.flagNsGrDestination)
+	nsBindImportFlags(s.networkServicesGrImportCmd, &s.flagNsGrSource)
+	s.networkServicesGrListCmd.Flags().Int64Var(&s.flagNsGrPageSize, "page-size", 0, "Maximum results per page")
 
-	networkServicesGrpcRoutesCmd.AddCommand(all...)
-	networkServicesCmd.AddCommand(networkServicesGrpcRoutesCmd)
+	s.networkServicesGrpcRoutesCmd.AddCommand(all...)
+	s.networkServicesCmd.AddCommand(s.networkServicesGrpcRoutesCmd)
 }
 
-func nsGrName(id string) (string, error) {
-	return nsResourceName(flagNsGrLocation, "grpcRoutes", id)
+func (s *networkServicesCmds) nsGrName(id string) (string, error) {
+	return s.nsResourceName(s.flagNsGrLocation, "grpcRoutes", id)
 }
 
-func runNsGrDelete(cmd *cobra.Command, args []string) error {
-	name, err := nsGrName(args[0])
+func (s *networkServicesCmds) runNsGrDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.nsGrName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -81,17 +46,17 @@ func runNsGrDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting gRPC route: %w", err)
 	}
-	fmt.Printf("Delete gRPC route [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsGrFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete gRPC route [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsGrFormat)
 }
 
-func runNsGrDescribe(cmd *cobra.Command, args []string) error {
-	name, err := nsGrName(args[0])
+func (s *networkServicesCmds) runNsGrDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.nsGrName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,16 +64,16 @@ func runNsGrDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing gRPC route: %w", err)
 	}
-	return emitFormatted(got, flagNsGrFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNsGrFormat)
 }
 
-func runNsGrExport(cmd *cobra.Command, args []string) error {
-	name, err := nsGrName(args[0])
+func (s *networkServicesCmds) runNsGrExport(cmd *cobra.Command, args []string) error {
+	name, err := s.nsGrName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -116,25 +81,25 @@ func runNsGrExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting gRPC route: %w", err)
 	}
-	return saveAsYAML(flagNsGrDestination, got)
+	return saveAsYAML(s.flagNsGrDestination, got)
 }
 
-func runNsGrImport(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsGrLocation)
+func (s *networkServicesCmds) runNsGrImport(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsGrLocation)
 	if err != nil {
 		return err
 	}
-	name, err := nsGrName(args[0])
+	name, err := s.nsGrName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &networkservices.GrpcRoute{}
-	if err := loadYAMLOrJSONInto(flagNsGrSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNsGrSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,24 +108,24 @@ func runNsGrImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating gRPC route: %w", err)
 		}
-		fmt.Printf("Create gRPC route [%s] initiated (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagNsGrFormat)
+		fmt.Fprintf(s.inv.stdout, "Create gRPC route [%s] initiated (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagNsGrFormat)
 	}
 	op, err := svc.Projects.Locations.GrpcRoutes.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating gRPC route: %w", err)
 	}
-	fmt.Printf("Update gRPC route [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNsGrFormat)
+	fmt.Fprintf(s.inv.stdout, "Update gRPC route [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNsGrFormat)
 }
 
-func runNsGrList(cmd *cobra.Command, args []string) error {
-	parent, err := nsLocationParent(flagNsGrLocation)
+func (s *networkServicesCmds) runNsGrList(cmd *cobra.Command, args []string) error {
+	parent, err := s.nsLocationParent(s.flagNsGrLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -168,8 +133,8 @@ func runNsGrList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.GrpcRoutes.List(parent).Context(ctx)
-		if flagNsGrPageSize > 0 {
-			call = call.PageSize(flagNsGrPageSize)
+		if s.flagNsGrPageSize > 0 {
+			call = call.PageSize(s.flagNsGrPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -184,5 +149,5 @@ func runNsGrList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNsGrFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNsGrFormat)
 }
