@@ -90,7 +90,8 @@ func TestFuncTrigger(t *testing.T) {
 }
 
 func TestFunctionsListRegistered(t *testing.T) {
-	list, _, err := functionsCmd.Find([]string{"list"})
+	grp := newFunctionsCmds(legacyTestInvocation())
+	list, _, err := grp.functionsCmd.Find([]string{"list"})
 	if err != nil || list.RunE == nil || list.Flags().Lookup("regions") == nil || list.Flags().Lookup("v2") == nil {
 		t.Fatalf("functions list not registered with --regions/--v2: %v", err)
 	}
