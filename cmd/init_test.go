@@ -17,10 +17,11 @@ func TestInitCommandRegistered(t *testing.T) {
 }
 
 func TestInitQuietRejects(t *testing.T) {
-	prev := flagQuiet
-	flagQuiet = true
-	t.Cleanup(func() { flagQuiet = prev })
-	if err := runInit(initCmd, nil); err == nil {
+	grp := newInitCmds(legacyTestInvocation())
+	prev := grp.inv.flags.quiet
+	grp.inv.flags.quiet = true
+	t.Cleanup(func() { grp.inv.flags.quiet = prev })
+	if err := grp.runInit(grp.initCmd, nil); err == nil {
 		t.Fatal("expected --quiet to reject the interactive init flow")
 	}
 }
