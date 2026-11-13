@@ -1,50 +1,30 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
 
 // --- gcloud artifacts locations (#1075) ---
 
-var artifactsLocationsCmd = &cobra.Command{
-	Use:   "locations",
-	Short: "List regional metadata for Artifact Registry",
+func (s *artifactsCmds) initArtifactsLocations() {
+	s.artifactsLocationsListCmd.Flags().StringVar(&s.flagArtLocationsFormat, "format", "", "Output format")
+	s.artifactsLocationsListCmd.Flags().StringVar(&s.flagArtLocationsFilter, "filter", "", "List filter expression")
+	s.artifactsLocationsListCmd.Flags().Int64Var(&s.flagArtLocationsPageSize, "page-size", 0, "Page size")
+
+	s.artifactsLocationsCmd.AddCommand(s.artifactsLocationsListCmd)
+	s.artifactsCmd.AddCommand(s.artifactsLocationsCmd)
 }
 
-var (
-	flagArtLocationsFormat   string
-	flagArtLocationsFilter   string
-	flagArtLocationsPageSize int64
-)
-
-var artifactsLocationsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Artifact Registry locations for a project",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsLocationsList,
-}
-
-func init() {
-	artifactsLocationsListCmd.Flags().StringVar(&flagArtLocationsFormat, "format", "", "Output format")
-	artifactsLocationsListCmd.Flags().StringVar(&flagArtLocationsFilter, "filter", "", "List filter expression")
-	artifactsLocationsListCmd.Flags().Int64Var(&flagArtLocationsPageSize, "page-size", 0, "Page size")
-
-	artifactsLocationsCmd.AddCommand(artifactsLocationsListCmd)
-	artifactsCmd.AddCommand(artifactsLocationsCmd)
-}
-
-func runArtifactsLocationsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsLocationsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
@@ -54,11 +34,11 @@ func runArtifactsLocationsList(cmd *cobra.Command, args []string) error {
 	token := ""
 	for {
 		call := svc.Projects.Locations.List(parent).Context(ctx)
-		if flagArtLocationsFilter != "" {
-			call = call.Filter(flagArtLocationsFilter)
+		if s.flagArtLocationsFilter != "" {
+			call = call.Filter(s.flagArtLocationsFilter)
 		}
-		if flagArtLocationsPageSize > 0 {
-			call = call.PageSize(flagArtLocationsPageSize)
+		if s.flagArtLocationsPageSize > 0 {
+			call = call.PageSize(s.flagArtLocationsPageSize)
 		}
 		if token != "" {
 			call = call.PageToken(token)
@@ -73,5 +53,5 @@ func runArtifactsLocationsList(cmd *cobra.Command, args []string) error {
 		}
 		token = resp.NextPageToken
 	}
-	return emitFormatted(all, flagArtLocationsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagArtLocationsFormat)
 }

@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
@@ -15,139 +13,65 @@ import (
 // --- gcloud secrets IAM, replication, locations (#546) ---
 
 var (
-	flagSecretsIamMember       string
-	flagSecretsIamRole         string
-	flagSecretsIamFormat       string
-	flagSecretsReplConfigFile  string
-	flagSecretsReplUpdateMask  string
-	flagSecretsLocDescribeFmt  string
-	flagSecretsLocListFmt      string
 	flagSecretsLocListLocation string
 )
 
 // --- IAM ---
 
-var (
-	secretsGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy SECRET_ID", Short: "Get the IAM policy for a secret",
-		Args: cobra.ExactArgs(1), RunE: runSecretsGetIam,
-	}
-	secretsSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy SECRET_ID POLICY_FILE", Short: "Replace the IAM policy for a secret",
-		Args: cobra.ExactArgs(2), RunE: runSecretsSetIam,
-	}
-	secretsAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding SECRET_ID", Short: "Add an IAM binding to a secret",
-		Args: cobra.ExactArgs(1), RunE: runSecretsAddIam,
-	}
-	secretsRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding SECRET_ID", Short: "Remove an IAM binding from a secret",
-		Args: cobra.ExactArgs(1), RunE: runSecretsRemoveIam,
-	}
-)
-
 // --- replication ---
-
-var secretsReplicationCmd = &cobra.Command{Use: "replication", Short: "Manage secret replication"}
-
-var (
-	secretsReplGetCmd = &cobra.Command{
-		Use: "get SECRET_ID", Short: "Get the replication policy of a secret",
-		Args: cobra.ExactArgs(1), RunE: runSecretsReplGet,
-	}
-	secretsReplSetCmd = &cobra.Command{
-		Use: "set SECRET_ID", Short: "Replace the replication policy of a secret from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSecretsReplSet,
-	}
-	secretsReplUpdateCmd = &cobra.Command{
-		Use: "update SECRET_ID", Short: "Patch the replication policy of a secret from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSecretsReplUpdate,
-	}
-)
 
 // --- managed rotation ---
 
-var (
-	flagSecretsRotInstanceID string
-	flagSecretsRotUsername   string
-	flagSecretsRotPassword   string
-)
-
-var secretsEnableManagedRotationCmd = &cobra.Command{
-	Use:   "enable-managed-rotation SECRET_ID",
-	Short: "Enable managed rotation for a secret (Cloud SQL Single User credentials)",
-	Args:  cobra.ExactArgs(1), RunE: runSecretsEnableManagedRotation,
-}
-
-var secretsRotateSecretCmd = &cobra.Command{
-	Use:   "rotate-secret SECRET_ID",
-	Short: "Rotate a secret",
-	Args:  cobra.ExactArgs(1), RunE: runSecretsRotateSecret,
-}
-
 // --- locations ---
 
-var secretsLocationsCmd = &cobra.Command{Use: "locations", Short: "Manage Secret Manager locations"}
-
-var (
-	secretsLocDescribeCmd = &cobra.Command{
-		Use: "describe LOCATION", Short: "Describe a Secret Manager location",
-		Args: cobra.ExactArgs(1), RunE: runSecretsLocDescribe,
-	}
-	secretsLocListCmd = &cobra.Command{
-		Use: "list", Short: "List Secret Manager locations",
-		Args: cobra.NoArgs, RunE: runSecretsLocList,
-	}
-)
-
-func init() {
+func (g *secretsCmds) initSecretsMore() {
 	// IAM
-	for _, c := range []*cobra.Command{secretsGetIamCmd, secretsSetIamCmd, secretsAddIamCmd, secretsRemoveIamCmd} {
-		c.Flags().StringVar(&flagSecretsLocation, "location", "",
+	for _, c := range []*cobra.Command{g.secretsGetIamCmd, g.secretsSetIamCmd, g.secretsAddIamCmd, g.secretsRemoveIamCmd} {
+		c.Flags().StringVar(&g.flagSecretsLocation, "location", "",
 			"Secret Manager location (for regional secrets)")
 	}
-	secretsGetIamCmd.Flags().StringVar(&flagSecretsIamFormat, "format", "", "Output format")
-	for _, c := range []*cobra.Command{secretsAddIamCmd, secretsRemoveIamCmd} {
-		c.Flags().StringVar(&flagSecretsIamMember, "member", "", "IAM member (required)")
-		c.Flags().StringVar(&flagSecretsIamRole, "role", "", "IAM role (required)")
+	g.secretsGetIamCmd.Flags().StringVar(&g.flagSecretsIamFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{g.secretsAddIamCmd, g.secretsRemoveIamCmd} {
+		c.Flags().StringVar(&g.flagSecretsIamMember, "member", "", "IAM member (required)")
+		c.Flags().StringVar(&g.flagSecretsIamRole, "role", "", "IAM role (required)")
 		_ = c.MarkFlagRequired("member")
 		_ = c.MarkFlagRequired("role")
 	}
-	secretsCmd.AddCommand(secretsGetIamCmd, secretsSetIamCmd, secretsAddIamCmd, secretsRemoveIamCmd)
+	g.secretsCmd.AddCommand(g.secretsGetIamCmd, g.secretsSetIamCmd, g.secretsAddIamCmd, g.secretsRemoveIamCmd)
 
 	// replication
-	for _, c := range []*cobra.Command{secretsReplGetCmd, secretsReplSetCmd, secretsReplUpdateCmd} {
-		c.Flags().StringVar(&flagSecretsLocation, "location", "",
+	for _, c := range []*cobra.Command{g.secretsReplGetCmd, g.secretsReplSetCmd, g.secretsReplUpdateCmd} {
+		c.Flags().StringVar(&g.flagSecretsLocation, "location", "",
 			"Secret Manager location (for regional secrets)")
 	}
-	for _, c := range []*cobra.Command{secretsReplSetCmd, secretsReplUpdateCmd} {
-		c.Flags().StringVar(&flagSecretsReplConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{g.secretsReplSetCmd, g.secretsReplUpdateCmd} {
+		c.Flags().StringVar(&g.flagSecretsReplConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Replication body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	secretsReplUpdateCmd.Flags().StringVar(&flagSecretsReplUpdateMask, "update-mask", "",
+	g.secretsReplUpdateCmd.Flags().StringVar(&g.flagSecretsReplUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field, prefixed with 'replication.')")
-	secretsReplicationCmd.AddCommand(secretsReplGetCmd, secretsReplSetCmd, secretsReplUpdateCmd)
-	secretsCmd.AddCommand(secretsReplicationCmd)
+	g.secretsReplicationCmd.AddCommand(g.secretsReplGetCmd, g.secretsReplSetCmd, g.secretsReplUpdateCmd)
+	g.secretsCmd.AddCommand(g.secretsReplicationCmd)
 
 	// locations
-	secretsLocDescribeCmd.Flags().StringVar(&flagSecretsLocDescribeFmt, "format", "", "Output format")
-	secretsLocListCmd.Flags().StringVar(&flagSecretsLocListFmt, "format", "", "Output format")
-	secretsLocationsCmd.AddCommand(secretsLocDescribeCmd, secretsLocListCmd)
-	secretsCmd.AddCommand(secretsLocationsCmd)
+	g.secretsLocDescribeCmd.Flags().StringVar(&g.flagSecretsLocDescribeFmt, "format", "", "Output format")
+	g.secretsLocListCmd.Flags().StringVar(&g.flagSecretsLocListFmt, "format", "", "Output format")
+	g.secretsLocationsCmd.AddCommand(g.secretsLocDescribeCmd, g.secretsLocListCmd)
+	g.secretsCmd.AddCommand(g.secretsLocationsCmd)
 
 	// managed rotation / rotate-secret
-	for _, c := range []*cobra.Command{secretsEnableManagedRotationCmd, secretsRotateSecretCmd} {
-		c.Flags().StringVar(&flagSecretsLocation, "location", "",
+	for _, c := range []*cobra.Command{g.secretsEnableManagedRotationCmd, g.secretsRotateSecretCmd} {
+		c.Flags().StringVar(&g.flagSecretsLocation, "location", "",
 			"Secret Manager location (for regional secrets)")
 	}
-	secretsEnableManagedRotationCmd.Flags().StringVar(&flagSecretsRotInstanceID, "instance-id", "",
+	g.secretsEnableManagedRotationCmd.Flags().StringVar(&g.flagSecretsRotInstanceID, "instance-id", "",
 		"Cloud SQL instance ID (required for Cloud SQL Single User rotation)")
-	secretsEnableManagedRotationCmd.Flags().StringVar(&flagSecretsRotUsername, "username", "",
+	g.secretsEnableManagedRotationCmd.Flags().StringVar(&g.flagSecretsRotUsername, "username", "",
 		"Cloud SQL username (required for Cloud SQL Single User rotation)")
-	secretsEnableManagedRotationCmd.Flags().StringVar(&flagSecretsRotPassword, "password", "",
+	g.secretsEnableManagedRotationCmd.Flags().StringVar(&g.flagSecretsRotPassword, "password", "",
 		"Cloud SQL password (optional; the server generates one if omitted)")
-	secretsCmd.AddCommand(secretsEnableManagedRotationCmd, secretsRotateSecretCmd)
+	g.secretsCmd.AddCommand(g.secretsEnableManagedRotationCmd, g.secretsRotateSecretCmd)
 }
 
 // secretTypeEnum maps a kebab-case CLI value to the SecretType enum expected
@@ -169,25 +93,25 @@ func secretTypeEnum(v string) (string, error) {
 
 // --- IAM impl ---
 
-func runSecretsGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *secretsCmds) runSecretsGetIam(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := secrets.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := secrets.NewService(ctx, g.inv.flags.account)
 	if err != nil {
 		return err
 	}
-	policy, err := svc.Projects.Secrets.GetIamPolicy(secrets.SecretName(project, args[0], flagSecretsLocation)).Context(ctx).Do()
+	policy, err := svc.Projects.Secrets.GetIamPolicy(secrets.SecretName(project, args[0], g.flagSecretsLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagSecretsIamFormat)
+	return emitFormattedTo(g.inv.stdout, policy, g.flagSecretsIamFormat)
 }
 
-func runSecretsSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *secretsCmds) runSecretsSetIam(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
@@ -195,47 +119,47 @@ func runSecretsSetIam(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := secrets.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := secrets.NewService(ctx, g.inv.flags.account)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Secrets.SetIamPolicy(secrets.SecretName(project, args[0], flagSecretsLocation),
+	got, err := svc.Projects.Secrets.SetIamPolicy(secrets.SecretName(project, args[0], g.flagSecretsLocation),
 		&secretmanager.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runSecretsAddIam(cmd *cobra.Command, args []string) error {
-	return secretsModifyIam(args[0], func(p *secretmanager.Policy) {
+func (g *secretsCmds) runSecretsAddIam(cmd *cobra.Command, args []string) error {
+	return g.secretsModifyIam(args[0], func(p *secretmanager.Policy) {
 		for _, b := range p.Bindings {
-			if b.Role == flagSecretsIamRole {
+			if b.Role == g.flagSecretsIamRole {
 				for _, m := range b.Members {
-					if m == flagSecretsIamMember {
+					if m == g.flagSecretsIamMember {
 						return
 					}
 				}
-				b.Members = append(b.Members, flagSecretsIamMember)
+				b.Members = append(b.Members, g.flagSecretsIamMember)
 				return
 			}
 		}
 		p.Bindings = append(p.Bindings, &secretmanager.Binding{
-			Role: flagSecretsIamRole, Members: []string{flagSecretsIamMember},
+			Role: g.flagSecretsIamRole, Members: []string{g.flagSecretsIamMember},
 		})
 	})
 }
 
-func runSecretsRemoveIam(cmd *cobra.Command, args []string) error {
-	return secretsModifyIam(args[0], func(p *secretmanager.Policy) {
+func (g *secretsCmds) runSecretsRemoveIam(cmd *cobra.Command, args []string) error {
+	return g.secretsModifyIam(args[0], func(p *secretmanager.Policy) {
 		for _, b := range p.Bindings {
-			if b.Role != flagSecretsIamRole {
+			if b.Role != g.flagSecretsIamRole {
 				continue
 			}
 			out := b.Members[:0]
 			for _, m := range b.Members {
-				if m != flagSecretsIamMember {
+				if m != g.flagSecretsIamMember {
 					out = append(out, m)
 				}
 			}
@@ -244,17 +168,17 @@ func runSecretsRemoveIam(cmd *cobra.Command, args []string) error {
 	})
 }
 
-func secretsModifyIam(secretID string, mutate func(*secretmanager.Policy)) error {
-	project, err := resolveProject()
+func (g *secretsCmds) secretsModifyIam(secretID string, mutate func(*secretmanager.Policy)) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := secrets.NewService(ctx, flagAccount)
+	ctx := g.inv.context()
+	svc, err := secrets.NewService(ctx, g.inv.flags.account)
 	if err != nil {
 		return err
 	}
-	resource := secrets.SecretName(project, secretID, flagSecretsLocation)
+	resource := secrets.SecretName(project, secretID, g.flagSecretsLocation)
 	policy, err := svc.Projects.Secrets.GetIamPolicy(resource).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
@@ -264,44 +188,44 @@ func secretsModifyIam(secretID string, mutate func(*secretmanager.Policy)) error
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
 // --- replication impl ---
 
-func runSecretsReplGet(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *secretsCmds) runSecretsReplGet(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := secrets.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := secrets.NewService(ctx, g.inv.flags.account)
 	if err != nil {
 		return err
 	}
-	secret, err := svc.Projects.Secrets.Get(secrets.SecretName(project, args[0], flagSecretsLocation)).Context(ctx).Do()
+	secret, err := svc.Projects.Secrets.Get(secrets.SecretName(project, args[0], g.flagSecretsLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting secret: %w", err)
 	}
-	return emitFormatted(secret.Replication, "")
+	return emitFormattedTo(g.inv.stdout, secret.Replication, "")
 }
 
-func runSecretsReplSet(cmd *cobra.Command, args []string) error {
-	return runSecretsReplPatch(args[0], "replication")
+func (g *secretsCmds) runSecretsReplSet(cmd *cobra.Command, args []string) error {
+	return g.runSecretsReplPatch(args[0], "replication")
 }
 
-func runSecretsReplUpdate(cmd *cobra.Command, args []string) error {
-	mask := flagSecretsReplUpdateMask
-	return runSecretsReplPatch(args[0], mask)
+func (g *secretsCmds) runSecretsReplUpdate(cmd *cobra.Command, args []string) error {
+	mask := g.flagSecretsReplUpdateMask
+	return g.runSecretsReplPatch(args[0], mask)
 }
 
-func runSecretsReplPatch(secretID, mask string) error {
-	project, err := resolveProject()
+func (g *secretsCmds) runSecretsReplPatch(secretID, mask string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	repl := &secretmanager.Replication{}
-	if err := loadYAMLOrJSONInto(flagSecretsReplConfigFile, repl); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSecretsReplConfigFile, repl); err != nil {
 		return err
 	}
 	if mask == "" {
@@ -311,29 +235,29 @@ func runSecretsReplPatch(secretID, mask string) error {
 		}
 		mask = joinMask(fields)
 	}
-	ctx := context.Background()
-	svc, err := secrets.NewService(ctx, flagAccount)
+	ctx := g.inv.context()
+	svc, err := secrets.NewService(ctx, g.inv.flags.account)
 	if err != nil {
 		return err
 	}
 	body := &secretmanager.Secret{Replication: repl}
-	got, err := svc.Projects.Secrets.Patch(secrets.SecretName(project, secretID, flagSecretsLocation), body).
+	got, err := svc.Projects.Secrets.Patch(secrets.SecretName(project, secretID, g.flagSecretsLocation), body).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating replication: %w", err)
 	}
-	return emitFormatted(got.Replication, "")
+	return emitFormattedTo(g.inv.stdout, got.Replication, "")
 }
 
 // --- locations impl ---
 
-func runSecretsLocDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *secretsCmds) runSecretsLocDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := secrets.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := secrets.NewService(ctx, g.inv.flags.account)
 	if err != nil {
 		return err
 	}
@@ -341,16 +265,16 @@ func runSecretsLocDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(got, flagSecretsLocDescribeFmt)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSecretsLocDescribeFmt)
 }
 
-func runSecretsLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *secretsCmds) runSecretsLocList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := secrets.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := secrets.NewService(ctx, g.inv.flags.account)
 	if err != nil {
 		return err
 	}
@@ -371,62 +295,62 @@ func runSecretsLocList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagSecretsLocListFmt != "" {
-		return emitFormatted(all, flagSecretsLocListFmt)
+	if g.flagSecretsLocListFmt != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagSecretsLocListFmt)
 	}
-	printTableHeading(len(all), "%-30s %s\n", "LOCATION_ID", "NAME")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-30s %s\n", "LOCATION_ID", "NAME")
 	for _, l := range all {
-		fmt.Printf("%-30s %s\n", l.LocationId, path.Base(l.Name))
+		fmt.Fprintf(g.inv.stdout, "%-30s %s\n", l.LocationId, path.Base(l.Name))
 	}
 	return nil
 }
 
 // --- managed rotation impl ---
 
-func runSecretsEnableManagedRotation(cmd *cobra.Command, args []string) error {
-	if flagSecretsRotInstanceID == "" || flagSecretsRotUsername == "" {
+func (g *secretsCmds) runSecretsEnableManagedRotation(cmd *cobra.Command, args []string) error {
+	if g.flagSecretsRotInstanceID == "" || g.flagSecretsRotUsername == "" {
 		return fmt.Errorf("--instance-id and --username are required for Cloud SQL Single User managed rotation")
 	}
-	project, err := resolveProject()
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := secrets.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := secrets.NewService(ctx, g.inv.flags.account)
 	if err != nil {
 		return err
 	}
 	req := &secretmanager.EnableManagedRotationRequest{
 		CloudSqlSingleUserCredentials: &secretmanager.CloudSQLSingleUserCredentials{
-			InstanceId: flagSecretsRotInstanceID,
-			Username:   flagSecretsRotUsername,
-			Password:   flagSecretsRotPassword,
+			InstanceId: g.flagSecretsRotInstanceID,
+			Username:   g.flagSecretsRotUsername,
+			Password:   g.flagSecretsRotPassword,
 		},
 	}
-	name := secrets.SecretName(project, args[0], flagSecretsLocation)
+	name := secrets.SecretName(project, args[0], g.flagSecretsLocation)
 	got, err := svc.Projects.Secrets.EnableManagedRotation(name, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("enabling managed rotation: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Enabled managed rotation for secret [%s].\n", args[0])
-	return emitFormatted(got, "")
+	fmt.Fprintf(g.inv.stderr, "Enabled managed rotation for secret [%s].\n", args[0])
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runSecretsRotateSecret(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *secretsCmds) runSecretsRotateSecret(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := secrets.NewService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := secrets.NewService(ctx, g.inv.flags.account)
 	if err != nil {
 		return err
 	}
-	name := secrets.SecretName(project, args[0], flagSecretsLocation)
+	name := secrets.SecretName(project, args[0], g.flagSecretsLocation)
 	got, err := svc.Projects.Secrets.RotateSecret(name, &secretmanager.RotateSecretRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("rotating secret: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Rotated secret [%s].\n", args[0])
-	return emitFormatted(got, "")
+	fmt.Fprintf(g.inv.stderr, "Rotated secret [%s].\n", args[0])
+	return emitFormattedTo(g.inv.stdout, got, "")
 }

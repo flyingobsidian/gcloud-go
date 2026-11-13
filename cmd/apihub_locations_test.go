@@ -70,20 +70,21 @@ func TestParseMcpToolFlag(t *testing.T) {
 // TestBuildApihubMcpToolsMutex ensures --mcp-tools and --mcp-tools-from-file
 // are mutually exclusive and that one of them is required.
 func TestBuildApihubMcpToolsMutex(t *testing.T) {
+	grp := newApihubCmds(legacyTestInvocation())
 	t.Cleanup(func() {
-		flagApihubCDMcpTools = nil
-		flagApihubCDMcpToolsFromFile = ""
+		grp.flagApihubCDMcpTools = nil
+		grp.flagApihubCDMcpToolsFromFile = ""
 	})
 
-	flagApihubCDMcpTools = []string{"tool-id=x,description=y,operation=z"}
-	flagApihubCDMcpToolsFromFile = "tools.yaml"
-	if _, err := buildApihubMcpTools(); err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+	grp.flagApihubCDMcpTools = []string{"tool-id=x,description=y,operation=z"}
+	grp.flagApihubCDMcpToolsFromFile = "tools.yaml"
+	if _, err := grp.buildApihubMcpTools(); err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Fatalf("want mutually-exclusive error; got %v", err)
 	}
 
-	flagApihubCDMcpTools = nil
-	flagApihubCDMcpToolsFromFile = ""
-	if _, err := buildApihubMcpTools(); err == nil || !strings.Contains(err.Error(), "required") {
+	grp.flagApihubCDMcpTools = nil
+	grp.flagApihubCDMcpToolsFromFile = ""
+	if _, err := grp.buildApihubMcpTools(); err == nil || !strings.Contains(err.Error(), "required") {
 		t.Fatalf("want required error; got %v", err)
 	}
 }

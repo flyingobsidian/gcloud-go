@@ -1,101 +1,62 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	netapp "google.golang.org/api/netapp/v1"
 )
 
 // --- gcloud netapp active-directories (#1197) ---
 
-var netappADCmd = &cobra.Command{
-	Use:   "active-directories",
-	Short: "Manage NetApp Active Directories",
-}
-
-var (
-	flagNetAppADLocation   string
-	flagNetAppADConfigFile string
-	flagNetAppADUpdateMask string
-	flagNetAppADFormat     string
-	flagNetAppADFilter     string
-	flagNetAppADPageSize   int64
-)
-
-var (
-	netappADCreateCmd = &cobra.Command{
-		Use: "create ACTIVE_DIRECTORY", Short: "Create an Active Directory",
-		Args: cobra.ExactArgs(1), RunE: runNetAppADCreate,
-	}
-	netappADDeleteCmd = &cobra.Command{
-		Use: "delete ACTIVE_DIRECTORY", Short: "Delete an Active Directory",
-		Args: cobra.ExactArgs(1), RunE: runNetAppADDelete,
-	}
-	netappADDescribeCmd = &cobra.Command{
-		Use: "describe ACTIVE_DIRECTORY", Short: "Describe an Active Directory",
-		Args: cobra.ExactArgs(1), RunE: runNetAppADDescribe,
-	}
-	netappADListCmd = &cobra.Command{
-		Use: "list", Short: "List Active Directories",
-		Args: cobra.NoArgs, RunE: runNetAppADList,
-	}
-	netappADUpdateCmd = &cobra.Command{
-		Use: "update ACTIVE_DIRECTORY", Short: "Update an Active Directory",
-		Args: cobra.ExactArgs(1), RunE: runNetAppADUpdate,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{netappADCreateCmd, netappADDeleteCmd, netappADDescribeCmd, netappADListCmd, netappADUpdateCmd}
+func (s *netappCmds) initNetappActiveDirectories() {
+	all := []*cobra.Command{s.netappADCreateCmd, s.netappADDeleteCmd, s.netappADDescribeCmd, s.netappADListCmd, s.netappADUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNetAppADLocation, "location", "", "Location for the Active Directory (required)")
+		c.Flags().StringVar(&s.flagNetAppADLocation, "location", "", "Location for the Active Directory (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNetAppADFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNetAppADFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{netappADCreateCmd, netappADUpdateCmd} {
-		c.Flags().StringVar(&flagNetAppADConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.netappADCreateCmd, s.netappADUpdateCmd} {
+		c.Flags().StringVar(&s.flagNetAppADConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the ActiveDirectory body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	netappADUpdateCmd.Flags().StringVar(&flagNetAppADUpdateMask, "update-mask", "",
+	s.netappADUpdateCmd.Flags().StringVar(&s.flagNetAppADUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	netappADListCmd.Flags().StringVar(&flagNetAppADFilter, "filter", "", "Server-side filter expression")
-	netappADListCmd.Flags().Int64Var(&flagNetAppADPageSize, "page-size", 0, "Maximum number of results per page")
+	s.netappADListCmd.Flags().StringVar(&s.flagNetAppADFilter, "filter", "", "Server-side filter expression")
+	s.netappADListCmd.Flags().Int64Var(&s.flagNetAppADPageSize, "page-size", 0, "Maximum number of results per page")
 
-	netappADCmd.AddCommand(all...)
-	netappCmd.AddCommand(netappADCmd)
+	s.netappADCmd.AddCommand(all...)
+	s.netappCmd.AddCommand(s.netappADCmd)
 }
 
-func netappADParent() (string, error) {
-	project, err := resolveProject()
+func (s *netappCmds) netappADParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return netappLocationParent(project, flagNetAppADLocation), nil
+	return netappLocationParent(project, s.flagNetAppADLocation), nil
 }
 
-func netappADName(id string) (string, error) {
-	parent, err := netappADParent()
+func (s *netappCmds) netappADName(id string) (string, error) {
+	parent, err := s.netappADParent()
 	if err != nil {
 		return "", err
 	}
 	return netappChild("activeDirectories", id, parent), nil
 }
 
-func runNetAppADCreate(cmd *cobra.Command, args []string) error {
-	parent, err := netappADParent()
+func (s *netappCmds) runNetAppADCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappADParent()
 	if err != nil {
 		return err
 	}
 	body := &netapp.ActiveDirectory{}
-	if err := loadYAMLOrJSONInto(flagNetAppADConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppADConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -103,17 +64,17 @@ func runNetAppADCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating active directory: %w", err)
 	}
-	fmt.Printf("Create request issued for active directory [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppADFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for active directory [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppADFormat)
 }
 
-func runNetAppADDelete(cmd *cobra.Command, args []string) error {
-	name, err := netappADName(args[0])
+func (s *netappCmds) runNetAppADDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.netappADName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -121,17 +82,17 @@ func runNetAppADDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting active directory: %w", err)
 	}
-	fmt.Printf("Delete request issued for active directory [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppADFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for active directory [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppADFormat)
 }
 
-func runNetAppADDescribe(cmd *cobra.Command, args []string) error {
-	name, err := netappADName(args[0])
+func (s *netappCmds) runNetAppADDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.netappADName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -139,16 +100,16 @@ func runNetAppADDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing active directory: %w", err)
 	}
-	return emitFormatted(got, flagNetAppADFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNetAppADFormat)
 }
 
-func runNetAppADList(cmd *cobra.Command, args []string) error {
-	parent, err := netappADParent()
+func (s *netappCmds) runNetAppADList(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappADParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -156,11 +117,11 @@ func runNetAppADList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.ActiveDirectories.List(parent).Context(ctx)
-		if flagNetAppADFilter != "" {
-			call = call.Filter(flagNetAppADFilter)
+		if s.flagNetAppADFilter != "" {
+			call = call.Filter(s.flagNetAppADFilter)
 		}
-		if flagNetAppADPageSize > 0 {
-			call = call.PageSize(flagNetAppADPageSize)
+		if s.flagNetAppADPageSize > 0 {
+			call = call.PageSize(s.flagNetAppADPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -175,24 +136,24 @@ func runNetAppADList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNetAppADFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNetAppADFormat)
 }
 
-func runNetAppADUpdate(cmd *cobra.Command, args []string) error {
-	name, err := netappADName(args[0])
+func (s *netappCmds) runNetAppADUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.netappADName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &netapp.ActiveDirectory{}
-	if err := loadYAMLOrJSONInto(flagNetAppADConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppADConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagNetAppADUpdateMask
+	mask := s.flagNetAppADUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -204,6 +165,6 @@ func runNetAppADUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating active directory: %w", err)
 	}
-	fmt.Printf("Update request issued for active directory [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppADFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for active directory [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppADFormat)
 }

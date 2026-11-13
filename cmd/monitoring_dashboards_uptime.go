@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	monitoringv1 "google.golang.org/api/monitoring/v1"
 	monitoring "google.golang.org/api/monitoring/v3"
@@ -13,154 +11,52 @@ import (
 
 // --- gcloud monitoring dashboards (#951) & uptime (#952) ---
 
-// Common flags for the dashboards/uptime surface.
-var (
-	flagMonDashFile    string
-	flagMonDashFilter  string
-	flagMonDashPage    int64
-	flagMonDashLimit   int64
-	flagMonDashDisplay string
-
-	flagMonUCFile         string
-	flagMonUCDisplayName  string
-	flagMonUCResourceType string
-	flagMonUCHost         string
-	flagMonUCPath         string
-	flagMonUCPort         int64
-	flagMonUCProtocol     string
-	flagMonUCPeriod       string
-	flagMonUCTimeout      string
-	flagMonUCFilter       string
-	flagMonUCPage         int64
-	flagMonUCLimit        int64
-)
-
 // --- Dashboards ---
-
-var monitoringDashboardsCmd = &cobra.Command{
-	Use:   "dashboards",
-	Short: "Manage Cloud Monitoring custom dashboards",
-}
-
-var monitoringDashboardsCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a dashboard from a JSON/YAML definition",
-	Args:  cobra.NoArgs,
-	RunE:  runMonDashCreate,
-}
-
-var monitoringDashboardsDeleteCmd = &cobra.Command{
-	Use:   "delete DASHBOARD",
-	Short: "Delete a dashboard",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runMonDashDelete,
-}
-
-var monitoringDashboardsDescribeCmd = &cobra.Command{
-	Use:   "describe DASHBOARD",
-	Short: "Describe a dashboard",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runMonDashDescribe,
-}
-
-var monitoringDashboardsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List dashboards",
-	Args:  cobra.NoArgs,
-	RunE:  runMonDashList,
-}
-
-var monitoringDashboardsUpdateCmd = &cobra.Command{
-	Use:   "update DASHBOARD",
-	Short: "Update a dashboard from a JSON/YAML definition",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runMonDashUpdate,
-}
 
 // --- Uptime ---
 
-var monitoringUptimeCmd = &cobra.Command{
-	Use:   "uptime",
-	Short: "Manage Cloud Monitoring uptime check configurations",
-}
+func (g *monitoringCmds) initMonitoringDashboardsUptime() {
+	g.monitoringDashboardsCreateCmd.Flags().StringVar(&g.flagMonDashFile, "config-from-file", "", "YAML/JSON file with the Dashboard definition (required)")
+	g.monitoringDashboardsCreateCmd.Flags().StringVar(&g.flagMonDashDisplay, "display-name", "", "Override the display name in the config file")
+	g.monitoringDashboardsCreateCmd.MarkFlagRequired("config-from-file")
 
-var monitoringUptimeCreateCmd = &cobra.Command{
-	Use:   "create DISPLAY_NAME",
-	Short: "Create an uptime check",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runMonUCCreate,
-}
+	g.monitoringDashboardsListCmd.Flags().StringVar(&g.flagMonDashFilter, "filter", "", "Server-side filter expression")
+	g.monitoringDashboardsListCmd.Flags().Int64Var(&g.flagMonDashPage, "page-size", 0, "Number of results per page")
+	g.monitoringDashboardsListCmd.Flags().Int64Var(&g.flagMonDashLimit, "limit", 0, "Maximum number of results to return")
 
-var monitoringUptimeDeleteCmd = &cobra.Command{
-	Use:   "delete UPTIME_CHECK",
-	Short: "Delete an uptime check",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runMonUCDelete,
-}
+	g.monitoringDashboardsUpdateCmd.Flags().StringVar(&g.flagMonDashFile, "config-from-file", "", "YAML/JSON file with the Dashboard patch (required)")
+	g.monitoringDashboardsUpdateCmd.Flags().StringVar(&g.flagMonDashDisplay, "display-name", "", "Override the display name in the config file")
+	g.monitoringDashboardsUpdateCmd.MarkFlagRequired("config-from-file")
 
-var monitoringUptimeDescribeCmd = &cobra.Command{
-	Use:   "describe UPTIME_CHECK",
-	Short: "Describe an uptime check",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runMonUCDescribe,
-}
-
-var monitoringUptimeListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List uptime checks",
-	Args:  cobra.NoArgs,
-	RunE:  runMonUCList,
-}
-
-var monitoringUptimeUpdateCmd = &cobra.Command{
-	Use:   "update UPTIME_CHECK",
-	Short: "Update an uptime check",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runMonUCUpdate,
-}
-
-func init() {
-	monitoringDashboardsCreateCmd.Flags().StringVar(&flagMonDashFile, "config-from-file", "", "YAML/JSON file with the Dashboard definition (required)")
-	monitoringDashboardsCreateCmd.Flags().StringVar(&flagMonDashDisplay, "display-name", "", "Override the display name in the config file")
-	monitoringDashboardsCreateCmd.MarkFlagRequired("config-from-file")
-
-	monitoringDashboardsListCmd.Flags().StringVar(&flagMonDashFilter, "filter", "", "Server-side filter expression")
-	monitoringDashboardsListCmd.Flags().Int64Var(&flagMonDashPage, "page-size", 0, "Number of results per page")
-	monitoringDashboardsListCmd.Flags().Int64Var(&flagMonDashLimit, "limit", 0, "Maximum number of results to return")
-
-	monitoringDashboardsUpdateCmd.Flags().StringVar(&flagMonDashFile, "config-from-file", "", "YAML/JSON file with the Dashboard patch (required)")
-	monitoringDashboardsUpdateCmd.Flags().StringVar(&flagMonDashDisplay, "display-name", "", "Override the display name in the config file")
-	monitoringDashboardsUpdateCmd.MarkFlagRequired("config-from-file")
-
-	monitoringDashboardsCmd.AddCommand(
-		monitoringDashboardsCreateCmd, monitoringDashboardsDeleteCmd,
-		monitoringDashboardsDescribeCmd, monitoringDashboardsListCmd,
-		monitoringDashboardsUpdateCmd,
+	g.monitoringDashboardsCmd.AddCommand(
+		g.monitoringDashboardsCreateCmd, g.monitoringDashboardsDeleteCmd,
+		g.monitoringDashboardsDescribeCmd, g.monitoringDashboardsListCmd,
+		g.monitoringDashboardsUpdateCmd,
 	)
 
 	// Uptime create/update: users may pass a config file OR use short flags for
 	// common cases (http/https/tcp against a URL/host).
-	for _, c := range []*cobra.Command{monitoringUptimeCreateCmd, monitoringUptimeUpdateCmd} {
-		c.Flags().StringVar(&flagMonUCFile, "config-from-file", "", "YAML/JSON file with the UptimeCheckConfig")
-		c.Flags().StringVar(&flagMonUCDisplayName, "display-name", "", "Display name")
-		c.Flags().StringVar(&flagMonUCResourceType, "resource-type", "uptime-url", "Monitored resource type (uptime-url, gce-instance, aws-ec2-instance, ...)")
-		c.Flags().StringVar(&flagMonUCHost, "host", "", "Host or URL to check")
-		c.Flags().StringVar(&flagMonUCPath, "path", "", "HTTP path")
-		c.Flags().Int64Var(&flagMonUCPort, "port", 0, "TCP or HTTP port")
-		c.Flags().StringVar(&flagMonUCProtocol, "protocol", "http", "Protocol (http, https, tcp)")
-		c.Flags().StringVar(&flagMonUCPeriod, "period", "", "Check period in seconds (60, 300, 600, 900); e.g. 60s")
-		c.Flags().StringVar(&flagMonUCTimeout, "timeout", "", "Timeout in seconds; e.g. 10s")
+	for _, c := range []*cobra.Command{g.monitoringUptimeCreateCmd, g.monitoringUptimeUpdateCmd} {
+		c.Flags().StringVar(&g.flagMonUCFile, "config-from-file", "", "YAML/JSON file with the UptimeCheckConfig")
+		c.Flags().StringVar(&g.flagMonUCDisplayName, "display-name", "", "Display name")
+		c.Flags().StringVar(&g.flagMonUCResourceType, "resource-type", "uptime-url", "Monitored resource type (uptime-url, gce-instance, aws-ec2-instance, ...)")
+		c.Flags().StringVar(&g.flagMonUCHost, "host", "", "Host or URL to check")
+		c.Flags().StringVar(&g.flagMonUCPath, "path", "", "HTTP path")
+		c.Flags().Int64Var(&g.flagMonUCPort, "port", 0, "TCP or HTTP port")
+		c.Flags().StringVar(&g.flagMonUCProtocol, "protocol", "http", "Protocol (http, https, tcp)")
+		c.Flags().StringVar(&g.flagMonUCPeriod, "period", "", "Check period in seconds (60, 300, 600, 900); e.g. 60s")
+		c.Flags().StringVar(&g.flagMonUCTimeout, "timeout", "", "Timeout in seconds; e.g. 10s")
 	}
-	monitoringUptimeListCmd.Flags().StringVar(&flagMonUCFilter, "filter", "", "Server-side filter expression")
-	monitoringUptimeListCmd.Flags().Int64Var(&flagMonUCPage, "page-size", 0, "Number of results per page")
-	monitoringUptimeListCmd.Flags().Int64Var(&flagMonUCLimit, "limit", 0, "Maximum number of results to return")
+	g.monitoringUptimeListCmd.Flags().StringVar(&g.flagMonUCFilter, "filter", "", "Server-side filter expression")
+	g.monitoringUptimeListCmd.Flags().Int64Var(&g.flagMonUCPage, "page-size", 0, "Number of results per page")
+	g.monitoringUptimeListCmd.Flags().Int64Var(&g.flagMonUCLimit, "limit", 0, "Maximum number of results to return")
 
-	monitoringUptimeCmd.AddCommand(
-		monitoringUptimeCreateCmd, monitoringUptimeDeleteCmd,
-		monitoringUptimeDescribeCmd, monitoringUptimeListCmd, monitoringUptimeUpdateCmd,
+	g.monitoringUptimeCmd.AddCommand(
+		g.monitoringUptimeCreateCmd, g.monitoringUptimeDeleteCmd,
+		g.monitoringUptimeDescribeCmd, g.monitoringUptimeListCmd, g.monitoringUptimeUpdateCmd,
 	)
 
-	monitoringCmd.AddCommand(monitoringDashboardsCmd, monitoringUptimeCmd)
+	g.monitoringCmd.AddCommand(g.monitoringDashboardsCmd, g.monitoringUptimeCmd)
 }
 
 // --- Dashboards impl ---
@@ -172,20 +68,20 @@ func dashboardName(project, id string) string {
 	return fmt.Sprintf("projects/%s/dashboards/%s", project, id)
 }
 
-func runMonDashCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonDashCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	dash := &monitoringv1.Dashboard{}
-	if err := loadYAMLOrJSONInto(flagMonDashFile, dash); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagMonDashFile, dash); err != nil {
 		return err
 	}
-	if flagMonDashDisplay != "" {
-		dash.DisplayName = flagMonDashDisplay
+	if g.flagMonDashDisplay != "" {
+		dash.DisplayName = g.flagMonDashDisplay
 	}
-	ctx := context.Background()
-	svc, err := gcp.MonitoringV1Service(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().MonitoringV1(ctx)
 	if err != nil {
 		return err
 	}
@@ -193,34 +89,34 @@ func runMonDashCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating dashboard: %w", err)
 	}
-	fmt.Printf("Created dashboard [%s].\n", got.Name)
-	return emitFormatted(got, "")
+	fmt.Fprintf(g.inv.stdout, "Created dashboard [%s].\n", got.Name)
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runMonDashDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonDashDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MonitoringV1Service(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().MonitoringV1(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Dashboards.Delete(dashboardName(project, args[0])).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting dashboard: %w", err)
 	}
-	fmt.Printf("Deleted dashboard [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted dashboard [%s].\n", args[0])
 	return nil
 }
 
-func runMonDashDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonDashDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MonitoringV1Service(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().MonitoringV1(ctx)
 	if err != nil {
 		return err
 	}
@@ -228,16 +124,16 @@ func runMonDashDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing dashboard: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runMonDashList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonDashList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MonitoringV1Service(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().MonitoringV1(ctx)
 	if err != nil {
 		return err
 	}
@@ -245,8 +141,8 @@ func runMonDashList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Dashboards.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
-		if flagMonDashPage > 0 {
-			call = call.PageSize(flagMonDashPage)
+		if g.flagMonDashPage > 0 {
+			call = call.PageSize(g.flagMonDashPage)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -256,8 +152,8 @@ func runMonDashList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing dashboards: %w", err)
 		}
 		all = append(all, resp.Dashboards...)
-		if flagMonDashLimit > 0 && int64(len(all)) >= flagMonDashLimit {
-			all = all[:flagMonDashLimit]
+		if g.flagMonDashLimit > 0 && int64(len(all)) >= g.flagMonDashLimit {
+			all = all[:g.flagMonDashLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -268,8 +164,8 @@ func runMonDashList(cmd *cobra.Command, args []string) error {
 	// Server-side dashboards.list does not accept --filter, so we honor it
 	// client-side by dropping anything whose display name doesn't contain the
 	// substring (case-insensitive), matching the behavior of gcloud python.
-	if flagMonDashFilter != "" {
-		needle := strings.ToLower(flagMonDashFilter)
+	if g.flagMonDashFilter != "" {
+		needle := strings.ToLower(g.flagMonDashFilter)
 		filtered := all[:0]
 		for _, d := range all {
 			if strings.Contains(strings.ToLower(d.DisplayName), needle) {
@@ -278,26 +174,26 @@ func runMonDashList(cmd *cobra.Command, args []string) error {
 		}
 		all = filtered
 	}
-	return emitFormatted(all, "")
+	return emitFormattedTo(g.inv.stdout, all, "")
 }
 
-func runMonDashUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonDashUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	dash := &monitoringv1.Dashboard{}
-	if err := loadYAMLOrJSONInto(flagMonDashFile, dash); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagMonDashFile, dash); err != nil {
 		return err
 	}
-	if flagMonDashDisplay != "" {
-		dash.DisplayName = flagMonDashDisplay
+	if g.flagMonDashDisplay != "" {
+		dash.DisplayName = g.flagMonDashDisplay
 	}
 	name := dashboardName(project, args[0])
 	// Dashboards.Patch expects the resource's Name to match the URL.
 	dash.Name = name
-	ctx := context.Background()
-	svc, err := gcp.MonitoringV1Service(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().MonitoringV1(ctx)
 	if err != nil {
 		return err
 	}
@@ -305,8 +201,8 @@ func runMonDashUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating dashboard: %w", err)
 	}
-	fmt.Printf("Updated dashboard [%s].\n", got.Name)
-	return emitFormatted(got, "")
+	fmt.Fprintf(g.inv.stdout, "Updated dashboard [%s].\n", got.Name)
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
 // --- Uptime impl ---
@@ -322,43 +218,43 @@ func uptimeName(project, id string) string {
 // been loaded from --config-from-file) and the short-form command-line flags.
 // Only fields whose flags are explicitly set are overwritten so callers can
 // mix a config file with a couple of overrides.
-func buildUptimeConfig(base *monitoring.UptimeCheckConfig, defaultDisplay string) *monitoring.UptimeCheckConfig {
+func (g *monitoringCmds) buildUptimeConfig(base *monitoring.UptimeCheckConfig, defaultDisplay string) *monitoring.UptimeCheckConfig {
 	uc := base
 	if uc == nil {
 		uc = &monitoring.UptimeCheckConfig{}
 	}
-	if flagMonUCDisplayName != "" {
-		uc.DisplayName = flagMonUCDisplayName
+	if g.flagMonUCDisplayName != "" {
+		uc.DisplayName = g.flagMonUCDisplayName
 	} else if uc.DisplayName == "" && defaultDisplay != "" {
 		uc.DisplayName = defaultDisplay
 	}
-	if flagMonUCPeriod != "" {
-		uc.Period = flagMonUCPeriod
+	if g.flagMonUCPeriod != "" {
+		uc.Period = g.flagMonUCPeriod
 	}
-	if flagMonUCTimeout != "" {
-		uc.Timeout = flagMonUCTimeout
+	if g.flagMonUCTimeout != "" {
+		uc.Timeout = g.flagMonUCTimeout
 	}
-	if flagMonUCHost != "" || flagMonUCPath != "" || flagMonUCPort > 0 || flagMonUCProtocol != "" {
-		mrType := monitoredResourceType(flagMonUCResourceType)
-		if flagMonUCHost != "" {
+	if g.flagMonUCHost != "" || g.flagMonUCPath != "" || g.flagMonUCPort > 0 || g.flagMonUCProtocol != "" {
+		mrType := monitoredResourceType(g.flagMonUCResourceType)
+		if g.flagMonUCHost != "" {
 			uc.MonitoredResource = &monitoring.MonitoredResource{
 				Type:   mrType,
-				Labels: map[string]string{"host": flagMonUCHost},
+				Labels: map[string]string{"host": g.flagMonUCHost},
 			}
 		}
-		switch strings.ToLower(flagMonUCProtocol) {
+		switch strings.ToLower(g.flagMonUCProtocol) {
 		case "tcp":
-			uc.TcpCheck = &monitoring.TcpCheck{Port: flagMonUCPort}
+			uc.TcpCheck = &monitoring.TcpCheck{Port: g.flagMonUCPort}
 		case "https":
 			uc.HttpCheck = &monitoring.HttpCheck{
-				Path:   flagMonUCPath,
-				Port:   flagMonUCPort,
+				Path:   g.flagMonUCPath,
+				Port:   g.flagMonUCPort,
 				UseSsl: true,
 			}
 		default:
 			uc.HttpCheck = &monitoring.HttpCheck{
-				Path: flagMonUCPath,
-				Port: flagMonUCPort,
+				Path: g.flagMonUCPath,
+				Port: g.flagMonUCPort,
 			}
 		}
 	}
@@ -389,21 +285,21 @@ func monitoredResourceType(kind string) string {
 	return strings.ReplaceAll(strings.ToLower(kind), "-", "_")
 }
 
-func runMonUCCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonUCCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	var base *monitoring.UptimeCheckConfig
-	if flagMonUCFile != "" {
+	if g.flagMonUCFile != "" {
 		base = &monitoring.UptimeCheckConfig{}
-		if err := loadYAMLOrJSONInto(flagMonUCFile, base); err != nil {
+		if err := loadYAMLOrJSONInto(g.flagMonUCFile, base); err != nil {
 			return err
 		}
 	}
-	uc := buildUptimeConfig(base, args[0])
-	ctx := context.Background()
-	svc, err := gcp.MonitoringService(ctx, flagAccount)
+	uc := g.buildUptimeConfig(base, args[0])
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Monitoring(ctx)
 	if err != nil {
 		return err
 	}
@@ -411,34 +307,34 @@ func runMonUCCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating uptime check: %w", err)
 	}
-	fmt.Printf("Created uptime check [%s].\n", got.Name)
-	return emitFormatted(got, "")
+	fmt.Fprintf(g.inv.stdout, "Created uptime check [%s].\n", got.Name)
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runMonUCDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonUCDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MonitoringService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Monitoring(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.UptimeCheckConfigs.Delete(uptimeName(project, args[0])).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting uptime check: %w", err)
 	}
-	fmt.Printf("Deleted uptime check [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted uptime check [%s].\n", args[0])
 	return nil
 }
 
-func runMonUCDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonUCDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MonitoringService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Monitoring(ctx)
 	if err != nil {
 		return err
 	}
@@ -446,16 +342,16 @@ func runMonUCDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing uptime check: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runMonUCList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonUCList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MonitoringService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Monitoring(ctx)
 	if err != nil {
 		return err
 	}
@@ -463,11 +359,11 @@ func runMonUCList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.UptimeCheckConfigs.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
-		if flagMonUCPage > 0 {
-			call = call.PageSize(flagMonUCPage)
+		if g.flagMonUCPage > 0 {
+			call = call.PageSize(g.flagMonUCPage)
 		}
-		if flagMonUCFilter != "" {
-			call = call.Filter(flagMonUCFilter)
+		if g.flagMonUCFilter != "" {
+			call = call.Filter(g.flagMonUCFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -477,8 +373,8 @@ func runMonUCList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing uptime checks: %w", err)
 		}
 		all = append(all, resp.UptimeCheckConfigs...)
-		if flagMonUCLimit > 0 && int64(len(all)) >= flagMonUCLimit {
-			all = all[:flagMonUCLimit]
+		if g.flagMonUCLimit > 0 && int64(len(all)) >= g.flagMonUCLimit {
+			all = all[:g.flagMonUCLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -486,40 +382,40 @@ func runMonUCList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, "")
+	return emitFormattedTo(g.inv.stdout, all, "")
 }
 
-func runMonUCUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonUCUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	name := uptimeName(project, args[0])
-	ctx := context.Background()
-	svc, err := gcp.MonitoringService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Monitoring(ctx)
 	if err != nil {
 		return err
 	}
 	// Fetch the existing config so we can build an update mask from the fields
 	// the user actually set on the command line.
 	var base *monitoring.UptimeCheckConfig
-	if flagMonUCFile != "" {
+	if g.flagMonUCFile != "" {
 		base = &monitoring.UptimeCheckConfig{}
-		if err := loadYAMLOrJSONInto(flagMonUCFile, base); err != nil {
+		if err := loadYAMLOrJSONInto(g.flagMonUCFile, base); err != nil {
 			return err
 		}
 	}
-	uc := buildUptimeConfig(base, "")
+	uc := g.buildUptimeConfig(base, "")
 	uc.Name = name
 
 	var mask []string
-	if flagMonUCDisplayName != "" {
+	if g.flagMonUCDisplayName != "" {
 		mask = append(mask, "display_name")
 	}
-	if flagMonUCPeriod != "" {
+	if g.flagMonUCPeriod != "" {
 		mask = append(mask, "period")
 	}
-	if flagMonUCTimeout != "" {
+	if g.flagMonUCTimeout != "" {
 		mask = append(mask, "timeout")
 	}
 	if uc.HttpCheck != nil {
@@ -539,6 +435,6 @@ func runMonUCUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating uptime check: %w", err)
 	}
-	fmt.Printf("Updated uptime check [%s].\n", got.Name)
-	return emitFormatted(got, "")
+	fmt.Fprintf(g.inv.stdout, "Updated uptime check [%s].\n", got.Name)
+	return emitFormattedTo(g.inv.stdout, got, "")
 }

@@ -6,23 +6,23 @@ import (
 	"testing"
 )
 
-func resetIamWpCcFlags() {
-	flagIamWpCcOutputFile = ""
-	flagIamWpCcUserProject = ""
-	flagIamWpCcSubjectTokenType = ""
-	flagIamWpCcCredSourceFile = ""
-	flagIamWpCcCredSourceURL = ""
-	flagIamWpCcCredSourceHeaders = nil
-	flagIamWpCcCredSourceType = ""
-	flagIamWpCcCredSourceField = ""
-	flagIamWpCcExecCommand = ""
-	flagIamWpCcExecTimeoutMs = 30000
-	flagIamWpCcExecOutputFile = ""
-	flagIamWpCcServiceAccount = ""
-	flagIamWpCcSATokenLifetime = 0
-	flagIamWpCcStsLocation = ""
-	flagIamWpCcUniverseDomain = ""
-	flagIamWpCcEnableMtls = false
+func resetIamWpCcFlags(grp *iamCmds) {
+	grp.flagIamWpCcOutputFile = ""
+	grp.flagIamWpCcUserProject = ""
+	grp.flagIamWpCcSubjectTokenType = ""
+	grp.flagIamWpCcCredSourceFile = ""
+	grp.flagIamWpCcCredSourceURL = ""
+	grp.flagIamWpCcCredSourceHeaders = nil
+	grp.flagIamWpCcCredSourceType = ""
+	grp.flagIamWpCcCredSourceField = ""
+	grp.flagIamWpCcExecCommand = ""
+	grp.flagIamWpCcExecTimeoutMs = 30000
+	grp.flagIamWpCcExecOutputFile = ""
+	grp.flagIamWpCcServiceAccount = ""
+	grp.flagIamWpCcSATokenLifetime = 0
+	grp.flagIamWpCcStsLocation = ""
+	grp.flagIamWpCcUniverseDomain = ""
+	grp.flagIamWpCcEnableMtls = false
 }
 
 func TestNormalizeWorkforceAudience(t *testing.T) {
@@ -95,15 +95,16 @@ func TestStsBaseURL(t *testing.T) {
 }
 
 func TestRunIamWpCreateCredConfigShortForm(t *testing.T) {
-	resetIamWpCcFlags()
-	defer resetIamWpCcFlags()
+	grp := newIamCmds(legacyTestInvocation())
+	resetIamWpCcFlags(grp)
+	defer resetIamWpCcFlags(grp)
 
 	out := t.TempDir() + "/wp-cred.json"
-	flagIamWpCcOutputFile = out
-	flagIamWpCcUserProject = "42"
-	flagIamWpCcCredSourceFile = "/var/run/wpi"
+	grp.flagIamWpCcOutputFile = out
+	grp.flagIamWpCcUserProject = "42"
+	grp.flagIamWpCcCredSourceFile = "/var/run/wpi"
 
-	if err := runIamWpCreateCredConfig(nil, []string{"my-pool/my-prov"}); err != nil {
+	if err := grp.runIamWpCreateCredConfig(nil, []string{"my-pool/my-prov"}); err != nil {
 		t.Fatalf("runIamWpCreateCredConfig error: %v", err)
 	}
 	data, err := os.ReadFile(out)
@@ -135,16 +136,17 @@ func TestRunIamWpCreateCredConfigShortForm(t *testing.T) {
 }
 
 func TestRunIamWpCreateCredConfigStsLocation(t *testing.T) {
-	resetIamWpCcFlags()
-	defer resetIamWpCcFlags()
+	grp := newIamCmds(legacyTestInvocation())
+	resetIamWpCcFlags(grp)
+	defer resetIamWpCcFlags(grp)
 
 	out := t.TempDir() + "/wp-cred.json"
-	flagIamWpCcOutputFile = out
-	flagIamWpCcUserProject = "42"
-	flagIamWpCcCredSourceFile = "/var/run/wpi"
-	flagIamWpCcStsLocation = "us-east1"
+	grp.flagIamWpCcOutputFile = out
+	grp.flagIamWpCcUserProject = "42"
+	grp.flagIamWpCcCredSourceFile = "/var/run/wpi"
+	grp.flagIamWpCcStsLocation = "us-east1"
 
-	if err := runIamWpCreateCredConfig(nil, []string{"pool/prov"}); err != nil {
+	if err := grp.runIamWpCreateCredConfig(nil, []string{"pool/prov"}); err != nil {
 		t.Fatalf("error: %v", err)
 	}
 	data, _ := os.ReadFile(out)
@@ -156,14 +158,15 @@ func TestRunIamWpCreateCredConfigStsLocation(t *testing.T) {
 }
 
 func TestRunIamWpCreateLoginConfig(t *testing.T) {
+	grp := newIamCmds(legacyTestInvocation())
 	out := t.TempDir() + "/wp-login.json"
-	flagIamWpLcOutputFile = out
-	flagIamWpLcUniverseDomain = ""
-	flagIamWpLcCloudWebDomain = ""
-	flagIamWpLcEnableMtls = false
-	flagIamWpLcActivate = false
+	grp.flagIamWpLcOutputFile = out
+	grp.flagIamWpLcUniverseDomain = ""
+	grp.flagIamWpLcCloudWebDomain = ""
+	grp.flagIamWpLcEnableMtls = false
+	grp.flagIamWpLcActivate = false
 
-	if err := runIamWpCreateLoginConfig(nil, []string{"pool/prov"}); err != nil {
+	if err := grp.runIamWpCreateLoginConfig(nil, []string{"pool/prov"}); err != nil {
 		t.Fatalf("error: %v", err)
 	}
 	data, _ := os.ReadFile(out)
@@ -184,25 +187,26 @@ func TestRunIamWpCreateLoginConfig(t *testing.T) {
 }
 
 func TestRunCreateCredConfigX509Mtls(t *testing.T) {
+	grp := newIamCmds(legacyTestInvocation())
 	// X.509 cert path should imply mTLS on STS endpoints.
-	flagOutputFile = t.TempDir() + "/cred.json"
-	flagCredCertPath = "/tmp/cert.pem"
-	flagCredCertKeyPath = "/tmp/key.pem"
-	flagCredentialSourceFile = ""
-	flagCredentialSourceURL = ""
-	flagExecutableCommand = ""
-	flagAws = false
-	flagAzure = false
-	flagServiceAccount = ""
-	flagServiceAccountTokenLifetime = 0
-	flagCredStsLocation = ""
-	flagCredUniverseDomain = ""
-	flagCredEnableMtls = false
+	grp.flagOutputFile = t.TempDir() + "/cred.json"
+	grp.flagCredCertPath = "/tmp/cert.pem"
+	grp.flagCredCertKeyPath = "/tmp/key.pem"
+	grp.flagCredentialSourceFile = ""
+	grp.flagCredentialSourceURL = ""
+	grp.flagExecutableCommand = ""
+	grp.flagAws = false
+	grp.flagAzure = false
+	grp.flagServiceAccount = ""
+	grp.flagServiceAccountTokenLifetime = 0
+	grp.flagCredStsLocation = ""
+	grp.flagCredUniverseDomain = ""
+	grp.flagCredEnableMtls = false
 
-	if err := runCreateCredConfig(nil, []string{"//iam.googleapis.com/x"}); err != nil {
+	if err := grp.runCreateCredConfig(nil, []string{"//iam.googleapis.com/x"}); err != nil {
 		t.Fatalf("runCreateCredConfig error: %v", err)
 	}
-	data, _ := os.ReadFile(flagOutputFile)
+	data, _ := os.ReadFile(grp.flagOutputFile)
 	var cfg map[string]any
 	_ = json.Unmarshal(data, &cfg)
 	if cfg["token_url"] != "https://sts.mtls.googleapis.com/v1/token" {
@@ -212,6 +216,6 @@ func TestRunCreateCredConfigX509Mtls(t *testing.T) {
 		t.Errorf("subject_token_type = %v", cfg["subject_token_type"])
 	}
 	// Reset shared flags used elsewhere.
-	flagCredCertPath = ""
-	flagCredCertKeyPath = ""
+	grp.flagCredCertPath = ""
+	grp.flagCredCertKeyPath = ""
 }

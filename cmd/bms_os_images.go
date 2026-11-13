@@ -1,51 +1,34 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	baremetalsolution "google.golang.org/api/baremetalsolution/v2"
 )
 
 // --- gcloud bms os-images (#1230) ---
 
-var bmsOsImagesCmd = &cobra.Command{Use: "os-images", Short: "Manage bare metal OS images"}
-
-var (
-	flagBmsOsLocation string
-	flagBmsOsFormat   string
-	flagBmsOsPageSize int64
-)
-
-var (
-	bmsOsListCmd = &cobra.Command{
-		Use: "list", Short: "List available bare metal OS images",
-		Args: cobra.NoArgs, RunE: runBmsOsList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{bmsOsListCmd}
+func (s *bmsCmds) initBmsOsImages() {
+	all := []*cobra.Command{s.bmsOsListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagBmsOsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagBmsOsLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagBmsOsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBmsOsFormat, "format", "", "Output format")
 	}
-	bmsOsListCmd.Flags().Int64Var(&flagBmsOsPageSize, "page-size", 0, "Maximum results per page")
+	s.bmsOsListCmd.Flags().Int64Var(&s.flagBmsOsPageSize, "page-size", 0, "Maximum results per page")
 
-	bmsOsImagesCmd.AddCommand(all...)
-	bmsCmd.AddCommand(bmsOsImagesCmd)
+	s.bmsOsImagesCmd.AddCommand(all...)
+	s.bmsCmd.AddCommand(s.bmsOsImagesCmd)
 }
 
-func runBmsOsList(cmd *cobra.Command, args []string) error {
-	parent, err := bmsLocationParent(flagBmsOsLocation)
+func (s *bmsCmds) runBmsOsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.bmsLocationParent(s.flagBmsOsLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
@@ -53,8 +36,8 @@ func runBmsOsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.OsImages.List(parent).Context(ctx)
-		if flagBmsOsPageSize > 0 {
-			call = call.PageSize(flagBmsOsPageSize)
+		if s.flagBmsOsPageSize > 0 {
+			call = call.PageSize(s.flagBmsOsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -69,5 +52,5 @@ func runBmsOsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBmsOsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBmsOsFormat)
 }

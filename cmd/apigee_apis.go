@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,83 +13,53 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apigee "google.golang.org/api/apigee/v1"
 )
 
 // --- gcloud apigee apis (#1375, import #1753) ---
 
-var apigeeApisCmd = &cobra.Command{Use: "apis", Short: "Manage Apigee API proxies"}
-
-var (
-	flagApigeeApiOrganization string
-	flagApigeeApiFormat       string
-	flagApigeeApiFromBundle   string
-	flagApigeeApiFromTemplate string
-	flagApigeeApiSpace        string
-)
-
-var (
-	apigeeApisDeleteCmd = &cobra.Command{
-		Use: "delete RESOURCE", Short: "Delete an API proxy",
-		Args: cobra.ExactArgs(1), RunE: runApigeeApisDelete,
-	}
-	apigeeApisDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe an API proxy",
-		Args: cobra.ExactArgs(1), RunE: runApigeeApisDescribe,
-	}
-	apigeeApisListCmd = &cobra.Command{
-		Use: "list", Short: "List API proxies in an organization",
-		Args: cobra.NoArgs, RunE: runApigeeApisList,
-	}
-	apigeeApisImportCmd = &cobra.Command{
-		Use: "import API", Short: "Import an API proxy from a local bundle or feature template",
-		Args: cobra.ExactArgs(1), RunE: runApigeeApisImport,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{apigeeApisDeleteCmd, apigeeApisDescribeCmd, apigeeApisListCmd, apigeeApisImportCmd}
+func (s *apigeeCmds) initApigeeApis() {
+	all := []*cobra.Command{s.apigeeApisDeleteCmd, s.apigeeApisDescribeCmd, s.apigeeApisListCmd, s.apigeeApisImportCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApigeeApiOrganization, "organization", "", "Apigee organization (required)")
+		c.Flags().StringVar(&s.flagApigeeApiOrganization, "organization", "", "Apigee organization (required)")
 		_ = c.MarkFlagRequired("organization")
-		c.Flags().StringVar(&flagApigeeApiFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagApigeeApiFormat, "format", "", "Output format")
 	}
-	apigeeApisImportCmd.Flags().StringVar(&flagApigeeApiFromBundle, "from-bundle", "",
+	s.apigeeApisImportCmd.Flags().StringVar(&s.flagApigeeApiFromBundle, "from-bundle", "",
 		"Path to a local API proxy bundle ZIP to import "+
 			"(mutually exclusive with --from-template)")
-	apigeeApisImportCmd.Flags().StringVar(&flagApigeeApiFromTemplate, "from-template", "",
+	s.apigeeApisImportCmd.Flags().StringVar(&s.flagApigeeApiFromTemplate, "from-template", "",
 		"Path to an Apigee Feature Template YAML (not yet supported in gcloud-go; "+
 			"use --from-bundle for now)")
-	apigeeApisImportCmd.Flags().StringVar(&flagApigeeApiSpace, "space", "",
+	s.apigeeApisImportCmd.Flags().StringVar(&s.flagApigeeApiSpace, "space", "",
 		"Optional Apigee space to import the API proxy into")
 
-	apigeeApisCmd.AddCommand(all...)
-	apigeeCmd.AddCommand(apigeeApisCmd)
+	s.apigeeApisCmd.AddCommand(all...)
+	s.apigeeCmd.AddCommand(s.apigeeApisCmd)
 }
 
-func apigeeApiName(id string) (string, error) {
-	return apigeeResource(flagApigeeApiOrganization, "apis", id)
+func (s *apigeeCmds) apigeeApiName(id string) (string, error) {
+	return apigeeResource(s.flagApigeeApiOrganization, "apis", id)
 }
 
 // runApigeeApisDelete deletes an API proxy and all of its revisions after a
 // confirmation prompt, then prints the deleted proxy, matching gcloud-python's
 // `apigee apis delete` (584.0.0, GA in 589.0.0).
-func runApigeeApisDelete(cmd *cobra.Command, args []string) error {
-	name, err := apigeeApiName(args[0])
+func (s *apigeeCmds) runApigeeApisDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeeApiName(args[0])
 	if err != nil {
 		return err
 	}
 	apiID := path.Base(name)
-	if err := promptContinue(
+	if err := s.inv.promptContinue(
 		fmt.Sprintf("API proxy [%s] and all of its revisions will be deleted.", apiID),
 		"Deletion aborted by user.",
 	); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -98,17 +67,17 @@ func runApigeeApisDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting API proxy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Deleted API proxy [%s].\n", apiID)
-	return emitFormatted(got, flagApigeeApiFormat)
+	fmt.Fprintf(s.inv.stderr, "Deleted API proxy [%s].\n", apiID)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeeApiFormat)
 }
 
-func runApigeeApisDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apigeeApiName(args[0])
+func (s *apigeeCmds) runApigeeApisDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeeApiName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -116,7 +85,7 @@ func runApigeeApisDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing api: %w", err)
 	}
-	return emitFormatted(got, flagApigeeApiFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeeApiFormat)
 }
 
 // runApigeeApisImport uploads a local API proxy bundle ZIP to Apigee using the
@@ -128,21 +97,21 @@ func runApigeeApisDescribe(cmd *cobra.Command, args []string) error {
 // --from-template compilation (Apigee Feature Templates) is not yet supported
 // in gcloud-go; users should compile the template into a bundle upstream and
 // then invoke `apis import --from-bundle=...`.
-func runApigeeApisImport(cmd *cobra.Command, args []string) error {
-	if flagApigeeApiFromBundle == "" && flagApigeeApiFromTemplate == "" {
+func (s *apigeeCmds) runApigeeApisImport(cmd *cobra.Command, args []string) error {
+	if s.flagApigeeApiFromBundle == "" && s.flagApigeeApiFromTemplate == "" {
 		return fmt.Errorf("either --from-bundle or --from-template must be specified")
 	}
-	if flagApigeeApiFromBundle != "" && flagApigeeApiFromTemplate != "" {
+	if s.flagApigeeApiFromBundle != "" && s.flagApigeeApiFromTemplate != "" {
 		return fmt.Errorf("--from-bundle and --from-template are mutually exclusive")
 	}
-	if flagApigeeApiFromTemplate != "" {
+	if s.flagApigeeApiFromTemplate != "" {
 		return fmt.Errorf("--from-template (Apigee Feature Template compilation) is not yet supported in gcloud-go; " +
 			"compile the template locally and use --from-bundle=BUNDLE.zip instead")
 	}
 
 	// The API proxy positional may already be a fully qualified name.
 	proxyName := args[0]
-	org := flagApigeeApiOrganization
+	org := s.flagApigeeApiOrganization
 	if strings.HasPrefix(proxyName, "organizations/") {
 		parts := strings.Split(proxyName, "/")
 		if len(parts) != 4 || parts[2] != "apis" {
@@ -154,7 +123,7 @@ func runApigeeApisImport(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--organization is required (or supply organizations/ORG/apis/API as the positional arg)")
 	}
 
-	bundlePath := flagApigeeApiFromBundle
+	bundlePath := s.flagApigeeApiFromBundle
 	if !strings.HasSuffix(strings.ToLower(bundlePath), ".zip") {
 		return fmt.Errorf("--from-bundle must point at a .zip file (got %q)", filepath.Base(bundlePath))
 	}
@@ -166,8 +135,8 @@ func runApigeeApisImport(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("bundle %q is empty", bundlePath)
 	}
 
-	ctx := context.Background()
-	ts, err := gcp.PlatformTokenSource(ctx, flagAccount)
+	ctx := cmd.Context()
+	ts, err := s.inv.clients().PlatformTokenSource(ctx)
 	if err != nil {
 		return err
 	}
@@ -179,10 +148,10 @@ func runApigeeApisImport(cmd *cobra.Command, args []string) error {
 	q := url.Values{}
 	q.Set("action", "import")
 	q.Set("name", proxyName)
-	if flagApigeeApiSpace != "" {
-		q.Set("space", flagApigeeApiSpace)
+	if s.flagApigeeApiSpace != "" {
+		q.Set("space", s.flagApigeeApiSpace)
 	}
-	host, err := gcp.ApigeeOrgHost(ctx, flagAccount, org)
+	host, err := s.inv.clients().ApigeeOrgHost(ctx, org)
 	if err != nil {
 		return err
 	}
@@ -211,18 +180,18 @@ func runApigeeApisImport(cmd *cobra.Command, args []string) error {
 	if err := json.Unmarshal(body, &rev); err != nil {
 		return fmt.Errorf("decoding response: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Imported API proxy [%s] revision %s from %s.\n",
+	fmt.Fprintf(s.inv.stderr, "Imported API proxy [%s] revision %s from %s.\n",
 		proxyName, rev.Revision, bundlePath)
-	return emitFormatted(&rev, flagApigeeApiFormat)
+	return emitFormattedTo(s.inv.stdout, &rev, s.flagApigeeApiFormat)
 }
 
-func runApigeeApisList(cmd *cobra.Command, args []string) error {
-	parent, err := apigeeOrgName(flagApigeeApiOrganization)
+func (s *apigeeCmds) runApigeeApisList(cmd *cobra.Command, args []string) error {
+	parent, err := apigeeOrgName(s.flagApigeeApiOrganization)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, parent)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -232,5 +201,5 @@ func runApigeeApisList(cmd *cobra.Command, args []string) error {
 	}
 	var all []*apigee.GoogleCloudApigeeV1ApiProxy
 	all = append(all, resp.Proxies...)
-	return emitFormatted(all, flagApigeeApiFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagApigeeApiFormat)
 }

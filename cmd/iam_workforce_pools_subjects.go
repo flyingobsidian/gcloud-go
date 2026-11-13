@@ -3,11 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudiam "google.golang.org/api/iam/v1"
 )
@@ -18,43 +16,16 @@ import (
 // iam.locations.workforcePools.subjects collection; each returns an LRO
 // that is waited on unless --async.
 
-var iamWpSubjectsCmd = &cobra.Command{
-	Use:   "subjects",
-	Short: "Create and manage workforce pool subjects",
-}
-
-var (
-	iamWpSubjDeleteCmd = &cobra.Command{
-		Use: "delete SUBJECT", Short: "Delete a workforce pool subject",
-		Args: cobra.ExactArgs(1), RunE: runIamWpSubjDelete,
-	}
-	iamWpSubjUndeleteCmd = &cobra.Command{
-		Use: "undelete SUBJECT", Short: "Undelete a workforce pool subject",
-		Args: cobra.ExactArgs(1), RunE: runIamWpSubjUndelete,
-	}
-	iamWpSubjRevokeSessionsCmd = &cobra.Command{
-		Use: "revoke-sessions SUBJECT", Short: "Revoke all sessions for a workforce pool subject",
-		Args: cobra.ExactArgs(1), RunE: runIamWpSubjRevokeSessions,
-	}
-)
-
-var (
-	flagIamWpSubjLocation string
-	flagIamWpSubjPool     string
-	flagIamWpSubjAsync    bool
-	flagIamWpSubjFormat   string
-)
-
-func init() {
-	for _, c := range []*cobra.Command{iamWpSubjDeleteCmd, iamWpSubjUndeleteCmd, iamWpSubjRevokeSessionsCmd} {
-		c.Flags().StringVar(&flagIamWpSubjLocation, "location", "", "The location for the workforce pool")
-		c.Flags().StringVar(&flagIamWpSubjPool, "workforce-pool", "", "The ID of the workforce pool")
-		c.Flags().BoolVar(&flagIamWpSubjAsync, "async", false,
+func (s *iamCmds) initIamWorkforcePoolsSubjects() {
+	for _, c := range []*cobra.Command{s.iamWpSubjDeleteCmd, s.iamWpSubjUndeleteCmd, s.iamWpSubjRevokeSessionsCmd} {
+		c.Flags().StringVar(&s.flagIamWpSubjLocation, "location", "", "The location for the workforce pool")
+		c.Flags().StringVar(&s.flagIamWpSubjPool, "workforce-pool", "", "The ID of the workforce pool")
+		c.Flags().BoolVar(&s.flagIamWpSubjAsync, "async", false,
 			"Return immediately, without waiting for the operation in progress to complete")
-		c.Flags().StringVar(&flagIamWpSubjFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagIamWpSubjFormat, "format", "", "Output format")
 	}
-	iamWpSubjectsCmd.AddCommand(iamWpSubjDeleteCmd, iamWpSubjUndeleteCmd, iamWpSubjRevokeSessionsCmd)
-	iamWorkforcePoolsCmd.AddCommand(iamWpSubjectsCmd)
+	s.iamWpSubjectsCmd.AddCommand(s.iamWpSubjDeleteCmd, s.iamWpSubjUndeleteCmd, s.iamWpSubjRevokeSessionsCmd)
+	s.iamWorkforcePoolsCmd.AddCommand(s.iamWpSubjectsCmd)
 }
 
 // iamWpSubjectName resolves SUBJECT (an ID or a full
@@ -79,37 +50,37 @@ func iamWpSubjectName(arg, location, pool string) (string, string, error) {
 // iamWpSubjFinishOp prints gcloud's declarative LRO messages and waits for
 // the operation unless --async. It returns the finished operation, or nil
 // when --async was given.
-func iamWpSubjFinishOp(ctx context.Context, svc *cloudiam.Service, op *cloudiam.Operation, requestMsg string) (*cloudiam.Operation, error) {
-	fmt.Fprintln(os.Stderr, requestMsg)
-	if flagIamWpSubjAsync {
-		fmt.Fprintf(os.Stderr, "Check operation [%s] for status.\n", op.Name)
+func (s *iamCmds) iamWpSubjFinishOp(ctx context.Context, svc *cloudiam.Service, op *cloudiam.Operation, requestMsg string) (*cloudiam.Operation, error) {
+	fmt.Fprintln(s.inv.stderr, requestMsg)
+	if s.flagIamWpSubjAsync {
+		fmt.Fprintf(s.inv.stderr, "Check operation [%s] for status.\n", op.Name)
 		return nil, nil
 	}
-	fmt.Fprintf(os.Stderr, "Waiting for operation [%s] to complete...", op.Name)
+	fmt.Fprintf(s.inv.stderr, "Waiting for operation [%s] to complete...", op.Name)
 	for !op.Done {
 		time.Sleep(time.Second)
 		got, err := svc.Locations.WorkforcePools.Subjects.Operations.Get(op.Name).Context(ctx).Do()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "failed.")
+			fmt.Fprintln(s.inv.stderr, "failed.")
 			return nil, fmt.Errorf("polling operation %s: %w", op.Name, err)
 		}
 		op = got
 	}
 	if op.Error != nil {
-		fmt.Fprintln(os.Stderr, "failed.")
+		fmt.Fprintln(s.inv.stderr, "failed.")
 		return nil, fmt.Errorf("%s", op.Error.Message)
 	}
-	fmt.Fprintln(os.Stderr, "done.")
+	fmt.Fprintln(s.inv.stderr, "done.")
 	return op, nil
 }
 
-func runIamWpSubjDelete(cmd *cobra.Command, args []string) error {
-	name, id, err := iamWpSubjectName(args[0], flagIamWpSubjLocation, flagIamWpSubjPool)
+func (s *iamCmds) runIamWpSubjDelete(cmd *cobra.Command, args []string) error {
+	name, id, err := iamWpSubjectName(args[0], s.flagIamWpSubjLocation, s.flagIamWpSubjPool)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -117,31 +88,31 @@ func runIamWpSubjDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting workforce pool subject: %w", err)
 	}
-	final, err := iamWpSubjFinishOp(ctx, svc, op, fmt.Sprintf("Delete request issued for: [%s]", id))
+	final, err := s.iamWpSubjFinishOp(ctx, svc, op, fmt.Sprintf("Delete request issued for: [%s]", id))
 	if err != nil {
 		return err
 	}
 	// gcloud-python's delete is a SilentCommand: no stdout unless --format.
 	if final == nil {
-		if flagIamWpSubjFormat != "" {
-			return emitFormatted(op, flagIamWpSubjFormat)
+		if s.flagIamWpSubjFormat != "" {
+			return emitFormattedTo(s.inv.stdout, op, s.flagIamWpSubjFormat)
 		}
 		return nil
 	}
-	fmt.Fprintf(os.Stderr, "Deleted workforce pool subject [%s].\n", id)
-	if flagIamWpSubjFormat != "" && len(final.Response) > 0 {
-		return emitFormatted(final.Response, flagIamWpSubjFormat)
+	fmt.Fprintf(s.inv.stderr, "Deleted workforce pool subject [%s].\n", id)
+	if s.flagIamWpSubjFormat != "" && len(final.Response) > 0 {
+		return emitFormattedTo(s.inv.stdout, final.Response, s.flagIamWpSubjFormat)
 	}
 	return nil
 }
 
-func runIamWpSubjUndelete(cmd *cobra.Command, args []string) error {
-	name, id, err := iamWpSubjectName(args[0], flagIamWpSubjLocation, flagIamWpSubjPool)
+func (s *iamCmds) runIamWpSubjUndelete(cmd *cobra.Command, args []string) error {
+	name, id, err := iamWpSubjectName(args[0], s.flagIamWpSubjLocation, s.flagIamWpSubjPool)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -149,16 +120,16 @@ func runIamWpSubjUndelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("undeleting workforce pool subject: %w", err)
 	}
-	return iamWpSubjGenericResult(ctx, svc, op, id)
+	return s.iamWpSubjGenericResult(ctx, svc, op, id)
 }
 
-func runIamWpSubjRevokeSessions(cmd *cobra.Command, args []string) error {
-	name, id, err := iamWpSubjectName(args[0], flagIamWpSubjLocation, flagIamWpSubjPool)
+func (s *iamCmds) runIamWpSubjRevokeSessions(cmd *cobra.Command, args []string) error {
+	name, id, err := iamWpSubjectName(args[0], s.flagIamWpSubjLocation, s.flagIamWpSubjPool)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -166,22 +137,22 @@ func runIamWpSubjRevokeSessions(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("revoking workforce pool subject sessions: %w", err)
 	}
-	return iamWpSubjGenericResult(ctx, svc, op, id)
+	return s.iamWpSubjGenericResult(ctx, svc, op, id)
 }
 
 // iamWpSubjGenericResult finishes a generic (custom-method) declarative
 // command: with --async the operation is printed, otherwise the operation's
 // response, if any.
-func iamWpSubjGenericResult(ctx context.Context, svc *cloudiam.Service, op *cloudiam.Operation, id string) error {
-	final, err := iamWpSubjFinishOp(ctx, svc, op, fmt.Sprintf("Request issued for: [%s]", id))
+func (s *iamCmds) iamWpSubjGenericResult(ctx context.Context, svc *cloudiam.Service, op *cloudiam.Operation, id string) error {
+	final, err := s.iamWpSubjFinishOp(ctx, svc, op, fmt.Sprintf("Request issued for: [%s]", id))
 	if err != nil {
 		return err
 	}
 	if final == nil {
-		return emitFormatted(op, flagIamWpSubjFormat)
+		return emitFormattedTo(s.inv.stdout, op, s.flagIamWpSubjFormat)
 	}
 	if len(final.Response) > 0 {
-		return emitFormatted(final.Response, flagIamWpSubjFormat)
+		return emitFormattedTo(s.inv.stdout, final.Response, s.flagIamWpSubjFormat)
 	}
 	return nil
 }

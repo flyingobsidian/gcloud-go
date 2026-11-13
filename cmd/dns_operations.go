@@ -1,80 +1,59 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dns "google.golang.org/api/dns/v1"
 )
 
 // --- gcloud dns operations (#1538) ---
 
-var dnsOpCmd = &cobra.Command{Use: "operations", Short: "Manage Cloud DNS operations"}
-
-var (
-	flagDNSOpZone       string
-	flagDNSOpFormat     string
-	flagDNSOpMaxResults int64
-)
-
-var (
-	dnsOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Cloud DNS operation",
-		Args: cobra.ExactArgs(1), RunE: runDNSOpDescribe,
-	}
-	dnsOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Cloud DNS operations for a managed zone",
-		Args: cobra.NoArgs, RunE: runDNSOpList,
-	}
-)
-
-func init() {
-	for _, c := range []*cobra.Command{dnsOpDescribeCmd, dnsOpListCmd} {
-		c.Flags().StringVar(&flagDNSOpZone, "zone", "", "Managed zone name (required)")
+func (s *dnsCmds) initDnsOperations() {
+	for _, c := range []*cobra.Command{s.dnsOpDescribeCmd, s.dnsOpListCmd} {
+		c.Flags().StringVar(&s.flagDNSOpZone, "zone", "", "Managed zone name (required)")
 		_ = c.MarkFlagRequired("zone")
-		c.Flags().StringVar(&flagDNSOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDNSOpFormat, "format", "", "Output format")
 	}
-	dnsOpListCmd.Flags().Int64Var(&flagDNSOpMaxResults, "limit", 0, "Maximum results per page")
+	s.dnsOpListCmd.Flags().Int64Var(&s.flagDNSOpMaxResults, "limit", 0, "Maximum results per page")
 
-	dnsOpCmd.AddCommand(dnsOpDescribeCmd, dnsOpListCmd)
-	dnsCmd.AddCommand(dnsOpCmd)
+	s.dnsOpCmd.AddCommand(s.dnsOpDescribeCmd, s.dnsOpListCmd)
+	s.dnsCmd.AddCommand(s.dnsOpCmd)
 }
 
-func runDNSOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSOpDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.ManagedZoneOperations.Get(project, flagDNSOpZone, args[0]).Context(ctx).Do()
+	got, err := svc.ManagedZoneOperations.Get(project, s.flagDNSOpZone, args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing DNS operation: %w", err)
 	}
-	return emitFormatted(got, flagDNSOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSOpFormat)
 }
 
-func runDNSOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSOpList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*dns.Operation
 	pageToken := ""
 	for {
-		call := svc.ManagedZoneOperations.List(project, flagDNSOpZone).Context(ctx)
-		if flagDNSOpMaxResults > 0 {
-			call = call.MaxResults(flagDNSOpMaxResults)
+		call := svc.ManagedZoneOperations.List(project, s.flagDNSOpZone).Context(ctx)
+		if s.flagDNSOpMaxResults > 0 {
+			call = call.MaxResults(s.flagDNSOpMaxResults)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -89,5 +68,5 @@ func runDNSOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDNSOpFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDNSOpFormat)
 }

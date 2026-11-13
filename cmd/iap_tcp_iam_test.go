@@ -3,8 +3,9 @@ package cmd
 import "testing"
 
 func TestIapTcpIamSubcommands(t *testing.T) {
+	grp := newIapCmds(legacyTestInvocation())
 	for _, want := range []string{"get-iam-policy", "set-iam-policy", "add-iam-policy-binding", "remove-iam-policy-binding", "dest-groups"} {
-		if findSub(iapTcpCmd, want) == nil {
+		if findSub(grp.iapTcpCmd, want) == nil {
 			t.Errorf("iap tcp %s missing", want)
 		}
 	}

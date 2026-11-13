@@ -7,7 +7,8 @@ import (
 )
 
 func dataplexSubgroup(name string) *cobra.Command {
-	for _, c := range dataplexCmd.Commands() {
+	grp := newDataplexCmds(legacyTestInvocation())
+	for _, c := range grp.dataplexCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -19,10 +20,11 @@ func dataplexSubgroup(name string) *cobra.Command {
 // (covers the create + update data-documentation/data-profile bullet), plus
 // `dataplex context lookup --all-schema-fields`.
 func TestDataplex_1774_DatascansCreateFlags(t *testing.T) {
-	if dataplexDatascansCreateCmd.Flags().Lookup("enable-catalog-publishing") == nil {
+	grp := newDataplexCmds(legacyTestInvocation())
+	if grp.dataplexDatascansCreateCmd.Flags().Lookup("enable-catalog-publishing") == nil {
 		t.Error("dataplex datascans create: --enable-catalog-publishing flag missing")
 	}
-	if dataplexDatascansCreateCmd.Flags().Lookup("mode") == nil {
+	if grp.dataplexDatascansCreateCmd.Flags().Lookup("mode") == nil {
 		t.Error("dataplex datascans create: --mode flag missing")
 	}
 }

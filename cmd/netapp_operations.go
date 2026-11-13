@@ -1,116 +1,86 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	netapp "google.golang.org/api/netapp/v1"
 )
 
 // --- gcloud netapp operations (#1203) ---
 
-var netappOpCmd = &cobra.Command{Use: "operations", Short: "Manage NetApp Files operations"}
-
-var (
-	flagNetAppOpLocation string
-	flagNetAppOpFormat   string
-	flagNetAppOpFilter   string
-	flagNetAppOpPageSize int64
-)
-
-var (
-	netappOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a NetApp operation",
-		Args: cobra.ExactArgs(1), RunE: runNetAppOpCancel,
-	}
-	netappOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete a NetApp operation record",
-		Args: cobra.ExactArgs(1), RunE: runNetAppOpDelete,
-	}
-	netappOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a NetApp operation",
-		Args: cobra.ExactArgs(1), RunE: runNetAppOpDescribe,
-	}
-	netappOpListCmd = &cobra.Command{
-		Use: "list", Short: "List NetApp operations",
-		Args: cobra.NoArgs, RunE: runNetAppOpList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{netappOpCancelCmd, netappOpDeleteCmd, netappOpDescribeCmd, netappOpListCmd}
+func (s *netappCmds) initNetappOperations() {
+	all := []*cobra.Command{s.netappOpCancelCmd, s.netappOpDeleteCmd, s.netappOpDescribeCmd, s.netappOpListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNetAppOpLocation, "location", "", "Location for the operation (required)")
+		c.Flags().StringVar(&s.flagNetAppOpLocation, "location", "", "Location for the operation (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNetAppOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNetAppOpFormat, "format", "", "Output format")
 	}
-	netappOpListCmd.Flags().StringVar(&flagNetAppOpFilter, "filter", "", "Server-side filter expression")
-	netappOpListCmd.Flags().Int64Var(&flagNetAppOpPageSize, "page-size", 0, "Maximum number of results per page")
+	s.netappOpListCmd.Flags().StringVar(&s.flagNetAppOpFilter, "filter", "", "Server-side filter expression")
+	s.netappOpListCmd.Flags().Int64Var(&s.flagNetAppOpPageSize, "page-size", 0, "Maximum number of results per page")
 
-	netappOpCmd.AddCommand(all...)
-	netappCmd.AddCommand(netappOpCmd)
+	s.netappOpCmd.AddCommand(all...)
+	s.netappCmd.AddCommand(s.netappOpCmd)
 }
 
-func netappOpParent() (string, error) {
-	project, err := resolveProject()
+func (s *netappCmds) netappOpParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return netappLocationParent(project, flagNetAppOpLocation), nil
+	return netappLocationParent(project, s.flagNetAppOpLocation), nil
 }
 
-func netappOpName(id string) (string, error) {
-	parent, err := netappOpParent()
+func (s *netappCmds) netappOpName(id string) (string, error) {
+	parent, err := s.netappOpParent()
 	if err != nil {
 		return "", err
 	}
 	return netappChild("operations", id, parent), nil
 }
 
-func runNetAppOpCancel(cmd *cobra.Command, args []string) error {
-	name, err := netappOpName(args[0])
+func (s *netappCmds) runNetAppOpCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.netappOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Cancel(name, &netapp.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancel request issued for operation %s.\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancel request issued for operation %s.\n", args[0])
 	return nil
 }
 
-func runNetAppOpDelete(cmd *cobra.Command, args []string) error {
-	name, err := netappOpName(args[0])
+func (s *netappCmds) runNetAppOpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.netappOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation %s.\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation %s.\n", args[0])
 	return nil
 }
 
-func runNetAppOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := netappOpName(args[0])
+func (s *netappCmds) runNetAppOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.netappOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -118,16 +88,16 @@ func runNetAppOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagNetAppOpFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppOpFormat)
 }
 
-func runNetAppOpList(cmd *cobra.Command, args []string) error {
-	parent, err := netappOpParent()
+func (s *netappCmds) runNetAppOpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappOpParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -135,11 +105,11 @@ func runNetAppOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Operations.List(parent).Context(ctx)
-		if flagNetAppOpFilter != "" {
-			call = call.Filter(flagNetAppOpFilter)
+		if s.flagNetAppOpFilter != "" {
+			call = call.Filter(s.flagNetAppOpFilter)
 		}
-		if flagNetAppOpPageSize > 0 {
-			call = call.PageSize(flagNetAppOpPageSize)
+		if s.flagNetAppOpPageSize > 0 {
+			call = call.PageSize(s.flagNetAppOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -154,12 +124,12 @@ func runNetAppOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagNetAppOpFormat != "" {
-		return emitFormatted(all, flagNetAppOpFormat)
+	if s.flagNetAppOpFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagNetAppOpFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range all {
-		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(s.inv.stdout, "%-40s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }

@@ -7,7 +7,8 @@ import (
 )
 
 func dataflowSubgroup(name string) *cobra.Command {
-	for _, c := range dataflowCmd.Commands() {
+	grp := newDataflowCmds(legacyTestInvocation())
+	for _, c := range grp.dataflowCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -49,7 +50,8 @@ func TestDataflow_1773_JobsSubcommands(t *testing.T) {
 }
 
 func TestDataflow_1773_TurnkeyAlertsFlag(t *testing.T) {
-	if dataflowJobsRunCmd.Flags().Lookup("enable-turnkey-alerts") == nil {
+	grp := newDataflowCmds(legacyTestInvocation())
+	if grp.dataflowJobsRunCmd.Flags().Lookup("enable-turnkey-alerts") == nil {
 		t.Error("dataflow jobs run: --enable-turnkey-alerts flag missing")
 	}
 	ft := dataflowSubgroup("flex-template")

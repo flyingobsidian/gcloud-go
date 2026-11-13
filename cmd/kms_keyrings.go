@@ -1,115 +1,37 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 )
 
 // --- gcloud kms keyrings (#1106) ---
 
-var kmsKeyringsCmd = &cobra.Command{
-	Use:   "keyrings",
-	Short: "Manage Cloud KMS key rings",
-}
-
-var (
-	flagKmsKRLocation   string
-	flagKmsKRFormat     string
-	flagKmsKRFilter     string
-	flagKmsKRPageSize   int64
-	flagKmsKRConfigFile string
-	flagKmsKRAllConds   bool
-
-	flagKmsKRIamMember    string
-	flagKmsKRIamRole      string
-	flagKmsKRIamCondExpr  string
-	flagKmsKRIamCondTitle string
-	flagKmsKRIamCondDesc  string
-)
-
-var kmsKRCreateCmd = &cobra.Command{
-	Use:   "create KEYRING",
-	Short: "Create a key ring",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKRCreate,
-}
-
-var kmsKRDeleteCmd = &cobra.Command{
-	Use:   "delete KEYRING",
-	Short: "Delete a key ring",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKRDelete,
-}
-
-var kmsKRDescribeCmd = &cobra.Command{
-	Use:   "describe KEYRING",
-	Short: "Describe a key ring",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKRDescribe,
-}
-
-var kmsKRListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List key rings in a location",
-	Args:  cobra.NoArgs,
-	RunE:  runKmsKRList,
-}
-
-var kmsKRGetIamCmd = &cobra.Command{
-	Use:   "get-iam-policy KEYRING",
-	Short: "Get the IAM policy for a key ring",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKRGetIam,
-}
-
-var kmsKRSetIamCmd = &cobra.Command{
-	Use:   "set-iam-policy KEYRING POLICY_FILE",
-	Short: "Set the IAM policy for a key ring",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runKmsKRSetIam,
-}
-
-var kmsKRAddIamCmd = &cobra.Command{
-	Use:   "add-iam-policy-binding KEYRING",
-	Short: "Add an IAM policy binding on a key ring",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKRAddIam,
-}
-
-var kmsKRRemoveIamCmd = &cobra.Command{
-	Use:   "remove-iam-policy-binding KEYRING",
-	Short: "Remove an IAM policy binding from a key ring",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKRRemoveIam,
-}
-
-func init() {
+func (s *kmsCmds) initKmsKeyrings() {
 	all := []*cobra.Command{
-		kmsKRCreateCmd, kmsKRDeleteCmd, kmsKRDescribeCmd, kmsKRListCmd,
-		kmsKRGetIamCmd, kmsKRSetIamCmd, kmsKRAddIamCmd, kmsKRRemoveIamCmd,
+		s.kmsKRCreateCmd, s.kmsKRDeleteCmd, s.kmsKRDescribeCmd, s.kmsKRListCmd,
+		s.kmsKRGetIamCmd, s.kmsKRSetIamCmd, s.kmsKRAddIamCmd, s.kmsKRRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagKmsKRLocation, "location", "", "Location (required)")
-		c.Flags().StringVar(&flagKmsKRFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagKmsKRLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagKmsKRFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("location")
 	}
-	kmsKRCreateCmd.Flags().StringVar(&flagKmsKRConfigFile, "config-file", "", "YAML/JSON body for the KeyRing (optional; empty is valid)")
+	s.kmsKRCreateCmd.Flags().StringVar(&s.flagKmsKRConfigFile, "config-file", "", "YAML/JSON body for the KeyRing (optional; empty is valid)")
 
-	kmsKRListCmd.Flags().StringVar(&flagKmsKRFilter, "filter", "", "Filter expression")
-	kmsKRListCmd.Flags().Int64Var(&flagKmsKRPageSize, "page-size", 0, "Page size")
+	s.kmsKRListCmd.Flags().StringVar(&s.flagKmsKRFilter, "filter", "", "Filter expression")
+	s.kmsKRListCmd.Flags().Int64Var(&s.flagKmsKRPageSize, "page-size", 0, "Page size")
 
-	kmsIamMemberFlags(kmsKRAddIamCmd, &flagKmsKRIamMember, &flagKmsKRIamRole,
-		&flagKmsKRIamCondExpr, &flagKmsKRIamCondTitle, &flagKmsKRIamCondDesc)
-	kmsIamMemberFlags(kmsKRRemoveIamCmd, &flagKmsKRIamMember, &flagKmsKRIamRole,
-		&flagKmsKRIamCondExpr, &flagKmsKRIamCondTitle, &flagKmsKRIamCondDesc)
-	kmsKRRemoveIamCmd.Flags().BoolVar(&flagKmsKRAllConds, "all", false, "Match bindings for the role across all conditions")
+	kmsIamMemberFlags(s.kmsKRAddIamCmd, &s.flagKmsKRIamMember, &s.flagKmsKRIamRole,
+		&s.flagKmsKRIamCondExpr, &s.flagKmsKRIamCondTitle, &s.flagKmsKRIamCondDesc)
+	kmsIamMemberFlags(s.kmsKRRemoveIamCmd, &s.flagKmsKRIamMember, &s.flagKmsKRIamRole,
+		&s.flagKmsKRIamCondExpr, &s.flagKmsKRIamCondTitle, &s.flagKmsKRIamCondDesc)
+	s.kmsKRRemoveIamCmd.Flags().BoolVar(&s.flagKmsKRAllConds, "all", false, "Match bindings for the role across all conditions")
 
-	kmsKeyringsCmd.AddCommand(all...)
-	kmsCmd.AddCommand(kmsKeyringsCmd)
+	s.kmsKeyringsCmd.AddCommand(all...)
+	s.kmsCmd.AddCommand(s.kmsKeyringsCmd)
 }
 
 func kmsKRName(project, location, raw string) string {
@@ -117,95 +39,95 @@ func kmsKRName(project, location, raw string) string {
 	return kmsFullName(parent, raw)
 }
 
-func runKmsKRCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKRCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
 	body := &cloudkms.KeyRing{}
-	if flagKmsKRConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagKmsKRConfigFile, body); err != nil {
+	if s.flagKmsKRConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagKmsKRConfigFile, body); err != nil {
 			return err
 		}
 	}
-	parent := kmsLocationParent(project, flagKmsKRLocation)
+	parent := kmsLocationParent(project, s.flagKmsKRLocation)
 	out, err := svc.Projects.Locations.KeyRings.Create(parent, body).
 		KeyRingId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating key ring: %w", err)
 	}
-	return emitFormatted(out, flagKmsKRFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKRFormat)
 }
 
 // runKmsKRDelete mirrors gcloud-python's keyrings delete (589.0.0): a
 // DeleteCommand that issues the request and prints nothing unless --format.
-func runKmsKRDelete(cmd *cobra.Command, args []string) error {
+func (s *kmsCmds) runKmsKRDelete(cmd *cobra.Command, args []string) error {
 	if args[0] == "" {
 		return fmt.Errorf("Invalid value for [keyring]: keyring id must be non-empty.")
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKRName(project, flagKmsKRLocation, args[0])
+	name := kmsKRName(project, s.flagKmsKRLocation, args[0])
 	op, err := svc.Projects.Locations.KeyRings.Delete(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting key ring: %w", err)
 	}
-	if flagKmsKRFormat != "" {
-		return emitFormatted(op, flagKmsKRFormat)
+	if s.flagKmsKRFormat != "" {
+		return emitFormattedTo(s.inv.stdout, op, s.flagKmsKRFormat)
 	}
 	return nil
 }
 
-func runKmsKRDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKRDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKRName(project, flagKmsKRLocation, args[0])
+	name := kmsKRName(project, s.flagKmsKRLocation, args[0])
 	out, err := svc.Projects.Locations.KeyRings.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing key ring: %w", err)
 	}
-	return emitFormatted(out, flagKmsKRFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKRFormat)
 }
 
-func runKmsKRList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKRList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	parent := kmsLocationParent(project, flagKmsKRLocation)
+	parent := kmsLocationParent(project, s.flagKmsKRLocation)
 	var all []*cloudkms.KeyRing
 	token := ""
 	for {
 		call := svc.Projects.Locations.KeyRings.List(parent).Context(ctx)
-		if flagKmsKRFilter != "" {
-			call = call.Filter(flagKmsKRFilter)
+		if s.flagKmsKRFilter != "" {
+			call = call.Filter(s.flagKmsKRFilter)
 		}
-		if flagKmsKRPageSize > 0 {
-			call = call.PageSize(flagKmsKRPageSize)
+		if s.flagKmsKRPageSize > 0 {
+			call = call.PageSize(s.flagKmsKRPageSize)
 		}
 		if token != "" {
 			call = call.PageToken(token)
@@ -220,34 +142,34 @@ func runKmsKRList(cmd *cobra.Command, args []string) error {
 		}
 		token = resp.NextPageToken
 	}
-	return emitFormatted(all, flagKmsKRFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagKmsKRFormat)
 }
 
-func runKmsKRGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKRGetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKRName(project, flagKmsKRLocation, args[0])
+	name := kmsKRName(project, s.flagKmsKRLocation, args[0])
 	pol, err := svc.Projects.Locations.KeyRings.GetIamPolicy(name).OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(pol, flagKmsKRFormat)
+	return emitFormattedTo(s.inv.stdout, pol, s.flagKmsKRFormat)
 }
 
-func runKmsKRSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKRSetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
@@ -255,33 +177,33 @@ func runKmsKRSetIam(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
-	name := kmsKRName(project, flagKmsKRLocation, args[0])
+	name := kmsKRName(project, s.flagKmsKRLocation, args[0])
 	req := &cloudkms.SetIamPolicyRequest{Policy: policy}
 	out, err := svc.Projects.Locations.KeyRings.SetIamPolicy(name, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	kmsUpdatedIam(name)
-	return emitFormatted(out, flagKmsKRFormat)
+	s.kmsUpdatedIam(name)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKRFormat)
 }
 
-func runKmsKRAddIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKRAddIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKRName(project, flagKmsKRLocation, args[0])
+	name := kmsKRName(project, s.flagKmsKRLocation, args[0])
 	pol, err := svc.Projects.Locations.KeyRings.GetIamPolicy(name).OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	cond := kmsIamBuildCondition(flagKmsKRIamCondExpr, flagKmsKRIamCondTitle, flagKmsKRIamCondDesc)
-	kmsIamAddBinding(pol, flagKmsKRIamRole, flagKmsKRIamMember, cond)
+	cond := kmsIamBuildCondition(s.flagKmsKRIamCondExpr, s.flagKmsKRIamCondTitle, s.flagKmsKRIamCondDesc)
+	kmsIamAddBinding(pol, s.flagKmsKRIamRole, s.flagKmsKRIamMember, cond)
 	if cond != nil && pol.Version < 3 {
 		pol.Version = 3
 	}
@@ -290,27 +212,27 @@ func runKmsKRAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("adding IAM binding: %w", err)
 	}
-	kmsUpdatedIam(name)
-	return emitFormatted(out, flagKmsKRFormat)
+	s.kmsUpdatedIam(name)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKRFormat)
 }
 
-func runKmsKRRemoveIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKRRemoveIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKRName(project, flagKmsKRLocation, args[0])
+	name := kmsKRName(project, s.flagKmsKRLocation, args[0])
 	pol, err := svc.Projects.Locations.KeyRings.GetIamPolicy(name).OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	cond := kmsIamBuildCondition(flagKmsKRIamCondExpr, flagKmsKRIamCondTitle, flagKmsKRIamCondDesc)
-	if !kmsIamRemoveBinding(pol, flagKmsKRIamRole, flagKmsKRIamMember, cond, flagKmsKRAllConds) {
+	cond := kmsIamBuildCondition(s.flagKmsKRIamCondExpr, s.flagKmsKRIamCondTitle, s.flagKmsKRIamCondDesc)
+	if !kmsIamRemoveBinding(pol, s.flagKmsKRIamRole, s.flagKmsKRIamMember, cond, s.flagKmsKRAllConds) {
 		return fmt.Errorf("no matching binding to remove")
 	}
 	req := &cloudkms.SetIamPolicyRequest{Policy: pol}
@@ -318,6 +240,6 @@ func runKmsKRRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("removing IAM binding: %w", err)
 	}
-	kmsUpdatedIam(name)
-	return emitFormatted(out, flagKmsKRFormat)
+	s.kmsUpdatedIam(name)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKRFormat)
 }

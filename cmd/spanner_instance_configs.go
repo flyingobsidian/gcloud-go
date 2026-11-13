@@ -1,80 +1,46 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	spanner "google.golang.org/api/spanner/v1"
 )
 
 // --- gcloud spanner instance-configs (#1208) ---
 
-var spannerInstanceConfigsCmd = &cobra.Command{Use: "instance-configs", Short: "Manage Cloud Spanner instance configurations"}
-
-var (
-	flagSpICFormat     string
-	flagSpICConfigFile string
-	flagSpICUpdateMask string
-	flagSpICPageSize   int64
-)
-
-var (
-	spannerICCreateCmd = &cobra.Command{
-		Use: "create CONFIG", Short: "Create a Cloud Spanner instance configuration",
-		Args: cobra.ExactArgs(1), RunE: runSpICCreate,
-	}
-	spannerICDeleteCmd = &cobra.Command{
-		Use: "delete CONFIG", Short: "Delete a Cloud Spanner instance configuration",
-		Args: cobra.ExactArgs(1), RunE: runSpICDelete,
-	}
-	spannerICDescribeCmd = &cobra.Command{
-		Use: "describe CONFIG", Short: "Describe a Cloud Spanner instance configuration",
-		Args: cobra.ExactArgs(1), RunE: runSpICDescribe,
-	}
-	spannerICListCmd = &cobra.Command{
-		Use: "list", Short: "List Cloud Spanner instance configurations",
-		Args: cobra.NoArgs, RunE: runSpICList,
-	}
-	spannerICUpdateCmd = &cobra.Command{
-		Use: "update CONFIG", Short: "Update a Cloud Spanner instance configuration",
-		Args: cobra.ExactArgs(1), RunE: runSpICUpdate,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{spannerICCreateCmd, spannerICDeleteCmd, spannerICDescribeCmd, spannerICListCmd, spannerICUpdateCmd}
+func (s *spannerCmds) initSpannerInstanceConfigs() {
+	all := []*cobra.Command{s.spannerICCreateCmd, s.spannerICDeleteCmd, s.spannerICDescribeCmd, s.spannerICListCmd, s.spannerICUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSpICFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSpICFormat, "format", "", "Output format")
 	}
-	spannerICCreateCmd.Flags().StringVar(&flagSpICConfigFile, "config-file", "", "YAML/JSON file for the InstanceConfig body (required)")
-	_ = spannerICCreateCmd.MarkFlagRequired("config-file")
-	spannerICUpdateCmd.Flags().StringVar(&flagSpICConfigFile, "config-file", "", "YAML/JSON file for the InstanceConfig body (required)")
-	_ = spannerICUpdateCmd.MarkFlagRequired("config-file")
-	spannerICUpdateCmd.Flags().StringVar(&flagSpICUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.spannerICCreateCmd.Flags().StringVar(&s.flagSpICConfigFile, "config-file", "", "YAML/JSON file for the InstanceConfig body (required)")
+	_ = s.spannerICCreateCmd.MarkFlagRequired("config-file")
+	s.spannerICUpdateCmd.Flags().StringVar(&s.flagSpICConfigFile, "config-file", "", "YAML/JSON file for the InstanceConfig body (required)")
+	_ = s.spannerICUpdateCmd.MarkFlagRequired("config-file")
+	s.spannerICUpdateCmd.Flags().StringVar(&s.flagSpICUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 
-	spannerICListCmd.Flags().Int64Var(&flagSpICPageSize, "page-size", 0, "Maximum results per page")
+	s.spannerICListCmd.Flags().Int64Var(&s.flagSpICPageSize, "page-size", 0, "Maximum results per page")
 
-	spannerInstanceConfigsCmd.AddCommand(all...)
-	spannerCmd.AddCommand(spannerInstanceConfigsCmd)
+	s.spannerInstanceConfigsCmd.AddCommand(all...)
+	s.spannerCmd.AddCommand(s.spannerInstanceConfigsCmd)
 }
 
-func runSpICCreate(cmd *cobra.Command, args []string) error {
-	parent, err := spannerProject()
+func (s *spannerCmds) runSpICCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerProject()
 	if err != nil {
 		return err
 	}
 	cfg := &spanner.InstanceConfig{}
-	if err := loadYAMLOrJSONInto(flagSpICConfigFile, cfg); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSpICConfigFile, cfg); err != nil {
 		return err
 	}
 	body := &spanner.CreateInstanceConfigRequest{
 		InstanceConfig:   cfg,
 		InstanceConfigId: args[0],
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -82,34 +48,34 @@ func runSpICCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating instance config: %w", err)
 	}
-	fmt.Printf("Create instance config [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSpICFormat)
+	fmt.Fprintf(s.inv.stdout, "Create instance config [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpICFormat)
 }
 
-func runSpICDelete(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstanceConfig(args[0])
+func (s *spannerCmds) runSpICDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstanceConfig(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.InstanceConfigs.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting instance config: %w", err)
 	}
-	fmt.Printf("Deleted instance config [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted instance config [%s].\n", args[0])
 	return nil
 }
 
-func runSpICDescribe(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstanceConfig(args[0])
+func (s *spannerCmds) runSpICDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstanceConfig(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -117,16 +83,16 @@ func runSpICDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing instance config: %w", err)
 	}
-	return emitFormatted(got, flagSpICFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSpICFormat)
 }
 
-func runSpICList(cmd *cobra.Command, args []string) error {
-	parent, err := spannerProject()
+func (s *spannerCmds) runSpICList(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -134,8 +100,8 @@ func runSpICList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.InstanceConfigs.List(parent).Context(ctx)
-		if flagSpICPageSize > 0 {
-			call = call.PageSize(flagSpICPageSize)
+		if s.flagSpICPageSize > 0 {
+			call = call.PageSize(s.flagSpICPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -150,20 +116,20 @@ func runSpICList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSpICFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSpICFormat)
 }
 
-func runSpICUpdate(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstanceConfig(args[0])
+func (s *spannerCmds) runSpICUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstanceConfig(args[0])
 	if err != nil {
 		return err
 	}
 	cfg := &spanner.InstanceConfig{}
-	if err := loadYAMLOrJSONInto(flagSpICConfigFile, cfg); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSpICConfigFile, cfg); err != nil {
 		return err
 	}
 	cfg.Name = name
-	mask := flagSpICUpdateMask
+	mask := s.flagSpICUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(cfg))
 	}
@@ -171,8 +137,8 @@ func runSpICUpdate(cmd *cobra.Command, args []string) error {
 		InstanceConfig: cfg,
 		UpdateMask:     mask,
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -180,5 +146,5 @@ func runSpICUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating instance config: %w", err)
 	}
-	return emitFormatted(op, flagSpICFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpICFormat)
 }

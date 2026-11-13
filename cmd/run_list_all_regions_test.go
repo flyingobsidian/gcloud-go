@@ -62,7 +62,8 @@ func TestRunListAllV1Error(t *testing.T) {
 }
 
 func TestRunListRegionOptional(t *testing.T) {
-	for name, cmd := range map[string]*cobra.Command{"services": runServicesListCmd, "jobs": runJobsListCmd} {
+	grp := newRunCmds(legacyTestInvocation())
+	for name, cmd := range map[string]*cobra.Command{"services": grp.runServicesListCmd, "jobs": grp.runJobsListCmd} {
 		f := cmd.Flags().Lookup("region")
 		if f == nil {
 			t.Fatalf("run %s list missing --region", name)
@@ -71,7 +72,7 @@ func TestRunListRegionOptional(t *testing.T) {
 			t.Errorf("run %s list --region should be optional", name)
 		}
 	}
-	if f := runServicesDescribeCmd.Flags().Lookup("region"); f == nil || f.Annotations["cobra_annotation_bash_completion_one_required_flag"] == nil {
+	if f := grp.runServicesDescribeCmd.Flags().Lookup("region"); f == nil || f.Annotations["cobra_annotation_bash_completion_one_required_flag"] == nil {
 		t.Error("run services describe --region should stay required")
 	}
 }

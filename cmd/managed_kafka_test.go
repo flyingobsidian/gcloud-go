@@ -7,7 +7,8 @@ import (
 )
 
 func mkSubgroup(name string) *cobra.Command {
-	for _, c := range managedKafkaCmd.Commands() {
+	grp := newManagedKafkaCmds(legacyTestInvocation())
+	for _, c := range grp.managedKafkaCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

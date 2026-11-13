@@ -1,64 +1,18 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	auditmanager "google.golang.org/api/auditmanager/v1"
 )
 
 // --- gcloud audit-manager audit-schedules (#1911, gcloud-python 586.0.0) ---
 // --- gcloud audit-manager operations describe (#1911) ---
-
-var auditManagerSchedulesCmd = &cobra.Command{
-	Use:   "audit-schedules",
-	Short: "Command group for Audit Manager Audit Schedules",
-}
-
-var (
-	flagAMFolder       string
-	flagAMOrganization string
-	flagAMLocation     string
-	flagAMScheduleID   string
-	flagAMFramework    string
-	flagAMReportFormat string
-	flagAMGcsURI       string
-	flagAMStartTime    string
-	flagAMEndTime      string
-	flagAMFrequency    string
-	flagAMTimeZone     string
-	flagAMDisplayName  string
-	flagAMState        string
-	flagAMFormat       string
-	flagAMLimit        int64
-	flagAMPageSize     int64
-)
-
-var (
-	auditManagerSchedulesCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create Audit Schedule",
-		Args: cobra.NoArgs, RunE: runAuditManagerSchedulesCreate,
-	}
-	auditManagerSchedulesListCmd = &cobra.Command{
-		Use: "list", Short: "List Audit Schedules",
-		Args: cobra.NoArgs, RunE: runAuditManagerSchedulesList,
-	}
-	auditManagerSchedulesUpdateCmd = &cobra.Command{
-		Use: "update AUDIT_SCHEDULE", Short: "Update Audit Schedule",
-		Args: cobra.ExactArgs(1), RunE: runAuditManagerSchedulesUpdate,
-	}
-	auditManagerOperationsDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe Audit operation",
-		Args: cobra.ExactArgs(1), RunE: runAuditManagerOperationsDescribe,
-	}
-)
 
 // errAuditManagerStopPaging ends Pages iteration once --limit is reached.
 var errAuditManagerStopPaging = errors.New("stop paging")
@@ -71,63 +25,63 @@ var auditManagerScheduleStates = map[string]string{
 	"active": "SCHEDULE_STATE_ACTIVE", "paused": "SCHEDULE_STATE_PAUSED", "deleted": "SCHEDULE_STATE_DELETED",
 }
 
-func init() {
+func (g *auditManagerCmds) initAuditManagerAuditSchedules() {
 	scope := func(c *cobra.Command, help string) {
-		c.Flags().StringVar(&flagAMFolder, "folder", "", "Folder Id "+help)
-		c.Flags().StringVar(&flagAMOrganization, "organization", "", "Organization Id "+help)
-		c.Flags().StringVar(&flagAMFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagAMFolder, "folder", "", "Folder Id "+help)
+		c.Flags().StringVar(&g.flagAMOrganization, "organization", "", "Organization Id "+help)
+		c.Flags().StringVar(&g.flagAMFormat, "format", "", "Output format")
 	}
-	scope(auditManagerSchedulesCreateCmd, "for which to create audit schedule")
-	scope(auditManagerSchedulesListCmd, "for which to list audit schedules")
-	auditManagerSchedulesCreateCmd.Flags().StringVar(&flagAMLocation, "location", "",
+	scope(g.auditManagerSchedulesCreateCmd, "for which to create audit schedule")
+	scope(g.auditManagerSchedulesListCmd, "for which to list audit schedules")
+	g.auditManagerSchedulesCreateCmd.Flags().StringVar(&g.flagAMLocation, "location", "",
 		"The location where the audit schedule should be created.")
-	auditManagerSchedulesListCmd.Flags().StringVar(&flagAMLocation, "location", "",
+	g.auditManagerSchedulesListCmd.Flags().StringVar(&g.flagAMLocation, "location", "",
 		"The location where audit schedules should be listed.")
-	for _, c := range []*cobra.Command{auditManagerSchedulesCreateCmd, auditManagerSchedulesListCmd} {
+	for _, c := range []*cobra.Command{g.auditManagerSchedulesCreateCmd, g.auditManagerSchedulesListCmd} {
 		_ = c.MarkFlagRequired("location")
 	}
 
-	f := auditManagerSchedulesCreateCmd.Flags()
-	f.StringVar(&flagAMScheduleID, "audit-schedule-id", "", "ID to use for the audit schedule.")
-	f.StringVar(&flagAMFramework, "compliance-framework", "",
+	f := g.auditManagerSchedulesCreateCmd.Flags()
+	f.StringVar(&g.flagAMScheduleID, "audit-schedule-id", "", "ID to use for the audit schedule.")
+	f.StringVar(&g.flagAMFramework, "compliance-framework", "",
 		"Compliance Framework against which the Report must be generated. Eg: FEDRAMP_MODERATE")
-	f.StringVar(&flagAMReportFormat, "report-format", "", "The format in which the audit report should be created: odf.")
-	f.StringVar(&flagAMGcsURI, "gcs-uri", "",
+	f.StringVar(&g.flagAMReportFormat, "report-format", "", "The format in which the audit report should be created: odf.")
+	f.StringVar(&g.flagAMGcsURI, "gcs-uri", "",
 		"Destination Cloud storage bucket where report and evidence must be uploaded.")
-	f.StringVar(&flagAMStartTime, "start-time", "",
+	f.StringVar(&g.flagAMStartTime, "start-time", "",
 		"Date and time when the first audit run is triggered in RFC 3339 format.")
-	f.StringVar(&flagAMEndTime, "end-time", "", "Date and time that the schedule stops in RFC 3339 format.")
-	f.StringVar(&flagAMFrequency, "frequency", "",
+	f.StringVar(&g.flagAMEndTime, "end-time", "", "Date and time that the schedule stops in RFC 3339 format.")
+	f.StringVar(&g.flagAMFrequency, "frequency", "",
 		"Frequency of audit runs: daily, weekly, monthly, quarterly, annually.")
-	f.StringVar(&flagAMTimeZone, "time-zone", "",
+	f.StringVar(&g.flagAMTimeZone, "time-zone", "",
 		"Time zone for the audit schedule in IANA format (e.g. America/New_York).")
-	f.StringVar(&flagAMDisplayName, "display-name", "", "Display name for the audit schedule.")
+	f.StringVar(&g.flagAMDisplayName, "display-name", "", "Display name for the audit schedule.")
 	for _, name := range []string{"audit-schedule-id", "compliance-framework", "report-format", "gcs-uri", "start-time", "frequency"} {
-		_ = auditManagerSchedulesCreateCmd.MarkFlagRequired(name)
+		_ = g.auditManagerSchedulesCreateCmd.MarkFlagRequired(name)
 	}
 
-	auditManagerSchedulesListCmd.Flags().Int64Var(&flagAMLimit, "limit", 0, "Maximum number of resources to list")
-	auditManagerSchedulesListCmd.Flags().Int64Var(&flagAMPageSize, "page-size", 0, "Number of resources to fetch per page")
+	g.auditManagerSchedulesListCmd.Flags().Int64Var(&g.flagAMLimit, "limit", 0, "Maximum number of resources to list")
+	g.auditManagerSchedulesListCmd.Flags().Int64Var(&g.flagAMPageSize, "page-size", 0, "Number of resources to fetch per page")
 
-	auditManagerSchedulesUpdateCmd.Flags().StringVar(&flagAMState, "state", "",
+	g.auditManagerSchedulesUpdateCmd.Flags().StringVar(&g.flagAMState, "state", "",
 		"State to update the audit schedule to: active, paused, deleted.")
-	_ = auditManagerSchedulesUpdateCmd.MarkFlagRequired("state")
-	auditManagerSchedulesUpdateCmd.Flags().StringVar(&flagAMFormat, "format", "", "Output format")
+	_ = g.auditManagerSchedulesUpdateCmd.MarkFlagRequired("state")
+	g.auditManagerSchedulesUpdateCmd.Flags().StringVar(&g.flagAMFormat, "format", "", "Output format")
 
-	o := auditManagerOperationsDescribeCmd.Flags()
-	o.StringVar(&flagAMFolder, "folder", "", "The folder ID of the operation")
-	o.StringVar(&flagAMOrganization, "organization", "", "The organization ID of the operation")
-	o.StringVar(&flagAMLocation, "location", "", "The location of the operation")
-	o.StringVar(&flagAMFormat, "format", "", "Output format")
+	o := g.auditManagerOperationsDescribeCmd.Flags()
+	o.StringVar(&g.flagAMFolder, "folder", "", "The folder ID of the operation")
+	o.StringVar(&g.flagAMOrganization, "organization", "", "The organization ID of the operation")
+	o.StringVar(&g.flagAMLocation, "location", "", "The location of the operation")
+	o.StringVar(&g.flagAMFormat, "format", "", "Output format")
 
-	auditManagerSchedulesCmd.AddCommand(auditManagerSchedulesCreateCmd, auditManagerSchedulesListCmd, auditManagerSchedulesUpdateCmd)
-	auditManagerCmd.AddCommand(auditManagerSchedulesCmd)
-	auditManagerOperationsCmd.AddCommand(auditManagerOperationsDescribeCmd)
+	g.auditManagerSchedulesCmd.AddCommand(g.auditManagerSchedulesCreateCmd, g.auditManagerSchedulesListCmd, g.auditManagerSchedulesUpdateCmd)
+	g.auditManagerCmd.AddCommand(g.auditManagerSchedulesCmd)
+	g.auditManagerOperationsCmd.AddCommand(g.auditManagerOperationsDescribeCmd)
 }
 
 // auditManagerScope resolves the parent scope from exactly one of --project,
 // --folder or --organization, plus --location.
-func auditManagerScope(cmd *cobra.Command) (string, error) {
+func (g *auditManagerCmds) auditManagerScope(cmd *cobra.Command) (string, error) {
 	var set []string
 	for _, f := range []string{"folder", "organization", "project"} {
 		if cmd.Flags().Changed(f) {
@@ -140,13 +94,13 @@ func auditManagerScope(cmd *cobra.Command) (string, error) {
 	var scope string
 	switch set[0] {
 	case "folder":
-		scope = "folders/" + flagAMFolder
+		scope = "folders/" + g.flagAMFolder
 	case "organization":
-		scope = "organizations/" + flagAMOrganization
+		scope = "organizations/" + g.flagAMOrganization
 	default:
-		scope = "projects/" + flagProject
+		scope = "projects/" + g.inv.flags.project
 	}
-	return scope + "/locations/" + flagAMLocation, nil
+	return scope + "/locations/" + g.flagAMLocation, nil
 }
 
 // auditManagerChoice lower-cases v and checks it against choices.
@@ -163,40 +117,40 @@ func auditManagerChoice(flag, v string, choices map[string]string) (string, erro
 }
 
 // auditManagerBuildSchedule builds the AuditSchedule body for create.
-func auditManagerBuildSchedule() (*auditmanager.AuditSchedule, error) {
-	format, err := auditManagerChoice("report-format", flagAMReportFormat, map[string]string{"odf": "AUDIT_REPORT_FORMAT_ODF"})
+func (g *auditManagerCmds) auditManagerBuildSchedule() (*auditmanager.AuditSchedule, error) {
+	format, err := auditManagerChoice("report-format", g.flagAMReportFormat, map[string]string{"odf": "AUDIT_REPORT_FORMAT_ODF"})
 	if err != nil {
 		return nil, err
 	}
-	freq, err := auditManagerChoice("frequency", flagAMFrequency, auditManagerFrequencies)
+	freq, err := auditManagerChoice("frequency", g.flagAMFrequency, auditManagerFrequencies)
 	if err != nil {
 		return nil, err
 	}
 	return &auditmanager.AuditSchedule{
-		GcsUri:              flagAMGcsURI,
-		ComplianceFramework: flagAMFramework,
+		GcsUri:              g.flagAMGcsURI,
+		ComplianceFramework: g.flagAMFramework,
 		ReportFormat:        format,
-		DisplayName:         flagAMDisplayName,
+		DisplayName:         g.flagAMDisplayName,
 		ScheduleConfig: &auditmanager.ScheduleConfig{
-			StartTime: flagAMStartTime,
-			EndTime:   flagAMEndTime,
+			StartTime: g.flagAMStartTime,
+			EndTime:   g.flagAMEndTime,
 			Frequency: freq,
-			TimeZone:  flagAMTimeZone,
+			TimeZone:  g.flagAMTimeZone,
 		},
 	}, nil
 }
 
-func runAuditManagerSchedulesCreate(cmd *cobra.Command, args []string) error {
-	parent, err := auditManagerScope(cmd)
+func (g *auditManagerCmds) runAuditManagerSchedulesCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.auditManagerScope(cmd)
 	if err != nil {
 		return err
 	}
-	body, err := auditManagerBuildSchedule()
+	body, err := g.auditManagerBuildSchedule()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AuditManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AuditManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -204,31 +158,31 @@ func runAuditManagerSchedulesCreate(cmd *cobra.Command, args []string) error {
 	// v1/{+name} for every parent type, so the projects service serves
 	// folder and organization scopes too.
 	got, err := svc.Projects.Locations.AuditSchedules.Create(parent, body).
-		AuditScheduleId(flagAMScheduleID).Context(ctx).Do()
+		AuditScheduleId(g.flagAMScheduleID).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating audit schedule: %w", err)
 	}
-	return emitFormatted(got, flagAMFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAMFormat)
 }
 
-func runAuditManagerSchedulesList(cmd *cobra.Command, args []string) error {
-	parent, err := auditManagerScope(cmd)
+func (g *auditManagerCmds) runAuditManagerSchedulesList(cmd *cobra.Command, args []string) error {
+	parent, err := g.auditManagerScope(cmd)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AuditManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AuditManager(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*auditmanager.AuditSchedule
 	call := svc.Projects.Locations.AuditSchedules.List(parent).Context(ctx)
-	if flagAMPageSize > 0 {
-		call = call.PageSize(flagAMPageSize)
+	if g.flagAMPageSize > 0 {
+		call = call.PageSize(g.flagAMPageSize)
 	}
 	err = call.Pages(ctx, func(resp *auditmanager.ListAuditSchedulesResponse) error {
 		all = append(all, resp.AuditSchedules...)
-		if flagAMLimit > 0 && int64(len(all)) >= flagAMLimit {
+		if g.flagAMLimit > 0 && int64(len(all)) >= g.flagAMLimit {
 			return errAuditManagerStopPaging
 		}
 		return nil
@@ -236,10 +190,10 @@ func runAuditManagerSchedulesList(cmd *cobra.Command, args []string) error {
 	if err != nil && err != errAuditManagerStopPaging {
 		return fmt.Errorf("listing audit schedules: %w", err)
 	}
-	if flagAMLimit > 0 && int64(len(all)) > flagAMLimit {
-		all = all[:flagAMLimit]
+	if g.flagAMLimit > 0 && int64(len(all)) > g.flagAMLimit {
+		all = all[:g.flagAMLimit]
 	}
-	return emitAuditSchedules(os.Stdout, os.Stderr, all, flagAMFormat)
+	return emitAuditSchedules(g.inv.stdout, g.inv.stderr, all, g.flagAMFormat)
 }
 
 // emitAuditSchedules prints schedules with gcloud-python's list columns
@@ -267,8 +221,8 @@ func emitAuditSchedules(w, errW io.Writer, all []*auditmanager.AuditSchedule, fo
 		"scheduleConfig,createTime,updateTime,nextRunTime,lastTriggerTime,errorMessage)")
 }
 
-func runAuditManagerSchedulesUpdate(cmd *cobra.Command, args []string) error {
-	state, err := auditManagerChoice("state", flagAMState, auditManagerScheduleStates)
+func (g *auditManagerCmds) runAuditManagerSchedulesUpdate(cmd *cobra.Command, args []string) error {
+	state, err := auditManagerChoice("state", g.flagAMState, auditManagerScheduleStates)
 	if err != nil {
 		return err
 	}
@@ -279,8 +233,8 @@ func runAuditManagerSchedulesUpdate(cmd *cobra.Command, args []string) error {
 			"folders/{folder}/locations/{location}/auditSchedules/{audit_schedule}, or " +
 			"organizations/{organization}/locations/{location}/auditSchedules/{audit_schedule}.")
 	}
-	ctx := context.Background()
-	svc, err := gcp.AuditManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AuditManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -289,18 +243,18 @@ func runAuditManagerSchedulesUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating audit schedule: %w", err)
 	}
-	return emitFormatted(got, flagAMFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAMFormat)
 }
 
 // auditManagerOperationName resolves OPERATION to
 // {projects|folders|organizations}/X/locations/L/operationDetails/OP.
-func auditManagerOperationName(cmd *cobra.Command, op string) (string, error) {
+func (g *auditManagerCmds) auditManagerOperationName(cmd *cobra.Command, op string) (string, error) {
 	for _, p := range []string{"projects/", "folders/", "organizations/"} {
 		if strings.HasPrefix(op, p) {
 			return op, nil
 		}
 	}
-	if flagAMLocation == "" {
+	if g.flagAMLocation == "" {
 		return "", fmt.Errorf("Error parsing [operation]. The [operation] resource is not properly specified. Failed to find attribute [location].")
 	}
 	if cmd.Flags().Changed("folder") && cmd.Flags().Changed("organization") {
@@ -308,27 +262,27 @@ func auditManagerOperationName(cmd *cobra.Command, op string) (string, error) {
 	}
 	var scope string
 	switch {
-	case flagAMFolder != "":
-		scope = "folders/" + flagAMFolder
-	case flagAMOrganization != "":
-		scope = "organizations/" + flagAMOrganization
+	case g.flagAMFolder != "":
+		scope = "folders/" + g.flagAMFolder
+	case g.flagAMOrganization != "":
+		scope = "organizations/" + g.flagAMOrganization
 	default:
-		project, err := resolveProject()
+		project, err := g.inv.project()
 		if err != nil {
 			return "", err
 		}
 		scope = "projects/" + project
 	}
-	return fmt.Sprintf("%s/locations/%s/operationDetails/%s", scope, flagAMLocation, op), nil
+	return fmt.Sprintf("%s/locations/%s/operationDetails/%s", scope, g.flagAMLocation, op), nil
 }
 
-func runAuditManagerOperationsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := auditManagerOperationName(cmd, args[0])
+func (g *auditManagerCmds) runAuditManagerOperationsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.auditManagerOperationName(cmd, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AuditManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AuditManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -336,5 +290,5 @@ func runAuditManagerOperationsDescribe(cmd *cobra.Command, args []string) error 
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagAMFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAMFormat)
 }

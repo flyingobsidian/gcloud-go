@@ -3,43 +3,18 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmmigration "google.golang.org/api/vmmigration/v1"
 )
 
 // --- gcloud migration vms target-projects and image-imports (#895, #896) ---
 
-var (
-	flagMVMLocation     string
-	flagMVMFormat       string
-	flagMVMFilter       string
-	flagMVMAsync        bool
-	flagMVMTargetProj   string
-	flagMVMDescription  string
-	flagMVMUpdateMask   string
-	flagMVMConfigFile   string
-	flagMVMSourceFile   string
-	flagMVMImageName    string
-	flagMVMImportTP     string
-	flagMVMFamily       string
-	flagMVMLabels       []string
-	flagMVMAddLicenses  []string
-	flagMVMSingleRegion bool
-	flagMVMKmsKey       string
-	flagMVMSkipOSAdapt  bool
-	flagMVMGeneralize   bool
-	flagMVMLicenseType  string
-	flagMVMBootConv     string
-)
-
-func mvmService(ctx context.Context) (*vmmigration.Service, error) {
-	return gcp.VMMigrationService(ctx, flagAccount)
+func (s *migrationCmds) mvmService(ctx context.Context) (*vmmigration.Service, error) {
+	return s.inv.clients().VMMigration(ctx)
 }
 
 // mvmLocationParent returns projects/PROJECT/locations/LOCATION.
@@ -54,12 +29,12 @@ func mvmResourceName(parent, collection, id string) string {
 	return fmt.Sprintf("%s/%s/%s", parent, collection, id)
 }
 
-func mvmResolveLocationParent(defaultToGlobal bool) (string, error) {
-	project, err := resolveProject()
+func (s *migrationCmds) mvmResolveLocationParent(defaultToGlobal bool) (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	loc := flagMVMLocation
+	loc := s.flagMVMLocation
 	if loc == "" && defaultToGlobal {
 		loc = "global"
 	}
@@ -84,162 +59,112 @@ func mvmWaitOp(ctx context.Context, svc *vmmigration.Service, op *vmmigration.Op
 	return op, nil
 }
 
-func mvmFinishOp(ctx context.Context, svc *vmmigration.Service, op *vmmigration.Operation, verb, target string) error {
-	if flagMVMAsync {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, flagMVMFormat)
+func (s *migrationCmds) mvmFinishOp(ctx context.Context, svc *vmmigration.Service, op *vmmigration.Operation, verb, target string) error {
+	if s.flagMVMAsync {
+		fmt.Fprintf(s.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagMVMFormat)
 	}
 	final, err := mvmWaitOp(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, target)
-	return emitFormatted(final, flagMVMFormat)
+	fmt.Fprintf(s.inv.stderr, "%s [%s] completed.\n", verb, target)
+	return emitFormattedTo(s.inv.stdout, final, s.flagMVMFormat)
 }
 
 // --- target-projects ---
 
-var mvmTargetProjectsCmd = &cobra.Command{
-	Use: "target-projects", Short: "Manage VM Migration target projects",
-}
-
-var (
-	mvmTPAddCmd = &cobra.Command{
-		Use: "add TARGET_PROJECT", Short: "Create a target project",
-		Args: cobra.ExactArgs(1), RunE: runMVMTPCreate,
-	}
-	mvmTPDeleteCmd = &cobra.Command{
-		Use: "delete TARGET_PROJECT", Short: "Delete a target project",
-		Args: cobra.ExactArgs(1), RunE: runMVMTPDelete,
-	}
-	mvmTPDescribeCmd = &cobra.Command{
-		Use: "describe TARGET_PROJECT", Short: "Describe a target project",
-		Args: cobra.ExactArgs(1), RunE: runMVMTPDescribe,
-	}
-	mvmTPListCmd = &cobra.Command{
-		Use: "list", Short: "List target projects",
-		Args: cobra.NoArgs, RunE: runMVMTPList,
-	}
-	mvmTPUpdateCmd = &cobra.Command{
-		Use: "update TARGET_PROJECT", Short: "Update a target project",
-		Args: cobra.ExactArgs(1), RunE: runMVMTPUpdate,
-	}
-)
-
 // --- image-imports ---
 
-var mvmImageImportsCmd = &cobra.Command{
-	Use: "image-imports", Short: "Manage VM Migration image imports",
-}
-
-var (
-	mvmIICreateCmd = &cobra.Command{
-		Use: "create IMAGE_IMPORT", Short: "Create an image import",
-		Args: cobra.ExactArgs(1), RunE: runMVMIICreate,
-	}
-	mvmIIDeleteCmd = &cobra.Command{
-		Use: "delete IMAGE_IMPORT", Short: "Delete an image import",
-		Args: cobra.ExactArgs(1), RunE: runMVMIIDelete,
-	}
-	mvmIIDescribeCmd = &cobra.Command{
-		Use: "describe IMAGE_IMPORT", Short: "Describe an image import",
-		Args: cobra.ExactArgs(1), RunE: runMVMIIDescribe,
-	}
-	mvmIIListCmd = &cobra.Command{
-		Use: "list", Short: "List image imports",
-		Args: cobra.NoArgs, RunE: runMVMIIList,
-	}
-)
-
-func init() {
+func (s *migrationCmds) initMigrationVms() {
 	addLoc := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagMVMLocation, "location", "", "Location (region); defaults to 'global' for target-projects")
+			c.Flags().StringVar(&s.flagMVMLocation, "location", "", "Location (region); defaults to 'global' for target-projects")
 		}
 	}
 	addFmt := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagMVMFormat, "format", "", "Output format")
+			c.Flags().StringVar(&s.flagMVMFormat, "format", "", "Output format")
 		}
 	}
 	addFilter := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagMVMFilter, "filter", "", "Server-side list filter")
+			c.Flags().StringVar(&s.flagMVMFilter, "filter", "", "Server-side list filter")
 		}
 	}
 
 	// target-projects
-	addLoc(mvmTPAddCmd, mvmTPDeleteCmd, mvmTPDescribeCmd, mvmTPListCmd, mvmTPUpdateCmd)
-	addFmt(mvmTPAddCmd, mvmTPDescribeCmd, mvmTPListCmd, mvmTPUpdateCmd)
-	addFilter(mvmTPListCmd)
-	mvmTPAddCmd.Flags().StringVar(&flagMVMTargetProj, "target-project", "", "The Compute Engine project ID or number (required)")
-	_ = mvmTPAddCmd.MarkFlagRequired("target-project")
-	mvmTPAddCmd.Flags().StringVar(&flagMVMDescription, "description", "", "Optional description")
-	mvmTPAddCmd.Flags().BoolVar(&flagMVMAsync, "async", false, "Do not wait for the operation to finish")
-	mvmTPDeleteCmd.Flags().BoolVar(&flagMVMAsync, "async", false, "Do not wait for the operation to finish")
-	mvmTPUpdateCmd.Flags().StringVar(&flagMVMTargetProj, "target-project", "", "Update the Compute Engine project ID")
-	mvmTPUpdateCmd.Flags().StringVar(&flagMVMDescription, "description", "", "Update the description")
-	mvmTPUpdateCmd.Flags().StringVar(&flagMVMUpdateMask, "update-mask", "", "Comma-separated list of fields to update")
-	mvmTPUpdateCmd.Flags().BoolVar(&flagMVMAsync, "async", false, "Do not wait for the operation to finish")
-	mvmTargetProjectsCmd.AddCommand(mvmTPAddCmd, mvmTPDeleteCmd, mvmTPDescribeCmd, mvmTPListCmd, mvmTPUpdateCmd)
-	migrationVMsCmd.AddCommand(mvmTargetProjectsCmd)
+	addLoc(s.mvmTPAddCmd, s.mvmTPDeleteCmd, s.mvmTPDescribeCmd, s.mvmTPListCmd, s.mvmTPUpdateCmd)
+	addFmt(s.mvmTPAddCmd, s.mvmTPDescribeCmd, s.mvmTPListCmd, s.mvmTPUpdateCmd)
+	addFilter(s.mvmTPListCmd)
+	s.mvmTPAddCmd.Flags().StringVar(&s.flagMVMTargetProj, "target-project", "", "The Compute Engine project ID or number (required)")
+	_ = s.mvmTPAddCmd.MarkFlagRequired("target-project")
+	s.mvmTPAddCmd.Flags().StringVar(&s.flagMVMDescription, "description", "", "Optional description")
+	s.mvmTPAddCmd.Flags().BoolVar(&s.flagMVMAsync, "async", false, "Do not wait for the operation to finish")
+	s.mvmTPDeleteCmd.Flags().BoolVar(&s.flagMVMAsync, "async", false, "Do not wait for the operation to finish")
+	s.mvmTPUpdateCmd.Flags().StringVar(&s.flagMVMTargetProj, "target-project", "", "Update the Compute Engine project ID")
+	s.mvmTPUpdateCmd.Flags().StringVar(&s.flagMVMDescription, "description", "", "Update the description")
+	s.mvmTPUpdateCmd.Flags().StringVar(&s.flagMVMUpdateMask, "update-mask", "", "Comma-separated list of fields to update")
+	s.mvmTPUpdateCmd.Flags().BoolVar(&s.flagMVMAsync, "async", false, "Do not wait for the operation to finish")
+	s.mvmTargetProjectsCmd.AddCommand(s.mvmTPAddCmd, s.mvmTPDeleteCmd, s.mvmTPDescribeCmd, s.mvmTPListCmd, s.mvmTPUpdateCmd)
+	s.migrationVMsCmd.AddCommand(s.mvmTargetProjectsCmd)
 
 	// image-imports
-	addLoc(mvmIICreateCmd, mvmIIDeleteCmd, mvmIIDescribeCmd, mvmIIListCmd)
-	addFmt(mvmIICreateCmd, mvmIIDescribeCmd, mvmIIListCmd)
-	addFilter(mvmIIListCmd)
-	mvmIICreateCmd.Flags().StringVar(&flagMVMSourceFile, "source-file", "", "Cloud Storage URI (gs://bucket/file.vmdk) of the source image (required)")
-	_ = mvmIICreateCmd.MarkFlagRequired("source-file")
-	mvmIICreateCmd.Flags().StringVar(&flagMVMImageName, "image-name", "", "Target Compute Engine image name (defaults to the import resource ID)")
-	mvmIICreateCmd.Flags().StringVar(&flagMVMImportTP, "target-project", "", "Target project resource path (projects/*/locations/global/targetProjects/*) (required)")
-	_ = mvmIICreateCmd.MarkFlagRequired("target-project")
-	mvmIICreateCmd.Flags().StringVar(&flagMVMDescription, "description", "", "Optional description for the target image")
-	mvmIICreateCmd.Flags().StringVar(&flagMVMFamily, "family-name", "", "Compute Engine image family")
-	mvmIICreateCmd.Flags().StringSliceVar(&flagMVMLabels, "labels", nil, "KEY=VALUE labels on the target image")
-	mvmIICreateCmd.Flags().StringSliceVar(&flagMVMAddLicenses, "additional-licenses", nil, "Additional Compute Engine license URIs")
-	mvmIICreateCmd.Flags().BoolVar(&flagMVMSingleRegion, "single-region-storage", false, "Store image in a single region")
-	mvmIICreateCmd.Flags().StringVar(&flagMVMKmsKey, "kms-key", "", "Cloud KMS key used to encrypt the image import (projects/.../cryptoKeys/...)")
-	mvmIICreateCmd.Flags().BoolVar(&flagMVMSkipOSAdapt, "skip-os-adaptation", false, "Skip OS adaptation")
-	mvmIICreateCmd.Flags().BoolVar(&flagMVMGeneralize, "generalize", false, "Generalize the image (Windows)")
-	mvmIICreateCmd.Flags().StringVar(&flagMVMLicenseType, "license-type", "", "License type (default, payg, byol)")
-	mvmIICreateCmd.Flags().StringVar(&flagMVMBootConv, "boot-conversion", "", "Boot conversion (none, bios-to-efi)")
-	mvmIICreateCmd.Flags().StringVar(&flagMVMConfigFile, "config-file", "", "JSON/YAML ImageImport body override")
-	mvmIICreateCmd.Flags().BoolVar(&flagMVMAsync, "async", false, "Do not wait for the operation to finish")
-	mvmIIDeleteCmd.Flags().BoolVar(&flagMVMAsync, "async", false, "Do not wait for the operation to finish")
-	mvmImageImportsCmd.AddCommand(mvmIICreateCmd, mvmIIDeleteCmd, mvmIIDescribeCmd, mvmIIListCmd)
-	migrationVMsCmd.AddCommand(mvmImageImportsCmd)
+	addLoc(s.mvmIICreateCmd, s.mvmIIDeleteCmd, s.mvmIIDescribeCmd, s.mvmIIListCmd)
+	addFmt(s.mvmIICreateCmd, s.mvmIIDescribeCmd, s.mvmIIListCmd)
+	addFilter(s.mvmIIListCmd)
+	s.mvmIICreateCmd.Flags().StringVar(&s.flagMVMSourceFile, "source-file", "", "Cloud Storage URI (gs://bucket/file.vmdk) of the source image (required)")
+	_ = s.mvmIICreateCmd.MarkFlagRequired("source-file")
+	s.mvmIICreateCmd.Flags().StringVar(&s.flagMVMImageName, "image-name", "", "Target Compute Engine image name (defaults to the import resource ID)")
+	s.mvmIICreateCmd.Flags().StringVar(&s.flagMVMImportTP, "target-project", "", "Target project resource path (projects/*/locations/global/targetProjects/*) (required)")
+	_ = s.mvmIICreateCmd.MarkFlagRequired("target-project")
+	s.mvmIICreateCmd.Flags().StringVar(&s.flagMVMDescription, "description", "", "Optional description for the target image")
+	s.mvmIICreateCmd.Flags().StringVar(&s.flagMVMFamily, "family-name", "", "Compute Engine image family")
+	s.mvmIICreateCmd.Flags().StringSliceVar(&s.flagMVMLabels, "labels", nil, "KEY=VALUE labels on the target image")
+	s.mvmIICreateCmd.Flags().StringSliceVar(&s.flagMVMAddLicenses, "additional-licenses", nil, "Additional Compute Engine license URIs")
+	s.mvmIICreateCmd.Flags().BoolVar(&s.flagMVMSingleRegion, "single-region-storage", false, "Store image in a single region")
+	s.mvmIICreateCmd.Flags().StringVar(&s.flagMVMKmsKey, "kms-key", "", "Cloud KMS key used to encrypt the image import (projects/.../cryptoKeys/...)")
+	s.mvmIICreateCmd.Flags().BoolVar(&s.flagMVMSkipOSAdapt, "skip-os-adaptation", false, "Skip OS adaptation")
+	s.mvmIICreateCmd.Flags().BoolVar(&s.flagMVMGeneralize, "generalize", false, "Generalize the image (Windows)")
+	s.mvmIICreateCmd.Flags().StringVar(&s.flagMVMLicenseType, "license-type", "", "License type (default, payg, byol)")
+	s.mvmIICreateCmd.Flags().StringVar(&s.flagMVMBootConv, "boot-conversion", "", "Boot conversion (none, bios-to-efi)")
+	s.mvmIICreateCmd.Flags().StringVar(&s.flagMVMConfigFile, "config-file", "", "JSON/YAML ImageImport body override")
+	s.mvmIICreateCmd.Flags().BoolVar(&s.flagMVMAsync, "async", false, "Do not wait for the operation to finish")
+	s.mvmIIDeleteCmd.Flags().BoolVar(&s.flagMVMAsync, "async", false, "Do not wait for the operation to finish")
+	s.mvmImageImportsCmd.AddCommand(s.mvmIICreateCmd, s.mvmIIDeleteCmd, s.mvmIIDescribeCmd, s.mvmIIListCmd)
+	s.migrationVMsCmd.AddCommand(s.mvmImageImportsCmd)
 }
 
 // --- target-projects impl ---
 
-func runMVMTPCreate(cmd *cobra.Command, args []string) error {
-	parent, err := mvmResolveLocationParent(true)
+func (s *migrationCmds) runMVMTPCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.mvmResolveLocationParent(true)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := mvmService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.mvmService(ctx)
 	if err != nil {
 		return err
 	}
 	body := &vmmigration.TargetProject{
-		Project:     flagMVMTargetProj,
-		Description: flagMVMDescription,
+		Project:     s.flagMVMTargetProj,
+		Description: s.flagMVMDescription,
 	}
 	op, err := svc.Projects.Locations.TargetProjects.Create(parent, body).TargetProjectId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating target project: %w", err)
 	}
-	return mvmFinishOp(ctx, svc, op, "Create target project", args[0])
+	return s.mvmFinishOp(ctx, svc, op, "Create target project", args[0])
 }
 
-func runMVMTPDelete(cmd *cobra.Command, args []string) error {
-	parent, err := mvmResolveLocationParent(true)
+func (s *migrationCmds) runMVMTPDelete(cmd *cobra.Command, args []string) error {
+	parent, err := s.mvmResolveLocationParent(true)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := mvmService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.mvmService(ctx)
 	if err != nil {
 		return err
 	}
@@ -248,16 +173,16 @@ func runMVMTPDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting target project: %w", err)
 	}
-	return mvmFinishOp(ctx, svc, op, "Delete target project", args[0])
+	return s.mvmFinishOp(ctx, svc, op, "Delete target project", args[0])
 }
 
-func runMVMTPDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := mvmResolveLocationParent(true)
+func (s *migrationCmds) runMVMTPDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := s.mvmResolveLocationParent(true)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := mvmService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.mvmService(ctx)
 	if err != nil {
 		return err
 	}
@@ -266,16 +191,16 @@ func runMVMTPDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing target project: %w", err)
 	}
-	return emitFormatted(got, flagMVMFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMVMFormat)
 }
 
-func runMVMTPList(cmd *cobra.Command, args []string) error {
-	parent, err := mvmResolveLocationParent(true)
+func (s *migrationCmds) runMVMTPList(cmd *cobra.Command, args []string) error {
+	parent, err := s.mvmResolveLocationParent(true)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := mvmService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.mvmService(ctx)
 	if err != nil {
 		return err
 	}
@@ -283,8 +208,8 @@ func runMVMTPList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.TargetProjects.List(parent).Context(ctx)
-		if flagMVMFilter != "" {
-			call = call.Filter(flagMVMFilter)
+		if s.flagMVMFilter != "" {
+			call = call.Filter(s.flagMVMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -299,38 +224,38 @@ func runMVMTPList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagMVMFormat != "" {
-		return emitFormatted(all, flagMVMFormat)
+	if s.flagMVMFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagMVMFormat)
 	}
-	printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "PROJECT", "CREATE_TIME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-30s %s\n", "NAME", "PROJECT", "CREATE_TIME")
 	for _, tp := range all {
-		fmt.Printf("%-40s %-30s %s\n", path.Base(tp.Name), tp.Project, tp.CreateTime)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-30s %s\n", path.Base(tp.Name), tp.Project, tp.CreateTime)
 	}
 	return nil
 }
 
-func runMVMTPUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := mvmResolveLocationParent(true)
+func (s *migrationCmds) runMVMTPUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := s.mvmResolveLocationParent(true)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := mvmService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.mvmService(ctx)
 	if err != nil {
 		return err
 	}
 	body := &vmmigration.TargetProject{}
 	var mask []string
-	if flagMVMTargetProj != "" {
-		body.Project = flagMVMTargetProj
+	if s.flagMVMTargetProj != "" {
+		body.Project = s.flagMVMTargetProj
 		mask = append(mask, "project")
 	}
-	if flagMVMDescription != "" {
-		body.Description = flagMVMDescription
+	if s.flagMVMDescription != "" {
+		body.Description = s.flagMVMDescription
 		mask = append(mask, "description")
 	}
-	if flagMVMUpdateMask != "" {
-		mask = strings.Split(flagMVMUpdateMask, ",")
+	if s.flagMVMUpdateMask != "" {
+		mask = strings.Split(s.flagMVMUpdateMask, ",")
 	}
 	name := mvmResourceName(parent, "targetProjects", args[0])
 	call := svc.Projects.Locations.TargetProjects.Patch(name, body).Context(ctx)
@@ -341,26 +266,26 @@ func runMVMTPUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating target project: %w", err)
 	}
-	return mvmFinishOp(ctx, svc, op, "Update target project", args[0])
+	return s.mvmFinishOp(ctx, svc, op, "Update target project", args[0])
 }
 
 // --- image-imports impl ---
 
-func runMVMIICreate(cmd *cobra.Command, args []string) error {
-	parent, err := mvmResolveLocationParent(false)
+func (s *migrationCmds) runMVMIICreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.mvmResolveLocationParent(false)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := mvmService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.mvmService(ctx)
 	if err != nil {
 		return err
 	}
 	body := &vmmigration.ImageImport{
-		CloudStorageUri: flagMVMSourceFile,
+		CloudStorageUri: s.flagMVMSourceFile,
 	}
-	if flagMVMConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagMVMConfigFile, body); err != nil {
+	if s.flagMVMConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagMVMConfigFile, body); err != nil {
 			return err
 		}
 	}
@@ -368,23 +293,23 @@ func runMVMIICreate(cmd *cobra.Command, args []string) error {
 		body.DiskImageTargetDefaults = &vmmigration.DiskImageTargetDetails{}
 	}
 	target := body.DiskImageTargetDefaults
-	if flagMVMImageName != "" {
-		target.ImageName = flagMVMImageName
+	if s.flagMVMImageName != "" {
+		target.ImageName = s.flagMVMImageName
 	} else if target.ImageName == "" {
 		target.ImageName = args[0]
 	}
-	target.TargetProject = flagMVMImportTP
-	if flagMVMDescription != "" {
-		target.Description = flagMVMDescription
+	target.TargetProject = s.flagMVMImportTP
+	if s.flagMVMDescription != "" {
+		target.Description = s.flagMVMDescription
 	}
-	if flagMVMFamily != "" {
-		target.FamilyName = flagMVMFamily
+	if s.flagMVMFamily != "" {
+		target.FamilyName = s.flagMVMFamily
 	}
-	if len(flagMVMLabels) > 0 {
+	if len(s.flagMVMLabels) > 0 {
 		if target.Labels == nil {
 			target.Labels = map[string]string{}
 		}
-		for _, kv := range flagMVMLabels {
+		for _, kv := range s.flagMVMLabels {
 			k, v, ok := strings.Cut(kv, "=")
 			if !ok {
 				return fmt.Errorf("invalid --labels entry %q (want KEY=VALUE)", kv)
@@ -392,23 +317,23 @@ func runMVMIICreate(cmd *cobra.Command, args []string) error {
 			target.Labels[k] = v
 		}
 	}
-	if len(flagMVMAddLicenses) > 0 {
-		target.AdditionalLicenses = append(target.AdditionalLicenses, flagMVMAddLicenses...)
+	if len(s.flagMVMAddLicenses) > 0 {
+		target.AdditionalLicenses = append(target.AdditionalLicenses, s.flagMVMAddLicenses...)
 	}
-	target.SingleRegionStorage = flagMVMSingleRegion
-	if flagMVMKmsKey != "" {
-		body.Encryption = &vmmigration.Encryption{KmsKey: flagMVMKmsKey}
+	target.SingleRegionStorage = s.flagMVMSingleRegion
+	if s.flagMVMKmsKey != "" {
+		body.Encryption = &vmmigration.Encryption{KmsKey: s.flagMVMKmsKey}
 	}
-	if flagMVMSkipOSAdapt {
+	if s.flagMVMSkipOSAdapt {
 		target.DataDiskImageImport = &vmmigration.DataDiskImageImport{}
 		target.OsAdaptationParameters = nil
-	} else if flagMVMGeneralize || flagMVMLicenseType != "" || flagMVMBootConv != "" {
+	} else if s.flagMVMGeneralize || s.flagMVMLicenseType != "" || s.flagMVMBootConv != "" {
 		if target.OsAdaptationParameters == nil {
 			target.OsAdaptationParameters = &vmmigration.ImageImportOsAdaptationParameters{}
 		}
 		p := target.OsAdaptationParameters
-		p.Generalize = flagMVMGeneralize
-		switch strings.ToLower(flagMVMLicenseType) {
+		p.Generalize = s.flagMVMGeneralize
+		switch strings.ToLower(s.flagMVMLicenseType) {
 		case "":
 		case "default":
 			p.LicenseType = "COMPUTE_ENGINE_LICENSE_TYPE_DEFAULT"
@@ -417,32 +342,32 @@ func runMVMIICreate(cmd *cobra.Command, args []string) error {
 		case "byol":
 			p.LicenseType = "COMPUTE_ENGINE_LICENSE_TYPE_BYOL"
 		default:
-			return fmt.Errorf("invalid --license-type %q (want default, payg, or byol)", flagMVMLicenseType)
+			return fmt.Errorf("invalid --license-type %q (want default, payg, or byol)", s.flagMVMLicenseType)
 		}
-		switch strings.ToLower(flagMVMBootConv) {
+		switch strings.ToLower(s.flagMVMBootConv) {
 		case "":
 		case "none":
 			p.BootConversion = "NONE"
 		case "bios-to-efi":
 			p.BootConversion = "BIOS_TO_EFI"
 		default:
-			return fmt.Errorf("invalid --boot-conversion %q (want none or bios-to-efi)", flagMVMBootConv)
+			return fmt.Errorf("invalid --boot-conversion %q (want none or bios-to-efi)", s.flagMVMBootConv)
 		}
 	}
 	op, err := svc.Projects.Locations.ImageImports.Create(parent, body).ImageImportId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating image import: %w", err)
 	}
-	return mvmFinishOp(ctx, svc, op, "Create image import", args[0])
+	return s.mvmFinishOp(ctx, svc, op, "Create image import", args[0])
 }
 
-func runMVMIIDelete(cmd *cobra.Command, args []string) error {
-	parent, err := mvmResolveLocationParent(false)
+func (s *migrationCmds) runMVMIIDelete(cmd *cobra.Command, args []string) error {
+	parent, err := s.mvmResolveLocationParent(false)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := mvmService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.mvmService(ctx)
 	if err != nil {
 		return err
 	}
@@ -451,16 +376,16 @@ func runMVMIIDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting image import: %w", err)
 	}
-	return mvmFinishOp(ctx, svc, op, "Delete image import", args[0])
+	return s.mvmFinishOp(ctx, svc, op, "Delete image import", args[0])
 }
 
-func runMVMIIDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := mvmResolveLocationParent(false)
+func (s *migrationCmds) runMVMIIDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := s.mvmResolveLocationParent(false)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := mvmService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.mvmService(ctx)
 	if err != nil {
 		return err
 	}
@@ -469,16 +394,16 @@ func runMVMIIDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing image import: %w", err)
 	}
-	return emitFormatted(got, flagMVMFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMVMFormat)
 }
 
-func runMVMIIList(cmd *cobra.Command, args []string) error {
-	parent, err := mvmResolveLocationParent(false)
+func (s *migrationCmds) runMVMIIList(cmd *cobra.Command, args []string) error {
+	parent, err := s.mvmResolveLocationParent(false)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := mvmService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.mvmService(ctx)
 	if err != nil {
 		return err
 	}
@@ -486,8 +411,8 @@ func runMVMIIList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.ImageImports.List(parent).Context(ctx)
-		if flagMVMFilter != "" {
-			call = call.Filter(flagMVMFilter)
+		if s.flagMVMFilter != "" {
+			call = call.Filter(s.flagMVMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -502,12 +427,12 @@ func runMVMIIList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagMVMFormat != "" {
-		return emitFormatted(all, flagMVMFormat)
+	if s.flagMVMFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagMVMFormat)
 	}
-	printTableHeading(len(all), "%-40s %-60s %s\n", "NAME", "CLOUD_STORAGE_URI", "CREATE_TIME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-60s %s\n", "NAME", "CLOUD_STORAGE_URI", "CREATE_TIME")
 	for _, ii := range all {
-		fmt.Printf("%-40s %-60s %s\n", path.Base(ii.Name), ii.CloudStorageUri, ii.CreateTime)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-60s %s\n", path.Base(ii.Name), ii.CloudStorageUri, ii.CreateTime)
 	}
 	return nil
 }

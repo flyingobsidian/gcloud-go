@@ -7,68 +7,38 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	composer "google.golang.org/api/composer/v1"
 )
 
 // --- gcloud composer operations (#1503) ---
 
-var composerOpCmd = &cobra.Command{Use: "operations", Short: "Manage Cloud Composer operations"}
-
-var (
-	flagComposerOpLocation string
-	flagComposerOpFormat   string
-	flagComposerOpFilter   string
-	flagComposerOpPageSize int64
-	flagComposerOpTimeout  time.Duration
-)
-
-var (
-	composerOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete a Composer operation record",
-		Args: cobra.ExactArgs(1), RunE: runComposerOpDelete,
-	}
-	composerOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Composer operation",
-		Args: cobra.ExactArgs(1), RunE: runComposerOpDescribe,
-	}
-	composerOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Composer operations",
-		Args: cobra.NoArgs, RunE: runComposerOpList,
-	}
-	composerOpWaitCmd = &cobra.Command{
-		Use: "wait OPERATION", Short: "Wait for a Composer operation to complete",
-		Args: cobra.ExactArgs(1), RunE: runComposerOpWait,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{composerOpDeleteCmd, composerOpDescribeCmd, composerOpListCmd, composerOpWaitCmd}
+func (s *composerCmds) initComposerOperations() {
+	all := []*cobra.Command{s.composerOpDeleteCmd, s.composerOpDescribeCmd, s.composerOpListCmd, s.composerOpWaitCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagComposerOpLocation, "location", "", "Composer location (required)")
+		c.Flags().StringVar(&s.flagComposerOpLocation, "location", "", "Composer location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagComposerOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagComposerOpFormat, "format", "", "Output format")
 	}
-	composerOpListCmd.Flags().StringVar(&flagComposerOpFilter, "filter", "", "Server-side filter expression")
-	composerOpListCmd.Flags().Int64Var(&flagComposerOpPageSize, "page-size", 0, "Maximum results per page")
-	composerOpWaitCmd.Flags().DurationVar(&flagComposerOpTimeout, "timeout", 30*time.Minute,
+	s.composerOpListCmd.Flags().StringVar(&s.flagComposerOpFilter, "filter", "", "Server-side filter expression")
+	s.composerOpListCmd.Flags().Int64Var(&s.flagComposerOpPageSize, "page-size", 0, "Maximum results per page")
+	s.composerOpWaitCmd.Flags().DurationVar(&s.flagComposerOpTimeout, "timeout", 30*time.Minute,
 		"Maximum time to wait before returning (e.g. 15m, 1h)")
 
-	composerOpCmd.AddCommand(all...)
-	composerCmd.AddCommand(composerOpCmd)
+	s.composerOpCmd.AddCommand(all...)
+	s.composerCmd.AddCommand(s.composerOpCmd)
 }
 
-func composerOpParent() (string, error) {
-	project, err := resolveProject()
+func (s *composerCmds) composerOpParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return composerLocationParent(project, flagComposerOpLocation), nil
+	return composerLocationParent(project, s.flagComposerOpLocation), nil
 }
 
-func composerOpName(id string) (string, error) {
-	parent, err := composerOpParent()
+func (s *composerCmds) composerOpName(id string) (string, error) {
+	parent, err := s.composerOpParent()
 	if err != nil {
 		return "", err
 	}
@@ -81,30 +51,30 @@ func composerOpName(id string) (string, error) {
 	return fmt.Sprintf("%s/operations/%s", parent, id), nil
 }
 
-func runComposerOpDelete(cmd *cobra.Command, args []string) error {
-	name, err := composerOpName(args[0])
+func (s *composerCmds) runComposerOpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.composerOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation %s.\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation %s.\n", args[0])
 	return nil
 }
 
-func runComposerOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := composerOpName(args[0])
+func (s *composerCmds) runComposerOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.composerOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -112,16 +82,16 @@ func runComposerOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagComposerOpFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagComposerOpFormat)
 }
 
-func runComposerOpList(cmd *cobra.Command, args []string) error {
-	parent, err := composerOpParent()
+func (s *composerCmds) runComposerOpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.composerOpParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,11 +99,11 @@ func runComposerOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Operations.List(parent).Context(ctx)
-		if flagComposerOpFilter != "" {
-			call = call.Filter(flagComposerOpFilter)
+		if s.flagComposerOpFilter != "" {
+			call = call.Filter(s.flagComposerOpFilter)
 		}
-		if flagComposerOpPageSize > 0 {
-			call = call.PageSize(flagComposerOpPageSize)
+		if s.flagComposerOpPageSize > 0 {
+			call = call.PageSize(s.flagComposerOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -148,24 +118,24 @@ func runComposerOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagComposerOpFormat != "" {
-		return emitFormatted(all, flagComposerOpFormat)
+	if s.flagComposerOpFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagComposerOpFormat)
 	}
-	printTableHeading(len(all), "%-50s %s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-50s %s\n", "NAME", "DONE")
 	for _, o := range all {
-		fmt.Printf("%-50s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(s.inv.stdout, "%-50s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }
 
-func runComposerOpWait(cmd *cobra.Command, args []string) error {
-	name, err := composerOpName(args[0])
+func (s *composerCmds) runComposerOpWait(cmd *cobra.Command, args []string) error {
+	name, err := s.composerOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), flagComposerOpTimeout)
+	ctx, cancel := context.WithTimeout(cmd.Context(), s.flagComposerOpTimeout)
 	defer cancel()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -179,8 +149,8 @@ func runComposerOpWait(cmd *cobra.Command, args []string) error {
 			if op.Error != nil {
 				return fmt.Errorf("operation failed: %s", op.Error.Message)
 			}
-			fmt.Printf("Operation %s completed.\n", args[0])
-			return emitFormatted(op, flagComposerOpFormat)
+			fmt.Fprintf(s.inv.stdout, "Operation %s completed.\n", args[0])
+			return emitFormattedTo(s.inv.stdout, op, s.flagComposerOpFormat)
 		}
 		select {
 		case <-ctx.Done():

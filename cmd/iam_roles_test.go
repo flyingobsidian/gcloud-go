@@ -14,18 +14,19 @@ func TestRoleResourceName(t *testing.T) {
 }
 
 func TestBuildCreateRoleRequest(t *testing.T) {
-	flagRoleTitle = "My Role"
-	flagRoleDescription = "does things"
-	flagRolePermissions = []string{"some.permission", "some.other.permission"}
-	flagRoleStage = "GA"
+	grp := newIamCmds(legacyTestInvocation())
+	grp.flagRoleTitle = "My Role"
+	grp.flagRoleDescription = "does things"
+	grp.flagRolePermissions = []string{"some.permission", "some.other.permission"}
+	grp.flagRoleStage = "GA"
 	t.Cleanup(func() {
-		flagRoleTitle = ""
-		flagRoleDescription = ""
-		flagRolePermissions = nil
-		flagRoleStage = ""
+		grp.flagRoleTitle = ""
+		grp.flagRoleDescription = ""
+		grp.flagRolePermissions = nil
+		grp.flagRoleStage = ""
 	})
 
-	req := buildCreateRoleRequest("myRole")
+	req := grp.buildCreateRoleRequest("myRole")
 
 	if req.RoleId != "myRole" {
 		t.Errorf("RoleId = %q, want myRole", req.RoleId)
@@ -49,12 +50,13 @@ func TestBuildCreateRoleRequest(t *testing.T) {
 }
 
 func TestBuildCreateRoleRequestMinimal(t *testing.T) {
-	flagRoleTitle = ""
-	flagRoleDescription = ""
-	flagRolePermissions = nil
-	flagRoleStage = ""
+	grp := newIamCmds(legacyTestInvocation())
+	grp.flagRoleTitle = ""
+	grp.flagRoleDescription = ""
+	grp.flagRolePermissions = nil
+	grp.flagRoleStage = ""
 
-	req := buildCreateRoleRequest("bareRole")
+	req := grp.buildCreateRoleRequest("bareRole")
 
 	if req.RoleId != "bareRole" {
 		t.Errorf("RoleId = %q, want bareRole", req.RoleId)

@@ -7,7 +7,8 @@ import (
 )
 
 func nsSubgroup(name string) *cobra.Command {
-	for _, c := range networkSecurityCmd.Commands() {
+	grp := newNetworkSecurityCmds(legacyTestInvocation())
+	for _, c := range grp.networkSecurityCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

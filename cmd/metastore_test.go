@@ -7,7 +7,8 @@ import (
 )
 
 func metastoreSubgroup(name string) *cobra.Command {
-	for _, c := range metastoreCmd.Commands() {
+	grp := newMetastoreCmds(legacyTestInvocation())
+	for _, c := range grp.metastoreCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

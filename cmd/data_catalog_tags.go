@@ -1,109 +1,76 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	datacatalog "google.golang.org/api/datacatalog/v1"
 )
 
 // --- gcloud data-catalog tags (#1507) ---
 
-var dcTagsCmd = &cobra.Command{Use: "tags", Short: "Manage Data Catalog tags"}
-
-var (
-	flagDCTagLocation   string
-	flagDCTagEntryGroup string
-	flagDCTagEntry      string
-	flagDCTagFormat     string
-	flagDCTagConfigFile string
-	flagDCTagUpdateMask string
-	flagDCTagPageSize   int64
-)
-
-var (
-	dcTagCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create a tag",
-		Args: cobra.NoArgs, RunE: runDCTagCreate,
-	}
-	dcTagDeleteCmd = &cobra.Command{
-		Use: "delete TAG", Short: "Delete a tag",
-		Args: cobra.ExactArgs(1), RunE: runDCTagDelete,
-	}
-	dcTagListCmd = &cobra.Command{
-		Use: "list", Short: "List tags on an entry or entry group",
-		Args: cobra.NoArgs, RunE: runDCTagList,
-	}
-	dcTagUpdateCmd = &cobra.Command{
-		Use: "update TAG", Short: "Update a tag",
-		Args: cobra.ExactArgs(1), RunE: runDCTagUpdate,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{dcTagCreateCmd, dcTagDeleteCmd, dcTagListCmd, dcTagUpdateCmd}
+func (s *dataCatalogCmds) initDataCatalogTags() {
+	all := []*cobra.Command{s.dcTagCreateCmd, s.dcTagDeleteCmd, s.dcTagListCmd, s.dcTagUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDCTagLocation, "location", "", "Location that owns the entry group (required)")
+		c.Flags().StringVar(&s.flagDCTagLocation, "location", "", "Location that owns the entry group (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagDCTagEntryGroup, "entry-group", "", "Entry group ID (required)")
+		c.Flags().StringVar(&s.flagDCTagEntryGroup, "entry-group", "", "Entry group ID (required)")
 		_ = c.MarkFlagRequired("entry-group")
-		c.Flags().StringVar(&flagDCTagEntry, "entry", "",
+		c.Flags().StringVar(&s.flagDCTagEntry, "entry", "",
 			"Entry ID (omit to attach the tag to the entry group itself)")
-		c.Flags().StringVar(&flagDCTagFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDCTagFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dcTagCreateCmd, dcTagUpdateCmd} {
-		c.Flags().StringVar(&flagDCTagConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dcTagCreateCmd, s.dcTagUpdateCmd} {
+		c.Flags().StringVar(&s.flagDCTagConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Tag body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dcTagUpdateCmd.Flags().StringVar(&flagDCTagUpdateMask, "update-mask", "",
+	s.dcTagUpdateCmd.Flags().StringVar(&s.flagDCTagUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	dcTagListCmd.Flags().Int64Var(&flagDCTagPageSize, "page-size", 0, "Maximum results per page")
+	s.dcTagListCmd.Flags().Int64Var(&s.flagDCTagPageSize, "page-size", 0, "Maximum results per page")
 
-	dcTagsCmd.AddCommand(all...)
-	dataCatalogCmd.AddCommand(dcTagsCmd)
+	s.dcTagsCmd.AddCommand(all...)
+	s.dataCatalogCmd.AddCommand(s.dcTagsCmd)
 }
 
-func dcTagParent() (string, error) {
-	project, err := resolveProject()
+func (s *dataCatalogCmds) dcTagParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	group := dcChild("entryGroups", flagDCTagEntryGroup, dcLocationParent(project, flagDCTagLocation))
-	if flagDCTagEntry != "" {
-		return dcChild("entries", flagDCTagEntry, group), nil
+	group := dcChild("entryGroups", s.flagDCTagEntryGroup, dcLocationParent(project, s.flagDCTagLocation))
+	if s.flagDCTagEntry != "" {
+		return dcChild("entries", s.flagDCTagEntry, group), nil
 	}
 	return group, nil
 }
 
-func dcTagName(id string) (string, error) {
-	parent, err := dcTagParent()
+func (s *dataCatalogCmds) dcTagName(id string) (string, error) {
+	parent, err := s.dcTagParent()
 	if err != nil {
 		return "", err
 	}
 	return dcChild("tags", id, parent), nil
 }
 
-func runDCTagCreate(cmd *cobra.Command, args []string) error {
-	parent, err := dcTagParent()
+func (s *dataCatalogCmds) runDCTagCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.dcTagParent()
 	if err != nil {
 		return err
 	}
 	body := &datacatalog.GoogleCloudDatacatalogV1Tag{}
-	if err := loadYAMLOrJSONInto(flagDCTagConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDCTagConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
 	var (
 		got *datacatalog.GoogleCloudDatacatalogV1Tag
 	)
-	if flagDCTagEntry != "" {
+	if s.flagDCTagEntry != "" {
 		got, err = svc.Projects.Locations.EntryGroups.Entries.Tags.Create(parent, body).Context(ctx).Do()
 	} else {
 		got, err = svc.Projects.Locations.EntryGroups.Tags.Create(parent, body).Context(ctx).Do()
@@ -111,21 +78,21 @@ func runDCTagCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating tag: %w", err)
 	}
-	fmt.Printf("Created tag [%s].\n", got.Name)
-	return emitFormatted(got, flagDCTagFormat)
+	fmt.Fprintf(s.inv.stdout, "Created tag [%s].\n", got.Name)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCTagFormat)
 }
 
-func runDCTagDelete(cmd *cobra.Command, args []string) error {
-	name, err := dcTagName(args[0])
+func (s *dataCatalogCmds) runDCTagDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.dcTagName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
-	if flagDCTagEntry != "" {
+	if s.flagDCTagEntry != "" {
 		_, err = svc.Projects.Locations.EntryGroups.Entries.Tags.Delete(name).Context(ctx).Do()
 	} else {
 		_, err = svc.Projects.Locations.EntryGroups.Tags.Delete(name).Context(ctx).Do()
@@ -133,17 +100,17 @@ func runDCTagDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting tag: %w", err)
 	}
-	fmt.Printf("Deleted tag [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted tag [%s].\n", args[0])
 	return nil
 }
 
-func runDCTagList(cmd *cobra.Command, args []string) error {
-	parent, err := dcTagParent()
+func (s *dataCatalogCmds) runDCTagList(cmd *cobra.Command, args []string) error {
+	parent, err := s.dcTagParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -151,10 +118,10 @@ func runDCTagList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		var resp *datacatalog.GoogleCloudDatacatalogV1ListTagsResponse
-		if flagDCTagEntry != "" {
+		if s.flagDCTagEntry != "" {
 			call := svc.Projects.Locations.EntryGroups.Entries.Tags.List(parent).Context(ctx)
-			if flagDCTagPageSize > 0 {
-				call = call.PageSize(flagDCTagPageSize)
+			if s.flagDCTagPageSize > 0 {
+				call = call.PageSize(s.flagDCTagPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -162,8 +129,8 @@ func runDCTagList(cmd *cobra.Command, args []string) error {
 			resp, err = call.Do()
 		} else {
 			call := svc.Projects.Locations.EntryGroups.Tags.List(parent).Context(ctx)
-			if flagDCTagPageSize > 0 {
-				call = call.PageSize(flagDCTagPageSize)
+			if s.flagDCTagPageSize > 0 {
+				call = call.PageSize(s.flagDCTagPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -179,29 +146,29 @@ func runDCTagList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDCTagFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDCTagFormat)
 }
 
-func runDCTagUpdate(cmd *cobra.Command, args []string) error {
-	name, err := dcTagName(args[0])
+func (s *dataCatalogCmds) runDCTagUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.dcTagName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &datacatalog.GoogleCloudDatacatalogV1Tag{}
-	if err := loadYAMLOrJSONInto(flagDCTagConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDCTagConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagDCTagUpdateMask
+	mask := s.flagDCTagUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
 	var got *datacatalog.GoogleCloudDatacatalogV1Tag
-	if flagDCTagEntry != "" {
+	if s.flagDCTagEntry != "" {
 		call := svc.Projects.Locations.EntryGroups.Entries.Tags.Patch(name, body).Context(ctx)
 		if mask != "" {
 			call = call.UpdateMask(mask)
@@ -217,6 +184,6 @@ func runDCTagUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating tag: %w", err)
 	}
-	fmt.Printf("Updated tag [%s].\n", args[0])
-	return emitFormatted(got, flagDCTagFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated tag [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCTagFormat)
 }

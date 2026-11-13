@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	testing "google.golang.org/api/testing/v1"
 )
@@ -15,124 +14,88 @@ import (
 // models/versions/locales enumeration, and ProjectsTestMatrices for
 // submitting/inspecting an Android test run.
 
-var firebaseTestAndroidCmd = &cobra.Command{Use: "android", Short: "Android application testing"}
+func (s *firebaseCmds) initFirebaseTestAndroidCmd() {
+	s.firebaseTestAndroidModelsCmd.AddCommand(s.firebaseTestAndroidModelsListCmd)
+	s.firebaseTestAndroidVersionsCmd.AddCommand(s.firebaseTestAndroidVersionsListCmd)
+	s.firebaseTestAndroidLocalesCmd.AddCommand(s.firebaseTestAndroidLocalesListCmd)
+	s.firebaseTestAndroidRunCmd.Flags().StringVar(&s.flagFtaConfigFile, "config-file", "", "YAML/JSON file with a TestMatrix body (required)")
+	_ = s.firebaseTestAndroidRunCmd.MarkFlagRequired("config-file")
+	s.firebaseTestAndroidRunCmd.Flags().StringVar(&s.flagFtaProject, "project", "", "Owning project (falls back to the resolved project)")
+	s.firebaseTestAndroidRunCmd.Flags().StringVar(&s.flagFtaFormat, "format", "", "Output format")
+	s.firebaseTestAndroidModelsListCmd.Flags().StringVar(&s.flagFtaFormat, "format", "", "Output format")
+	s.firebaseTestAndroidVersionsListCmd.Flags().StringVar(&s.flagFtaFormat, "format", "", "Output format")
+	s.firebaseTestAndroidLocalesListCmd.Flags().StringVar(&s.flagFtaFormat, "format", "", "Output format")
 
-var (
-	flagFtaFormat     string
-	flagFtaConfigFile string
-	flagFtaProject    string
-)
-
-var (
-	firebaseTestAndroidModelsCmd = &cobra.Command{
-		Use: "models", Short: "Manage supported Android device models",
-	}
-	firebaseTestAndroidModelsListCmd = &cobra.Command{
-		Use: "list", Short: "List supported Android device models",
-		Args: cobra.NoArgs, RunE: runFtaModelsList,
-	}
-	firebaseTestAndroidVersionsCmd = &cobra.Command{
-		Use: "versions", Short: "Manage supported Android OS versions",
-	}
-	firebaseTestAndroidVersionsListCmd = &cobra.Command{
-		Use: "list", Short: "List supported Android OS versions",
-		Args: cobra.NoArgs, RunE: runFtaVersionsList,
-	}
-	firebaseTestAndroidLocalesCmd = &cobra.Command{
-		Use: "locales", Short: "Manage supported Android locales",
-	}
-	firebaseTestAndroidLocalesListCmd = &cobra.Command{
-		Use: "locales", Short: "List supported Android locales",
-		Args: cobra.NoArgs, RunE: runFtaLocalesList,
-	}
-	firebaseTestAndroidRunCmd = &cobra.Command{
-		Use: "run", Short: "Submit an Android test matrix (loads TestMatrix body from --config-file)",
-		Args: cobra.NoArgs, RunE: runFtaRun,
-	}
-)
-
-func init() {
-	firebaseTestAndroidModelsCmd.AddCommand(firebaseTestAndroidModelsListCmd)
-	firebaseTestAndroidVersionsCmd.AddCommand(firebaseTestAndroidVersionsListCmd)
-	firebaseTestAndroidLocalesCmd.AddCommand(firebaseTestAndroidLocalesListCmd)
-	firebaseTestAndroidRunCmd.Flags().StringVar(&flagFtaConfigFile, "config-file", "", "YAML/JSON file with a TestMatrix body (required)")
-	_ = firebaseTestAndroidRunCmd.MarkFlagRequired("config-file")
-	firebaseTestAndroidRunCmd.Flags().StringVar(&flagFtaProject, "project", "", "Owning project (falls back to the resolved project)")
-	firebaseTestAndroidRunCmd.Flags().StringVar(&flagFtaFormat, "format", "", "Output format")
-	firebaseTestAndroidModelsListCmd.Flags().StringVar(&flagFtaFormat, "format", "", "Output format")
-	firebaseTestAndroidVersionsListCmd.Flags().StringVar(&flagFtaFormat, "format", "", "Output format")
-	firebaseTestAndroidLocalesListCmd.Flags().StringVar(&flagFtaFormat, "format", "", "Output format")
-
-	firebaseTestAndroidCmd.AddCommand(
-		firebaseTestAndroidModelsCmd, firebaseTestAndroidVersionsCmd,
-		firebaseTestAndroidLocalesCmd, firebaseTestAndroidRunCmd,
+	s.firebaseTestAndroidCmd.AddCommand(
+		s.firebaseTestAndroidModelsCmd, s.firebaseTestAndroidVersionsCmd,
+		s.firebaseTestAndroidLocalesCmd, s.firebaseTestAndroidRunCmd,
 	)
-	firebaseTestCmd.AddCommand(firebaseTestAndroidCmd)
+	s.firebaseTestCmd.AddCommand(s.firebaseTestAndroidCmd)
 }
 
-func ftaCatalog(ctx context.Context) (*testing.TestEnvironmentCatalog, error) {
-	project, err := resolveProject()
+func (s *firebaseCmds) ftaCatalog(ctx context.Context) (*testing.TestEnvironmentCatalog, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return nil, err
 	}
-	svc, err := gcp.TestingService(ctx, flagAccount)
+	svc, err := s.inv.clients().Testing(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return svc.TestEnvironmentCatalog.Get("ANDROID").ProjectId(project).Context(ctx).Do()
 }
 
-func runFtaModelsList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	cat, err := ftaCatalog(ctx)
+func (s *firebaseCmds) runFtaModelsList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	cat, err := s.ftaCatalog(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching Android device catalog: %w", err)
 	}
 	if cat.AndroidDeviceCatalog == nil {
-		return emitFormatted([]any{}, flagFtaFormat)
+		return emitFormattedTo(s.inv.stdout, []any{}, s.flagFtaFormat)
 	}
-	return emitFormatted(cat.AndroidDeviceCatalog.Models, flagFtaFormat)
+	return emitFormattedTo(s.inv.stdout, cat.AndroidDeviceCatalog.Models, s.flagFtaFormat)
 }
 
-func runFtaVersionsList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	cat, err := ftaCatalog(ctx)
+func (s *firebaseCmds) runFtaVersionsList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	cat, err := s.ftaCatalog(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching Android device catalog: %w", err)
 	}
 	if cat.AndroidDeviceCatalog == nil {
-		return emitFormatted([]any{}, flagFtaFormat)
+		return emitFormattedTo(s.inv.stdout, []any{}, s.flagFtaFormat)
 	}
-	return emitFormatted(cat.AndroidDeviceCatalog.Versions, flagFtaFormat)
+	return emitFormattedTo(s.inv.stdout, cat.AndroidDeviceCatalog.Versions, s.flagFtaFormat)
 }
 
-func runFtaLocalesList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	cat, err := ftaCatalog(ctx)
+func (s *firebaseCmds) runFtaLocalesList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	cat, err := s.ftaCatalog(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching Android device catalog: %w", err)
 	}
 	if cat.AndroidDeviceCatalog == nil {
-		return emitFormatted([]any{}, flagFtaFormat)
+		return emitFormattedTo(s.inv.stdout, []any{}, s.flagFtaFormat)
 	}
-	return emitFormatted(cat.AndroidDeviceCatalog.RuntimeConfiguration.Locales, flagFtaFormat)
+	return emitFormattedTo(s.inv.stdout, cat.AndroidDeviceCatalog.RuntimeConfiguration.Locales, s.flagFtaFormat)
 }
 
-func runFtaRun(cmd *cobra.Command, args []string) error {
-	project := flagFtaProject
+func (s *firebaseCmds) runFtaRun(cmd *cobra.Command, args []string) error {
+	project := s.flagFtaProject
 	if project == "" {
-		p, err := resolveProject()
+		p, err := s.inv.project()
 		if err != nil {
 			return err
 		}
 		project = p
 	}
 	body := &testing.TestMatrix{}
-	if err := loadYAMLOrJSONInto(flagFtaConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagFtaConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.TestingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Testing(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,6 +103,6 @@ func runFtaRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("submitting Android test matrix: %w", err)
 	}
-	fmt.Printf("Submitted Android test matrix [%s].\n", got.TestMatrixId)
-	return emitFormatted(got, flagFtaFormat)
+	fmt.Fprintf(s.inv.stdout, "Submitted Android test matrix [%s].\n", got.TestMatrixId)
+	return emitFormattedTo(s.inv.stdout, got, s.flagFtaFormat)
 }

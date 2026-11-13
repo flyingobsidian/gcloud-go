@@ -1,54 +1,35 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 )
 
 // --- gcloud artifacts operations (#1076) ---
 
-var artifactsOperationsCmd = &cobra.Command{
-	Use:   "operations",
-	Short: "Manage Artifact Registry long-running operations",
+func (s *artifactsCmds) initArtifactsOperations() {
+	s.artifactsOperationsDescribeCmd.Flags().StringVar(&s.flagArtOpsLocation, "location", "", "Location of the operation")
+	s.artifactsOperationsDescribeCmd.Flags().StringVar(&s.flagArtOpsFormat, "format", "", "Output format")
+
+	s.artifactsOperationsCmd.AddCommand(s.artifactsOperationsDescribeCmd)
+	s.artifactsCmd.AddCommand(s.artifactsOperationsCmd)
 }
 
-var (
-	flagArtOpsLocation string
-	flagArtOpsFormat   string
-)
-
-var artifactsOperationsDescribeCmd = &cobra.Command{
-	Use:   "describe OPERATION",
-	Short: "Describe an Artifact Registry operation",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsOperationsDescribe,
-}
-
-func init() {
-	artifactsOperationsDescribeCmd.Flags().StringVar(&flagArtOpsLocation, "location", "", "Location of the operation")
-	artifactsOperationsDescribeCmd.Flags().StringVar(&flagArtOpsFormat, "format", "", "Output format")
-
-	artifactsOperationsCmd.AddCommand(artifactsOperationsDescribeCmd)
-	artifactsCmd.AddCommand(artifactsOperationsCmd)
-}
-
-func runArtifactsOperationsDescribe(cmd *cobra.Command, args []string) error {
+func (s *artifactsCmds) runArtifactsOperationsDescribe(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	if flagArtOpsLocation == "" && !isFullOperationName(name) {
+	if s.flagArtOpsLocation == "" && !isFullOperationName(name) {
 		return fmt.Errorf("--location is required (or pass a full projects/.../operations/... name)")
 	}
 	if !isFullOperationName(name) {
-		project, err := resolveProject()
+		project, err := s.inv.project()
 		if err != nil {
 			return err
 		}
-		name = fmt.Sprintf("%s/operations/%s", artLocationParent(project, flagArtOpsLocation), name)
+		name = fmt.Sprintf("%s/operations/%s", artLocationParent(project, s.flagArtOpsLocation), name)
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
@@ -56,7 +37,7 @@ func runArtifactsOperationsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagArtOpsFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagArtOpsFormat)
 }
 
 func isFullOperationName(s string) bool {

@@ -7,7 +7,8 @@ import (
 )
 
 func functionsSubgroup(name string) *cobra.Command {
-	for _, c := range functionsCmd.Commands() {
+	grp := newFunctionsCmds(legacyTestInvocation())
+	for _, c := range grp.functionsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -16,9 +17,10 @@ func functionsSubgroup(name string) *cobra.Command {
 }
 
 func TestFunctionsIamCommandsRegistered(t *testing.T) {
+	grp := newFunctionsCmds(legacyTestInvocation())
 	want := []string{"add-iam-policy-binding", "get-iam-policy", "remove-iam-policy-binding", "set-iam-policy"}
 	got := map[string]bool{}
-	for _, c := range functionsCmd.Commands() {
+	for _, c := range grp.functionsCmd.Commands() {
 		got[c.Name()] = true
 	}
 	for _, w := range want {

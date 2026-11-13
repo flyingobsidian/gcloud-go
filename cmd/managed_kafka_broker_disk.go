@@ -13,11 +13,11 @@ import (
 // cluster.brokerCapacityConfig.diskSizeGib, matching the api_field of
 // gcloud-python's broker-disk flag. Other brokerCapacityConfig fields loaded
 // from --config-file are preserved; the flag overrides diskSizeGib.
-func applyBrokerDiskFlag(cluster *managedkafka.Cluster) error {
-	if flagMKBrokerDiskGiB == "" {
+func (s *managedKafkaCmds) applyBrokerDiskFlag(cluster *managedkafka.Cluster) error {
+	if s.flagMKBrokerDiskGiB == "" {
 		return nil
 	}
-	gib, err := parseBrokerDiskSizeGiB(flagMKBrokerDiskGiB)
+	gib, err := parseBrokerDiskSizeGiB(s.flagMKBrokerDiskGiB)
 	if err != nil {
 		return err
 	}
@@ -39,8 +39,8 @@ func applyBrokerDiskFlag(cluster *managedkafka.Cluster) error {
 
 // parseBrokerDiskSizeGiB accepts a raw --broker-disk-size-gib value from the
 // CLI and returns the size in gibibytes. The gcloud-python util accepts a
-// plain integer or an integer plus a byte-unit suffix (``B``, ``KiB``, ``KB``,
-// ``MiB``, ``MB``, ``GiB``, ``GB``, ``TiB``, ``TB``, etc.) and normalises the
+// plain integer or an integer plus a byte-unit suffix (“B“, “KiB“, “KB“,
+// “MiB“, “MB“, “GiB“, “GB“, “TiB“, “TB“, etc.) and normalises the
 // value to GiB. Fractional GiB values are rejected to match the API contract.
 func parseBrokerDiskSizeGiB(raw string) (int64, error) {
 	s := strings.TrimSpace(raw)

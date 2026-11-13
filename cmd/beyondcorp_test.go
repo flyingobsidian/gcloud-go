@@ -8,7 +8,8 @@ import (
 )
 
 func beyondcorpSubgroup(name string) *cobra.Command {
-	for _, c := range beyondcorpCmd.Commands() {
+	grp := newBeyondcorpCmds(legacyTestInvocation())
+	for _, c := range grp.beyondcorpCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -137,18 +138,19 @@ func TestBcIamAddRemoveBinding(t *testing.T) {
 }
 
 func TestBcIamBuildAndCondsEqual(t *testing.T) {
+	grp := newBeyondcorpCmds(legacyTestInvocation())
 	// no flags → nil
-	flagBCIamCondExpr, flagBCIamCondTitle, flagBCIamCondDesc = "", "", ""
-	if bcIamBuildCondition() != nil {
+	grp.flagBCIamCondExpr, grp.flagBCIamCondTitle, grp.flagBCIamCondDesc = "", "", ""
+	if grp.bcIamBuildCondition() != nil {
 		t.Error("expected nil condition when no flags set")
 	}
 	// flags set → non-nil with correct values
-	flagBCIamCondExpr = "request.time < timestamp('2026-01-01T00:00:00Z')"
-	flagBCIamCondTitle = "expires_2026"
-	flagBCIamCondDesc = "expires new year 2026"
-	defer func() { flagBCIamCondExpr, flagBCIamCondTitle, flagBCIamCondDesc = "", "", "" }()
-	c := bcIamBuildCondition()
-	if c == nil || c.Expression != flagBCIamCondExpr || c.Title != flagBCIamCondTitle || c.Description != flagBCIamCondDesc {
+	grp.flagBCIamCondExpr = "request.time < timestamp('2026-01-01T00:00:00Z')"
+	grp.flagBCIamCondTitle = "expires_2026"
+	grp.flagBCIamCondDesc = "expires new year 2026"
+	defer func() { grp.flagBCIamCondExpr, grp.flagBCIamCondTitle, grp.flagBCIamCondDesc = "", "", "" }()
+	c := grp.bcIamBuildCondition()
+	if c == nil || c.Expression != grp.flagBCIamCondExpr || c.Title != grp.flagBCIamCondTitle || c.Description != grp.flagBCIamCondDesc {
 		t.Errorf("bcIamBuildCondition returned %+v", c)
 	}
 	// conds equal
@@ -158,7 +160,7 @@ func TestBcIamBuildAndCondsEqual(t *testing.T) {
 	if bcIamCondsEqual(c, nil) || bcIamCondsEqual(nil, c) {
 		t.Error("nil and non-nil should not be equal")
 	}
-	if !bcIamCondsEqual(c, bcIamBuildCondition()) {
+	if !bcIamCondsEqual(c, grp.bcIamBuildCondition()) {
 		t.Error("identical conditions should be equal")
 	}
 }

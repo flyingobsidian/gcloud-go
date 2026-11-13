@@ -1,96 +1,61 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
 
 // --- gcloud apihub attributes (#1156) ---
 
-var apihubAttrsCmd = &cobra.Command{Use: "attributes", Short: "Manage API Hub attributes"}
-
-var (
-	flagApihubAttrsLocation    string
-	flagApihubAttrsFormat      string
-	flagApihubAttrsDestination string
-	flagApihubAttrsSource      string
-	flagApihubAttrsPageSize    int64
-)
-
-var (
-	apihubAttrsDeleteCmd = &cobra.Command{
-		Use: "delete RESOURCE", Short: "Delete an attribute",
-		Args: cobra.ExactArgs(1), RunE: runApihubAttrsDelete,
-	}
-	apihubAttrsDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe an attribute",
-		Args: cobra.ExactArgs(1), RunE: runApihubAttrsDescribe,
-	}
-	apihubAttrsExportCmd = &cobra.Command{
-		Use: "export RESOURCE", Short: "Export an attribute to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runApihubAttrsExport,
-	}
-	apihubAttrsImportCmd = &cobra.Command{
-		Use: "import RESOURCE", Short: "Import an attribute from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runApihubAttrsImport,
-	}
-	apihubAttrsListCmd = &cobra.Command{
-		Use: "list", Short: "List attributes in a location",
-		Args: cobra.NoArgs, RunE: runApihubAttrsList,
-	}
-)
-
-func init() {
+func (g *apihubCmds) initApihubAttributes() {
 	all := []*cobra.Command{
-		apihubAttrsDeleteCmd, apihubAttrsDescribeCmd,
-		apihubAttrsExportCmd, apihubAttrsImportCmd,
-		apihubAttrsListCmd,
+		g.apihubAttrsDeleteCmd, g.apihubAttrsDescribeCmd,
+		g.apihubAttrsExportCmd, g.apihubAttrsImportCmd,
+		g.apihubAttrsListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApihubAttrsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&g.flagApihubAttrsLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagApihubAttrsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagApihubAttrsFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(apihubAttrsExportCmd, &flagApihubAttrsDestination)
-	nsBindImportFlags(apihubAttrsImportCmd, &flagApihubAttrsSource)
-	apihubAttrsListCmd.Flags().Int64Var(&flagApihubAttrsPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(g.apihubAttrsExportCmd, &g.flagApihubAttrsDestination)
+	nsBindImportFlags(g.apihubAttrsImportCmd, &g.flagApihubAttrsSource)
+	g.apihubAttrsListCmd.Flags().Int64Var(&g.flagApihubAttrsPageSize, "page-size", 0, "Maximum results per page")
 
-	apihubAttrsCmd.AddCommand(all...)
-	apihubCmd.AddCommand(apihubAttrsCmd)
+	g.apihubAttrsCmd.AddCommand(all...)
+	g.apihubCmd.AddCommand(g.apihubAttrsCmd)
 }
 
-func apihubAttrsName(id string) (string, error) {
-	return apihubResource(flagApihubAttrsLocation, "attributes", id)
+func (g *apihubCmds) apihubAttrsName(id string) (string, error) {
+	return g.apihubResource(g.flagApihubAttrsLocation, "attributes", id)
 }
 
-func runApihubAttrsDelete(cmd *cobra.Command, args []string) error {
-	name, err := apihubAttrsName(args[0])
+func (g *apihubCmds) runApihubAttrsDelete(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubAttrsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Attributes.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting attribute: %w", err)
 	}
-	fmt.Printf("Deleted attribute [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted attribute [%s].\n", args[0])
 	return nil
 }
 
-func runApihubAttrsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apihubAttrsName(args[0])
+func (g *apihubCmds) runApihubAttrsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubAttrsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -98,16 +63,16 @@ func runApihubAttrsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing attribute: %w", err)
 	}
-	return emitFormatted(got, flagApihubAttrsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubAttrsFormat)
 }
 
-func runApihubAttrsExport(cmd *cobra.Command, args []string) error {
-	name, err := apihubAttrsName(args[0])
+func (g *apihubCmds) runApihubAttrsExport(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubAttrsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,25 +80,25 @@ func runApihubAttrsExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting attribute: %w", err)
 	}
-	return saveAsYAML(flagApihubAttrsDestination, got)
+	return saveAsYAML(g.flagApihubAttrsDestination, got)
 }
 
-func runApihubAttrsImport(cmd *cobra.Command, args []string) error {
-	parent, err := apihubLocationParent(flagApihubAttrsLocation)
+func (g *apihubCmds) runApihubAttrsImport(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubLocationParent(g.flagApihubAttrsLocation)
 	if err != nil {
 		return err
 	}
-	name, err := apihubAttrsName(args[0])
+	name, err := g.apihubAttrsName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &apihub.GoogleCloudApihubV1Attribute{}
-	if err := loadYAMLOrJSONInto(flagApihubAttrsSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagApihubAttrsSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -142,22 +107,22 @@ func runApihubAttrsImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating attribute: %w", err)
 		}
-		return emitFormatted(got, flagApihubAttrsFormat)
+		return emitFormattedTo(g.inv.stdout, got, g.flagApihubAttrsFormat)
 	}
 	got, err := svc.Projects.Locations.Attributes.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating attribute: %w", err)
 	}
-	return emitFormatted(got, flagApihubAttrsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubAttrsFormat)
 }
 
-func runApihubAttrsList(cmd *cobra.Command, args []string) error {
-	parent, err := apihubLocationParent(flagApihubAttrsLocation)
+func (g *apihubCmds) runApihubAttrsList(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubLocationParent(g.flagApihubAttrsLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -165,8 +130,8 @@ func runApihubAttrsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Attributes.List(parent).Context(ctx)
-		if flagApihubAttrsPageSize > 0 {
-			call = call.PageSize(flagApihubAttrsPageSize)
+		if g.flagApihubAttrsPageSize > 0 {
+			call = call.PageSize(g.flagApihubAttrsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -181,5 +146,5 @@ func runApihubAttrsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagApihubAttrsFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagApihubAttrsFormat)
 }

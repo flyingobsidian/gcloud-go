@@ -7,7 +7,8 @@ import (
 )
 
 func transferSubgroup(name string) *cobra.Command {
-	for _, c := range transferCmd.Commands() {
+	grp := newTransferCmds(legacyTestInvocation())
+	for _, c := range grp.transferCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

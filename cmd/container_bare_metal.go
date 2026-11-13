@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	gkeonprem "google.golang.org/api/gkeonprem/v1"
 )
@@ -14,95 +12,61 @@ import (
 //
 // Manages Anthos-on-bare-metal user clusters via the gkeonprem v1 client.
 
-var containerBareMetalCmd = &cobra.Command{Use: "bare-metal", Short: "Manage Anthos on bare metal"}
-var containerBareMetalClustersCmd = &cobra.Command{Use: "clusters", Short: "Manage bare-metal user clusters"}
-
-var (
-	flagCbmLocation   string
-	flagCbmFormat     string
-	flagCbmConfigFile string
-	flagCbmUpdateMask string
-	flagCbmPageSize   int64
-)
-
-var (
-	containerBmClCreateCmd = &cobra.Command{
-		Use: "create CLUSTER", Short: "Create a bare-metal user cluster (loads body from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runCbmClCreate,
-	}
-	containerBmClDeleteCmd = &cobra.Command{
-		Use: "delete CLUSTER", Short: "Delete a bare-metal user cluster",
-		Args: cobra.ExactArgs(1), RunE: runCbmClDelete,
-	}
-	containerBmClDescribeCmd = &cobra.Command{
-		Use: "describe CLUSTER", Short: "Describe a bare-metal user cluster",
-		Args: cobra.ExactArgs(1), RunE: runCbmClDescribe,
-	}
-	containerBmClListCmd = &cobra.Command{
-		Use: "list", Short: "List bare-metal user clusters in a location",
-		Args: cobra.NoArgs, RunE: runCbmClList,
-	}
-	containerBmClUpdateCmd = &cobra.Command{
-		Use: "update CLUSTER", Short: "Update a bare-metal user cluster (loads body from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runCbmClUpdate,
-	}
-)
-
-func init() {
+func (s *containerCmds) initContainerBareMetal() {
 	all := []*cobra.Command{
-		containerBmClCreateCmd, containerBmClDeleteCmd, containerBmClDescribeCmd,
-		containerBmClListCmd, containerBmClUpdateCmd,
+		s.containerBmClCreateCmd, s.containerBmClDeleteCmd, s.containerBmClDescribeCmd,
+		s.containerBmClListCmd, s.containerBmClUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagCbmLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagCbmLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagCbmFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagCbmFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{containerBmClCreateCmd, containerBmClUpdateCmd} {
-		c.Flags().StringVar(&flagCbmConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
+	for _, c := range []*cobra.Command{s.containerBmClCreateCmd, s.containerBmClUpdateCmd} {
+		c.Flags().StringVar(&s.flagCbmConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	containerBmClUpdateCmd.Flags().StringVar(&flagCbmUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
-	containerBmClListCmd.Flags().Int64Var(&flagCbmPageSize, "page-size", 0, "Maximum results per page")
+	s.containerBmClUpdateCmd.Flags().StringVar(&s.flagCbmUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.containerBmClListCmd.Flags().Int64Var(&s.flagCbmPageSize, "page-size", 0, "Maximum results per page")
 
-	containerBareMetalClustersCmd.AddCommand(all...)
-	containerBareMetalCmd.AddCommand(containerBareMetalClustersCmd)
-	containerCmd.AddCommand(containerBareMetalCmd)
+	s.containerBareMetalClustersCmd.AddCommand(all...)
+	s.containerBareMetalCmd.AddCommand(s.containerBareMetalClustersCmd)
+	s.containerCmd.AddCommand(s.containerBareMetalCmd)
 }
 
-func cbmLocationParent() (string, error) {
-	project, err := resolveProject()
+func (s *containerCmds) cbmLocationParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	if flagCbmLocation == "" {
+	if s.flagCbmLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagCbmLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagCbmLocation), nil
 }
 
-func cbmClusterName(id string) (string, error) {
+func (s *containerCmds) cbmClusterName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := cbmLocationParent()
+	parent, err := s.cbmLocationParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/bareMetalClusters/%s", parent, id), nil
 }
 
-func runCbmClCreate(cmd *cobra.Command, args []string) error {
-	parent, err := cbmLocationParent()
+func (s *containerCmds) runCbmClCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.cbmLocationParent()
 	if err != nil {
 		return err
 	}
 	body := &gkeonprem.BareMetalCluster{}
-	if err := loadYAMLOrJSONInto(flagCbmConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCbmConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -110,17 +74,17 @@ func runCbmClCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating bare-metal cluster: %w", err)
 	}
-	fmt.Printf("Create bare-metal cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCbmFormat)
+	fmt.Fprintf(s.inv.stdout, "Create bare-metal cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCbmFormat)
 }
 
-func runCbmClDelete(cmd *cobra.Command, args []string) error {
-	name, err := cbmClusterName(args[0])
+func (s *containerCmds) runCbmClDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.cbmClusterName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -128,17 +92,17 @@ func runCbmClDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting bare-metal cluster: %w", err)
 	}
-	fmt.Printf("Delete bare-metal cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCbmFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete bare-metal cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCbmFormat)
 }
 
-func runCbmClDescribe(cmd *cobra.Command, args []string) error {
-	name, err := cbmClusterName(args[0])
+func (s *containerCmds) runCbmClDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.cbmClusterName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -146,16 +110,16 @@ func runCbmClDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing bare-metal cluster: %w", err)
 	}
-	return emitFormatted(got, flagCbmFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagCbmFormat)
 }
 
-func runCbmClList(cmd *cobra.Command, args []string) error {
-	parent, err := cbmLocationParent()
+func (s *containerCmds) runCbmClList(cmd *cobra.Command, args []string) error {
+	parent, err := s.cbmLocationParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -163,8 +127,8 @@ func runCbmClList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.BareMetalClusters.List(parent).Context(ctx)
-		if flagCbmPageSize > 0 {
-			call = call.PageSize(flagCbmPageSize)
+		if s.flagCbmPageSize > 0 {
+			call = call.PageSize(s.flagCbmPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -179,25 +143,25 @@ func runCbmClList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagCbmFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagCbmFormat)
 }
 
-func runCbmClUpdate(cmd *cobra.Command, args []string) error {
-	name, err := cbmClusterName(args[0])
+func (s *containerCmds) runCbmClUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.cbmClusterName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &gkeonprem.BareMetalCluster{}
-	if err := loadYAMLOrJSONInto(flagCbmConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCbmConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagCbmUpdateMask
+	mask := s.flagCbmUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -209,6 +173,6 @@ func runCbmClUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating bare-metal cluster: %w", err)
 	}
-	fmt.Printf("Update bare-metal cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCbmFormat)
+	fmt.Fprintf(s.inv.stdout, "Update bare-metal cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCbmFormat)
 }

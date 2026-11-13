@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	binaryauthorization "google.golang.org/api/binaryauthorization/v1"
 )
@@ -15,94 +13,52 @@ import (
 // Wires the core Binary Authorization surface: the project-scoped policy
 // singleton, and the attestors subgroup.
 
-var containerBinauthzCmd = &cobra.Command{Use: "binauthz", Short: "Manage Binary Authorization"}
-var containerBinauthzPolicyCmd = &cobra.Command{Use: "policy", Short: "Manage the Binary Authorization policy singleton for the project"}
-var containerBinauthzAttestorsCmd = &cobra.Command{Use: "attestors", Short: "Manage Binary Authorization attestors"}
-
-var (
-	flagBaFormat     string
-	flagBaConfigFile string
-	flagBaPageSize   int64
-)
-
-var (
-	binauthzPolicyDescribeCmd = &cobra.Command{
-		Use: "describe", Short: "Describe the project's Binary Authorization policy",
-		Args: cobra.NoArgs, RunE: runBaPolicyDescribe,
-	}
-	binauthzPolicyUpdateCmd = &cobra.Command{
-		Use: "update", Short: "Update the project's Binary Authorization policy (loads body from --config-file)",
-		Args: cobra.NoArgs, RunE: runBaPolicyUpdate,
-	}
-
-	binauthzAttestorsCreateCmd = &cobra.Command{
-		Use: "create ATTESTOR", Short: "Create an attestor (loads body from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runBaAttestorsCreate,
-	}
-	binauthzAttestorsDeleteCmd = &cobra.Command{
-		Use: "delete ATTESTOR", Short: "Delete an attestor",
-		Args: cobra.ExactArgs(1), RunE: runBaAttestorsDelete,
-	}
-	binauthzAttestorsDescribeCmd = &cobra.Command{
-		Use: "describe ATTESTOR", Short: "Describe an attestor",
-		Args: cobra.ExactArgs(1), RunE: runBaAttestorsDescribe,
-	}
-	binauthzAttestorsListCmd = &cobra.Command{
-		Use: "list", Short: "List attestors in the current project",
-		Args: cobra.NoArgs, RunE: runBaAttestorsList,
-	}
-	binauthzAttestorsUpdateCmd = &cobra.Command{
-		Use: "update ATTESTOR", Short: "Update an attestor (loads body from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runBaAttestorsUpdate,
-	}
-)
-
-func init() {
+func (s *containerCmds) initContainerBinauthz() {
 	for _, c := range []*cobra.Command{
-		binauthzPolicyDescribeCmd, binauthzPolicyUpdateCmd,
-		binauthzAttestorsCreateCmd, binauthzAttestorsDeleteCmd,
-		binauthzAttestorsDescribeCmd, binauthzAttestorsListCmd, binauthzAttestorsUpdateCmd,
+		s.binauthzPolicyDescribeCmd, s.binauthzPolicyUpdateCmd,
+		s.binauthzAttestorsCreateCmd, s.binauthzAttestorsDeleteCmd,
+		s.binauthzAttestorsDescribeCmd, s.binauthzAttestorsListCmd, s.binauthzAttestorsUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagBaFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBaFormat, "format", "", "Output format")
 	}
 	for _, c := range []*cobra.Command{
-		binauthzPolicyUpdateCmd, binauthzAttestorsCreateCmd, binauthzAttestorsUpdateCmd,
+		s.binauthzPolicyUpdateCmd, s.binauthzAttestorsCreateCmd, s.binauthzAttestorsUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagBaConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
+		c.Flags().StringVar(&s.flagBaConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	binauthzAttestorsListCmd.Flags().Int64Var(&flagBaPageSize, "page-size", 0, "Maximum results per page")
+	s.binauthzAttestorsListCmd.Flags().Int64Var(&s.flagBaPageSize, "page-size", 0, "Maximum results per page")
 
-	containerBinauthzPolicyCmd.AddCommand(binauthzPolicyDescribeCmd, binauthzPolicyUpdateCmd)
-	containerBinauthzAttestorsCmd.AddCommand(
-		binauthzAttestorsCreateCmd, binauthzAttestorsDeleteCmd,
-		binauthzAttestorsDescribeCmd, binauthzAttestorsListCmd, binauthzAttestorsUpdateCmd,
+	s.containerBinauthzPolicyCmd.AddCommand(s.binauthzPolicyDescribeCmd, s.binauthzPolicyUpdateCmd)
+	s.containerBinauthzAttestorsCmd.AddCommand(
+		s.binauthzAttestorsCreateCmd, s.binauthzAttestorsDeleteCmd,
+		s.binauthzAttestorsDescribeCmd, s.binauthzAttestorsListCmd, s.binauthzAttestorsUpdateCmd,
 	)
-	containerBinauthzCmd.AddCommand(containerBinauthzPolicyCmd, containerBinauthzAttestorsCmd)
-	containerCmd.AddCommand(containerBinauthzCmd)
+	s.containerBinauthzCmd.AddCommand(s.containerBinauthzPolicyCmd, s.containerBinauthzAttestorsCmd)
+	s.containerCmd.AddCommand(s.containerBinauthzCmd)
 }
 
-func baProjectName() (string, error) {
-	project, err := resolveProject()
+func (s *containerCmds) baProjectName() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
 	return "projects/" + project, nil
 }
 
-func baPolicyName() (string, error) {
-	p, err := baProjectName()
+func (s *containerCmds) baPolicyName() (string, error) {
+	p, err := s.baProjectName()
 	if err != nil {
 		return "", err
 	}
 	return p + "/policy", nil
 }
 
-func baAttestorName(id string) (string, error) {
+func (s *containerCmds) baAttestorName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	p, err := baProjectName()
+	p, err := s.baProjectName()
 	if err != nil {
 		return "", err
 	}
@@ -111,13 +67,13 @@ func baAttestorName(id string) (string, error) {
 
 // policy
 
-func runBaPolicyDescribe(cmd *cobra.Command, args []string) error {
-	name, err := baPolicyName()
+func (s *containerCmds) runBaPolicyDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.baPolicyName()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BinaryAuthorizationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BinaryAuthorization(ctx)
 	if err != nil {
 		return err
 	}
@@ -125,21 +81,21 @@ func runBaPolicyDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing policy: %w", err)
 	}
-	return emitFormatted(got, flagBaFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBaFormat)
 }
 
-func runBaPolicyUpdate(cmd *cobra.Command, args []string) error {
-	name, err := baPolicyName()
+func (s *containerCmds) runBaPolicyUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.baPolicyName()
 	if err != nil {
 		return err
 	}
 	body := &binaryauthorization.Policy{}
-	if err := loadYAMLOrJSONInto(flagBaConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBaConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.BinaryAuthorizationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BinaryAuthorization(ctx)
 	if err != nil {
 		return err
 	}
@@ -147,23 +103,23 @@ func runBaPolicyUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating policy: %w", err)
 	}
-	fmt.Println("Updated Binary Authorization policy.")
-	return emitFormatted(got, flagBaFormat)
+	fmt.Fprintln(s.inv.stdout, "Updated Binary Authorization policy.")
+	return emitFormattedTo(s.inv.stdout, got, s.flagBaFormat)
 }
 
 // attestors
 
-func runBaAttestorsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := baProjectName()
+func (s *containerCmds) runBaAttestorsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.baProjectName()
 	if err != nil {
 		return err
 	}
 	body := &binaryauthorization.Attestor{}
-	if err := loadYAMLOrJSONInto(flagBaConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBaConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BinaryAuthorizationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BinaryAuthorization(ctx)
 	if err != nil {
 		return err
 	}
@@ -171,34 +127,34 @@ func runBaAttestorsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating attestor: %w", err)
 	}
-	fmt.Printf("Created attestor [%s].\n", args[0])
-	return emitFormatted(got, flagBaFormat)
+	fmt.Fprintf(s.inv.stdout, "Created attestor [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagBaFormat)
 }
 
-func runBaAttestorsDelete(cmd *cobra.Command, args []string) error {
-	name, err := baAttestorName(args[0])
+func (s *containerCmds) runBaAttestorsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.baAttestorName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BinaryAuthorizationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BinaryAuthorization(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Attestors.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting attestor: %w", err)
 	}
-	fmt.Printf("Deleted attestor [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted attestor [%s].\n", args[0])
 	return nil
 }
 
-func runBaAttestorsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := baAttestorName(args[0])
+func (s *containerCmds) runBaAttestorsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.baAttestorName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BinaryAuthorizationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BinaryAuthorization(ctx)
 	if err != nil {
 		return err
 	}
@@ -206,16 +162,16 @@ func runBaAttestorsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing attestor: %w", err)
 	}
-	return emitFormatted(got, flagBaFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBaFormat)
 }
 
-func runBaAttestorsList(cmd *cobra.Command, args []string) error {
-	parent, err := baProjectName()
+func (s *containerCmds) runBaAttestorsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.baProjectName()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BinaryAuthorizationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BinaryAuthorization(ctx)
 	if err != nil {
 		return err
 	}
@@ -223,8 +179,8 @@ func runBaAttestorsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Attestors.List(parent).Context(ctx)
-		if flagBaPageSize > 0 {
-			call = call.PageSize(flagBaPageSize)
+		if s.flagBaPageSize > 0 {
+			call = call.PageSize(s.flagBaPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -239,21 +195,21 @@ func runBaAttestorsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBaFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBaFormat)
 }
 
-func runBaAttestorsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := baAttestorName(args[0])
+func (s *containerCmds) runBaAttestorsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.baAttestorName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &binaryauthorization.Attestor{}
-	if err := loadYAMLOrJSONInto(flagBaConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBaConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.BinaryAuthorizationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BinaryAuthorization(ctx)
 	if err != nil {
 		return err
 	}
@@ -261,6 +217,6 @@ func runBaAttestorsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating attestor: %w", err)
 	}
-	fmt.Printf("Updated attestor [%s].\n", args[0])
-	return emitFormatted(got, flagBaFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated attestor [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagBaFormat)
 }

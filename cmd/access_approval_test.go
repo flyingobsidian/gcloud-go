@@ -7,7 +7,8 @@ import (
 )
 
 func aaSubgroup(name string) *cobra.Command {
-	for _, c := range accessApprovalCmd.Commands() {
+	grp := newAccessApprovalCmds(legacyTestInvocation())
+	for _, c := range grp.accessApprovalCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

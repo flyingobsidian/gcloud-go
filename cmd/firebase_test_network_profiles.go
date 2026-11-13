@@ -1,49 +1,29 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 )
 
 // --- gcloud firebase test network-profiles (#1235) ---
 
-var firebaseTestNetworkProfilesCmd = &cobra.Command{Use: "network-profiles", Short: "List network profiles available to Firebase Test Lab"}
-
-var (
-	flagFtnpFormat string
-	flagFtnpID     string
-)
-
-var (
-	firebaseTestNetworkProfilesListCmd = &cobra.Command{
-		Use: "list", Short: "List network profiles",
-		Args: cobra.NoArgs, RunE: runFtnpList,
-	}
-	firebaseTestNetworkProfilesDescribeCmd = &cobra.Command{
-		Use: "describe PROFILE_ID", Short: "Describe a network profile",
-		Args: cobra.ExactArgs(1), RunE: runFtnpDescribe,
-	}
-)
-
-func init() {
-	for _, c := range []*cobra.Command{firebaseTestNetworkProfilesListCmd, firebaseTestNetworkProfilesDescribeCmd} {
-		c.Flags().StringVar(&flagFtnpFormat, "format", "", "Output format")
+func (s *firebaseCmds) initFirebaseTestNetworkProfiles() {
+	for _, c := range []*cobra.Command{s.firebaseTestNetworkProfilesListCmd, s.firebaseTestNetworkProfilesDescribeCmd} {
+		c.Flags().StringVar(&s.flagFtnpFormat, "format", "", "Output format")
 	}
 
-	firebaseTestNetworkProfilesCmd.AddCommand(firebaseTestNetworkProfilesListCmd, firebaseTestNetworkProfilesDescribeCmd)
-	firebaseTestCmd.AddCommand(firebaseTestNetworkProfilesCmd)
+	s.firebaseTestNetworkProfilesCmd.AddCommand(s.firebaseTestNetworkProfilesListCmd, s.firebaseTestNetworkProfilesDescribeCmd)
+	s.firebaseTestCmd.AddCommand(s.firebaseTestNetworkProfilesCmd)
 }
 
-func runFtnpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *firebaseCmds) runFtnpList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.TestingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Testing(ctx)
 	if err != nil {
 		return err
 	}
@@ -52,19 +32,19 @@ func runFtnpList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fetching network configuration catalog: %w", err)
 	}
 	if cat.NetworkConfigurationCatalog == nil {
-		return emitFormatted([]any{}, flagFtnpFormat)
+		return emitFormattedTo(s.inv.stdout, []any{}, s.flagFtnpFormat)
 	}
-	return emitFormatted(cat.NetworkConfigurationCatalog.Configurations, flagFtnpFormat)
+	return emitFormattedTo(s.inv.stdout, cat.NetworkConfigurationCatalog.Configurations, s.flagFtnpFormat)
 }
 
-func runFtnpDescribe(cmd *cobra.Command, args []string) error {
-	flagFtnpID = args[0]
-	project, err := resolveProject()
+func (s *firebaseCmds) runFtnpDescribe(cmd *cobra.Command, args []string) error {
+	s.flagFtnpID = args[0]
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.TestingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Testing(ctx)
 	if err != nil {
 		return err
 	}
@@ -74,10 +54,10 @@ func runFtnpDescribe(cmd *cobra.Command, args []string) error {
 	}
 	if cat.NetworkConfigurationCatalog != nil {
 		for _, nc := range cat.NetworkConfigurationCatalog.Configurations {
-			if nc.Id == flagFtnpID {
-				return emitFormatted(nc, flagFtnpFormat)
+			if nc.Id == s.flagFtnpID {
+				return emitFormattedTo(s.inv.stdout, nc, s.flagFtnpFormat)
 			}
 		}
 	}
-	return fmt.Errorf("network profile [%s] not found", flagFtnpID)
+	return fmt.Errorf("network profile [%s] not found", s.flagFtnpID)
 }

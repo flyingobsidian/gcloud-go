@@ -1,82 +1,48 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database exascale-db-storage-vaults (#1287, dupe #1567) ---
 
-var oracleExascaleDbStorageVaultsCmd = &cobra.Command{
-	Use:   "exascale-db-storage-vaults",
-	Short: "Manage Oracle Exascale DB storage vaults",
-}
-
-var (
-	flagOdbExaStLocation   string
-	flagOdbExaStFormat     string
-	flagOdbExaStConfigFile string
-	flagOdbExaStPageSize   int64
-	flagOdbExaStFilter     string
-)
-
-var (
-	oracleExaStCreateCmd = &cobra.Command{
-		Use: "create VAULT", Short: "Create an Exascale DB storage vault",
-		Args: cobra.ExactArgs(1), RunE: runOracleExaStCreate,
-	}
-	oracleExaStDeleteCmd = &cobra.Command{
-		Use: "delete VAULT", Short: "Delete an Exascale DB storage vault",
-		Args: cobra.ExactArgs(1), RunE: runOracleExaStDelete,
-	}
-	oracleExaStDescribeCmd = &cobra.Command{
-		Use: "describe VAULT", Short: "Describe an Exascale DB storage vault",
-		Args: cobra.ExactArgs(1), RunE: runOracleExaStDescribe,
-	}
-	oracleExaStListCmd = &cobra.Command{
-		Use: "list", Short: "List Exascale DB storage vaults in a location",
-		Args: cobra.NoArgs, RunE: runOracleExaStList,
-	}
-)
-
-func init() {
+func (s *oracleDatabaseCmds) initOracleDatabaseExascaleDbStorageVaults() {
 	all := []*cobra.Command{
-		oracleExaStCreateCmd, oracleExaStDeleteCmd,
-		oracleExaStDescribeCmd, oracleExaStListCmd,
+		s.oracleExaStCreateCmd, s.oracleExaStDeleteCmd,
+		s.oracleExaStDescribeCmd, s.oracleExaStListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbExaStLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbExaStLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbExaStFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbExaStFormat, "format", "", "Output format")
 	}
-	oracleExaStCreateCmd.Flags().StringVar(&flagOdbExaStConfigFile, "config-file", "", "YAML/JSON file with Exascale DB storage vault body (required)")
-	_ = oracleExaStCreateCmd.MarkFlagRequired("config-file")
-	oracleExaStListCmd.Flags().Int64Var(&flagOdbExaStPageSize, "page-size", 0, "Maximum results per page")
-	oracleExaStListCmd.Flags().StringVar(&flagOdbExaStFilter, "filter", "", "Server-side filter expression")
+	s.oracleExaStCreateCmd.Flags().StringVar(&s.flagOdbExaStConfigFile, "config-file", "", "YAML/JSON file with Exascale DB storage vault body (required)")
+	_ = s.oracleExaStCreateCmd.MarkFlagRequired("config-file")
+	s.oracleExaStListCmd.Flags().Int64Var(&s.flagOdbExaStPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleExaStListCmd.Flags().StringVar(&s.flagOdbExaStFilter, "filter", "", "Server-side filter expression")
 
-	oracleExascaleDbStorageVaultsCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleExascaleDbStorageVaultsCmd)
+	s.oracleExascaleDbStorageVaultsCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleExascaleDbStorageVaultsCmd)
 }
 
-func oracleExaStName(id string) (string, error) {
-	return odbResource(flagOdbExaStLocation, "exascaleDbStorageVaults", id)
+func (s *oracleDatabaseCmds) oracleExaStName(id string) (string, error) {
+	return s.odbResource(s.flagOdbExaStLocation, "exascaleDbStorageVaults", id)
 }
 
-func runOracleExaStCreate(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbExaStLocation)
+func (s *oracleDatabaseCmds) runOracleExaStCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbExaStLocation)
 	if err != nil {
 		return err
 	}
 	body := &oracledatabase.ExascaleDbStorageVault{}
-	if err := loadYAMLOrJSONInto(flagOdbExaStConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagOdbExaStConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -84,17 +50,17 @@ func runOracleExaStCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating Exascale DB storage vault: %w", err)
 	}
-	fmt.Printf("Create Exascale DB storage vault [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbExaStFormat)
+	fmt.Fprintf(s.inv.stdout, "Create Exascale DB storage vault [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbExaStFormat)
 }
 
-func runOracleExaStDelete(cmd *cobra.Command, args []string) error {
-	name, err := oracleExaStName(args[0])
+func (s *oracleDatabaseCmds) runOracleExaStDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleExaStName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -102,17 +68,17 @@ func runOracleExaStDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting Exascale DB storage vault: %w", err)
 	}
-	fmt.Printf("Delete Exascale DB storage vault [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbExaStFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete Exascale DB storage vault [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbExaStFormat)
 }
 
-func runOracleExaStDescribe(cmd *cobra.Command, args []string) error {
-	name, err := oracleExaStName(args[0])
+func (s *oracleDatabaseCmds) runOracleExaStDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleExaStName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,16 +86,16 @@ func runOracleExaStDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing Exascale DB storage vault: %w", err)
 	}
-	return emitFormatted(got, flagOdbExaStFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagOdbExaStFormat)
 }
 
-func runOracleExaStList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbExaStLocation)
+func (s *oracleDatabaseCmds) runOracleExaStList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbExaStLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -137,11 +103,11 @@ func runOracleExaStList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.ExascaleDbStorageVaults.List(parent).Context(ctx)
-		if flagOdbExaStPageSize > 0 {
-			call = call.PageSize(flagOdbExaStPageSize)
+		if s.flagOdbExaStPageSize > 0 {
+			call = call.PageSize(s.flagOdbExaStPageSize)
 		}
-		if flagOdbExaStFilter != "" {
-			call = call.Filter(flagOdbExaStFilter)
+		if s.flagOdbExaStFilter != "" {
+			call = call.Filter(s.flagOdbExaStFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -156,5 +122,5 @@ func runOracleExaStList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbExaStFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbExaStFormat)
 }

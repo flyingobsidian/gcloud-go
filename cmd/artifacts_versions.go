@@ -1,160 +1,106 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
 
 // --- gcloud artifacts versions (#1084) ---
 
-var artifactsVersionsCmd = &cobra.Command{
-	Use:   "versions",
-	Short: "Manage Artifact Registry package versions",
-}
-
-var (
-	flagArtVerLocation    string
-	flagArtVerRepository  string
-	flagArtVerPackage     string
-	flagArtVerFormat      string
-	flagArtVerFilter      string
-	flagArtVerConfigFile  string
-	flagArtVerMask        string
-	flagArtVerDestination string
-	flagArtVerAsync       bool
-)
-
-var artifactsVersionsDeleteCmd = &cobra.Command{
-	Use:   "delete VERSION",
-	Short: "Delete a version",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsVersionsDelete,
-}
-
-var artifactsVersionsDescribeCmd = &cobra.Command{
-	Use:   "describe VERSION",
-	Short: "Describe a version",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsVersionsDescribe,
-}
-
-var artifactsVersionsExportCmd = &cobra.Command{
-	Use:   "export",
-	Short: "Export versions for a package to a JSON file",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsVersionsExport,
-}
-
-var artifactsVersionsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List versions of a package",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsVersionsList,
-}
-
-var artifactsVersionsUpdateCmd = &cobra.Command{
-	Use:   "update VERSION",
-	Short: "Update a version",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsVersionsUpdate,
-}
-
-func init() {
+func (s *artifactsCmds) initArtifactsVersions() {
 	for _, c := range []*cobra.Command{
-		artifactsVersionsDeleteCmd, artifactsVersionsDescribeCmd, artifactsVersionsExportCmd,
-		artifactsVersionsListCmd, artifactsVersionsUpdateCmd,
+		s.artifactsVersionsDeleteCmd, s.artifactsVersionsDescribeCmd, s.artifactsVersionsExportCmd,
+		s.artifactsVersionsListCmd, s.artifactsVersionsUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagArtVerLocation, "location", "", "Repository location (required)")
-		c.Flags().StringVar(&flagArtVerRepository, "repository", "", "Repository name (required)")
-		c.Flags().StringVar(&flagArtVerPackage, "package", "", "Package (required)")
-		c.Flags().StringVar(&flagArtVerFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagArtVerLocation, "location", "", "Repository location (required)")
+		c.Flags().StringVar(&s.flagArtVerRepository, "repository", "", "Repository name (required)")
+		c.Flags().StringVar(&s.flagArtVerPackage, "package", "", "Package (required)")
+		c.Flags().StringVar(&s.flagArtVerFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("location")
 		_ = c.MarkFlagRequired("repository")
 		_ = c.MarkFlagRequired("package")
 	}
-	artifactsVersionsDeleteCmd.Flags().BoolVar(&flagArtVerAsync, "async", false, "Return without waiting for operation")
-	artifactsVersionsListCmd.Flags().StringVar(&flagArtVerFilter, "filter", "", "Filter expression")
-	artifactsVersionsUpdateCmd.Flags().StringVar(&flagArtVerConfigFile, "config-file", "", "YAML/JSON body for the Version update (required)")
-	artifactsVersionsUpdateCmd.Flags().StringVar(&flagArtVerMask, "update-mask", "", "Fields to update")
-	_ = artifactsVersionsUpdateCmd.MarkFlagRequired("config-file")
-	artifactsVersionsExportCmd.Flags().StringVar(&flagArtVerDestination, "destination", "", "Local JSON file to write versions to (required)")
-	_ = artifactsVersionsExportCmd.MarkFlagRequired("destination")
+	s.artifactsVersionsDeleteCmd.Flags().BoolVar(&s.flagArtVerAsync, "async", false, "Return without waiting for operation")
+	s.artifactsVersionsListCmd.Flags().StringVar(&s.flagArtVerFilter, "filter", "", "Filter expression")
+	s.artifactsVersionsUpdateCmd.Flags().StringVar(&s.flagArtVerConfigFile, "config-file", "", "YAML/JSON body for the Version update (required)")
+	s.artifactsVersionsUpdateCmd.Flags().StringVar(&s.flagArtVerMask, "update-mask", "", "Fields to update")
+	_ = s.artifactsVersionsUpdateCmd.MarkFlagRequired("config-file")
+	s.artifactsVersionsExportCmd.Flags().StringVar(&s.flagArtVerDestination, "destination", "", "Local JSON file to write versions to (required)")
+	_ = s.artifactsVersionsExportCmd.MarkFlagRequired("destination")
 
-	artifactsVersionsCmd.AddCommand(
-		artifactsVersionsDeleteCmd, artifactsVersionsDescribeCmd, artifactsVersionsExportCmd,
-		artifactsVersionsListCmd, artifactsVersionsUpdateCmd,
+	s.artifactsVersionsCmd.AddCommand(
+		s.artifactsVersionsDeleteCmd, s.artifactsVersionsDescribeCmd, s.artifactsVersionsExportCmd,
+		s.artifactsVersionsListCmd, s.artifactsVersionsUpdateCmd,
 	)
-	artifactsCmd.AddCommand(artifactsVersionsCmd)
+	s.artifactsCmd.AddCommand(s.artifactsVersionsCmd)
 }
 
-func artVerPackageParent(project string) string {
-	return artFullName(artRepoParent(project, flagArtVerLocation, flagArtVerRepository)+"/packages", flagArtVerPackage)
+func (s *artifactsCmds) artVerPackageParent(project string) string {
+	return artFullName(artRepoParent(project, s.flagArtVerLocation, s.flagArtVerRepository)+"/packages", s.flagArtVerPackage)
 }
 
-func artVerName(project, id string) string {
-	return artFullName(artVerPackageParent(project)+"/versions", id)
+func (s *artifactsCmds) artVerName(project, id string) string {
+	return artFullName(s.artVerPackageParent(project)+"/versions", id)
 }
 
-func runArtifactsVersionsDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsVersionsDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	name := artVerName(project, args[0])
+	name := s.artVerName(project, args[0])
 	op, err := svc.Projects.Locations.Repositories.Packages.Versions.Delete(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting version: %w", err)
 	}
-	if flagArtVerAsync {
-		fmt.Fprintf(os.Stderr, "Delete started. Operation: %s\n", op.Name)
-		return emitFormatted(op, flagArtVerFormat)
+	if s.flagArtVerAsync {
+		fmt.Fprintf(s.inv.stderr, "Delete started. Operation: %s\n", op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagArtVerFormat)
 	}
 	final, err := waitForArtifactRegistryOperation(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(final, flagArtVerFormat)
+	return emitFormattedTo(s.inv.stdout, final, s.flagArtVerFormat)
 }
 
-func runArtifactsVersionsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsVersionsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	name := artVerName(project, args[0])
+	name := s.artVerName(project, args[0])
 	v, err := svc.Projects.Locations.Repositories.Packages.Versions.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing version: %w", err)
 	}
-	return emitFormatted(v, flagArtVerFormat)
+	return emitFormattedTo(s.inv.stdout, v, s.flagArtVerFormat)
 }
 
-func runArtifactsVersionsExport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsVersionsExport(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	all, err := listArtifactsVersions(project)
+	all, err := s.listArtifactsVersions(project)
 	if err != nil {
 		return err
 	}
-	f, err := os.Create(flagArtVerDestination)
+	f, err := os.Create(s.flagArtVerDestination)
 	if err != nil {
 		return fmt.Errorf("creating destination: %w", err)
 	}
@@ -164,35 +110,35 @@ func runArtifactsVersionsExport(cmd *cobra.Command, args []string) error {
 	if err := enc.Encode(all); err != nil {
 		return fmt.Errorf("writing versions: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Exported %d versions to [%s].\n", len(all), flagArtVerDestination)
+	fmt.Fprintf(s.inv.stderr, "Exported %d versions to [%s].\n", len(all), s.flagArtVerDestination)
 	return nil
 }
 
-func runArtifactsVersionsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsVersionsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	all, err := listArtifactsVersions(project)
+	all, err := s.listArtifactsVersions(project)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(all, flagArtVerFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagArtVerFormat)
 }
 
-func listArtifactsVersions(project string) ([]*artifactregistry.Version, error) {
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+func (s *artifactsCmds) listArtifactsVersions(project string) ([]*artifactregistry.Version, error) {
+	ctx := s.inv.context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return nil, err
 	}
-	pkg := artVerPackageParent(project)
+	pkg := s.artVerPackageParent(project)
 	var all []*artifactregistry.Version
 	token := ""
 	for {
 		call := svc.Projects.Locations.Repositories.Packages.Versions.List(pkg).Context(ctx)
-		if flagArtVerFilter != "" {
-			call = call.Filter(flagArtVerFilter)
+		if s.flagArtVerFilter != "" {
+			call = call.Filter(s.flagArtVerFilter)
 		}
 		if token != "" {
 			call = call.PageToken(token)
@@ -210,25 +156,25 @@ func listArtifactsVersions(project string) ([]*artifactregistry.Version, error) 
 	return all, nil
 }
 
-func runArtifactsVersionsUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsVersionsUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
 	body := &artifactregistry.Version{}
-	if err := loadYAMLOrJSONInto(flagArtVerConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagArtVerConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagArtVerMask
+	mask := s.flagArtVerMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	name := artVerName(project, args[0])
+	name := s.artVerName(project, args[0])
 	call := svc.Projects.Locations.Repositories.Packages.Versions.Patch(name, body).Context(ctx)
 	if mask != "" {
 		call = call.UpdateMask(mask)
@@ -237,5 +183,5 @@ func runArtifactsVersionsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating version: %w", err)
 	}
-	return emitFormatted(out, flagArtVerFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtVerFormat)
 }

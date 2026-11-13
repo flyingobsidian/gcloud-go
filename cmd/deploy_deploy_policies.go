@@ -1,97 +1,50 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	clouddeploy "google.golang.org/api/clouddeploy/v1"
 )
 
 // --- gcloud deploy deploy-policies (#1528) ---
 
-var deployDPolCmd = &cobra.Command{Use: "deploy-policies", Short: "Manage Cloud Deploy deploy policies"}
-
-var (
-	flagDeployDPolRegion string
-	flagDeployDPolFormat string
-
-	flagDeployDPolIamMember   string
-	flagDeployDPolIamRole     string
-	flagDeployDPolIamCondExpr string
-	flagDeployDPolIamCondT    string
-	flagDeployDPolIamCondD    string
-	flagDeployDPolIamAllCond  bool
-)
-
-var (
-	deployDPolDeleteCmd = &cobra.Command{
-		Use: "delete DEPLOY_POLICY", Short: "Delete a deploy policy",
-		Args: cobra.ExactArgs(1), RunE: runDeployDPolDelete,
-	}
-	deployDPolDescribeCmd = &cobra.Command{
-		Use: "describe DEPLOY_POLICY", Short: "Describe a deploy policy",
-		Args: cobra.ExactArgs(1), RunE: runDeployDPolDescribe,
-	}
-	deployDPolExportCmd = &cobra.Command{
-		Use: "export DEPLOY_POLICY", Short: "Export a deploy policy",
-		Args: cobra.ExactArgs(1), RunE: runDeployDPolExport,
-	}
-	deployDPolGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy DEPLOY_POLICY", Short: "Get the IAM policy",
-		Args: cobra.ExactArgs(1), RunE: runDeployDPolGetIam,
-	}
-	deployDPolSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy DEPLOY_POLICY POLICY_FILE", Short: "Set the IAM policy",
-		Args: cobra.ExactArgs(2), RunE: runDeployDPolSetIam,
-	}
-	deployDPolAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding DEPLOY_POLICY", Short: "Add an IAM policy binding",
-		Args: cobra.ExactArgs(1), RunE: runDeployDPolAddIam,
-	}
-	deployDPolRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding DEPLOY_POLICY", Short: "Remove an IAM policy binding",
-		Args: cobra.ExactArgs(1), RunE: runDeployDPolRemoveIam,
-	}
-)
-
-func init() {
+func (s *deployCmds) initDeployDeployPolicies() {
 	all := []*cobra.Command{
-		deployDPolDeleteCmd, deployDPolDescribeCmd, deployDPolExportCmd,
-		deployDPolGetIamCmd, deployDPolSetIamCmd, deployDPolAddIamCmd, deployDPolRemoveIamCmd,
+		s.deployDPolDeleteCmd, s.deployDPolDescribeCmd, s.deployDPolExportCmd,
+		s.deployDPolGetIamCmd, s.deployDPolSetIamCmd, s.deployDPolAddIamCmd, s.deployDPolRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDeployDPolRegion, "region", "", "Cloud Deploy region (required)")
+		c.Flags().StringVar(&s.flagDeployDPolRegion, "region", "", "Cloud Deploy region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDeployDPolFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDeployDPolFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{deployDPolAddIamCmd, deployDPolRemoveIamCmd} {
-		deployIamMemberFlags(c, &flagDeployDPolIamMember, &flagDeployDPolIamRole,
-			&flagDeployDPolIamCondExpr, &flagDeployDPolIamCondT, &flagDeployDPolIamCondD)
+	for _, c := range []*cobra.Command{s.deployDPolAddIamCmd, s.deployDPolRemoveIamCmd} {
+		deployIamMemberFlags(c, &s.flagDeployDPolIamMember, &s.flagDeployDPolIamRole,
+			&s.flagDeployDPolIamCondExpr, &s.flagDeployDPolIamCondT, &s.flagDeployDPolIamCondD)
 	}
-	deployDPolRemoveIamCmd.Flags().BoolVar(&flagDeployDPolIamAllCond, "all", false,
+	s.deployDPolRemoveIamCmd.Flags().BoolVar(&s.flagDeployDPolIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	deployDPolCmd.AddCommand(all...)
-	deployCmd.AddCommand(deployDPolCmd)
+	s.deployDPolCmd.AddCommand(all...)
+	s.deployCmd.AddCommand(s.deployDPolCmd)
 }
 
-func deployDPolName(id string) (string, error) {
-	project, err := resolveProject()
+func (s *deployCmds) deployDPolName(id string) (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return deployChild("deployPolicies", id, deployLocationParent(project, flagDeployDPolRegion)), nil
+	return deployChild("deployPolicies", id, deployLocationParent(project, s.flagDeployDPolRegion)), nil
 }
 
-func runDeployDPolDelete(cmd *cobra.Command, args []string) error {
-	name, err := deployDPolName(args[0])
+func (s *deployCmds) runDeployDPolDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.deployDPolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,17 +52,17 @@ func runDeployDPolDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting deploy policy: %w", err)
 	}
-	fmt.Printf("Delete request issued for deploy policy [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDeployDPolFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for deploy policy [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDeployDPolFormat)
 }
 
-func runDeployDPolDescribe(cmd *cobra.Command, args []string) error {
-	name, err := deployDPolName(args[0])
+func (s *deployCmds) runDeployDPolDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.deployDPolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -117,16 +70,16 @@ func runDeployDPolDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing deploy policy: %w", err)
 	}
-	return emitFormatted(got, flagDeployDPolFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDeployDPolFormat)
 }
 
-func runDeployDPolExport(cmd *cobra.Command, args []string) error {
-	name, err := deployDPolName(args[0])
+func (s *deployCmds) runDeployDPolExport(cmd *cobra.Command, args []string) error {
+	name, err := s.deployDPolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -134,20 +87,20 @@ func runDeployDPolExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting deploy policy: %w", err)
 	}
-	format := flagDeployDPolFormat
+	format := s.flagDeployDPolFormat
 	if format == "" {
 		format = "yaml"
 	}
-	return emitFormatted(got, format)
+	return emitFormattedTo(s.inv.stdout, got, format)
 }
 
-func runDeployDPolGetIam(cmd *cobra.Command, args []string) error {
-	name, err := deployDPolName(args[0])
+func (s *deployCmds) runDeployDPolGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployDPolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -155,11 +108,11 @@ func runDeployDPolGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagDeployDPolFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagDeployDPolFormat)
 }
 
-func runDeployDPolSetIam(cmd *cobra.Command, args []string) error {
-	name, err := deployDPolName(args[0])
+func (s *deployCmds) runDeployDPolSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployDPolName(args[0])
 	if err != nil {
 		return err
 	}
@@ -168,8 +121,8 @@ func runDeployDPolSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -177,17 +130,17 @@ func runDeployDPolSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	deployUpdatedIam(fmt.Sprintf("deploy policy [%s]", args[0]))
-	return emitFormatted(updated, flagDeployDPolFormat)
+	s.deployUpdatedIam(fmt.Sprintf("deploy policy [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDeployDPolFormat)
 }
 
-func runDeployDPolAddIam(cmd *cobra.Command, args []string) error {
-	name, err := deployDPolName(args[0])
+func (s *deployCmds) runDeployDPolAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployDPolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -195,24 +148,24 @@ func runDeployDPolAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	deployAddBinding(policy, flagDeployDPolIamRole, flagDeployDPolIamMember,
-		deployBuildCondition(flagDeployDPolIamCondExpr, flagDeployDPolIamCondT, flagDeployDPolIamCondD))
+	deployAddBinding(policy, s.flagDeployDPolIamRole, s.flagDeployDPolIamMember,
+		deployBuildCondition(s.flagDeployDPolIamCondExpr, s.flagDeployDPolIamCondT, s.flagDeployDPolIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Locations.DeployPolicies.SetIamPolicy(name, &clouddeploy.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	deployUpdatedIam(fmt.Sprintf("deploy policy [%s]", args[0]))
-	return emitFormatted(updated, flagDeployDPolFormat)
+	s.deployUpdatedIam(fmt.Sprintf("deploy policy [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDeployDPolFormat)
 }
 
-func runDeployDPolRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := deployDPolName(args[0])
+func (s *deployCmds) runDeployDPolRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployDPolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -220,14 +173,14 @@ func runDeployDPolRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !deployRemoveBinding(policy, flagDeployDPolIamRole, flagDeployDPolIamMember,
-		deployBuildCondition(flagDeployDPolIamCondExpr, flagDeployDPolIamCondT, flagDeployDPolIamCondD), flagDeployDPolIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagDeployDPolIamRole, flagDeployDPolIamMember)
+	if !deployRemoveBinding(policy, s.flagDeployDPolIamRole, s.flagDeployDPolIamMember,
+		deployBuildCondition(s.flagDeployDPolIamCondExpr, s.flagDeployDPolIamCondT, s.flagDeployDPolIamCondD), s.flagDeployDPolIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagDeployDPolIamRole, s.flagDeployDPolIamMember)
 	}
 	updated, err := svc.Projects.Locations.DeployPolicies.SetIamPolicy(name, &clouddeploy.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	deployUpdatedIam(fmt.Sprintf("deploy policy [%s]", args[0]))
-	return emitFormatted(updated, flagDeployDPolFormat)
+	s.deployUpdatedIam(fmt.Sprintf("deploy policy [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDeployDPolFormat)
 }

@@ -7,7 +7,8 @@ import (
 )
 
 func containerSubgroup(name string) *cobra.Command {
-	for _, c := range containerCmd.Commands() {
+	grp := newContainerCmds(legacyTestInvocation())
+	for _, c := range grp.containerCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

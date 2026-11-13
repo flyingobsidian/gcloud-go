@@ -16,48 +16,15 @@ import (
 // the same document so its output tracks upstream changes without a re-release.
 const eventarcAuditLogsCatalogURL = "https://raw.githubusercontent.com/googleapis/google-cloudevents/master/json/audit/service_catalog.json"
 
-var eventarcAuditLogsProviderCmd = &cobra.Command{
-	Use:   "audit-logs-provider",
-	Short: "Explore audit log providers for Eventarc",
-	Long: `Explore provider serviceNames and methodNames for event type
-google.cloud.audit.log.v1.written in Eventarc.`,
-}
-
-var eventarcAuditLogsMethodNamesCmd = &cobra.Command{
-	Use:   "method-names",
-	Short: "Explore values for the methodName attribute",
-}
-
-var eventarcAuditLogsServiceNamesCmd = &cobra.Command{
-	Use:   "service-names",
-	Short: "Explore values for the serviceName attribute",
-}
-
-var eventarcAuditLogsMethodNamesListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List values for the methodName attribute",
-	Args:  cobra.NoArgs,
-	RunE:  runEventarcAuditLogsMethodNamesList,
-}
-
-var eventarcAuditLogsServiceNamesListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List values for the serviceName attribute",
-	Args:  cobra.NoArgs,
-	RunE:  runEventarcAuditLogsServiceNamesList,
-}
-
-var flagEventarcAuditLogsServiceName string
-
-func init() {
-	eventarcAuditLogsMethodNamesListCmd.Flags().StringVar(&flagEventarcAuditLogsServiceName, "service-name", "",
+func (grp *eventarcCmds) initEventarcAuditLogsProvider() {
+	grp.eventarcAuditLogsMethodNamesListCmd.Flags().StringVar(&grp.flagEventarcAuditLogsServiceName, "service-name", "",
 		"Name of the service to list methodName values for (required)")
-	_ = eventarcAuditLogsMethodNamesListCmd.MarkFlagRequired("service-name")
+	_ = grp.eventarcAuditLogsMethodNamesListCmd.MarkFlagRequired("service-name")
 
-	eventarcAuditLogsMethodNamesCmd.AddCommand(eventarcAuditLogsMethodNamesListCmd)
-	eventarcAuditLogsServiceNamesCmd.AddCommand(eventarcAuditLogsServiceNamesListCmd)
-	eventarcAuditLogsProviderCmd.AddCommand(eventarcAuditLogsMethodNamesCmd, eventarcAuditLogsServiceNamesCmd)
-	eventarcCmd.AddCommand(eventarcAuditLogsProviderCmd)
+	grp.eventarcAuditLogsMethodNamesCmd.AddCommand(grp.eventarcAuditLogsMethodNamesListCmd)
+	grp.eventarcAuditLogsServiceNamesCmd.AddCommand(grp.eventarcAuditLogsServiceNamesListCmd)
+	grp.eventarcAuditLogsProviderCmd.AddCommand(grp.eventarcAuditLogsMethodNamesCmd, grp.eventarcAuditLogsServiceNamesCmd)
+	grp.eventarcCmd.AddCommand(grp.eventarcAuditLogsProviderCmd)
 }
 
 // auditLogService models one entry in the service catalog document.
@@ -116,38 +83,38 @@ func findAuditLogMethods(services []auditLogService, serviceName string) ([]audi
 	return nil, fmt.Errorf("%q is not a known value for the serviceName attribute.", serviceName)
 }
 
-func runEventarcAuditLogsServiceNamesList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+func (grp *eventarcCmds) runEventarcAuditLogsServiceNamesList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	services, err := httpGetAuditLogCatalog(ctx)
 	if err != nil {
 		return err
 	}
-	if flagFormat != "" {
-		return emitFormatted(services, flagFormat)
+	if grp.inv.flags.format != "" {
+		return emitFormattedTo(grp.inv.stdout, services, grp.inv.flags.format)
 	}
-	printTableHeading(len(services), "%-50s %s\n", "SERVICE_NAME", "DISPLAY_NAME")
+	printTableHeadingTo(grp.inv.stdout, len(services), "%-50s %s\n", "SERVICE_NAME", "DISPLAY_NAME")
 	for _, s := range services {
-		fmt.Printf("%-50s %s\n", s.ServiceName, s.DisplayName)
+		fmt.Fprintf(grp.inv.stdout, "%-50s %s\n", s.ServiceName, s.DisplayName)
 	}
 	return nil
 }
 
-func runEventarcAuditLogsMethodNamesList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+func (grp *eventarcCmds) runEventarcAuditLogsMethodNamesList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	services, err := httpGetAuditLogCatalog(ctx)
 	if err != nil {
 		return err
 	}
-	methods, err := findAuditLogMethods(services, flagEventarcAuditLogsServiceName)
+	methods, err := findAuditLogMethods(services, grp.flagEventarcAuditLogsServiceName)
 	if err != nil {
 		return err
 	}
-	if flagFormat != "" {
-		return emitFormatted(methods, flagFormat)
+	if grp.inv.flags.format != "" {
+		return emitFormattedTo(grp.inv.stdout, methods, grp.inv.flags.format)
 	}
-	printTableHeading(len(methods), "%s\n", "METHOD_NAME")
+	printTableHeadingTo(grp.inv.stdout, len(methods), "%s\n", "METHOD_NAME")
 	for _, m := range methods {
-		fmt.Println(m.MethodName)
+		fmt.Fprintln(grp.inv.stdout, m.MethodName)
 	}
 	return nil
 }

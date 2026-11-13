@@ -28,12 +28,13 @@ func TestEmulatorsPubsubRegistered(t *testing.T) {
 }
 
 func TestEmuPubsubEnvInitOutput(t *testing.T) {
-	prev := flagEmuPubsubHostPort
-	defer func() { flagEmuPubsubHostPort = prev }()
-	flagEmuPubsubHostPort = "127.0.0.1:8085"
+	grp := newEmulatorsCmds(legacyTestInvocation())
+	prev := grp.flagEmuPubsubHostPort
+	defer func() { grp.flagEmuPubsubHostPort = prev }()
+	grp.flagEmuPubsubHostPort = "127.0.0.1:8085"
 
 	out := captureStdout(t, func() {
-		if err := runEmuPubsubEnvInit(nil, nil); err != nil {
+		if err := grp.runEmuPubsubEnvInit(nil, nil); err != nil {
 			t.Fatalf("run: %v", err)
 		}
 	})

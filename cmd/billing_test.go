@@ -182,6 +182,7 @@ func TestBillingRemoveBindingFromPolicy(t *testing.T) {
 }
 
 func TestBillingCommandsRegistered(t *testing.T) {
+	grp := newBillingCmds(legacyTestInvocation())
 	groups := map[string][]string{
 		"accounts": {
 			"add-iam-policy-binding", "describe", "get-iam-policy",
@@ -190,7 +191,7 @@ func TestBillingCommandsRegistered(t *testing.T) {
 		"budgets":  {"create", "delete", "describe", "list", "update"},
 		"projects": {"describe", "link", "list", "unlink"},
 	}
-	for _, sub := range billingCmd.Commands() {
+	for _, sub := range grp.billingCmd.Commands() {
 		got := map[string]bool{}
 		for _, c := range sub.Commands() {
 			got[c.Name()] = true

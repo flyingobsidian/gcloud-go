@@ -4,164 +4,119 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	pubsublite "google.golang.org/api/pubsublite/v1"
 )
 
 // --- gcloud pubsub lite-topics (#1174) ---
 
-var pubsubLiteTopicsCmd = &cobra.Command{
-	Use:   "lite-topics",
-	Short: "Manage Pub/Sub Lite topics",
-}
-
-var (
-	flagPSLTopicLocation   string
-	flagPSLTopicFormat     string
-	flagPSLTopicConfigFile string
-	flagPSLTopicUpdateMask string
-	flagPSLTopicPageSize   int64
-)
-
-var (
-	pubsubLiteTopicCreateCmd = &cobra.Command{
-		Use: "create TOPIC", Short: "Create a Pub/Sub Lite topic",
-		Args: cobra.ExactArgs(1), RunE: runPSLTopicCreate,
-	}
-	pubsubLiteTopicDeleteCmd = &cobra.Command{
-		Use: "delete TOPIC", Short: "Delete a Pub/Sub Lite topic",
-		Args: cobra.ExactArgs(1), RunE: runPSLTopicDelete,
-	}
-	pubsubLiteTopicDescribeCmd = &cobra.Command{
-		Use: "describe TOPIC", Short: "Describe a Pub/Sub Lite topic",
-		Args: cobra.ExactArgs(1), RunE: runPSLTopicDescribe,
-	}
-	pubsubLiteTopicListCmd = &cobra.Command{
-		Use: "list", Short: "List Pub/Sub Lite topics in a location",
-		Args: cobra.NoArgs, RunE: runPSLTopicList,
-	}
-	pubsubLiteTopicListSubsCmd = &cobra.Command{
-		Use: "list-subscriptions TOPIC", Short: "List subscriptions attached to a Pub/Sub Lite topic",
-		Args: cobra.ExactArgs(1), RunE: runPSLTopicListSubs,
-	}
-	pubsubLiteTopicPublishCmd = &cobra.Command{
-		Use: "publish TOPIC", Short: "Publish to a Pub/Sub Lite topic (unsupported)",
-		Args: cobra.ExactArgs(1), RunE: runPSLTopicPublish,
-	}
-	pubsubLiteTopicUpdateCmd = &cobra.Command{
-		Use: "update TOPIC", Short: "Update a Pub/Sub Lite topic",
-		Args: cobra.ExactArgs(1), RunE: runPSLTopicUpdate,
-	}
-)
-
-func init() {
+func (g *pubsubCmds) initPubsubLiteTopics() {
 	all := []*cobra.Command{
-		pubsubLiteTopicCreateCmd, pubsubLiteTopicDeleteCmd, pubsubLiteTopicDescribeCmd,
-		pubsubLiteTopicListCmd, pubsubLiteTopicListSubsCmd, pubsubLiteTopicPublishCmd,
-		pubsubLiteTopicUpdateCmd,
+		g.pubsubLiteTopicCreateCmd, g.pubsubLiteTopicDeleteCmd, g.pubsubLiteTopicDescribeCmd,
+		g.pubsubLiteTopicListCmd, g.pubsubLiteTopicListSubsCmd, g.pubsubLiteTopicPublishCmd,
+		g.pubsubLiteTopicUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagPSLTopicLocation, "location", "",
+		c.Flags().StringVar(&g.flagPSLTopicLocation, "location", "",
 			"Regional or zonal location, e.g. us-central1 or us-central1-a (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagPSLTopicFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagPSLTopicFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{pubsubLiteTopicCreateCmd, pubsubLiteTopicUpdateCmd} {
-		c.Flags().StringVar(&flagPSLTopicConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{g.pubsubLiteTopicCreateCmd, g.pubsubLiteTopicUpdateCmd} {
+		c.Flags().StringVar(&g.flagPSLTopicConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Topic body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	pubsubLiteTopicUpdateCmd.Flags().StringVar(&flagPSLTopicUpdateMask, "update-mask", "",
+	g.pubsubLiteTopicUpdateCmd.Flags().StringVar(&g.flagPSLTopicUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (default: top-level fields in --config-file)")
-	for _, c := range []*cobra.Command{pubsubLiteTopicListCmd, pubsubLiteTopicListSubsCmd} {
-		c.Flags().Int64Var(&flagPSLTopicPageSize, "page-size", 0, "Maximum number of results per page")
+	for _, c := range []*cobra.Command{g.pubsubLiteTopicListCmd, g.pubsubLiteTopicListSubsCmd} {
+		c.Flags().Int64Var(&g.flagPSLTopicPageSize, "page-size", 0, "Maximum number of results per page")
 	}
 
-	pubsubLiteTopicsCmd.AddCommand(all...)
-	pubsubCmd.AddCommand(pubsubLiteTopicsCmd)
+	g.pubsubLiteTopicsCmd.AddCommand(all...)
+	g.pubsubCmd.AddCommand(g.pubsubLiteTopicsCmd)
 }
 
 func pslTopicName(id, project, location string) string {
 	return pubsubLiteChild("topics", id, pubsubLiteLocationParent(project, location))
 }
 
-func pslTopicService(ctx context.Context) (*pubsublite.Service, string, error) {
-	project, err := resolveProject()
+func (g *pubsubCmds) pslTopicService(ctx context.Context) (*pubsublite.Service, string, error) {
+	project, err := g.inv.project()
 	if err != nil {
 		return nil, "", err
 	}
-	region, err := pubsubLiteRegion(flagPSLTopicLocation)
+	region, err := pubsubLiteRegion(g.flagPSLTopicLocation)
 	if err != nil {
 		return nil, "", err
 	}
-	svc, err := gcp.PubSubLiteService(ctx, flagAccount, region)
+	svc, err := g.inv.clients().PubSubLite(ctx, region)
 	if err != nil {
 		return nil, "", err
 	}
 	return svc, project, nil
 }
 
-func runPSLTopicCreate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, project, err := pslTopicService(ctx)
+func (g *pubsubCmds) runPSLTopicCreate(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, project, err := g.pslTopicService(ctx)
 	if err != nil {
 		return err
 	}
 	body := &pubsublite.Topic{}
-	if err := loadYAMLOrJSONInto(flagPSLTopicConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagPSLTopicConfigFile, body); err != nil {
 		return err
 	}
 	got, err := svc.Admin.Projects.Locations.Topics.
-		Create(pubsubLiteLocationParent(project, flagPSLTopicLocation), body).
+		Create(pubsubLiteLocationParent(project, g.flagPSLTopicLocation), body).
 		TopicId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating topic: %w", err)
 	}
-	return emitFormatted(got, flagPSLTopicFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagPSLTopicFormat)
 }
 
-func runPSLTopicDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, project, err := pslTopicService(ctx)
+func (g *pubsubCmds) runPSLTopicDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, project, err := g.pslTopicService(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Admin.Projects.Locations.Topics.
-		Delete(pslTopicName(args[0], project, flagPSLTopicLocation)).Context(ctx).Do(); err != nil {
+		Delete(pslTopicName(args[0], project, g.flagPSLTopicLocation)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting topic: %w", err)
 	}
-	fmt.Printf("Deleted topic [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted topic [%s].\n", args[0])
 	return nil
 }
 
-func runPSLTopicDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, project, err := pslTopicService(ctx)
+func (g *pubsubCmds) runPSLTopicDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, project, err := g.pslTopicService(ctx)
 	if err != nil {
 		return err
 	}
 	got, err := svc.Admin.Projects.Locations.Topics.
-		Get(pslTopicName(args[0], project, flagPSLTopicLocation)).Context(ctx).Do()
+		Get(pslTopicName(args[0], project, g.flagPSLTopicLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing topic: %w", err)
 	}
-	return emitFormatted(got, flagPSLTopicFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagPSLTopicFormat)
 }
 
-func runPSLTopicList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, project, err := pslTopicService(ctx)
+func (g *pubsubCmds) runPSLTopicList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, project, err := g.pslTopicService(ctx)
 	if err != nil {
 		return err
 	}
-	parent := pubsubLiteLocationParent(project, flagPSLTopicLocation)
+	parent := pubsubLiteLocationParent(project, g.flagPSLTopicLocation)
 	var all []*pubsublite.Topic
 	pageToken := ""
 	for {
 		call := svc.Admin.Projects.Locations.Topics.List(parent).Context(ctx)
-		if flagPSLTopicPageSize > 0 {
-			call = call.PageSize(flagPSLTopicPageSize)
+		if g.flagPSLTopicPageSize > 0 {
+			call = call.PageSize(g.flagPSLTopicPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -176,22 +131,22 @@ func runPSLTopicList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagPSLTopicFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagPSLTopicFormat)
 }
 
-func runPSLTopicListSubs(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, project, err := pslTopicService(ctx)
+func (g *pubsubCmds) runPSLTopicListSubs(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, project, err := g.pslTopicService(ctx)
 	if err != nil {
 		return err
 	}
-	name := pslTopicName(args[0], project, flagPSLTopicLocation)
+	name := pslTopicName(args[0], project, g.flagPSLTopicLocation)
 	var all []string
 	pageToken := ""
 	for {
 		call := svc.Admin.Projects.Locations.Topics.Subscriptions.List(name).Context(ctx)
-		if flagPSLTopicPageSize > 0 {
-			call = call.PageSize(flagPSLTopicPageSize)
+		if g.flagPSLTopicPageSize > 0 {
+			call = call.PageSize(g.flagPSLTopicPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -206,32 +161,32 @@ func runPSLTopicListSubs(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagPSLTopicFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagPSLTopicFormat)
 }
 
 func runPSLTopicPublish(cmd *cobra.Command, args []string) error {
 	return fmt.Errorf("publish is a streaming gRPC operation not implemented over REST; use a native pub/sub client library for publishing")
 }
 
-func runPSLTopicUpdate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, project, err := pslTopicService(ctx)
+func (g *pubsubCmds) runPSLTopicUpdate(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, project, err := g.pslTopicService(ctx)
 	if err != nil {
 		return err
 	}
 	body := &pubsublite.Topic{}
-	if err := loadYAMLOrJSONInto(flagPSLTopicConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagPSLTopicConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagPSLTopicUpdateMask
+	mask := g.flagPSLTopicUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
 	got, err := svc.Admin.Projects.Locations.Topics.
-		Patch(pslTopicName(args[0], project, flagPSLTopicLocation), body).
+		Patch(pslTopicName(args[0], project, g.flagPSLTopicLocation), body).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating topic: %w", err)
 	}
-	return emitFormatted(got, flagPSLTopicFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagPSLTopicFormat)
 }

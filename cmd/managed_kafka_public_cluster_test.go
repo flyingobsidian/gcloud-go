@@ -7,8 +7,9 @@ import (
 )
 
 func TestMKPublicClusterFlagsRegistered(t *testing.T) {
+	grp := newManagedKafkaCmds(legacyTestInvocation())
 	for _, c := range []string{"create", "update"} {
-		cmd := findSub(mkClustersCmd, c)
+		cmd := findSub(grp.mkClustersCmd, c)
 		if cmd == nil {
 			t.Fatalf("managed-kafka clusters %s missing", c)
 		}

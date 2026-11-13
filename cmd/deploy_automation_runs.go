@@ -1,96 +1,70 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	clouddeploy "google.golang.org/api/clouddeploy/v1"
 )
 
 // --- gcloud deploy automation-runs (#1524) ---
 
-var deployARCmd = &cobra.Command{Use: "automation-runs", Short: "Manage Cloud Deploy automation runs"}
-
-var (
-	flagDeployARRegion   string
-	flagDeployARPipeline string
-	flagDeployARFormat   string
-	flagDeployARPageSize int64
-)
-
-var (
-	deployARCancelCmd = &cobra.Command{
-		Use: "cancel AUTOMATION_RUN", Short: "Cancel an automation run",
-		Args: cobra.ExactArgs(1), RunE: runDeployARCancel,
-	}
-	deployARDescribeCmd = &cobra.Command{
-		Use: "describe AUTOMATION_RUN", Short: "Describe an automation run",
-		Args: cobra.ExactArgs(1), RunE: runDeployARDescribe,
-	}
-	deployARListCmd = &cobra.Command{
-		Use: "list", Short: "List automation runs for a delivery pipeline",
-		Args: cobra.NoArgs, RunE: runDeployARList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{deployARCancelCmd, deployARDescribeCmd, deployARListCmd}
+func (s *deployCmds) initDeployAutomationRuns() {
+	all := []*cobra.Command{s.deployARCancelCmd, s.deployARDescribeCmd, s.deployARListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDeployARRegion, "region", "", "Cloud Deploy region (required)")
+		c.Flags().StringVar(&s.flagDeployARRegion, "region", "", "Cloud Deploy region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDeployARPipeline, "delivery-pipeline", "",
+		c.Flags().StringVar(&s.flagDeployARPipeline, "delivery-pipeline", "",
 			"Delivery pipeline (required)")
 		_ = c.MarkFlagRequired("delivery-pipeline")
-		c.Flags().StringVar(&flagDeployARFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDeployARFormat, "format", "", "Output format")
 	}
-	deployARListCmd.Flags().Int64Var(&flagDeployARPageSize, "page-size", 0, "Maximum results per page")
+	s.deployARListCmd.Flags().Int64Var(&s.flagDeployARPageSize, "page-size", 0, "Maximum results per page")
 
-	deployARCmd.AddCommand(all...)
-	deployCmd.AddCommand(deployARCmd)
+	s.deployARCmd.AddCommand(all...)
+	s.deployCmd.AddCommand(s.deployARCmd)
 }
 
-func deployARParent() (string, error) {
-	project, err := resolveProject()
+func (s *deployCmds) deployARParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return deployChild("deliveryPipelines", flagDeployARPipeline, deployLocationParent(project, flagDeployARRegion)), nil
+	return deployChild("deliveryPipelines", s.flagDeployARPipeline, deployLocationParent(project, s.flagDeployARRegion)), nil
 }
 
-func deployARName(id string) (string, error) {
-	parent, err := deployARParent()
+func (s *deployCmds) deployARName(id string) (string, error) {
+	parent, err := s.deployARParent()
 	if err != nil {
 		return "", err
 	}
 	return deployChild("automationRuns", id, parent), nil
 }
 
-func runDeployARCancel(cmd *cobra.Command, args []string) error {
-	name, err := deployARName(args[0])
+func (s *deployCmds) runDeployARCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.deployARName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.DeliveryPipelines.AutomationRuns.Cancel(name, &clouddeploy.CancelAutomationRunRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling automation run: %w", err)
 	}
-	fmt.Printf("Cancelled automation run [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled automation run [%s].\n", args[0])
 	return nil
 }
 
-func runDeployARDescribe(cmd *cobra.Command, args []string) error {
-	name, err := deployARName(args[0])
+func (s *deployCmds) runDeployARDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.deployARName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -98,16 +72,16 @@ func runDeployARDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing automation run: %w", err)
 	}
-	return emitFormatted(got, flagDeployARFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDeployARFormat)
 }
 
-func runDeployARList(cmd *cobra.Command, args []string) error {
-	parent, err := deployARParent()
+func (s *deployCmds) runDeployARList(cmd *cobra.Command, args []string) error {
+	parent, err := s.deployARParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,8 +89,8 @@ func runDeployARList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DeliveryPipelines.AutomationRuns.List(parent).Context(ctx)
-		if flagDeployARPageSize > 0 {
-			call = call.PageSize(flagDeployARPageSize)
+		if s.flagDeployARPageSize > 0 {
+			call = call.PageSize(s.flagDeployARPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -131,5 +105,5 @@ func runDeployARList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDeployARFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDeployARFormat)
 }

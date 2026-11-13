@@ -19,13 +19,13 @@ import (
 // emulatorLookupPath returns the resolved path to bin, searching PATH first
 // and then a handful of common Cloud SDK install locations. Returns an error
 // with usage guidance if nothing is found.
-func emulatorLookupPath(bin string, sdkSubdir string) (string, error) {
+func (s *emulatorsCmds) emulatorLookupPath(bin string, sdkSubdir string) (string, error) {
 	if p, err := exec.LookPath(bin); err == nil {
 		return p, nil
 	}
 	// Common Cloud SDK layouts. Users typically have exactly one of these.
 	candidates := []string{
-		os.Getenv("CLOUDSDK_ROOT_DIR"),
+		s.inv.env.Getenv("CLOUDSDK_ROOT_DIR"),
 		"/usr/lib/google-cloud-sdk",
 		"/opt/google-cloud-sdk",
 	}
@@ -70,24 +70,24 @@ func sdkComponentFor(bin string) string {
 // runEmulator runs bin (resolved via emulatorLookupPath) with the given argv,
 // forwarding stdio. Ctrl-C in a foreground terminal reaches the child via the
 // process group so both exit together.
-func runEmulator(bin, sdkSubdir string, argv []string) error {
-	path, err := emulatorLookupPath(bin, sdkSubdir)
+func (s *emulatorsCmds) runEmulator(bin, sdkSubdir string, argv []string) error {
+	path, err := s.emulatorLookupPath(bin, sdkSubdir)
 	if err != nil {
 		return err
 	}
 	cmd := exec.Command(path, argv...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdin = s.inv.stdin
+	cmd.Stdout = s.inv.stdout
+	cmd.Stderr = s.inv.stderr
 	return cmd.Run()
 }
 
 // printEnvInit prints the shell exports for an emulator's env variables. The
 // output format mirrors `gcloud emulators <x> env-init` -- one `export`
 // statement per line so `eval "$(gcloud-go emulators X env-init)"` works.
-func printEnvInit(vars map[string]string) error {
+func (s *emulatorsCmds) printEnvInit(vars map[string]string) error {
 	for k, v := range vars {
-		if _, err := fmt.Fprintf(os.Stdout, "export %s=%s\n", k, shellQuote(v)); err != nil {
+		if _, err := fmt.Fprintf(s.inv.stdout, "export %s=%s\n", k, shellQuote(v)); err != nil {
 			return err
 		}
 	}
@@ -95,9 +95,9 @@ func printEnvInit(vars map[string]string) error {
 }
 
 // printEnvUnset prints unset commands for the given env variables.
-func printEnvUnset(keys []string) error {
+func (s *emulatorsCmds) printEnvUnset(keys []string) error {
 	for _, k := range keys {
-		if _, err := fmt.Fprintf(os.Stdout, "unset %s\n", k); err != nil {
+		if _, err := fmt.Fprintf(s.inv.stdout, "unset %s\n", k); err != nil {
 			return err
 		}
 	}
@@ -137,17 +137,17 @@ func shellQuote(s string) string {
 // X` when the real subcommands are ready. It removes the stub group of the
 // same name (added in emulators.go's init) so cobra doesn't see two children
 // with matching names.
-func registerEmulatorGroup(g *cobra.Command) {
+func (s *emulatorsCmds) registerEmulatorGroup(g *cobra.Command) {
 	// Cobra doesn't provide a public Remove, but each stub group registered
 	// in emulators.go is added by pointer via registerStubGroup. We rebuild
 	// emulatorsCmd.commands by filtering out anything whose name matches.
-	current := emulatorsCmd.Commands()
-	emulatorsCmd.ResetCommands()
+	current := s.emulatorsCmd.Commands()
+	s.emulatorsCmd.ResetCommands()
 	for _, c := range current {
 		if c.Name() == g.Name() {
 			continue
 		}
-		emulatorsCmd.AddCommand(c)
+		s.emulatorsCmd.AddCommand(c)
 	}
-	emulatorsCmd.AddCommand(g)
+	s.emulatorsCmd.AddCommand(g)
 }

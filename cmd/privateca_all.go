@@ -1,49 +1,31 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	privateca "google.golang.org/api/privateca/v1"
 )
 
 // --- privateca locations ---
 
-var privatecaLocationsCmd = &cobra.Command{
-	Use:   "locations",
-	Short: "Explore Private CA locations",
+func (s *privatecaCmds) initPrivatecaAll() {
+	s.pcaLocDescribeCmd.Flags().StringVar(&s.flagPCAFormat, "format", "", "Output format")
+	s.pcaLocListCmd.Flags().StringVar(&s.flagPCAFormat, "format", "", "Output format")
+	s.privatecaLocationsCmd.AddCommand(s.pcaLocDescribeCmd, s.pcaLocListCmd)
+	s.privatecaCmd.AddCommand(s.privatecaLocationsCmd)
 }
 
-var pcaLocDescribeCmd = &cobra.Command{
-	Use: "describe LOCATION", Short: "Describe a Private CA location",
-	Args: cobra.ExactArgs(1), RunE: runPCALocDescribe,
-}
-var pcaLocListCmd = &cobra.Command{
-	Use: "list", Short: "List Private CA locations",
-	Args: cobra.NoArgs, RunE: runPCALocList,
-}
-
-var flagPCAFormat string
-
-func init() {
-	pcaLocDescribeCmd.Flags().StringVar(&flagPCAFormat, "format", "", "Output format")
-	pcaLocListCmd.Flags().StringVar(&flagPCAFormat, "format", "", "Output format")
-	privatecaLocationsCmd.AddCommand(pcaLocDescribeCmd, pcaLocListCmd)
-	privatecaCmd.AddCommand(privatecaLocationsCmd)
-}
-
-func runPCALocDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCALocDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
@@ -51,16 +33,16 @@ func runPCALocDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(got, flagPCAFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagPCAFormat)
 }
 
-func runPCALocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCALocList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
@@ -68,369 +50,286 @@ func runPCALocList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing locations: %w", err)
 	}
-	if flagPCAFormat != "" {
-		return emitFormatted(resp.Locations, flagPCAFormat)
+	if s.flagPCAFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Locations, s.flagPCAFormat)
 	}
-	printTableHeading(len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
+	printTableHeadingTo(s.inv.stdout, len(resp.Locations), "%-20s %s\n", "LOCATION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
-		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
+		fmt.Fprintf(s.inv.stdout, "%-20s %s\n", l.LocationId, l.DisplayName)
 	}
 	return nil
 }
 
 // --- privateca operations ---
 
-var privatecaOperationsCmd = &cobra.Command{
-	Use:   "operations",
-	Short: "Manage Private CA operations",
-}
-
-var (
-	pcaOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a Private CA operation",
-		Args: cobra.ExactArgs(1), RunE: runPCAOpCancel,
-	}
-	pcaOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete a Private CA operation",
-		Args: cobra.ExactArgs(1), RunE: runPCAOpDelete,
-	}
-	pcaOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Private CA operation",
-		Args: cobra.ExactArgs(1), RunE: runPCAOpDescribe,
-	}
-	pcaOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Private CA operations in a location",
-		Args: cobra.NoArgs, RunE: runPCAOpList,
-	}
-)
-
-var flagPCAOpLocation string
-
-func init() {
-	for _, c := range []*cobra.Command{pcaOpCancelCmd, pcaOpDeleteCmd, pcaOpDescribeCmd, pcaOpListCmd} {
-		c.Flags().StringVar(&flagPCAOpLocation, "location", "", "Location containing the operation (required)")
+func (s *privatecaCmds) initPrivatecaAll2() {
+	for _, c := range []*cobra.Command{s.pcaOpCancelCmd, s.pcaOpDeleteCmd, s.pcaOpDescribeCmd, s.pcaOpListCmd} {
+		c.Flags().StringVar(&s.flagPCAOpLocation, "location", "", "Location containing the operation (required)")
 		_ = c.MarkFlagRequired("location")
 	}
-	pcaOpDescribeCmd.Flags().StringVar(&flagPCAFormat, "format", "", "Output format")
-	pcaOpListCmd.Flags().StringVar(&flagPCAFormat, "format", "", "Output format")
+	s.pcaOpDescribeCmd.Flags().StringVar(&s.flagPCAFormat, "format", "", "Output format")
+	s.pcaOpListCmd.Flags().StringVar(&s.flagPCAFormat, "format", "", "Output format")
 
-	privatecaOperationsCmd.AddCommand(pcaOpCancelCmd, pcaOpDeleteCmd, pcaOpDescribeCmd, pcaOpListCmd)
-	privatecaCmd.AddCommand(privatecaOperationsCmd)
+	s.privatecaOperationsCmd.AddCommand(s.pcaOpCancelCmd, s.pcaOpDeleteCmd, s.pcaOpDescribeCmd, s.pcaOpListCmd)
+	s.privatecaCmd.AddCommand(s.privatecaOperationsCmd)
 }
 
 func pcaOpName(id, project, location string) string {
 	return pcaResourceName("operations", id, privatecaLocationParent(project, location))
 }
 
-func runPCAOpCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAOpCancel(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Operations.Cancel(pcaOpName(args[0], project, flagPCAOpLocation), &privateca.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Operations.Cancel(pcaOpName(args[0], project, s.flagPCAOpLocation), &privateca.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runPCAOpDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAOpDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Operations.Delete(pcaOpName(args[0], project, flagPCAOpLocation)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Operations.Delete(pcaOpName(args[0], project, s.flagPCAOpLocation)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runPCAOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAOpDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Operations.Get(pcaOpName(args[0], project, flagPCAOpLocation)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Operations.Get(pcaOpName(args[0], project, s.flagPCAOpLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagPCAFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagPCAFormat)
 }
 
-func runPCAOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAOpList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Operations.List(privatecaLocationParent(project, flagPCAOpLocation)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Operations.List(privatecaLocationParent(project, s.flagPCAOpLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	if flagPCAFormat != "" {
-		return emitFormatted(resp.Operations, flagPCAFormat)
+	if s.flagPCAFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Operations, s.flagPCAFormat)
 	}
-	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
-		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(s.inv.stdout, "%-40s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }
 
 // --- privateca pools ---
 
-var privatecaPoolsCmd = &cobra.Command{
-	Use:   "pools",
-	Short: "Manage Private CA pools",
-}
-
-var (
-	pcaPoolCreateCmd = &cobra.Command{
-		Use: "create POOL", Short: "Create a CA pool from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runPCAPoolCreate,
-	}
-	pcaPoolDeleteCmd = &cobra.Command{
-		Use: "delete POOL", Short: "Delete a CA pool",
-		Args: cobra.ExactArgs(1), RunE: runPCAPoolDelete,
-	}
-	pcaPoolDescribeCmd = &cobra.Command{
-		Use: "describe POOL", Short: "Describe a CA pool",
-		Args: cobra.ExactArgs(1), RunE: runPCAPoolDescribe,
-	}
-	pcaPoolListCmd = &cobra.Command{
-		Use: "list", Short: "List CA pools in a location",
-		Args: cobra.NoArgs, RunE: runPCAPoolList,
-	}
-	pcaPoolUpdateCmd = &cobra.Command{
-		Use: "update POOL", Short: "Update a CA pool from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runPCAPoolUpdate,
-	}
-	pcaPoolGetCaCertsCmd = &cobra.Command{
-		Use: "get-ca-certs POOL", Short: "Print PEM-encoded CA certificates for a pool",
-		Args: cobra.ExactArgs(1), RunE: runPCAPoolGetCaCerts,
-	}
-	pcaPoolGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy POOL", Short: "Print the IAM policy for a CA pool",
-		Args: cobra.ExactArgs(1), RunE: runPCAPoolGetIam,
-	}
-	pcaPoolSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy POOL POLICY_FILE", Short: "Replace the IAM policy for a CA pool",
-		Args: cobra.ExactArgs(2), RunE: runPCAPoolSetIam,
-	}
-	pcaPoolAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding POOL", Short: "Add an IAM binding to a CA pool",
-		Args: cobra.ExactArgs(1), RunE: runPCAPoolAddIam,
-	}
-	pcaPoolRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding POOL", Short: "Remove an IAM binding from a CA pool",
-		Args: cobra.ExactArgs(1), RunE: runPCAPoolRemoveIam,
-	}
-)
-
-var (
-	flagPCAPoolLocation   string
-	flagPCAPoolConfigFile string
-	flagPCAPoolUpdateMask string
-	flagPCAPoolAsync      bool
-	flagPCAPoolIamMember  string
-	flagPCAPoolIamRole    string
-)
-
-func init() {
-	all := []*cobra.Command{pcaPoolCreateCmd, pcaPoolDeleteCmd, pcaPoolDescribeCmd, pcaPoolListCmd, pcaPoolUpdateCmd,
-		pcaPoolGetCaCertsCmd, pcaPoolGetIamCmd, pcaPoolSetIamCmd, pcaPoolAddIamCmd, pcaPoolRemoveIamCmd}
+func (s *privatecaCmds) initPrivatecaAll3() {
+	all := []*cobra.Command{s.pcaPoolCreateCmd, s.pcaPoolDeleteCmd, s.pcaPoolDescribeCmd, s.pcaPoolListCmd, s.pcaPoolUpdateCmd,
+		s.pcaPoolGetCaCertsCmd, s.pcaPoolGetIamCmd, s.pcaPoolSetIamCmd, s.pcaPoolAddIamCmd, s.pcaPoolRemoveIamCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagPCAPoolLocation, "location", "", "Location containing the CA pool (required)")
+		c.Flags().StringVar(&s.flagPCAPoolLocation, "location", "", "Location containing the CA pool (required)")
 		_ = c.MarkFlagRequired("location")
 	}
-	for _, c := range []*cobra.Command{pcaPoolCreateCmd, pcaPoolUpdateCmd} {
-		c.Flags().StringVar(&flagPCAPoolConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.pcaPoolCreateCmd, s.pcaPoolUpdateCmd} {
+		c.Flags().StringVar(&s.flagPCAPoolConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the CaPool message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	pcaPoolUpdateCmd.Flags().StringVar(&flagPCAPoolUpdateMask, "update-mask", "",
+	s.pcaPoolUpdateCmd.Flags().StringVar(&s.flagPCAPoolUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{pcaPoolCreateCmd, pcaPoolDeleteCmd, pcaPoolUpdateCmd} {
-		c.Flags().BoolVar(&flagPCAPoolAsync, "async", false, "Return the long-running operation without waiting")
+	for _, c := range []*cobra.Command{s.pcaPoolCreateCmd, s.pcaPoolDeleteCmd, s.pcaPoolUpdateCmd} {
+		c.Flags().BoolVar(&s.flagPCAPoolAsync, "async", false, "Return the long-running operation without waiting")
 	}
-	pcaAddIAMFlags(pcaPoolAddIamCmd, &flagPCAPoolIamMember, &flagPCAPoolIamRole)
-	pcaAddIAMFlags(pcaPoolRemoveIamCmd, &flagPCAPoolIamMember, &flagPCAPoolIamRole)
+	pcaAddIAMFlags(s.pcaPoolAddIamCmd, &s.flagPCAPoolIamMember, &s.flagPCAPoolIamRole)
+	pcaAddIAMFlags(s.pcaPoolRemoveIamCmd, &s.flagPCAPoolIamMember, &s.flagPCAPoolIamRole)
 
-	privatecaPoolsCmd.AddCommand(all...)
-	privatecaCmd.AddCommand(privatecaPoolsCmd)
+	s.privatecaPoolsCmd.AddCommand(all...)
+	s.privatecaCmd.AddCommand(s.privatecaPoolsCmd)
 }
 
 func pcaPoolName(id, project, location string) string {
 	return pcaResourceName("caPools", id, privatecaLocationParent(project, location))
 }
 
-func runPCAPoolCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAPoolCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	pool := &privateca.CaPool{}
-	if err := loadYAMLOrJSONInto(flagPCAPoolConfigFile, pool); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagPCAPoolConfigFile, pool); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.CaPools.Create(privatecaLocationParent(project, flagPCAPoolLocation), pool).
+	op, err := svc.Projects.Locations.CaPools.Create(privatecaLocationParent(project, s.flagPCAPoolLocation), pool).
 		CaPoolId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating pool: %w", err)
 	}
-	return pcaFinishOp(ctx, svc, op, "Create pool", args[0], flagPCAPoolAsync)
+	return s.pcaFinishOp(ctx, svc, op, "Create pool", args[0], s.flagPCAPoolAsync)
 }
 
-func runPCAPoolDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAPoolDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.CaPools.Delete(pcaPoolName(args[0], project, flagPCAPoolLocation)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.CaPools.Delete(pcaPoolName(args[0], project, s.flagPCAPoolLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting pool: %w", err)
 	}
-	return pcaFinishOp(ctx, svc, op, "Delete pool", args[0], flagPCAPoolAsync)
+	return s.pcaFinishOp(ctx, svc, op, "Delete pool", args[0], s.flagPCAPoolAsync)
 }
 
-func runPCAPoolDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAPoolDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	pool, err := svc.Projects.Locations.CaPools.Get(pcaPoolName(args[0], project, flagPCAPoolLocation)).Context(ctx).Do()
+	pool, err := svc.Projects.Locations.CaPools.Get(pcaPoolName(args[0], project, s.flagPCAPoolLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing pool: %w", err)
 	}
-	return emitFormatted(pool, flagPCAFormat)
+	return emitFormattedTo(s.inv.stdout, pool, s.flagPCAFormat)
 }
 
-func runPCAPoolList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAPoolList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.CaPools.List(privatecaLocationParent(project, flagPCAPoolLocation)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.CaPools.List(privatecaLocationParent(project, s.flagPCAPoolLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing pools: %w", err)
 	}
-	if flagPCAFormat != "" {
-		return emitFormatted(resp.CaPools, flagPCAFormat)
+	if s.flagPCAFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.CaPools, s.flagPCAFormat)
 	}
-	printTableHeading(len(resp.CaPools), "%-40s %s\n", "NAME", "TIER")
+	printTableHeadingTo(s.inv.stdout, len(resp.CaPools), "%-40s %s\n", "NAME", "TIER")
 	for _, p := range resp.CaPools {
-		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.Tier)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(p.Name), p.Tier)
 	}
 	return nil
 }
 
-func runPCAPoolUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAPoolUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	pool := &privateca.CaPool{}
-	if err := loadYAMLOrJSONInto(flagPCAPoolConfigFile, pool); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagPCAPoolConfigFile, pool); err != nil {
 		return err
 	}
-	mask := flagPCAPoolUpdateMask
+	mask := s.flagPCAPoolUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(pool))
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.CaPools.Patch(pcaPoolName(args[0], project, flagPCAPoolLocation), pool).
+	op, err := svc.Projects.Locations.CaPools.Patch(pcaPoolName(args[0], project, s.flagPCAPoolLocation), pool).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating pool: %w", err)
 	}
-	return pcaFinishOp(ctx, svc, op, "Update pool", args[0], flagPCAPoolAsync)
+	return s.pcaFinishOp(ctx, svc, op, "Update pool", args[0], s.flagPCAPoolAsync)
 }
 
-func runPCAPoolGetCaCerts(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAPoolGetCaCerts(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.CaPools.FetchCaCerts(pcaPoolName(args[0], project, flagPCAPoolLocation), &privateca.FetchCaCertsRequest{}).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.CaPools.FetchCaCerts(pcaPoolName(args[0], project, s.flagPCAPoolLocation), &privateca.FetchCaCertsRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("fetching CA certs: %w", err)
 	}
 	for _, chain := range resp.CaCerts {
 		for _, pem := range chain.Certificates {
-			fmt.Print(pem)
+			fmt.Fprint(s.inv.stdout, pem)
 		}
 	}
 	return nil
 }
 
-func runPCAPoolGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAPoolGetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	policy, err := svc.Projects.Locations.CaPools.GetIamPolicy(pcaPoolName(args[0], project, flagPCAPoolLocation)).Context(ctx).Do()
+	policy, err := svc.Projects.Locations.CaPools.GetIamPolicy(pcaPoolName(args[0], project, s.flagPCAPoolLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagPCAFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagPCAFormat)
 }
 
-func runPCAPoolSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCAPoolSetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
@@ -438,41 +337,41 @@ func runPCAPoolSetIam(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.CaPools.SetIamPolicy(pcaPoolName(args[0], project, flagPCAPoolLocation), &privateca.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
+	got, err := svc.Projects.Locations.CaPools.SetIamPolicy(pcaPoolName(args[0], project, s.flagPCAPoolLocation), &privateca.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runPCAPoolAddIam(cmd *cobra.Command, args []string) error {
-	return pcaPoolModifyIam(args[0], func(p *privateca.Policy) {
-		pcaAddBinding(p, flagPCAPoolIamRole, flagPCAPoolIamMember)
+func (s *privatecaCmds) runPCAPoolAddIam(cmd *cobra.Command, args []string) error {
+	return s.pcaPoolModifyIam(args[0], func(p *privateca.Policy) {
+		pcaAddBinding(p, s.flagPCAPoolIamRole, s.flagPCAPoolIamMember)
 	})
 }
 
-func runPCAPoolRemoveIam(cmd *cobra.Command, args []string) error {
-	return pcaPoolModifyIam(args[0], func(p *privateca.Policy) {
-		pcaRemoveBinding(p, flagPCAPoolIamRole, flagPCAPoolIamMember)
+func (s *privatecaCmds) runPCAPoolRemoveIam(cmd *cobra.Command, args []string) error {
+	return s.pcaPoolModifyIam(args[0], func(p *privateca.Policy) {
+		pcaRemoveBinding(p, s.flagPCAPoolIamRole, s.flagPCAPoolIamMember)
 	})
 }
 
-func pcaPoolModifyIam(name string, mutate func(*privateca.Policy)) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) pcaPoolModifyIam(name string, mutate func(*privateca.Policy)) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := s.inv.context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	resource := pcaPoolName(name, project, flagPCAPoolLocation)
+	resource := pcaPoolName(name, project, s.flagPCAPoolLocation)
 	policy, err := svc.Projects.Locations.CaPools.GetIamPolicy(resource).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
@@ -482,97 +381,44 @@ func pcaPoolModifyIam(name string, mutate func(*privateca.Policy)) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
 // --- privateca certificates ---
 
-var privatecaCertificatesCmd = &cobra.Command{
-	Use:   "certificates",
-	Short: "Manage Private CA certificates",
-}
-
-var (
-	pcaCertCreateCmd = &cobra.Command{
-		Use: "create CERTIFICATE", Short: "Create a certificate from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runPCACertCreate,
-	}
-	pcaCertDescribeCmd = &cobra.Command{
-		Use: "describe CERTIFICATE", Short: "Describe a certificate",
-		Args: cobra.ExactArgs(1), RunE: runPCACertDescribe,
-	}
-	pcaCertListCmd = &cobra.Command{
-		Use: "list", Short: "List certificates in a CA pool",
-		Args: cobra.NoArgs, RunE: runPCACertList,
-	}
-	pcaCertUpdateCmd = &cobra.Command{
-		Use: "update CERTIFICATE", Short: "Update a certificate from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runPCACertUpdate,
-	}
-	pcaCertRevokeCmd = &cobra.Command{
-		Use: "revoke CERTIFICATE", Short: "Revoke a certificate",
-		Args: cobra.ExactArgs(1), RunE: runPCACertRevoke,
-	}
-	pcaCertExportCmd = &cobra.Command{
-		Use: "export CERTIFICATE", Short: "Print the PEM-encoded certificate to stdout",
-		Args: cobra.ExactArgs(1), RunE: runPCACertExport,
-	}
-)
-
-var (
-	flagPCACertLocation     string
-	flagPCACertIssuerPool   string
-	flagPCACertConfigFile   string
-	flagPCACertUpdateMask   string
-	flagPCACertRevokeReason string
-	flagPCACertOutputFile   string
-	// Certificate.RequestedNotBeforeTime (gcloud-python 569.0.0). Only valid
-	// when the issuing CA pool's issuancePolicy has
-	// `allowRequesterSpecifiedNotBeforeTime: true`.
-	flagPCACertNotBefore string
-
-	// --generate-key / --key-output-file / --key-algorithm on
-	// `certificates create`: generate a key pair locally, write the private
-	// key to --key-output-file and send the public key as
-	// config.publicKey (gcloud-python 588.0.0 added --key-algorithm).
-	flagPCACertGenerateKey   bool
-	flagPCACertKeyOutputFile string
-	flagPCACertKeyAlgorithm  string
-)
-
-func init() {
-	all := []*cobra.Command{pcaCertCreateCmd, pcaCertDescribeCmd, pcaCertListCmd, pcaCertUpdateCmd, pcaCertRevokeCmd, pcaCertExportCmd}
+func (s *privatecaCmds) initPrivatecaAll4() {
+	all := []*cobra.Command{s.pcaCertCreateCmd, s.pcaCertDescribeCmd, s.pcaCertListCmd, s.pcaCertUpdateCmd, s.pcaCertRevokeCmd, s.pcaCertExportCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagPCACertLocation, "location", "", "Location containing the certificate (required)")
-		c.Flags().StringVar(&flagPCACertIssuerPool, "issuer-pool", "", "CA pool containing the certificate (required)")
+		c.Flags().StringVar(&s.flagPCACertLocation, "location", "", "Location containing the certificate (required)")
+		c.Flags().StringVar(&s.flagPCACertIssuerPool, "issuer-pool", "", "CA pool containing the certificate (required)")
 		_ = c.MarkFlagRequired("location")
 		_ = c.MarkFlagRequired("issuer-pool")
 	}
-	for _, c := range []*cobra.Command{pcaCertCreateCmd, pcaCertUpdateCmd} {
-		c.Flags().StringVar(&flagPCACertConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.pcaCertCreateCmd, s.pcaCertUpdateCmd} {
+		c.Flags().StringVar(&s.flagPCACertConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Certificate message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	pcaCertUpdateCmd.Flags().StringVar(&flagPCACertUpdateMask, "update-mask", "",
+	s.pcaCertUpdateCmd.Flags().StringVar(&s.flagPCACertUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	pcaCertCreateCmd.Flags().StringVar(&flagPCACertNotBefore, "requested-not-before-time", "",
+	s.pcaCertCreateCmd.Flags().StringVar(&s.flagPCACertNotBefore, "requested-not-before-time", "",
 		"RFC 3339 timestamp for Certificate.requestedNotBeforeTime; requires "+
 			"the issuing CA pool's issuancePolicy to set "+
 			"allowRequesterSpecifiedNotBeforeTime=true")
-	pcaCertCreateCmd.Flags().BoolVar(&flagPCACertGenerateKey, "generate-key", false,
+	s.pcaCertCreateCmd.Flags().BoolVar(&s.flagPCACertGenerateKey, "generate-key", false,
 		"Use this flag to have a new private key securely generated on your machine.")
-	pcaCertCreateCmd.Flags().StringVar(&flagPCACertKeyOutputFile, "key-output-file", "",
+	s.pcaCertCreateCmd.Flags().StringVar(&s.flagPCACertKeyOutputFile, "key-output-file", "",
 		"The path where the generated private key file should be written (in PEM format).")
-	pcaCertCreateCmd.Flags().StringVar(&flagPCACertKeyAlgorithm, "key-algorithm", "rsa-2048",
+	s.pcaCertCreateCmd.Flags().StringVar(&s.flagPCACertKeyAlgorithm, "key-algorithm", "rsa-2048",
 		"The crypto algorithm to use for generating the client-side private key. "+
 			"KEY_ALGORITHM must be one of: "+strings.Join(pcaKeyAlgorithms, ", ")+".")
-	pcaCertRevokeCmd.Flags().StringVar(&flagPCACertRevokeReason, "reason", "REVOCATION_REASON_UNSPECIFIED",
+	s.pcaCertRevokeCmd.Flags().StringVar(&s.flagPCACertRevokeReason, "reason", "REVOCATION_REASON_UNSPECIFIED",
 		"Reason for revocation (see the ReasonForRevocation enum)")
-	pcaCertExportCmd.Flags().StringVar(&flagPCACertOutputFile, "output-file", "",
+	s.pcaCertExportCmd.Flags().StringVar(&s.flagPCACertOutputFile, "output-file", "",
 		"Write PEM output to this file instead of stdout")
 
-	privatecaCertificatesCmd.AddCommand(all...)
-	privatecaCmd.AddCommand(privatecaCertificatesCmd)
+	s.privatecaCertificatesCmd.AddCommand(all...)
+	s.privatecaCmd.AddCommand(s.privatecaCertificatesCmd)
 }
 
 func pcaCertName(id, project, location, pool string) string {
@@ -583,12 +429,12 @@ func pcaCertName(id, project, location, pool string) string {
 // validatePCACertKeyFlags enforces the --generate-key argument group:
 // --generate-key and --key-output-file go together, and --key-algorithm
 // only applies with --generate-key.
-func validatePCACertKeyFlags(cmd *cobra.Command) error {
-	if err := validatePCAKeyAlgorithm(flagPCACertKeyAlgorithm); err != nil {
+func (s *privatecaCmds) validatePCACertKeyFlags(cmd *cobra.Command) error {
+	if err := validatePCAKeyAlgorithm(s.flagPCACertKeyAlgorithm); err != nil {
 		return err
 	}
-	if flagPCACertGenerateKey {
-		if flagPCACertKeyOutputFile == "" {
+	if s.flagPCACertGenerateKey {
+		if s.flagPCACertKeyOutputFile == "" {
 			return fmt.Errorf("argument --generate-key: --key-output-file must be specified.")
 		}
 		return nil
@@ -601,143 +447,143 @@ func validatePCACertKeyFlags(cmd *cobra.Command) error {
 	return nil
 }
 
-func runPCACertCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCACertCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	if err := validatePCACertKeyFlags(cmd); err != nil {
+	if err := s.validatePCACertKeyFlags(cmd); err != nil {
 		return err
 	}
 	cert := &privateca.Certificate{}
-	if err := loadYAMLOrJSONInto(flagPCACertConfigFile, cert); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagPCACertConfigFile, cert); err != nil {
 		return err
 	}
-	if flagPCACertGenerateKey {
-		if err := applyPCAGeneratedKey(cert, flagPCACertKeyAlgorithm, flagPCACertKeyOutputFile); err != nil {
+	if s.flagPCACertGenerateKey {
+		if err := s.applyPCAGeneratedKey(cert, s.flagPCACertKeyAlgorithm, s.flagPCACertKeyOutputFile); err != nil {
 			return err
 		}
 	}
 	// --requested-not-before-time wins over any value from --config-file so
 	// the flag has a predictable effect regardless of the body content.
-	if flagPCACertNotBefore != "" {
-		cert.RequestedNotBeforeTime = flagPCACertNotBefore
+	if s.flagPCACertNotBefore != "" {
+		cert.RequestedNotBeforeTime = s.flagPCACertNotBefore
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	parent := fmt.Sprintf("%s/caPools/%s", privatecaLocationParent(project, flagPCACertLocation), flagPCACertIssuerPool)
+	parent := fmt.Sprintf("%s/caPools/%s", privatecaLocationParent(project, s.flagPCACertLocation), s.flagPCACertIssuerPool)
 	got, err := svc.Projects.Locations.CaPools.Certificates.Create(parent, cert).
 		CertificateId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating certificate: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runPCACertDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCACertDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.CaPools.Certificates.Get(pcaCertName(args[0], project, flagPCACertLocation, flagPCACertIssuerPool)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.CaPools.Certificates.Get(pcaCertName(args[0], project, s.flagPCACertLocation, s.flagPCACertIssuerPool)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing certificate: %w", err)
 	}
-	return emitFormatted(got, flagPCAFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagPCAFormat)
 }
 
-func runPCACertList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCACertList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	parent := fmt.Sprintf("%s/caPools/%s", privatecaLocationParent(project, flagPCACertLocation), flagPCACertIssuerPool)
+	parent := fmt.Sprintf("%s/caPools/%s", privatecaLocationParent(project, s.flagPCACertLocation), s.flagPCACertIssuerPool)
 	resp, err := svc.Projects.Locations.CaPools.Certificates.List(parent).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing certificates: %w", err)
 	}
-	if flagPCAFormat != "" {
-		return emitFormatted(resp.Certificates, flagPCAFormat)
+	if s.flagPCAFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Certificates, s.flagPCAFormat)
 	}
-	printTableHeading(len(resp.Certificates), "%-40s %s\n", "NAME", "SUBJECT")
+	printTableHeadingTo(s.inv.stdout, len(resp.Certificates), "%-40s %s\n", "NAME", "SUBJECT")
 	for _, c := range resp.Certificates {
 		sub := ""
 		if c.CertificateDescription != nil && c.CertificateDescription.SubjectDescription != nil && c.CertificateDescription.SubjectDescription.Subject != nil {
 			sub = c.CertificateDescription.SubjectDescription.Subject.CommonName
 		}
-		fmt.Printf("%-40s %s\n", path.Base(c.Name), sub)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(c.Name), sub)
 	}
 	return nil
 }
 
-func runPCACertUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCACertUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	cert := &privateca.Certificate{}
-	if err := loadYAMLOrJSONInto(flagPCACertConfigFile, cert); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagPCACertConfigFile, cert); err != nil {
 		return err
 	}
-	mask := flagPCACertUpdateMask
+	mask := s.flagPCACertUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(cert))
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.CaPools.Certificates.Patch(pcaCertName(args[0], project, flagPCACertLocation, flagPCACertIssuerPool), cert).
+	got, err := svc.Projects.Locations.CaPools.Certificates.Patch(pcaCertName(args[0], project, s.flagPCACertLocation, s.flagPCACertIssuerPool), cert).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating certificate: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runPCACertRevoke(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCACertRevoke(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	req := &privateca.RevokeCertificateRequest{Reason: flagPCACertRevokeReason}
-	got, err := svc.Projects.Locations.CaPools.Certificates.Revoke(pcaCertName(args[0], project, flagPCACertLocation, flagPCACertIssuerPool), req).Context(ctx).Do()
+	req := &privateca.RevokeCertificateRequest{Reason: s.flagPCACertRevokeReason}
+	got, err := svc.Projects.Locations.CaPools.Certificates.Revoke(pcaCertName(args[0], project, s.flagPCACertLocation, s.flagPCACertIssuerPool), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("revoking certificate: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runPCACertExport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *privatecaCmds) runPCACertExport(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PrivateCAService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().PrivateCA(ctx)
 	if err != nil {
 		return err
 	}
-	cert, err := svc.Projects.Locations.CaPools.Certificates.Get(pcaCertName(args[0], project, flagPCACertLocation, flagPCACertIssuerPool)).Context(ctx).Do()
+	cert, err := svc.Projects.Locations.CaPools.Certificates.Get(pcaCertName(args[0], project, s.flagPCACertLocation, s.flagPCACertIssuerPool)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("fetching certificate: %w", err)
 	}
@@ -745,9 +591,9 @@ func runPCACertExport(cmd *cobra.Command, args []string) error {
 	for _, c := range cert.PemCertificateChain {
 		out += c
 	}
-	if flagPCACertOutputFile != "" {
-		return os.WriteFile(flagPCACertOutputFile, []byte(out), 0644)
+	if s.flagPCACertOutputFile != "" {
+		return os.WriteFile(s.flagPCACertOutputFile, []byte(out), 0644)
 	}
-	fmt.Print(out)
+	fmt.Fprint(s.inv.stdout, out)
 	return nil
 }

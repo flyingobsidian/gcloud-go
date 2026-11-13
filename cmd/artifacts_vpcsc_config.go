@@ -1,97 +1,64 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
 
 // --- gcloud artifacts vpcsc-config (#1085) ---
 
-var artifactsVpcscConfigCmd = &cobra.Command{
-	Use:   "vpcsc-config",
-	Short: "Manage the VPC Service Controls config for Artifact Registry",
-}
-
-var (
-	flagArtVpcLocation string
-	flagArtVpcFormat   string
-)
-
-var artifactsVpcscConfigDescribeCmd = &cobra.Command{
-	Use:   "describe",
-	Short: "Describe the VPC-SC config for a location",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsVpcscConfigDescribe,
-}
-
-var artifactsVpcscConfigAllowCmd = &cobra.Command{
-	Use:   "allow",
-	Short: "Allow Artifact Registry to serve requests inside a VPC-SC perimeter",
-	Args:  cobra.NoArgs,
-	RunE:  func(cmd *cobra.Command, args []string) error { return artSetVpcscPolicy("ALLOW") },
-}
-
-var artifactsVpcscConfigDenyCmd = &cobra.Command{
-	Use:   "deny",
-	Short: "Deny Artifact Registry from serving requests inside a VPC-SC perimeter",
-	Args:  cobra.NoArgs,
-	RunE:  func(cmd *cobra.Command, args []string) error { return artSetVpcscPolicy("DENY") },
-}
-
-func init() {
+func (s *artifactsCmds) initArtifactsVpcscConfig() {
 	for _, c := range []*cobra.Command{
-		artifactsVpcscConfigDescribeCmd, artifactsVpcscConfigAllowCmd, artifactsVpcscConfigDenyCmd,
+		s.artifactsVpcscConfigDescribeCmd, s.artifactsVpcscConfigAllowCmd, s.artifactsVpcscConfigDenyCmd,
 	} {
-		c.Flags().StringVar(&flagArtVpcLocation, "location", "", "Location (required)")
-		c.Flags().StringVar(&flagArtVpcFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagArtVpcLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagArtVpcFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("location")
 	}
-	artifactsVpcscConfigCmd.AddCommand(
-		artifactsVpcscConfigDescribeCmd, artifactsVpcscConfigAllowCmd, artifactsVpcscConfigDenyCmd,
+	s.artifactsVpcscConfigCmd.AddCommand(
+		s.artifactsVpcscConfigDescribeCmd, s.artifactsVpcscConfigAllowCmd, s.artifactsVpcscConfigDenyCmd,
 	)
-	artifactsCmd.AddCommand(artifactsVpcscConfigCmd)
+	s.artifactsCmd.AddCommand(s.artifactsVpcscConfigCmd)
 }
 
-func artVpcscName(project string) string {
-	return artLocationParent(project, flagArtVpcLocation) + "/vpcscConfig"
+func (s *artifactsCmds) artVpcscName(project string) string {
+	return artLocationParent(project, s.flagArtVpcLocation) + "/vpcscConfig"
 }
 
-func runArtifactsVpcscConfigDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsVpcscConfigDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	cfg, err := svc.Projects.Locations.GetVpcscConfig(artVpcscName(project)).Context(ctx).Do()
+	cfg, err := svc.Projects.Locations.GetVpcscConfig(s.artVpcscName(project)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing vpcscConfig: %w", err)
 	}
-	return emitFormatted(cfg, flagArtVpcFormat)
+	return emitFormattedTo(s.inv.stdout, cfg, s.flagArtVpcFormat)
 }
 
-func artSetVpcscPolicy(policy string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) artSetVpcscPolicy(policy string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := s.inv.context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
 	body := &artifactregistry.VPCSCConfig{VpcscPolicy: policy}
-	out, err := svc.Projects.Locations.UpdateVpcscConfig(artVpcscName(project), body).
+	out, err := svc.Projects.Locations.UpdateVpcscConfig(s.artVpcscName(project), body).
 		UpdateMask("vpcscPolicy").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating vpcscConfig: %w", err)
 	}
-	return emitFormatted(out, flagArtVpcFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtVpcFormat)
 }

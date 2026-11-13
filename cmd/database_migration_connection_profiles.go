@@ -8,7 +8,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	datamigration "google.golang.org/api/datamigration/v1"
 	"gopkg.in/yaml.v3"
@@ -16,142 +15,66 @@ import (
 
 // --- gcloud database-migration connection-profiles (#782) ---
 
-var dmConnProfilesCmd = &cobra.Command{
-	Use:   "connection-profiles",
-	Short: "Manage Database Migration Service connection profiles",
-}
-
-var dmCPDescribeCmd = &cobra.Command{
-	Use:   "describe PROFILE",
-	Short: "Show details about a connection profile",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDMCPDescribe,
-}
-
-var dmCPListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List connection profiles in a region",
-	Args:  cobra.NoArgs,
-	RunE:  runDMCPList,
-}
-
-var dmCPDeleteCmd = &cobra.Command{
-	Use:   "delete PROFILE",
-	Short: "Delete a connection profile",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDMCPDelete,
-}
-
-var dmCPCreateCmd = &cobra.Command{
-	Use:   "create PROFILE",
-	Short: "Create a connection profile from a --config-file",
-	Long: `Create a Database Migration Service connection profile.
-
-The --config-file argument points at a JSON or YAML file containing a
-ConnectionProfile message body. gcloud-python exposes this command as a
-per-engine group (create mysql, create postgresql, etc.); the generic form
-here accepts any engine by loading its message body from disk. See:
-https://cloud.google.com/database-migration/docs/reference/rest/v1/projects.locations.connectionProfiles#ConnectionProfile
-`,
-	Args: cobra.ExactArgs(1),
-	RunE: runDMCPCreate,
-}
-
-var dmCPUpdateCmd = &cobra.Command{
-	Use:   "update PROFILE",
-	Short: "Update a connection profile from a --config-file",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDMCPUpdate,
-}
-
-var dmCPTestCmd = &cobra.Command{
-	Use:   "test PROFILE",
-	Short: "Test a connection profile without persisting changes",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDMCPTest,
-}
-
-var dmCPFetchStaticIPsCmd = &cobra.Command{
-	Use:   "fetch-static-ips",
-	Short: "Fetch static IPs the service uses to establish outbound connections",
-	Args:  cobra.NoArgs,
-	RunE:  runDMCPFetchStaticIPs,
-}
-
-var (
-	flagDMCPRegion              string
-	flagDMCPFormat              string
-	flagDMCPListPageSize        int64
-	flagDMCPListLimit           int64
-	flagDMCPListFilter          string
-	flagDMCPListURI             bool
-	flagDMCPConfigFile          string
-	flagDMCPUpdateMask          string
-	flagDMCPSkipValidate        bool
-	flagDMCPAsync               bool
-	flagDMCPFetchReservedPublic bool
-)
-
-func init() {
+func (s *databaseMigrationCmds) initDatabaseMigrationConnectionProfiles() {
 	// A single --region flag is shared by everything that resolves to a
 	// projects/*/locations/* parent.
 	for _, c := range []*cobra.Command{
-		dmCPDescribeCmd, dmCPListCmd, dmCPDeleteCmd, dmCPCreateCmd,
-		dmCPUpdateCmd, dmCPTestCmd, dmCPFetchStaticIPsCmd,
+		s.dmCPDescribeCmd, s.dmCPListCmd, s.dmCPDeleteCmd, s.dmCPCreateCmd,
+		s.dmCPUpdateCmd, s.dmCPTestCmd, s.dmCPFetchStaticIPsCmd,
 	} {
-		c.Flags().StringVar(&flagDMCPRegion, "region", "", "Region containing the resource (required)")
+		c.Flags().StringVar(&s.flagDMCPRegion, "region", "", "Region containing the resource (required)")
 		_ = c.MarkFlagRequired("region")
 	}
 
-	dmCPDescribeCmd.Flags().StringVar(&flagDMCPFormat, "format", "", "Output format (yaml, json, table, ...)")
+	s.dmCPDescribeCmd.Flags().StringVar(&s.flagDMCPFormat, "format", "", "Output format (yaml, json, table, ...)")
 
-	dmCPListCmd.Flags().StringVar(&flagDMCPFormat, "format", "", "Output format (yaml, json, table, ...)")
-	dmCPListCmd.Flags().Int64Var(&flagDMCPListPageSize, "page-size", 0, "Page size for API pagination")
-	dmCPListCmd.Flags().Int64Var(&flagDMCPListLimit, "limit", 0, "Cap total results (0 = no cap)")
-	dmCPListCmd.Flags().StringVar(&flagDMCPListFilter, "filter", "", "Server-side filter expression")
-	dmCPListCmd.Flags().BoolVar(&flagDMCPListURI, "uri", false, "Print resource names only")
+	s.dmCPListCmd.Flags().StringVar(&s.flagDMCPFormat, "format", "", "Output format (yaml, json, table, ...)")
+	s.dmCPListCmd.Flags().Int64Var(&s.flagDMCPListPageSize, "page-size", 0, "Page size for API pagination")
+	s.dmCPListCmd.Flags().Int64Var(&s.flagDMCPListLimit, "limit", 0, "Cap total results (0 = no cap)")
+	s.dmCPListCmd.Flags().StringVar(&s.flagDMCPListFilter, "filter", "", "Server-side filter expression")
+	s.dmCPListCmd.Flags().BoolVar(&s.flagDMCPListURI, "uri", false, "Print resource names only")
 
-	dmCPCreateCmd.Flags().StringVar(&flagDMCPConfigFile, "config-file", "",
+	s.dmCPCreateCmd.Flags().StringVar(&s.flagDMCPConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the ConnectionProfile message body (required)")
-	_ = dmCPCreateCmd.MarkFlagRequired("config-file")
-	dmCPCreateCmd.Flags().BoolVar(&flagDMCPSkipValidate, "skip-validation", false,
+	_ = s.dmCPCreateCmd.MarkFlagRequired("config-file")
+	s.dmCPCreateCmd.Flags().BoolVar(&s.flagDMCPSkipValidate, "skip-validation", false,
 		"Do not validate the profile at creation time")
-	dmCPCreateCmd.Flags().BoolVar(&flagDMCPAsync, "async", false,
+	s.dmCPCreateCmd.Flags().BoolVar(&s.flagDMCPAsync, "async", false,
 		"Return the long-running operation immediately without waiting for completion")
 
-	dmCPUpdateCmd.Flags().StringVar(&flagDMCPConfigFile, "config-file", "",
+	s.dmCPUpdateCmd.Flags().StringVar(&s.flagDMCPConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the ConnectionProfile message body (required)")
-	_ = dmCPUpdateCmd.MarkFlagRequired("config-file")
-	dmCPUpdateCmd.Flags().StringVar(&flagDMCPUpdateMask, "update-mask", "",
+	_ = s.dmCPUpdateCmd.MarkFlagRequired("config-file")
+	s.dmCPUpdateCmd.Flags().StringVar(&s.flagDMCPUpdateMask, "update-mask", "",
 		"Comma-separated set of fields to update; when omitted, defaults to every top-level field in the config file")
-	dmCPUpdateCmd.Flags().BoolVar(&flagDMCPSkipValidate, "skip-validation", false,
+	s.dmCPUpdateCmd.Flags().BoolVar(&s.flagDMCPSkipValidate, "skip-validation", false,
 		"Do not validate the profile at update time")
-	dmCPUpdateCmd.Flags().BoolVar(&flagDMCPAsync, "async", false,
+	s.dmCPUpdateCmd.Flags().BoolVar(&s.flagDMCPAsync, "async", false,
 		"Return the long-running operation immediately without waiting for completion")
 
-	dmCPDeleteCmd.Flags().BoolVar(&flagDMCPAsync, "async", false,
+	s.dmCPDeleteCmd.Flags().BoolVar(&s.flagDMCPAsync, "async", false,
 		"Return the long-running operation immediately without waiting for completion")
 
-	dmCPTestCmd.Flags().BoolVar(&flagDMCPAsync, "async", false,
+	s.dmCPTestCmd.Flags().BoolVar(&s.flagDMCPAsync, "async", false,
 		"Return the long-running operation immediately without waiting for completion")
 
 	// gcloud-python 581.0.0 added --fetch-reserved-public-ips to
 	// `connection-profiles fetch-static-ips`; maps to the FetchStaticIps
 	// request's fetchReservedPublicIps query parameter.
-	dmCPFetchStaticIPsCmd.Flags().BoolVar(&flagDMCPFetchReservedPublic, "fetch-reserved-public-ips", false,
+	s.dmCPFetchStaticIPsCmd.Flags().BoolVar(&s.flagDMCPFetchReservedPublic, "fetch-reserved-public-ips", false,
 		"Fetch reserved public IPs allocated for private connections in addition to the service's static outbound IPs")
-	dmCPFetchStaticIPsCmd.Flags().Int64Var(&flagDMCPListPageSize, "page-size", 0, "Page size for API pagination")
+	s.dmCPFetchStaticIPsCmd.Flags().Int64Var(&s.flagDMCPListPageSize, "page-size", 0, "Page size for API pagination")
 
-	dmConnProfilesCmd.AddCommand(
-		dmCPCreateCmd,
-		dmCPDeleteCmd,
-		dmCPDescribeCmd,
-		dmCPFetchStaticIPsCmd,
-		dmCPListCmd,
-		dmCPTestCmd,
-		dmCPUpdateCmd,
+	s.dmConnProfilesCmd.AddCommand(
+		s.dmCPCreateCmd,
+		s.dmCPDeleteCmd,
+		s.dmCPDescribeCmd,
+		s.dmCPFetchStaticIPsCmd,
+		s.dmCPListCmd,
+		s.dmCPTestCmd,
+		s.dmCPUpdateCmd,
 	)
-	databaseMigrationCmd.AddCommand(dmConnProfilesCmd)
+	s.databaseMigrationCmd.AddCommand(s.dmConnProfilesCmd)
 }
 
 // dmCPResourceName resolves a bare profile ID (plus --region) or a fully
@@ -234,45 +157,45 @@ func waitForDMOperation(ctx context.Context, svc *datamigration.Service, op *dat
 	return op, nil
 }
 
-func runDMCPDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCPDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	name := dmCPResourceName(args[0], project, flagDMCPRegion)
+	name := dmCPResourceName(args[0], project, s.flagDMCPRegion)
 	profile, err := svc.Projects.Locations.ConnectionProfiles.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing connection profile: %w", err)
 	}
-	return emitFormatted(profile, flagDMCPFormat)
+	return emitFormattedTo(s.inv.stdout, profile, s.flagDMCPFormat)
 }
 
-func runDMCPList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCPList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
 
-	parent := dmParent(project, flagDMCPRegion)
+	parent := dmParent(project, s.flagDMCPRegion)
 	var all []*datamigration.ConnectionProfile
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.ConnectionProfiles.List(parent).Context(ctx)
-		if flagDMCPListFilter != "" {
-			call = call.Filter(flagDMCPListFilter)
+		if s.flagDMCPListFilter != "" {
+			call = call.Filter(s.flagDMCPListFilter)
 		}
-		if flagDMCPListPageSize > 0 {
-			call = call.PageSize(flagDMCPListPageSize)
+		if s.flagDMCPListPageSize > 0 {
+			call = call.PageSize(s.flagDMCPListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -282,8 +205,8 @@ func runDMCPList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing connection profiles: %w", err)
 		}
 		all = append(all, resp.ConnectionProfiles...)
-		if flagDMCPListLimit > 0 && int64(len(all)) >= flagDMCPListLimit {
-			all = all[:flagDMCPListLimit]
+		if s.flagDMCPListLimit > 0 && int64(len(all)) >= s.flagDMCPListLimit {
+			all = all[:s.flagDMCPListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -292,18 +215,18 @@ func runDMCPList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagDMCPListURI {
+	if s.flagDMCPListURI {
 		for _, p := range all {
-			fmt.Println(p.Name)
+			fmt.Fprintln(s.inv.stdout, p.Name)
 		}
 		return nil
 	}
-	if flagDMCPFormat != "" {
-		return emitFormatted(all, flagDMCPFormat)
+	if s.flagDMCPFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDMCPFormat)
 	}
-	printTableHeading(len(all), "%-40s %-20s %s\n", "NAME", "STATE", "TYPE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-20s %s\n", "NAME", "STATE", "TYPE")
 	for _, p := range all {
-		fmt.Printf("%-40s %-20s %s\n", path.Base(p.Name), p.State, connectionProfileType(p))
+		fmt.Fprintf(s.inv.stdout, "%-40s %-20s %s\n", path.Base(p.Name), p.State, connectionProfileType(p))
 	}
 	return nil
 }
@@ -328,111 +251,111 @@ func connectionProfileType(p *datamigration.ConnectionProfile) string {
 	return ""
 }
 
-func runDMCPDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCPDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	name := dmCPResourceName(args[0], project, flagDMCPRegion)
+	name := dmCPResourceName(args[0], project, s.flagDMCPRegion)
 	op, err := svc.Projects.Locations.ConnectionProfiles.Delete(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting connection profile: %w", err)
 	}
-	if flagDMCPAsync {
-		fmt.Fprintf(os.Stderr, "Delete in progress (operation: %s).\n", op.Name)
-		return emitFormatted(op, "")
+	if s.flagDMCPAsync {
+		fmt.Fprintf(s.inv.stderr, "Delete in progress (operation: %s).\n", op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	op, err = waitForDMOperation(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "Deleted connection profile [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stderr, "Deleted connection profile [%s].\n", args[0])
 	return nil
 }
 
-func runDMCPCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCPCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	profile, err := loadConnectionProfileFile(flagDMCPConfigFile)
+	profile, err := loadConnectionProfileFile(s.flagDMCPConfigFile)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	parent := dmParent(project, flagDMCPRegion)
+	parent := dmParent(project, s.flagDMCPRegion)
 	call := svc.Projects.Locations.ConnectionProfiles.Create(parent, profile).
 		ConnectionProfileId(args[0]).Context(ctx)
-	if flagDMCPSkipValidate {
+	if s.flagDMCPSkipValidate {
 		call = call.SkipValidation(true)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("creating connection profile: %w", err)
 	}
-	if flagDMCPAsync {
-		fmt.Fprintf(os.Stderr, "Create in progress (operation: %s).\n", op.Name)
-		return emitFormatted(op, "")
+	if s.flagDMCPAsync {
+		fmt.Fprintf(s.inv.stderr, "Create in progress (operation: %s).\n", op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	op, err = waitForDMOperation(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "Created connection profile [%s].\n", args[0])
-	return emitFormatted(op.Response, "")
+	fmt.Fprintf(s.inv.stderr, "Created connection profile [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op.Response, "")
 }
 
-func runDMCPUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCPUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	profile, err := loadConnectionProfileFile(flagDMCPConfigFile)
+	profile, err := loadConnectionProfileFile(s.flagDMCPConfigFile)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	name := dmCPResourceName(args[0], project, flagDMCPRegion)
+	name := dmCPResourceName(args[0], project, s.flagDMCPRegion)
 
-	mask := flagDMCPUpdateMask
+	mask := s.flagDMCPUpdateMask
 	if mask == "" {
 		mask = deriveConnectionProfileUpdateMask(profile)
 	}
 
 	call := svc.Projects.Locations.ConnectionProfiles.Patch(name, profile).
 		UpdateMask(mask).Context(ctx)
-	if flagDMCPSkipValidate {
+	if s.flagDMCPSkipValidate {
 		call = call.SkipValidation(true)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("updating connection profile: %w", err)
 	}
-	if flagDMCPAsync {
-		fmt.Fprintf(os.Stderr, "Update in progress (operation: %s).\n", op.Name)
-		return emitFormatted(op, "")
+	if s.flagDMCPAsync {
+		fmt.Fprintf(s.inv.stderr, "Update in progress (operation: %s).\n", op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	op, err = waitForDMOperation(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "Updated connection profile [%s].\n", args[0])
-	return emitFormatted(op.Response, "")
+	fmt.Fprintf(s.inv.stderr, "Updated connection profile [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op.Response, "")
 }
 
 // deriveConnectionProfileUpdateMask lists every top-level field present on
@@ -476,21 +399,21 @@ func deriveConnectionProfileUpdateMask(p *datamigration.ConnectionProfile) strin
 	return strings.Join(fields, ",")
 }
 
-func runDMCPTest(cmd *cobra.Command, args []string) error {
+func (s *databaseMigrationCmds) runDMCPTest(cmd *cobra.Command, args []string) error {
 	// Match gcloud-python's connection_profiles.Test: fetch the existing
 	// profile, then issue a Patch with validateOnly=true and a no-op
 	// updateMask (displayName). The service runs validation but does not
 	// persist any changes.
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	name := dmCPResourceName(args[0], project, flagDMCPRegion)
+	name := dmCPResourceName(args[0], project, s.flagDMCPRegion)
 
 	current, err := svc.Projects.Locations.ConnectionProfiles.Get(name).Context(ctx).Do()
 	if err != nil {
@@ -501,34 +424,34 @@ func runDMCPTest(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("testing connection profile: %w", err)
 	}
-	if flagDMCPAsync {
-		fmt.Fprintf(os.Stderr, "Test in progress (operation: %s).\n", op.Name)
-		return emitFormatted(op, "")
+	if s.flagDMCPAsync {
+		fmt.Fprintf(s.inv.stderr, "Test in progress (operation: %s).\n", op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	op, err = waitForDMOperation(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "Connection profile [%s] validated successfully.\n", args[0])
+	fmt.Fprintf(s.inv.stderr, "Connection profile [%s] validated successfully.\n", args[0])
 	return nil
 }
 
-func runDMCPFetchStaticIPs(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCPFetchStaticIPs(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	parent := dmParent(project, flagDMCPRegion)
+	parent := dmParent(project, s.flagDMCPRegion)
 	call := svc.Projects.Locations.FetchStaticIps(parent).Context(ctx)
-	if flagDMCPListPageSize > 0 {
-		call = call.PageSize(flagDMCPListPageSize)
+	if s.flagDMCPListPageSize > 0 {
+		call = call.PageSize(s.flagDMCPListPageSize)
 	}
-	if flagDMCPFetchReservedPublic {
+	if s.flagDMCPFetchReservedPublic {
 		call = call.FetchReservedPublicIps(true)
 	}
 	resp, err := call.Do()
@@ -536,7 +459,7 @@ func runDMCPFetchStaticIPs(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fetching static IPs: %w", err)
 	}
 	for _, ip := range resp.StaticIps {
-		fmt.Println(ip)
+		fmt.Fprintln(s.inv.stdout, ip)
 	}
 	return nil
 }

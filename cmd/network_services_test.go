@@ -7,7 +7,8 @@ import (
 )
 
 func networkServicesSubgroup(name string) *cobra.Command {
-	for _, c := range networkServicesCmd.Commands() {
+	grp := newNetworkServicesCmds(legacyTestInvocation())
+	for _, c := range grp.networkServicesCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

@@ -1,37 +1,26 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 )
 
 // --- gcloud dns project-info (#1540) ---
 
-var dnsPICmd = &cobra.Command{Use: "project-info", Short: "View Cloud DNS project info"}
-
-var flagDNSPIFormat string
-
-var dnsPIDescribeCmd = &cobra.Command{
-	Use: "describe", Short: "Describe the current Cloud DNS project info",
-	Args: cobra.NoArgs, RunE: runDNSPIDescribe,
+func (s *dnsCmds) initDnsProjectInfo() {
+	s.dnsPIDescribeCmd.Flags().StringVar(&s.flagDNSPIFormat, "format", "", "Output format")
+	s.dnsPICmd.AddCommand(s.dnsPIDescribeCmd)
+	s.dnsCmd.AddCommand(s.dnsPICmd)
 }
 
-func init() {
-	dnsPIDescribeCmd.Flags().StringVar(&flagDNSPIFormat, "format", "", "Output format")
-	dnsPICmd.AddCommand(dnsPIDescribeCmd)
-	dnsCmd.AddCommand(dnsPICmd)
-}
-
-func runDNSPIDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSPIDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -39,5 +28,5 @@ func runDNSPIDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing DNS project info: %w", err)
 	}
-	return emitFormatted(got, flagDNSPIFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSPIFormat)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	runv2 "google.golang.org/api/run/v2"
 )
@@ -15,91 +14,60 @@ import (
 // command for pushing a container image to Cloud Run. Behaviour mirrors the
 // Python `gcloud run deploy` for the managed platform.
 
-var (
-	flagRunDeployRegion        string
-	flagRunDeployImage         string
-	flagRunDeployFormat        string
-	flagRunDeployAllowUnauth   bool
-	flagRunDeployNoAllowUnauth bool
-	flagRunDeployServiceAcct   string
-	flagRunDeployMemory        string
-	flagRunDeployCPU           string
-	flagRunDeployMaxInstances  int64
-	flagRunDeployMinInstances  int64
-	flagRunDeployConcurrency   int64
-	flagRunDeployTimeout       string
-	flagRunDeployPort          int64
-	flagRunDeployEnvVars       map[string]string
-	flagRunDeploySetEnvVars    map[string]string
-	flagRunDeployCommand       []string
-	flagRunDeployArgs          []string
-	flagRunDeployVpcConnector  string
-	flagRunDeployIngress       string
-	flagRunDeployLabels        map[string]string
-	flagRunDeployPlatform      string
-)
+func (s *runCmds) initRunDeploy() {
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployRegion, "region", "", "Cloud Run region (required)")
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployImage, "image", "", "Container image (required)")
+	_ = s.runDeployCmd.MarkFlagRequired("region")
+	_ = s.runDeployCmd.MarkFlagRequired("image")
 
-var runDeployCmd = &cobra.Command{
-	Use:   "deploy SERVICE",
-	Short: "Deploy a Cloud Run service",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDeployRun,
-}
-
-func init() {
-	runDeployCmd.Flags().StringVar(&flagRunDeployRegion, "region", "", "Cloud Run region (required)")
-	runDeployCmd.Flags().StringVar(&flagRunDeployImage, "image", "", "Container image (required)")
-	_ = runDeployCmd.MarkFlagRequired("region")
-	_ = runDeployCmd.MarkFlagRequired("image")
-
-	runDeployCmd.Flags().StringVar(&flagRunDeployFormat, "format", "", "Output format")
-	runDeployCmd.Flags().BoolVar(&flagRunDeployAllowUnauth, "allow-unauthenticated", false,
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployFormat, "format", "", "Output format")
+	s.runDeployCmd.Flags().BoolVar(&s.flagRunDeployAllowUnauth, "allow-unauthenticated", false,
 		"Allow unauthenticated invocations (grants roles/run.invoker to allUsers)")
-	runDeployCmd.Flags().BoolVar(&flagRunDeployNoAllowUnauth, "no-allow-unauthenticated", false,
+	s.runDeployCmd.Flags().BoolVar(&s.flagRunDeployNoAllowUnauth, "no-allow-unauthenticated", false,
 		"Explicitly disallow unauthenticated invocations")
-	runDeployCmd.Flags().StringVar(&flagRunDeployServiceAcct, "service-account", "", "Service account for the revision")
-	runDeployCmd.Flags().StringVar(&flagRunDeployMemory, "memory", "", "Memory limit (e.g. 512Mi)")
-	runDeployCmd.Flags().StringVar(&flagRunDeployCPU, "cpu", "", "CPU limit (e.g. 1, 2)")
-	runDeployCmd.Flags().Int64Var(&flagRunDeployMaxInstances, "max-instances", 0, "Maximum number of instances")
-	runDeployCmd.Flags().Int64Var(&flagRunDeployMinInstances, "min-instances", 0, "Minimum number of instances")
-	runDeployCmd.Flags().Int64Var(&flagRunDeployConcurrency, "concurrency", 0, "Max concurrent requests per instance")
-	runDeployCmd.Flags().StringVar(&flagRunDeployTimeout, "timeout", "", "Request timeout (e.g. 300s)")
-	runDeployCmd.Flags().Int64Var(&flagRunDeployPort, "port", 0, "Container port")
-	runDeployCmd.Flags().StringToStringVar(&flagRunDeployEnvVars, "env-vars", nil, "Container environment variables (KEY=VALUE)")
-	runDeployCmd.Flags().StringToStringVar(&flagRunDeploySetEnvVars, "set-env-vars", nil, "Alias for --env-vars")
-	runDeployCmd.Flags().StringSliceVar(&flagRunDeployCommand, "command", nil, "Container entrypoint override")
-	runDeployCmd.Flags().StringSliceVar(&flagRunDeployArgs, "args", nil, "Container arguments override")
-	runDeployCmd.Flags().StringVar(&flagRunDeployVpcConnector, "vpc-connector", "", "VPC connector to use")
-	runDeployCmd.Flags().StringVar(&flagRunDeployIngress, "ingress", "",
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployServiceAcct, "service-account", "", "Service account for the revision")
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployMemory, "memory", "", "Memory limit (e.g. 512Mi)")
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployCPU, "cpu", "", "CPU limit (e.g. 1, 2)")
+	s.runDeployCmd.Flags().Int64Var(&s.flagRunDeployMaxInstances, "max-instances", 0, "Maximum number of instances")
+	s.runDeployCmd.Flags().Int64Var(&s.flagRunDeployMinInstances, "min-instances", 0, "Minimum number of instances")
+	s.runDeployCmd.Flags().Int64Var(&s.flagRunDeployConcurrency, "concurrency", 0, "Max concurrent requests per instance")
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployTimeout, "timeout", "", "Request timeout (e.g. 300s)")
+	s.runDeployCmd.Flags().Int64Var(&s.flagRunDeployPort, "port", 0, "Container port")
+	s.runDeployCmd.Flags().StringToStringVar(&s.flagRunDeployEnvVars, "env-vars", nil, "Container environment variables (KEY=VALUE)")
+	s.runDeployCmd.Flags().StringToStringVar(&s.flagRunDeploySetEnvVars, "set-env-vars", nil, "Alias for --env-vars")
+	s.runDeployCmd.Flags().StringSliceVar(&s.flagRunDeployCommand, "command", nil, "Container entrypoint override")
+	s.runDeployCmd.Flags().StringSliceVar(&s.flagRunDeployArgs, "args", nil, "Container arguments override")
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployVpcConnector, "vpc-connector", "", "VPC connector to use")
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployIngress, "ingress", "",
 		"Ingress setting: all, internal, internal-and-cloud-load-balancing")
-	runDeployCmd.Flags().StringToStringVar(&flagRunDeployLabels, "labels", nil, "Service labels (KEY=VALUE)")
-	runDeployCmd.Flags().StringVar(&flagRunDeployPlatform, "platform", "managed",
+	s.runDeployCmd.Flags().StringToStringVar(&s.flagRunDeployLabels, "labels", nil, "Service labels (KEY=VALUE)")
+	s.runDeployCmd.Flags().StringVar(&s.flagRunDeployPlatform, "platform", "managed",
 		"Deployment platform (only 'managed' is supported)")
 
-	runCmd.AddCommand(runDeployCmd)
+	s.runCmd.AddCommand(s.runDeployCmd)
 }
 
-func runDeployRun(cmd *cobra.Command, args []string) error {
-	if flagRunDeployPlatform != "" && flagRunDeployPlatform != "managed" {
+func (s *runCmds) runDeployRun(cmd *cobra.Command, args []string) error {
+	if s.flagRunDeployPlatform != "" && s.flagRunDeployPlatform != "managed" {
 		return fmt.Errorf("only --platform=managed is supported (got %q); this CLI does not support the deprecated gke/kubernetes platforms",
-			flagRunDeployPlatform)
+			s.flagRunDeployPlatform)
 	}
-	if flagRunDeployAllowUnauth && flagRunDeployNoAllowUnauth {
+	if s.flagRunDeployAllowUnauth && s.flagRunDeployNoAllowUnauth {
 		return fmt.Errorf("--allow-unauthenticated and --no-allow-unauthenticated are mutually exclusive")
 	}
 
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunDeployRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunDeployRegion)
 	if err != nil {
 		return err
 	}
 
 	name := fmt.Sprintf("projects/%s/locations/%s/services/%s",
-		project, flagRunDeployRegion, args[0])
+		project, s.flagRunDeployRegion, args[0])
 	existing, err := svc.Projects.Locations.Services.Get(name).Context(ctx).Do()
 	if err != nil && !isNotFound(err) {
 		return fmt.Errorf("checking existing service: %w", err)
@@ -119,63 +87,63 @@ func runDeployRun(cmd *cobra.Command, args []string) error {
 		container = &runv2.GoogleCloudRunV2Container{}
 		body.Template.Containers = []*runv2.GoogleCloudRunV2Container{container}
 	}
-	container.Image = flagRunDeployImage
-	if flagRunDeployCommand != nil {
-		container.Command = flagRunDeployCommand
+	container.Image = s.flagRunDeployImage
+	if s.flagRunDeployCommand != nil {
+		container.Command = s.flagRunDeployCommand
 	}
-	if flagRunDeployArgs != nil {
-		container.Args = flagRunDeployArgs
+	if s.flagRunDeployArgs != nil {
+		container.Args = s.flagRunDeployArgs
 	}
-	env := mergeEnvMaps(flagRunDeployEnvVars, flagRunDeploySetEnvVars)
+	env := mergeEnvMaps(s.flagRunDeployEnvVars, s.flagRunDeploySetEnvVars)
 	if len(env) > 0 {
 		container.Env = envVarsFromMap(env)
 	}
-	if flagRunDeployPort > 0 {
-		container.Ports = []*runv2.GoogleCloudRunV2ContainerPort{{ContainerPort: flagRunDeployPort}}
+	if s.flagRunDeployPort > 0 {
+		container.Ports = []*runv2.GoogleCloudRunV2ContainerPort{{ContainerPort: s.flagRunDeployPort}}
 	}
-	applyResourceLimits(&container.Resources, flagRunDeployMemory, flagRunDeployCPU)
+	applyResourceLimits(&container.Resources, s.flagRunDeployMemory, s.flagRunDeployCPU)
 
-	if flagRunDeployServiceAcct != "" {
-		body.Template.ServiceAccount = flagRunDeployServiceAcct
+	if s.flagRunDeployServiceAcct != "" {
+		body.Template.ServiceAccount = s.flagRunDeployServiceAcct
 	}
-	if flagRunDeployTimeout != "" {
-		body.Template.Timeout = flagRunDeployTimeout
+	if s.flagRunDeployTimeout != "" {
+		body.Template.Timeout = s.flagRunDeployTimeout
 	}
-	if flagRunDeployConcurrency > 0 {
-		body.Template.MaxInstanceRequestConcurrency = flagRunDeployConcurrency
+	if s.flagRunDeployConcurrency > 0 {
+		body.Template.MaxInstanceRequestConcurrency = s.flagRunDeployConcurrency
 	}
-	if flagRunDeployMinInstances > 0 || flagRunDeployMaxInstances > 0 {
+	if s.flagRunDeployMinInstances > 0 || s.flagRunDeployMaxInstances > 0 {
 		if body.Template.Scaling == nil {
 			body.Template.Scaling = &runv2.GoogleCloudRunV2RevisionScaling{}
 		}
-		if flagRunDeployMinInstances > 0 {
-			body.Template.Scaling.MinInstanceCount = flagRunDeployMinInstances
+		if s.flagRunDeployMinInstances > 0 {
+			body.Template.Scaling.MinInstanceCount = s.flagRunDeployMinInstances
 		}
-		if flagRunDeployMaxInstances > 0 {
-			body.Template.Scaling.MaxInstanceCount = flagRunDeployMaxInstances
+		if s.flagRunDeployMaxInstances > 0 {
+			body.Template.Scaling.MaxInstanceCount = s.flagRunDeployMaxInstances
 		}
 	}
-	if err := applyRunScalingTargets(body.Template, flagRunDeployScalingCPUTarget, flagRunDeployScalingConcurrencyTarget); err != nil {
+	if err := applyRunScalingTargets(body.Template, s.flagRunDeployScalingCPUTarget, s.flagRunDeployScalingConcurrencyTarget); err != nil {
 		return err
 	}
-	if flagRunDeployVpcConnector != "" {
+	if s.flagRunDeployVpcConnector != "" {
 		if body.Template.VpcAccess == nil {
 			body.Template.VpcAccess = &runv2.GoogleCloudRunV2VpcAccess{}
 		}
-		body.Template.VpcAccess.Connector = flagRunDeployVpcConnector
+		body.Template.VpcAccess.Connector = s.flagRunDeployVpcConnector
 	}
-	if flagRunDeployIngress != "" {
-		mapped, err := mapDeployIngress(flagRunDeployIngress)
+	if s.flagRunDeployIngress != "" {
+		mapped, err := mapDeployIngress(s.flagRunDeployIngress)
 		if err != nil {
 			return err
 		}
 		body.Ingress = mapped
 	}
-	if len(flagRunDeployLabels) > 0 {
+	if len(s.flagRunDeployLabels) > 0 {
 		if body.Labels == nil {
 			body.Labels = map[string]string{}
 		}
-		for k, v := range flagRunDeployLabels {
+		for k, v := range s.flagRunDeployLabels {
 			body.Labels[k] = v
 		}
 	}
@@ -183,7 +151,7 @@ func runDeployRun(cmd *cobra.Command, args []string) error {
 	var op *runv2.GoogleLongrunningOperation
 	if existing == nil {
 		op, err = svc.Projects.Locations.Services.Create(
-			fmt.Sprintf("projects/%s/locations/%s", project, flagRunDeployRegion), body).
+			fmt.Sprintf("projects/%s/locations/%s", project, s.flagRunDeployRegion), body).
 			ServiceId(args[0]).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("creating service: %w", err)
@@ -196,7 +164,7 @@ func runDeployRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if flagRunDeployAllowUnauth {
+	if s.flagRunDeployAllowUnauth {
 		if err := runDeploySetAllowUnauth(ctx, svc, name); err != nil {
 			return fmt.Errorf("granting run.invoker to allUsers: %w", err)
 		}
@@ -206,11 +174,11 @@ func runDeployRun(cmd *cobra.Command, args []string) error {
 	// that only becomes populated after the reconcile completes.
 	got, ferr := svc.Projects.Locations.Services.Get(name).Context(ctx).Do()
 	if ferr == nil && got.Uri != "" {
-		fmt.Printf("Service [%s] URL: %s\n", args[0], got.Uri)
+		fmt.Fprintf(s.inv.stdout, "Service [%s] URL: %s\n", args[0], got.Uri)
 	} else {
-		fmt.Printf("Deploy request issued for service [%s] (operation: %s).\n", args[0], op.Name)
+		fmt.Fprintf(s.inv.stdout, "Deploy request issued for service [%s] (operation: %s).\n", args[0], op.Name)
 	}
-	return emitFormatted(op, flagRunDeployFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunDeployFormat)
 }
 
 // runDeploySetAllowUnauth adds the roles/run.invoker binding for allUsers on

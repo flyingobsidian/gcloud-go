@@ -3,8 +3,9 @@ package cmd
 import "testing"
 
 func TestContainerHasGetServerConfig(t *testing.T) {
+	grp := newContainerCmds(legacyTestInvocation())
 	found := false
-	for _, c := range containerCmd.Commands() {
+	for _, c := range grp.containerCmd.Commands() {
 		if c.Name() == "get-server-config" {
 			found = true
 			if c.RunE == nil {

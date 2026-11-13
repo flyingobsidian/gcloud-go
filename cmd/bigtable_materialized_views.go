@@ -1,134 +1,98 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
 )
 
 // --- gcloud bigtable materialized-views (#1487) ---
 
-var bigtableMVCmd = &cobra.Command{Use: "materialized-views", Short: "Manage Cloud Bigtable materialized views"}
-
-var (
-	flagBTMVInstance   string
-	flagBTMVFormat     string
-	flagBTMVConfigFile string
-	flagBTMVUpdateMask string
-	flagBTMVIgnoreWarn bool
-	flagBTMVPageSize   int64
-)
-
-var (
-	bigtableMVCreateCmd = &cobra.Command{
-		Use: "create MATERIALIZED_VIEW", Short: "Create a materialized view",
-		Args: cobra.ExactArgs(1), RunE: runBTMVCreate,
-	}
-	bigtableMVDeleteCmd = &cobra.Command{
-		Use: "delete MATERIALIZED_VIEW", Short: "Delete a materialized view",
-		Args: cobra.ExactArgs(1), RunE: runBTMVDelete,
-	}
-	bigtableMVDescribeCmd = &cobra.Command{
-		Use: "describe MATERIALIZED_VIEW", Short: "Describe a materialized view",
-		Args: cobra.ExactArgs(1), RunE: runBTMVDescribe,
-	}
-	bigtableMVListCmd = &cobra.Command{
-		Use: "list", Short: "List materialized views in an instance",
-		Args: cobra.NoArgs, RunE: runBTMVList,
-	}
-	bigtableMVUpdateCmd = &cobra.Command{
-		Use: "update MATERIALIZED_VIEW", Short: "Update a materialized view",
-		Args: cobra.ExactArgs(1), RunE: runBTMVUpdate,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{bigtableMVCreateCmd, bigtableMVDeleteCmd, bigtableMVDescribeCmd, bigtableMVListCmd, bigtableMVUpdateCmd}
+func (s *bigtableCmds) initBigtableMaterializedViews() {
+	all := []*cobra.Command{s.bigtableMVCreateCmd, s.bigtableMVDeleteCmd, s.bigtableMVDescribeCmd, s.bigtableMVListCmd, s.bigtableMVUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagBTMVInstance, "instance", "", "Bigtable instance ID (required)")
+		c.Flags().StringVar(&s.flagBTMVInstance, "instance", "", "Bigtable instance ID (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagBTMVFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBTMVFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{bigtableMVCreateCmd, bigtableMVUpdateCmd} {
-		c.Flags().StringVar(&flagBTMVConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.bigtableMVCreateCmd, s.bigtableMVUpdateCmd} {
+		c.Flags().StringVar(&s.flagBTMVConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the MaterializedView body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	bigtableMVUpdateCmd.Flags().StringVar(&flagBTMVUpdateMask, "update-mask", "",
+	s.bigtableMVUpdateCmd.Flags().StringVar(&s.flagBTMVUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	bigtableMVCreateCmd.Flags().BoolVar(&flagBTMVIgnoreWarn, "ignore-warnings", false,
+	s.bigtableMVCreateCmd.Flags().BoolVar(&s.flagBTMVIgnoreWarn, "ignore-warnings", false,
 		"If true, ignore safety checks when creating the materialized view.")
-	bigtableMVListCmd.Flags().Int64Var(&flagBTMVPageSize, "page-size", 0, "Maximum results per page")
+	s.bigtableMVListCmd.Flags().Int64Var(&s.flagBTMVPageSize, "page-size", 0, "Maximum results per page")
 
-	bigtableMVCmd.AddCommand(all...)
-	bigtableCmd.AddCommand(bigtableMVCmd)
+	s.bigtableMVCmd.AddCommand(all...)
+	s.bigtableCmd.AddCommand(s.bigtableMVCmd)
 }
 
-func btMVParent() (string, error) {
-	return bigtableInstanceParent(flagBTMVInstance)
+func (s *bigtableCmds) btMVParent() (string, error) {
+	return s.bigtableInstanceParent(s.flagBTMVInstance)
 }
 
-func btMVName(id string) (string, error) {
-	parent, err := btMVParent()
+func (s *bigtableCmds) btMVName(id string) (string, error) {
+	parent, err := s.btMVParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/materializedViews/%s", parent, id), nil
 }
 
-func runBTMVCreate(cmd *cobra.Command, args []string) error {
-	parent, err := btMVParent()
+func (s *bigtableCmds) runBTMVCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.btMVParent()
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.MaterializedView{}
-	if err := loadYAMLOrJSONInto(flagBTMVConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBTMVConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Projects.Instances.MaterializedViews.Create(parent, body).MaterializedViewId(args[0]).Context(ctx)
-	if flagBTMVIgnoreWarn {
+	if s.flagBTMVIgnoreWarn {
 		call = call.IgnoreWarnings(true)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("creating materialized view: %w", err)
 	}
-	fmt.Printf("Create request issued for materialized view [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBTMVFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for materialized view [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBTMVFormat)
 }
 
-func runBTMVDelete(cmd *cobra.Command, args []string) error {
-	name, err := btMVName(args[0])
+func (s *bigtableCmds) runBTMVDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.btMVName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.MaterializedViews.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting materialized view: %w", err)
 	}
-	fmt.Printf("Deleted materialized view [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted materialized view [%s].\n", args[0])
 	return nil
 }
 
-func runBTMVDescribe(cmd *cobra.Command, args []string) error {
-	name, err := btMVName(args[0])
+func (s *bigtableCmds) runBTMVDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.btMVName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -136,16 +100,16 @@ func runBTMVDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing materialized view: %w", err)
 	}
-	return emitFormatted(got, flagBTMVFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBTMVFormat)
 }
 
-func runBTMVList(cmd *cobra.Command, args []string) error {
-	parent, err := btMVParent()
+func (s *bigtableCmds) runBTMVList(cmd *cobra.Command, args []string) error {
+	parent, err := s.btMVParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -153,8 +117,8 @@ func runBTMVList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.MaterializedViews.List(parent).Context(ctx)
-		if flagBTMVPageSize > 0 {
-			call = call.PageSize(flagBTMVPageSize)
+		if s.flagBTMVPageSize > 0 {
+			call = call.PageSize(s.flagBTMVPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -169,24 +133,24 @@ func runBTMVList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBTMVFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBTMVFormat)
 }
 
-func runBTMVUpdate(cmd *cobra.Command, args []string) error {
-	name, err := btMVName(args[0])
+func (s *bigtableCmds) runBTMVUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.btMVName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.MaterializedView{}
-	if err := loadYAMLOrJSONInto(flagBTMVConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBTMVConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagBTMVUpdateMask
+	mask := s.flagBTMVUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -198,6 +162,6 @@ func runBTMVUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating materialized view: %w", err)
 	}
-	fmt.Printf("Update request issued for materialized view [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBTMVFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for materialized view [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBTMVFormat)
 }

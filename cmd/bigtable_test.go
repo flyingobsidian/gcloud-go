@@ -7,7 +7,8 @@ import (
 )
 
 func bigtableSubgroup(name string) *cobra.Command {
-	for _, c := range bigtableCmd.Commands() {
+	grp := newBigtableCmds(legacyTestInvocation())
+	for _, c := range grp.bigtableCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -77,13 +78,14 @@ func TestBigtableLogicalViewsSubcommands(t *testing.T) {
 // #1770: --ignore-warnings on `bigtable tables update` and
 // `bigtable materialized-views create`; --tags on `bigtable instances create`.
 func TestBigtable_1770_SyncFlags(t *testing.T) {
-	if bigtableTablesUpdateCmd.Flags().Lookup("ignore-warnings") == nil {
+	grp := newBigtableCmds(legacyTestInvocation())
+	if grp.bigtableTablesUpdateCmd.Flags().Lookup("ignore-warnings") == nil {
 		t.Error("bigtable tables update: --ignore-warnings flag missing")
 	}
-	if bigtableMVCreateCmd.Flags().Lookup("ignore-warnings") == nil {
+	if grp.bigtableMVCreateCmd.Flags().Lookup("ignore-warnings") == nil {
 		t.Error("bigtable materialized-views create: --ignore-warnings flag missing")
 	}
-	if bigtableInstCreateCmd.Flags().Lookup("tags") == nil {
+	if grp.bigtableInstCreateCmd.Flags().Lookup("tags") == nil {
 		t.Error("bigtable instances create: --tags flag missing")
 	}
 }

@@ -1,106 +1,61 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	healthcare "google.golang.org/api/healthcare/v1"
 )
 
 // --- gcloud healthcare consent-stores (#1220) ---
 
-var healthcareConsentStoresCmd = &cobra.Command{Use: "consent-stores", Short: "Manage Healthcare consent stores"}
-
-var (
-	flagHcCsLocation   string
-	flagHcCsDataset    string
-	flagHcCsFormat     string
-	flagHcCsConfigFile string
-	flagHcCsUpdateMask string
-	flagHcCsPageSize   int64
-)
-
-var (
-	hcCsCreateCmd = &cobra.Command{
-		Use: "create CONSENT_STORE", Short: "Create a Healthcare consent store",
-		Args: cobra.ExactArgs(1), RunE: runHcCsCreate,
-	}
-	hcCsDeleteCmd = &cobra.Command{
-		Use: "delete CONSENT_STORE", Short: "Delete a Healthcare consent store",
-		Args: cobra.ExactArgs(1), RunE: runHcCsDelete,
-	}
-	hcCsDescribeCmd = &cobra.Command{
-		Use: "describe CONSENT_STORE", Short: "Describe a Healthcare consent store",
-		Args: cobra.ExactArgs(1), RunE: runHcCsDescribe,
-	}
-	hcCsListCmd = &cobra.Command{
-		Use: "list", Short: "List Healthcare consent stores in a dataset",
-		Args: cobra.NoArgs, RunE: runHcCsList,
-	}
-	hcCsUpdateCmd = &cobra.Command{
-		Use: "update CONSENT_STORE", Short: "Update a Healthcare consent store",
-		Args: cobra.ExactArgs(1), RunE: runHcCsUpdate,
-	}
-	hcCsGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy CONSENT_STORE", Short: "Get the IAM policy for a Healthcare consent store",
-		Args: cobra.ExactArgs(1), RunE: runHcCsGetIam,
-	}
-	hcCsSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy CONSENT_STORE POLICY_FILE", Short: "Set the IAM policy for a Healthcare consent store",
-		Args: cobra.ExactArgs(2), RunE: runHcCsSetIam,
-	}
-)
-
-func init() {
+func (s *healthcareCmds) initHealthcareConsentStores() {
 	all := []*cobra.Command{
-		hcCsCreateCmd, hcCsDeleteCmd, hcCsDescribeCmd,
-		hcCsListCmd, hcCsUpdateCmd, hcCsGetIamCmd, hcCsSetIamCmd,
+		s.hcCsCreateCmd, s.hcCsDeleteCmd, s.hcCsDescribeCmd,
+		s.hcCsListCmd, s.hcCsUpdateCmd, s.hcCsGetIamCmd, s.hcCsSetIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagHcCsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagHcCsLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagHcCsDataset, "dataset", "", "Parent dataset (required)")
+		c.Flags().StringVar(&s.flagHcCsDataset, "dataset", "", "Parent dataset (required)")
 		_ = c.MarkFlagRequired("dataset")
-		c.Flags().StringVar(&flagHcCsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagHcCsFormat, "format", "", "Output format")
 	}
-	hcCsCreateCmd.Flags().StringVar(&flagHcCsConfigFile, "config-file", "", "YAML/JSON file with the ConsentStore body (required)")
-	_ = hcCsCreateCmd.MarkFlagRequired("config-file")
-	hcCsListCmd.Flags().Int64Var(&flagHcCsPageSize, "page-size", 0, "Maximum results per page")
-	hcCsUpdateCmd.Flags().StringVar(&flagHcCsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
-	_ = hcCsUpdateCmd.MarkFlagRequired("config-file")
-	hcCsUpdateCmd.Flags().StringVar(&flagHcCsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.hcCsCreateCmd.Flags().StringVar(&s.flagHcCsConfigFile, "config-file", "", "YAML/JSON file with the ConsentStore body (required)")
+	_ = s.hcCsCreateCmd.MarkFlagRequired("config-file")
+	s.hcCsListCmd.Flags().Int64Var(&s.flagHcCsPageSize, "page-size", 0, "Maximum results per page")
+	s.hcCsUpdateCmd.Flags().StringVar(&s.flagHcCsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
+	_ = s.hcCsUpdateCmd.MarkFlagRequired("config-file")
+	s.hcCsUpdateCmd.Flags().StringVar(&s.flagHcCsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 
-	healthcareConsentStoresCmd.AddCommand(all...)
-	healthcareCmd.AddCommand(healthcareConsentStoresCmd)
+	s.healthcareConsentStoresCmd.AddCommand(all...)
+	s.healthcareCmd.AddCommand(s.healthcareConsentStoresCmd)
 }
 
 // hcConsentStoreName returns projects/.../datasets/DATASET/consentStores/ID.
-func hcConsentStoreName(location, dataset, id string) (string, error) {
+func (s *healthcareCmds) hcConsentStoreName(location, dataset, id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	ds, err := hcDatasetName(location, dataset)
+	ds, err := s.hcDatasetName(location, dataset)
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/consentStores/%s", ds, id), nil
 }
 
-func runHcCsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := hcDatasetName(flagHcCsLocation, flagHcCsDataset)
+func (s *healthcareCmds) runHcCsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.hcDatasetName(s.flagHcCsLocation, s.flagHcCsDataset)
 	if err != nil {
 		return err
 	}
 	body := &healthcare.ConsentStore{}
-	if err := loadYAMLOrJSONInto(flagHcCsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagHcCsConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,34 +63,34 @@ func runHcCsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating consent store: %w", err)
 	}
-	fmt.Printf("Created consent store [%s].\n", args[0])
-	return emitFormatted(got, flagHcCsFormat)
+	fmt.Fprintf(s.inv.stdout, "Created consent store [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagHcCsFormat)
 }
 
-func runHcCsDelete(cmd *cobra.Command, args []string) error {
-	name, err := hcConsentStoreName(flagHcCsLocation, flagHcCsDataset, args[0])
+func (s *healthcareCmds) runHcCsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.hcConsentStoreName(s.flagHcCsLocation, s.flagHcCsDataset, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Datasets.ConsentStores.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting consent store: %w", err)
 	}
-	fmt.Printf("Deleted consent store [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted consent store [%s].\n", args[0])
 	return nil
 }
 
-func runHcCsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := hcConsentStoreName(flagHcCsLocation, flagHcCsDataset, args[0])
+func (s *healthcareCmds) runHcCsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.hcConsentStoreName(s.flagHcCsLocation, s.flagHcCsDataset, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,16 +98,16 @@ func runHcCsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing consent store: %w", err)
 	}
-	return emitFormatted(got, flagHcCsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagHcCsFormat)
 }
 
-func runHcCsList(cmd *cobra.Command, args []string) error {
-	parent, err := hcDatasetName(flagHcCsLocation, flagHcCsDataset)
+func (s *healthcareCmds) runHcCsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.hcDatasetName(s.flagHcCsLocation, s.flagHcCsDataset)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -160,8 +115,8 @@ func runHcCsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Datasets.ConsentStores.List(parent).Context(ctx)
-		if flagHcCsPageSize > 0 {
-			call = call.PageSize(flagHcCsPageSize)
+		if s.flagHcCsPageSize > 0 {
+			call = call.PageSize(s.flagHcCsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -176,25 +131,25 @@ func runHcCsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagHcCsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagHcCsFormat)
 }
 
-func runHcCsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := hcConsentStoreName(flagHcCsLocation, flagHcCsDataset, args[0])
+func (s *healthcareCmds) runHcCsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.hcConsentStoreName(s.flagHcCsLocation, s.flagHcCsDataset, args[0])
 	if err != nil {
 		return err
 	}
 	body := &healthcare.ConsentStore{}
-	if err := loadYAMLOrJSONInto(flagHcCsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagHcCsConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagHcCsUpdateMask
+	mask := s.flagHcCsUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -206,17 +161,17 @@ func runHcCsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating consent store: %w", err)
 	}
-	fmt.Printf("Updated consent store [%s].\n", args[0])
-	return emitFormatted(got, flagHcCsFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated consent store [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagHcCsFormat)
 }
 
-func runHcCsGetIam(cmd *cobra.Command, args []string) error {
-	name, err := hcConsentStoreName(flagHcCsLocation, flagHcCsDataset, args[0])
+func (s *healthcareCmds) runHcCsGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.hcConsentStoreName(s.flagHcCsLocation, s.flagHcCsDataset, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -224,11 +179,11 @@ func runHcCsGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagHcCsFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagHcCsFormat)
 }
 
-func runHcCsSetIam(cmd *cobra.Command, args []string) error {
-	name, err := hcConsentStoreName(flagHcCsLocation, flagHcCsDataset, args[0])
+func (s *healthcareCmds) runHcCsSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.hcConsentStoreName(s.flagHcCsLocation, s.flagHcCsDataset, args[0])
 	if err != nil {
 		return err
 	}
@@ -237,8 +192,8 @@ func runHcCsSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -246,6 +201,6 @@ func runHcCsSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for consent store [%s].\n", args[0])
-	return emitFormatted(updated, flagHcCsFormat)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for consent store [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, updated, s.flagHcCsFormat)
 }

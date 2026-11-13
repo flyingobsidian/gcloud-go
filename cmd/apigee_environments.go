@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,69 +9,42 @@ import (
 
 // --- gcloud apigee environments (#1380) ---
 
-var apigeeEnvironmentsCmd = &cobra.Command{Use: "environments", Short: "Manage Apigee environments"}
-
-var (
-	flagApigeeEnvOrganization string
-	flagApigeeEnvFormat       string
-	flagApigeeEnvConfigFile   string
-)
-
-var (
-	apigeeEnvCreateCmd = &cobra.Command{
-		Use: "create RESOURCE", Short: "Create an Apigee environment",
-		Args: cobra.ExactArgs(1), RunE: runApigeeEnvCreate,
-	}
-	apigeeEnvDeleteCmd = &cobra.Command{
-		Use: "delete RESOURCE", Short: "Delete an Apigee environment",
-		Args: cobra.ExactArgs(1), RunE: runApigeeEnvDelete,
-	}
-	apigeeEnvDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe an Apigee environment",
-		Args: cobra.ExactArgs(1), RunE: runApigeeEnvDescribe,
-	}
-	apigeeEnvUpdateCmd = &cobra.Command{
-		Use: "update RESOURCE", Short: "Update an Apigee environment",
-		Args: cobra.ExactArgs(1), RunE: runApigeeEnvUpdate,
-	}
-)
-
-func init() {
+func (s *apigeeCmds) initApigeeEnvironments() {
 	all := []*cobra.Command{
-		apigeeEnvCreateCmd, apigeeEnvDeleteCmd, apigeeEnvDescribeCmd, apigeeEnvUpdateCmd,
+		s.apigeeEnvCreateCmd, s.apigeeEnvDeleteCmd, s.apigeeEnvDescribeCmd, s.apigeeEnvUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApigeeEnvOrganization, "organization", "", "Apigee organization (required)")
+		c.Flags().StringVar(&s.flagApigeeEnvOrganization, "organization", "", "Apigee organization (required)")
 		_ = c.MarkFlagRequired("organization")
-		c.Flags().StringVar(&flagApigeeEnvFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagApigeeEnvFormat, "format", "", "Output format")
 	}
-	apigeeEnvCreateCmd.Flags().StringVar(&flagApigeeEnvConfigFile, "config-file", "", "Path to YAML/JSON environment definition (required)")
-	_ = apigeeEnvCreateCmd.MarkFlagRequired("config-file")
-	apigeeEnvUpdateCmd.Flags().StringVar(&flagApigeeEnvConfigFile, "config-file", "", "Path to YAML/JSON environment definition (required)")
-	_ = apigeeEnvUpdateCmd.MarkFlagRequired("config-file")
+	s.apigeeEnvCreateCmd.Flags().StringVar(&s.flagApigeeEnvConfigFile, "config-file", "", "Path to YAML/JSON environment definition (required)")
+	_ = s.apigeeEnvCreateCmd.MarkFlagRequired("config-file")
+	s.apigeeEnvUpdateCmd.Flags().StringVar(&s.flagApigeeEnvConfigFile, "config-file", "", "Path to YAML/JSON environment definition (required)")
+	_ = s.apigeeEnvUpdateCmd.MarkFlagRequired("config-file")
 
-	apigeeEnvironmentsCmd.AddCommand(all...)
-	apigeeCmd.AddCommand(apigeeEnvironmentsCmd)
+	s.apigeeEnvironmentsCmd.AddCommand(all...)
+	s.apigeeCmd.AddCommand(s.apigeeEnvironmentsCmd)
 }
 
-func apigeeEnvName(id string) (string, error) {
-	return apigeeResource(flagApigeeEnvOrganization, "environments", id)
+func (s *apigeeCmds) apigeeEnvName(id string) (string, error) {
+	return apigeeResource(s.flagApigeeEnvOrganization, "environments", id)
 }
 
-func runApigeeEnvCreate(cmd *cobra.Command, args []string) error {
-	parent, err := apigeeOrgName(flagApigeeEnvOrganization)
+func (s *apigeeCmds) runApigeeEnvCreate(cmd *cobra.Command, args []string) error {
+	parent, err := apigeeOrgName(s.flagApigeeEnvOrganization)
 	if err != nil {
 		return err
 	}
 	body := &apigee.GoogleCloudApigeeV1Environment{}
-	if err := loadYAMLOrJSONInto(flagApigeeEnvConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagApigeeEnvConfigFile, body); err != nil {
 		return err
 	}
 	if body.Name == "" {
 		body.Name = args[0]
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, parent)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -80,16 +52,16 @@ func runApigeeEnvCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating environment: %w", err)
 	}
-	return emitFormatted(op, flagApigeeEnvFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagApigeeEnvFormat)
 }
 
-func runApigeeEnvDelete(cmd *cobra.Command, args []string) error {
-	name, err := apigeeEnvName(args[0])
+func (s *apigeeCmds) runApigeeEnvDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeeEnvName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -98,20 +70,20 @@ func runApigeeEnvDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting environment: %w", err)
 	}
 	if op != nil && op.Name != "" {
-		fmt.Printf("Delete environment [%s] initiated (operation: %s).\n", args[0], op.Name)
+		fmt.Fprintf(s.inv.stdout, "Delete environment [%s] initiated (operation: %s).\n", args[0], op.Name)
 	} else {
-		fmt.Printf("Deleted environment [%s].\n", args[0])
+		fmt.Fprintf(s.inv.stdout, "Deleted environment [%s].\n", args[0])
 	}
 	return nil
 }
 
-func runApigeeEnvDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apigeeEnvName(args[0])
+func (s *apigeeCmds) runApigeeEnvDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeeEnvName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -119,20 +91,20 @@ func runApigeeEnvDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing environment: %w", err)
 	}
-	return emitFormatted(got, flagApigeeEnvFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeeEnvFormat)
 }
 
-func runApigeeEnvUpdate(cmd *cobra.Command, args []string) error {
-	name, err := apigeeEnvName(args[0])
+func (s *apigeeCmds) runApigeeEnvUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeeEnvName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &apigee.GoogleCloudApigeeV1Environment{}
-	if err := loadYAMLOrJSONInto(flagApigeeEnvConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagApigeeEnvConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -140,5 +112,5 @@ func runApigeeEnvUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating environment: %w", err)
 	}
-	return emitFormatted(got, flagApigeeEnvFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeeEnvFormat)
 }

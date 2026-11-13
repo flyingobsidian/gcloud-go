@@ -1,125 +1,66 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	firestore "google.golang.org/api/firestore/v1"
 )
 
-var firestoreDatabasesCmd = &cobra.Command{
-	Use:   "databases",
-	Short: "Manage Cloud Firestore databases",
-}
-
-var (
-	fsDBCreateCmd = &cobra.Command{
-		Use: "create DATABASE", Short: "Create a Firestore database from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runFSDBCreate,
-	}
-	fsDBDeleteCmd = &cobra.Command{
-		Use: "delete DATABASE", Short: "Delete a Firestore database",
-		Args: cobra.ExactArgs(1), RunE: runFSDBDelete,
-	}
-	fsDBDescribeCmd = &cobra.Command{
-		Use: "describe [DATABASE]", Short: "Describe a Firestore database",
-		Args: cobra.MaximumNArgs(1), RunE: runFSDBDescribe,
-	}
-	fsDBListCmd = &cobra.Command{
-		Use: "list", Short: "List Firestore databases in the project",
-		Args: cobra.NoArgs, RunE: runFSDBList,
-	}
-	fsDBUpdateCmd = &cobra.Command{
-		Use: "update DATABASE", Short: "Update a Firestore database from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runFSDBUpdate,
-	}
-	fsDBRestoreCmd = &cobra.Command{
-		Use: "restore", Short: "Restore a Firestore database from a backup",
-		Args: cobra.NoArgs, RunE: runFSDBRestore,
-	}
-	fsDBCloneCmd = &cobra.Command{
-		Use: "clone", Short: "Clone a Firestore database from another",
-		Args: cobra.NoArgs, RunE: runFSDBClone,
-	}
-	fsDBConnStrCmd = &cobra.Command{
-		Use: "connection-string [DATABASE]", Short: "Print a mongo connection string for the database",
-		Args: cobra.MaximumNArgs(1), RunE: runFSDBConnectionString,
-	}
-)
-
-var (
-	flagFSDBConfigFile        string
-	flagFSDBUpdateMask        string
-	flagFSDBFormat            string
-	flagFSDBAsync             bool
-	flagFSDBListPage          int64
-	flagFSDBListLimit         int64
-	flagFSDBListShowDeleted   bool
-	flagFSDBRestoreDest       string
-	flagFSDBRestoreBackup     string
-	flagFSDBRestoreKMS        string
-	flagFSDBCloneSource       string
-	flagFSDBCloneDest         string
-	flagFSDBCloneSnapshotTime string
-	flagFSDBCloneKMS          string
-)
-
-func init() {
-	for _, c := range []*cobra.Command{fsDBCreateCmd, fsDBUpdateCmd} {
-		c.Flags().StringVar(&flagFSDBConfigFile, "config-file", "",
+func (g *firestoreCmds) initFirestoreDatabases() {
+	for _, c := range []*cobra.Command{g.fsDBCreateCmd, g.fsDBUpdateCmd} {
+		c.Flags().StringVar(&g.flagFSDBConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Database message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	fsDBUpdateCmd.Flags().StringVar(&flagFSDBUpdateMask, "update-mask", "",
+	g.fsDBUpdateCmd.Flags().StringVar(&g.flagFSDBUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{fsDBCreateCmd, fsDBDeleteCmd, fsDBUpdateCmd, fsDBRestoreCmd, fsDBCloneCmd} {
-		c.Flags().BoolVar(&flagFSDBAsync, "async", false, "Return the long-running operation without waiting")
+	for _, c := range []*cobra.Command{g.fsDBCreateCmd, g.fsDBDeleteCmd, g.fsDBUpdateCmd, g.fsDBRestoreCmd, g.fsDBCloneCmd} {
+		c.Flags().BoolVar(&g.flagFSDBAsync, "async", false, "Return the long-running operation without waiting")
 	}
 
-	fsDBDescribeCmd.Flags().StringVar(&flagFSDBFormat, "format", "", "Output format")
-	fsDBListCmd.Flags().StringVar(&flagFSDBFormat, "format", "", "Output format")
-	fsDBListCmd.Flags().Int64Var(&flagFSDBListPage, "page-size", 0, "Page size")
-	fsDBListCmd.Flags().Int64Var(&flagFSDBListLimit, "limit", 0, "Cap total results (0 = no cap)")
-	fsDBListCmd.Flags().BoolVar(&flagFSDBListShowDeleted, "show-deleted", false, "Include deleted databases")
+	g.fsDBDescribeCmd.Flags().StringVar(&g.flagFSDBFormat, "format", "", "Output format")
+	g.fsDBListCmd.Flags().StringVar(&g.flagFSDBFormat, "format", "", "Output format")
+	g.fsDBListCmd.Flags().Int64Var(&g.flagFSDBListPage, "page-size", 0, "Page size")
+	g.fsDBListCmd.Flags().Int64Var(&g.flagFSDBListLimit, "limit", 0, "Cap total results (0 = no cap)")
+	g.fsDBListCmd.Flags().BoolVar(&g.flagFSDBListShowDeleted, "show-deleted", false, "Include deleted databases")
 
-	fsDBRestoreCmd.Flags().StringVar(&flagFSDBRestoreDest, "destination-database", "",
+	g.fsDBRestoreCmd.Flags().StringVar(&g.flagFSDBRestoreDest, "destination-database", "",
 		"ID of the database to restore into (required)")
-	fsDBRestoreCmd.Flags().StringVar(&flagFSDBRestoreBackup, "backup", "",
+	g.fsDBRestoreCmd.Flags().StringVar(&g.flagFSDBRestoreBackup, "backup", "",
 		"Fully qualified backup resource name to restore from (required)")
-	fsDBRestoreCmd.Flags().StringVar(&flagFSDBRestoreKMS, "kms-key-name", "",
+	g.fsDBRestoreCmd.Flags().StringVar(&g.flagFSDBRestoreKMS, "kms-key-name", "",
 		"Fully qualified CMEK key resource name")
-	_ = fsDBRestoreCmd.MarkFlagRequired("destination-database")
-	_ = fsDBRestoreCmd.MarkFlagRequired("backup")
+	_ = g.fsDBRestoreCmd.MarkFlagRequired("destination-database")
+	_ = g.fsDBRestoreCmd.MarkFlagRequired("backup")
 
-	fsDBCloneCmd.Flags().StringVar(&flagFSDBCloneSource, "source-database", "",
+	g.fsDBCloneCmd.Flags().StringVar(&g.flagFSDBCloneSource, "source-database", "",
 		"Fully qualified source database resource name (required)")
-	fsDBCloneCmd.Flags().StringVar(&flagFSDBCloneDest, "destination-database", "",
+	g.fsDBCloneCmd.Flags().StringVar(&g.flagFSDBCloneDest, "destination-database", "",
 		"ID of the database to clone into (required)")
-	fsDBCloneCmd.Flags().StringVar(&flagFSDBCloneSnapshotTime, "snapshot-time", "",
+	g.fsDBCloneCmd.Flags().StringVar(&g.flagFSDBCloneSnapshotTime, "snapshot-time", "",
 		"RFC3339 point-in-time snapshot to clone from")
-	fsDBCloneCmd.Flags().StringVar(&flagFSDBCloneKMS, "kms-key-name", "",
+	g.fsDBCloneCmd.Flags().StringVar(&g.flagFSDBCloneKMS, "kms-key-name", "",
 		"Fully qualified CMEK key resource name")
-	_ = fsDBCloneCmd.MarkFlagRequired("source-database")
-	_ = fsDBCloneCmd.MarkFlagRequired("destination-database")
+	_ = g.fsDBCloneCmd.MarkFlagRequired("source-database")
+	_ = g.fsDBCloneCmd.MarkFlagRequired("destination-database")
 
-	firestoreDatabasesCmd.AddCommand(fsDBCloneCmd, fsDBConnStrCmd, fsDBCreateCmd, fsDBDeleteCmd, fsDBDescribeCmd, fsDBListCmd, fsDBRestoreCmd, fsDBUpdateCmd)
-	firestoreCmd.AddCommand(firestoreDatabasesCmd)
+	g.firestoreDatabasesCmd.AddCommand(g.fsDBCloneCmd, g.fsDBConnStrCmd, g.fsDBCreateCmd, g.fsDBDeleteCmd, g.fsDBDescribeCmd, g.fsDBListCmd, g.fsDBRestoreCmd, g.fsDBUpdateCmd)
+	g.firestoreCmd.AddCommand(g.firestoreDatabasesCmd)
 }
 
-func runFSDBCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSDBCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	db := &firestore.GoogleFirestoreAdminV1Database{}
-	if err := loadYAMLOrJSONInto(flagFSDBConfigFile, db); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagFSDBConfigFile, db); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
@@ -128,16 +69,16 @@ func runFSDBCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating database: %w", err)
 	}
-	return firestoreFinishOp(ctx, svc, op, "Create database", args[0], flagFSDBAsync)
+	return g.firestoreFinishOp(ctx, svc, op, "Create database", args[0], g.flagFSDBAsync)
 }
 
-func runFSDBDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSDBDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
@@ -145,11 +86,11 @@ func runFSDBDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting database: %w", err)
 	}
-	return firestoreFinishOp(ctx, svc, op, "Delete database", args[0], flagFSDBAsync)
+	return g.firestoreFinishOp(ctx, svc, op, "Delete database", args[0], g.flagFSDBAsync)
 }
 
-func runFSDBDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSDBDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
@@ -157,8 +98,8 @@ func runFSDBDescribe(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 {
 		db = args[0]
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
@@ -166,21 +107,21 @@ func runFSDBDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing database: %w", err)
 	}
-	return emitFormatted(got, flagFSDBFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagFSDBFormat)
 }
 
-func runFSDBList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSDBList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Projects.Databases.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
-	if flagFSDBListShowDeleted {
+	if g.flagFSDBListShowDeleted {
 		call = call.ShowDeleted(true)
 	}
 	resp, err := call.Do()
@@ -188,34 +129,34 @@ func runFSDBList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing databases: %w", err)
 	}
 	dbs := resp.Databases
-	if flagFSDBListLimit > 0 && int64(len(dbs)) > flagFSDBListLimit {
-		dbs = dbs[:flagFSDBListLimit]
+	if g.flagFSDBListLimit > 0 && int64(len(dbs)) > g.flagFSDBListLimit {
+		dbs = dbs[:g.flagFSDBListLimit]
 	}
-	if flagFSDBFormat != "" {
-		return emitFormatted(dbs, flagFSDBFormat)
+	if g.flagFSDBFormat != "" {
+		return emitFormattedTo(g.inv.stdout, dbs, g.flagFSDBFormat)
 	}
-	printTableHeading(len(dbs), "%-40s %-15s %s\n", "NAME", "LOCATION", "TYPE")
+	printTableHeadingTo(g.inv.stdout, len(dbs), "%-40s %-15s %s\n", "NAME", "LOCATION", "TYPE")
 	for _, d := range dbs {
-		fmt.Printf("%-40s %-15s %s\n", path.Base(d.Name), d.LocationId, d.Type)
+		fmt.Fprintf(g.inv.stdout, "%-40s %-15s %s\n", path.Base(d.Name), d.LocationId, d.Type)
 	}
 	return nil
 }
 
-func runFSDBUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSDBUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	db := &firestore.GoogleFirestoreAdminV1Database{}
-	if err := loadYAMLOrJSONInto(flagFSDBConfigFile, db); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagFSDBConfigFile, db); err != nil {
 		return err
 	}
-	mask := flagFSDBUpdateMask
+	mask := g.flagFSDBUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(db))
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
@@ -224,27 +165,27 @@ func runFSDBUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating database: %w", err)
 	}
-	return firestoreFinishOp(ctx, svc, op, "Update database", args[0], flagFSDBAsync)
+	return g.firestoreFinishOp(ctx, svc, op, "Update database", args[0], g.flagFSDBAsync)
 }
 
-func runFSDBRestore(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSDBRestore(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	req := &firestore.GoogleFirestoreAdminV1RestoreDatabaseRequest{
-		Backup:     flagFSDBRestoreBackup,
-		DatabaseId: flagFSDBRestoreDest,
+		Backup:     g.flagFSDBRestoreBackup,
+		DatabaseId: g.flagFSDBRestoreDest,
 	}
-	if flagFSDBRestoreKMS != "" {
+	if g.flagFSDBRestoreKMS != "" {
 		req.EncryptionConfig = &firestore.GoogleFirestoreAdminV1EncryptionConfig{
 			CustomerManagedEncryption: &firestore.GoogleFirestoreAdminV1CustomerManagedEncryptionOptions{
-				KmsKeyName: flagFSDBRestoreKMS,
+				KmsKeyName: g.flagFSDBRestoreKMS,
 			},
 		}
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
@@ -252,30 +193,30 @@ func runFSDBRestore(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("restoring database: %w", err)
 	}
-	return firestoreFinishOp(ctx, svc, op, "Restore database", flagFSDBRestoreDest, flagFSDBAsync)
+	return g.firestoreFinishOp(ctx, svc, op, "Restore database", g.flagFSDBRestoreDest, g.flagFSDBAsync)
 }
 
-func runFSDBClone(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSDBClone(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	req := &firestore.GoogleFirestoreAdminV1CloneDatabaseRequest{
-		DatabaseId: flagFSDBCloneDest,
+		DatabaseId: g.flagFSDBCloneDest,
 		PitrSnapshot: &firestore.GoogleFirestoreAdminV1PitrSnapshot{
-			Database:     flagFSDBCloneSource,
-			SnapshotTime: flagFSDBCloneSnapshotTime,
+			Database:     g.flagFSDBCloneSource,
+			SnapshotTime: g.flagFSDBCloneSnapshotTime,
 		},
 	}
-	if flagFSDBCloneKMS != "" {
+	if g.flagFSDBCloneKMS != "" {
 		req.EncryptionConfig = &firestore.GoogleFirestoreAdminV1EncryptionConfig{
 			CustomerManagedEncryption: &firestore.GoogleFirestoreAdminV1CustomerManagedEncryptionOptions{
-				KmsKeyName: flagFSDBCloneKMS,
+				KmsKeyName: g.flagFSDBCloneKMS,
 			},
 		}
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
@@ -283,14 +224,14 @@ func runFSDBClone(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("cloning database: %w", err)
 	}
-	return firestoreFinishOp(ctx, svc, op, "Clone database", flagFSDBCloneDest, flagFSDBAsync)
+	return g.firestoreFinishOp(ctx, svc, op, "Clone database", g.flagFSDBCloneDest, g.flagFSDBAsync)
 }
 
 // runFSDBConnectionString prints a MongoDB-style connection string for a
 // Firestore Enterprise database. gcloud-python assembles this locally from
 // the database resource, so we do the same rather than calling any API.
-func runFSDBConnectionString(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSDBConnectionString(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
@@ -298,7 +239,7 @@ func runFSDBConnectionString(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 {
 		db = args[0]
 	}
-	fmt.Printf("mongodb://%s.%s.firestore.goog:443/%s?loadBalanced=true&tls=true&retryWrites=false\n",
+	fmt.Fprintf(g.inv.stdout, "mongodb://%s.%s.firestore.goog:443/%s?loadBalanced=true&tls=true&retryWrites=false\n",
 		db, project, db)
 	return nil
 }

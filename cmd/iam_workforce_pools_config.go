@@ -16,77 +16,36 @@ import (
 // the fully-qualified `locations/LOC/workforcePools/POOL/providers/PROV`
 // resource form or the short-format `POOL/PROVIDER` shipped in 581.0.0.
 
-var iamWpCreateCredConfigCmd = &cobra.Command{
-	Use:   "create-cred-config AUDIENCE",
-	Short: "Create a workforce-pool BYOID credential configuration file",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runIamWpCreateCredConfig,
-}
-
-var iamWpCreateLoginConfigCmd = &cobra.Command{
-	Use:   "create-login-config AUDIENCE",
-	Short: "Create a workforce-pool sign-in (login) configuration file",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runIamWpCreateLoginConfig,
-}
-
-var (
-	flagIamWpCcOutputFile        string
-	flagIamWpCcUserProject       string
-	flagIamWpCcSubjectTokenType  string
-	flagIamWpCcCredSourceFile    string
-	flagIamWpCcCredSourceURL     string
-	flagIamWpCcCredSourceHeaders map[string]string
-	flagIamWpCcCredSourceType    string
-	flagIamWpCcCredSourceField   string
-	flagIamWpCcExecCommand       string
-	flagIamWpCcExecTimeoutMs     int
-	flagIamWpCcExecOutputFile    string
-	flagIamWpCcServiceAccount    string
-	flagIamWpCcSATokenLifetime   int
-	flagIamWpCcStsLocation       string
-	flagIamWpCcUniverseDomain    string
-	flagIamWpCcEnableMtls        bool
-)
-
-var (
-	flagIamWpLcOutputFile     string
-	flagIamWpLcUniverseDomain string
-	flagIamWpLcCloudWebDomain string
-	flagIamWpLcEnableMtls     bool
-	flagIamWpLcActivate       bool
-)
-
-func init() {
+func (s *iamCmds) initIamWorkforcePoolsConfig() {
 	// create-cred-config flags
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcOutputFile, "output-file", "", "Output file path (required)")
-	_ = iamWpCreateCredConfigCmd.MarkFlagRequired("output-file")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcUserProject, "workforce-pool-user-project", "", "Client project number (required)")
-	_ = iamWpCreateCredConfigCmd.MarkFlagRequired("workforce-pool-user-project")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcSubjectTokenType, "subject-token-type", "", "Subject token type (defaults to id_token)")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcCredSourceFile, "credential-source-file", "", "File containing external credential")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcCredSourceURL, "credential-source-url", "", "URL that returns the external credential")
-	iamWpCreateCredConfigCmd.Flags().StringToStringVar(&flagIamWpCcCredSourceHeaders, "credential-source-headers", nil, "Headers to send with the credential-source URL")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcCredSourceType, "credential-source-type", "", "Credential source format: json or text")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcCredSourceField, "credential-source-field-name", "", "JSON field containing the token")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcExecCommand, "executable-command", "", "Absolute command to run for the credential")
-	iamWpCreateCredConfigCmd.Flags().IntVar(&flagIamWpCcExecTimeoutMs, "executable-timeout-millis", 30000, "Executable timeout in ms")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcExecOutputFile, "executable-output-file", "", "Cache file for the executable output")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcServiceAccount, "service-account", "", "Service account email to impersonate")
-	iamWpCreateCredConfigCmd.Flags().IntVar(&flagIamWpCcSATokenLifetime, "service-account-token-lifetime-seconds", 0, "Impersonation token lifetime seconds")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcStsLocation, "sts-location", "", "STS endpoint region (empty or 'global' for global endpoint)")
-	iamWpCreateCredConfigCmd.Flags().StringVar(&flagIamWpCcUniverseDomain, "universe-domain", "", "Override universe domain (defaults to googleapis.com)")
-	iamWpCreateCredConfigCmd.Flags().BoolVar(&flagIamWpCcEnableMtls, "enable-mtls", false, "Use mTLS for STS endpoints")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcOutputFile, "output-file", "", "Output file path (required)")
+	_ = s.iamWpCreateCredConfigCmd.MarkFlagRequired("output-file")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcUserProject, "workforce-pool-user-project", "", "Client project number (required)")
+	_ = s.iamWpCreateCredConfigCmd.MarkFlagRequired("workforce-pool-user-project")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcSubjectTokenType, "subject-token-type", "", "Subject token type (defaults to id_token)")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcCredSourceFile, "credential-source-file", "", "File containing external credential")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcCredSourceURL, "credential-source-url", "", "URL that returns the external credential")
+	s.iamWpCreateCredConfigCmd.Flags().StringToStringVar(&s.flagIamWpCcCredSourceHeaders, "credential-source-headers", nil, "Headers to send with the credential-source URL")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcCredSourceType, "credential-source-type", "", "Credential source format: json or text")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcCredSourceField, "credential-source-field-name", "", "JSON field containing the token")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcExecCommand, "executable-command", "", "Absolute command to run for the credential")
+	s.iamWpCreateCredConfigCmd.Flags().IntVar(&s.flagIamWpCcExecTimeoutMs, "executable-timeout-millis", 30000, "Executable timeout in ms")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcExecOutputFile, "executable-output-file", "", "Cache file for the executable output")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcServiceAccount, "service-account", "", "Service account email to impersonate")
+	s.iamWpCreateCredConfigCmd.Flags().IntVar(&s.flagIamWpCcSATokenLifetime, "service-account-token-lifetime-seconds", 0, "Impersonation token lifetime seconds")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcStsLocation, "sts-location", "", "STS endpoint region (empty or 'global' for global endpoint)")
+	s.iamWpCreateCredConfigCmd.Flags().StringVar(&s.flagIamWpCcUniverseDomain, "universe-domain", "", "Override universe domain (defaults to googleapis.com)")
+	s.iamWpCreateCredConfigCmd.Flags().BoolVar(&s.flagIamWpCcEnableMtls, "enable-mtls", false, "Use mTLS for STS endpoints")
 
 	// create-login-config flags
-	iamWpCreateLoginConfigCmd.Flags().StringVar(&flagIamWpLcOutputFile, "output-file", "", "Output file path (required)")
-	_ = iamWpCreateLoginConfigCmd.MarkFlagRequired("output-file")
-	iamWpCreateLoginConfigCmd.Flags().BoolVar(&flagIamWpLcActivate, "activate", false, "Persist auth/login_config_file to the generated file")
-	iamWpCreateLoginConfigCmd.Flags().StringVar(&flagIamWpLcUniverseDomain, "universe-domain", "", "Override universe domain (defaults to googleapis.com)")
-	iamWpCreateLoginConfigCmd.Flags().StringVar(&flagIamWpLcCloudWebDomain, "universe-cloud-web-domain", "", "Override cloud web domain")
-	iamWpCreateLoginConfigCmd.Flags().BoolVar(&flagIamWpLcEnableMtls, "enable-mtls", false, "Use mTLS for STS endpoints")
+	s.iamWpCreateLoginConfigCmd.Flags().StringVar(&s.flagIamWpLcOutputFile, "output-file", "", "Output file path (required)")
+	_ = s.iamWpCreateLoginConfigCmd.MarkFlagRequired("output-file")
+	s.iamWpCreateLoginConfigCmd.Flags().BoolVar(&s.flagIamWpLcActivate, "activate", false, "Persist auth/login_config_file to the generated file")
+	s.iamWpCreateLoginConfigCmd.Flags().StringVar(&s.flagIamWpLcUniverseDomain, "universe-domain", "", "Override universe domain (defaults to googleapis.com)")
+	s.iamWpCreateLoginConfigCmd.Flags().StringVar(&s.flagIamWpLcCloudWebDomain, "universe-cloud-web-domain", "", "Override cloud web domain")
+	s.iamWpCreateLoginConfigCmd.Flags().BoolVar(&s.flagIamWpLcEnableMtls, "enable-mtls", false, "Use mTLS for STS endpoints")
 
-	iamWorkforcePoolsCmd.AddCommand(iamWpCreateCredConfigCmd, iamWpCreateLoginConfigCmd)
+	s.iamWorkforcePoolsCmd.AddCommand(s.iamWpCreateCredConfigCmd, s.iamWpCreateLoginConfigCmd)
 }
 
 // normalizeWorkforceAudience accepts either a fully-qualified workforce-pool
@@ -134,25 +93,25 @@ func iamCredentialsBaseURL(universeDomain string, enableMtls bool) string {
 	return fmt.Sprintf("https://iamcredentials.%s%s", mtls, universeDomain)
 }
 
-func runIamWpCreateCredConfig(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runIamWpCreateCredConfig(cmd *cobra.Command, args []string) error {
 	audiencePath, err := normalizeWorkforceAudience(args[0])
 	if err != nil {
 		return err
 	}
-	universe := flagIamWpCcUniverseDomain
+	universe := s.flagIamWpCcUniverseDomain
 	if universe == "" {
 		universe = "googleapis.com"
 	}
-	stsBase, err := stsBaseURL(universe, flagIamWpCcStsLocation, flagIamWpCcEnableMtls)
+	stsBase, err := stsBaseURL(universe, s.flagIamWpCcStsLocation, s.flagIamWpCcEnableMtls)
 	if err != nil {
 		return err
 	}
 
-	credSource, tokenType, err := buildWorkforceCredSource()
+	credSource, tokenType, err := s.buildWorkforceCredSource()
 	if err != nil {
 		return err
 	}
-	subject := flagIamWpCcSubjectTokenType
+	subject := s.flagIamWpCcSubjectTokenType
 	if subject == "" {
 		if tokenType != "" {
 			subject = tokenType
@@ -168,17 +127,17 @@ func runIamWpCreateCredConfig(cmd *cobra.Command, args []string) error {
 		"subject_token_type":          subject,
 		"token_url":                   stsBase + "/v1/token",
 		"credential_source":           credSource,
-		"workforce_pool_user_project": flagIamWpCcUserProject,
+		"workforce_pool_user_project": s.flagIamWpCcUserProject,
 	}
-	if flagIamWpCcServiceAccount != "" {
+	if s.flagIamWpCcServiceAccount != "" {
 		output["service_account_impersonation_url"] = fmt.Sprintf(
 			"%s/v1/projects/-/serviceAccounts/%s:generateAccessToken",
-			iamCredentialsBaseURL(universe, flagIamWpCcEnableMtls),
-			flagIamWpCcServiceAccount,
+			iamCredentialsBaseURL(universe, s.flagIamWpCcEnableMtls),
+			s.flagIamWpCcServiceAccount,
 		)
-		if flagIamWpCcSATokenLifetime > 0 {
+		if s.flagIamWpCcSATokenLifetime > 0 {
 			output["service_account_impersonation"] = map[string]any{
-				"token_lifetime_seconds": flagIamWpCcSATokenLifetime,
+				"token_lifetime_seconds": s.flagIamWpCcSATokenLifetime,
 			}
 		}
 	} else {
@@ -189,24 +148,24 @@ func runIamWpCreateCredConfig(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
-	if err := os.WriteFile(flagIamWpCcOutputFile, data, 0600); err != nil {
+	if err := os.WriteFile(s.flagIamWpCcOutputFile, data, 0600); err != nil {
 		return fmt.Errorf("writing output file: %w", err)
 	}
-	fmt.Printf("Created credential configuration file [%s].\n", flagIamWpCcOutputFile)
+	fmt.Fprintf(s.inv.stdout, "Created credential configuration file [%s].\n", s.flagIamWpCcOutputFile)
 	return nil
 }
 
 // buildWorkforceCredSource returns the credential_source object plus an
 // implied subject token type (for X.509/mTLS the caller may override).
-func buildWorkforceCredSource() (map[string]any, string, error) {
+func (s *iamCmds) buildWorkforceCredSource() (map[string]any, string, error) {
 	count := 0
-	if flagIamWpCcCredSourceFile != "" {
+	if s.flagIamWpCcCredSourceFile != "" {
 		count++
 	}
-	if flagIamWpCcCredSourceURL != "" {
+	if s.flagIamWpCcCredSourceURL != "" {
 		count++
 	}
-	if flagIamWpCcExecCommand != "" {
+	if s.flagIamWpCcExecCommand != "" {
 		count++
 	}
 	if count == 0 {
@@ -216,34 +175,34 @@ func buildWorkforceCredSource() (map[string]any, string, error) {
 		return nil, "", fmt.Errorf("specify only one credential source type")
 	}
 
-	tokenFormat, err := credentialSourceFormat(flagIamWpCcCredSourceType, flagIamWpCcCredSourceField)
+	tokenFormat, err := credentialSourceFormat(s.flagIamWpCcCredSourceType, s.flagIamWpCcCredSourceField)
 	if err != nil {
 		return nil, "", err
 	}
 
 	switch {
-	case flagIamWpCcCredSourceFile != "":
-		src := map[string]any{"file": flagIamWpCcCredSourceFile}
+	case s.flagIamWpCcCredSourceFile != "":
+		src := map[string]any{"file": s.flagIamWpCcCredSourceFile}
 		if tokenFormat != nil {
 			src["format"] = tokenFormat
 		}
 		return src, "", nil
-	case flagIamWpCcCredSourceURL != "":
-		src := map[string]any{"url": flagIamWpCcCredSourceURL}
-		if len(flagIamWpCcCredSourceHeaders) > 0 {
-			src["headers"] = flagIamWpCcCredSourceHeaders
+	case s.flagIamWpCcCredSourceURL != "":
+		src := map[string]any{"url": s.flagIamWpCcCredSourceURL}
+		if len(s.flagIamWpCcCredSourceHeaders) > 0 {
+			src["headers"] = s.flagIamWpCcCredSourceHeaders
 		}
 		if tokenFormat != nil {
 			src["format"] = tokenFormat
 		}
 		return src, "", nil
-	case flagIamWpCcExecCommand != "":
+	case s.flagIamWpCcExecCommand != "":
 		exec := map[string]any{
-			"command":        flagIamWpCcExecCommand,
-			"timeout_millis": flagIamWpCcExecTimeoutMs,
+			"command":        s.flagIamWpCcExecCommand,
+			"timeout_millis": s.flagIamWpCcExecTimeoutMs,
 		}
-		if flagIamWpCcExecOutputFile != "" {
-			exec["output_file"] = flagIamWpCcExecOutputFile
+		if s.flagIamWpCcExecOutputFile != "" {
+			exec["output_file"] = s.flagIamWpCcExecOutputFile
 		}
 		return map[string]any{"executable": exec}, "", nil
 	}
@@ -268,20 +227,20 @@ func credentialSourceFormat(sourceType, fieldName string) (map[string]any, error
 	return f, nil
 }
 
-func runIamWpCreateLoginConfig(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runIamWpCreateLoginConfig(cmd *cobra.Command, args []string) error {
 	audiencePath, err := normalizeWorkforceAudience(args[0])
 	if err != nil {
 		return err
 	}
-	universe := flagIamWpLcUniverseDomain
+	universe := s.flagIamWpLcUniverseDomain
 	if universe == "" {
 		universe = "googleapis.com"
 	}
-	cloudWebDomain := flagIamWpLcCloudWebDomain
+	cloudWebDomain := s.flagIamWpLcCloudWebDomain
 	if cloudWebDomain == "" {
 		cloudWebDomain = "cloud.google"
 	}
-	stsBase, err := stsBaseURL(universe, "", flagIamWpLcEnableMtls)
+	stsBase, err := stsBaseURL(universe, "", s.flagIamWpLcEnableMtls)
 	if err != nil {
 		return err
 	}
@@ -300,12 +259,12 @@ func runIamWpCreateLoginConfig(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
-	if err := os.WriteFile(flagIamWpLcOutputFile, data, 0600); err != nil {
+	if err := os.WriteFile(s.flagIamWpLcOutputFile, data, 0600); err != nil {
 		return fmt.Errorf("writing output file: %w", err)
 	}
-	fmt.Printf("Created login configuration file [%s].\n", flagIamWpLcOutputFile)
-	if flagIamWpLcActivate {
-		fmt.Printf("Set auth/login_config_file requested but not persisted (unsupported in gcloud-go).\n")
+	fmt.Fprintf(s.inv.stdout, "Created login configuration file [%s].\n", s.flagIamWpLcOutputFile)
+	if s.flagIamWpLcActivate {
+		fmt.Fprintf(s.inv.stdout, "Set auth/login_config_file requested but not persisted (unsupported in gcloud-go).\n")
 	}
 	return nil
 }

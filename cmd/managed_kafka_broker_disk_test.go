@@ -9,6 +9,7 @@ import (
 )
 
 func TestApplyBrokerDiskFlag(t *testing.T) {
+	grp := newManagedKafkaCmds(legacyTestInvocation())
 	cases := []struct {
 		name    string
 		flag    string
@@ -29,11 +30,11 @@ func TestApplyBrokerDiskFlag(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			old := flagMKBrokerDiskGiB
-			flagMKBrokerDiskGiB = tc.flag
-			t.Cleanup(func() { flagMKBrokerDiskGiB = old })
+			old := grp.flagMKBrokerDiskGiB
+			grp.flagMKBrokerDiskGiB = tc.flag
+			t.Cleanup(func() { grp.flagMKBrokerDiskGiB = old })
 
-			err := applyBrokerDiskFlag(tc.cluster)
+			err := grp.applyBrokerDiskFlag(tc.cluster)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("applyBrokerDiskFlag() = nil, want error")
@@ -61,12 +62,13 @@ func TestApplyBrokerDiskFlag(t *testing.T) {
 }
 
 func TestApplyBrokerDiskFlagRequestBody(t *testing.T) {
-	old := flagMKBrokerDiskGiB
-	flagMKBrokerDiskGiB = "0"
-	t.Cleanup(func() { flagMKBrokerDiskGiB = old })
+	grp := newManagedKafkaCmds(legacyTestInvocation())
+	old := grp.flagMKBrokerDiskGiB
+	grp.flagMKBrokerDiskGiB = "0"
+	t.Cleanup(func() { grp.flagMKBrokerDiskGiB = old })
 
 	cluster := &managedkafka.Cluster{}
-	if err := applyBrokerDiskFlag(cluster); err != nil {
+	if err := grp.applyBrokerDiskFlag(cluster); err != nil {
 		t.Fatalf("applyBrokerDiskFlag() error: %v", err)
 	}
 	raw, err := json.Marshal(cluster)

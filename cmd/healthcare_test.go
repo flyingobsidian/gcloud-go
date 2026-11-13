@@ -7,7 +7,8 @@ import (
 )
 
 func healthcareSubgroup(name string) *cobra.Command {
-	for _, c := range healthcareCmd.Commands() {
+	grp := newHealthcareCmds(legacyTestInvocation())
+	for _, c := range grp.healthcareCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

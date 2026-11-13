@@ -1,59 +1,38 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
 
 // --- gcloud apihub discovered-api-observations (#1160) ---
 
-var apihubDiscoveredApiObservationsCmd = &cobra.Command{Use: "discovered-api-observations", Short: "Manage API Hub discovered API observations"}
-
-var (
-	flagApihubDaoLocation string
-	flagApihubDaoFormat   string
-	flagApihubDaoPageSize int64
-)
-
-var (
-	apihubDaoDescribeCmd = &cobra.Command{
-		Use: "describe OBSERVATION", Short: "Describe a discovered API observation",
-		Args: cobra.ExactArgs(1), RunE: runApihubDaoDescribe,
-	}
-	apihubDaoListCmd = &cobra.Command{
-		Use: "list", Short: "List discovered API observations in a location",
-		Args: cobra.NoArgs, RunE: runApihubDaoList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{apihubDaoDescribeCmd, apihubDaoListCmd}
+func (g *apihubCmds) initApihubDiscoveredApiObservations() {
+	all := []*cobra.Command{g.apihubDaoDescribeCmd, g.apihubDaoListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApihubDaoLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&g.flagApihubDaoLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagApihubDaoFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagApihubDaoFormat, "format", "", "Output format")
 	}
-	apihubDaoListCmd.Flags().Int64Var(&flagApihubDaoPageSize, "page-size", 0, "Maximum results per page")
+	g.apihubDaoListCmd.Flags().Int64Var(&g.flagApihubDaoPageSize, "page-size", 0, "Maximum results per page")
 
-	apihubDiscoveredApiObservationsCmd.AddCommand(all...)
-	apihubCmd.AddCommand(apihubDiscoveredApiObservationsCmd)
+	g.apihubDiscoveredApiObservationsCmd.AddCommand(all...)
+	g.apihubCmd.AddCommand(g.apihubDiscoveredApiObservationsCmd)
 }
 
-func apihubDaoName(id string) (string, error) {
-	return apihubResource(flagApihubDaoLocation, "discoveredApiObservations", id)
+func (g *apihubCmds) apihubDaoName(id string) (string, error) {
+	return g.apihubResource(g.flagApihubDaoLocation, "discoveredApiObservations", id)
 }
 
-func runApihubDaoDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apihubDaoName(args[0])
+func (g *apihubCmds) runApihubDaoDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubDaoName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -61,16 +40,16 @@ func runApihubDaoDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing discovered API observation: %w", err)
 	}
-	return emitFormatted(got, flagApihubDaoFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagApihubDaoFormat)
 }
 
-func runApihubDaoList(cmd *cobra.Command, args []string) error {
-	parent, err := apihubLocationParent(flagApihubDaoLocation)
+func (g *apihubCmds) runApihubDaoList(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubLocationParent(g.flagApihubDaoLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -78,8 +57,8 @@ func runApihubDaoList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DiscoveredApiObservations.List(parent).Context(ctx)
-		if flagApihubDaoPageSize > 0 {
-			call = call.PageSize(flagApihubDaoPageSize)
+		if g.flagApihubDaoPageSize > 0 {
+			call = call.PageSize(g.flagApihubDaoPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -94,5 +73,5 @@ func runApihubDaoList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagApihubDaoFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagApihubDaoFormat)
 }

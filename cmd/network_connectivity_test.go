@@ -7,7 +7,8 @@ import (
 )
 
 func ncSubgroup(name string) *cobra.Command {
-	for _, c := range networkConnectivityCmd.Commands() {
+	grp := newNetworkConnectivityCmds(legacyTestInvocation())
+	for _, c := range grp.networkConnectivityCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

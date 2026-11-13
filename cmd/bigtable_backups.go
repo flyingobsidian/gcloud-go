@@ -1,106 +1,63 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	bigtableadmin "google.golang.org/api/bigtableadmin/v2"
 )
 
 // --- gcloud bigtable backups (#1303) ---
 
-var bigtableBackupsCmd = &cobra.Command{Use: "backups", Short: "Manage Bigtable backups"}
-
-var (
-	flagBtBkInstance   string
-	flagBtBkCluster    string
-	flagBtBkFormat     string
-	flagBtBkConfigFile string
-	flagBtBkUpdateMask string
-	flagBtBkPageSize   int64
-	flagBtBkFilter     string
-	flagBtBkOrderBy    string
-	flagBtBkDestTable  string
-)
-
-var (
-	bigtableBkCreateCmd = &cobra.Command{
-		Use: "create BACKUP", Short: "Create a Bigtable backup",
-		Args: cobra.ExactArgs(1), RunE: runBtBkCreate,
-	}
-	bigtableBkDeleteCmd = &cobra.Command{
-		Use: "delete BACKUP", Short: "Delete a Bigtable backup",
-		Args: cobra.ExactArgs(1), RunE: runBtBkDelete,
-	}
-	bigtableBkDescribeCmd = &cobra.Command{
-		Use: "describe BACKUP", Short: "Describe a Bigtable backup",
-		Args: cobra.ExactArgs(1), RunE: runBtBkDescribe,
-	}
-	bigtableBkListCmd = &cobra.Command{
-		Use: "list", Short: "List Bigtable backups on a cluster",
-		Args: cobra.NoArgs, RunE: runBtBkList,
-	}
-	bigtableBkUpdateCmd = &cobra.Command{
-		Use: "update BACKUP", Short: "Update a Bigtable backup",
-		Args: cobra.ExactArgs(1), RunE: runBtBkUpdate,
-	}
-	bigtableBkRestoreCmd = &cobra.Command{
-		Use: "restore BACKUP", Short: "Restore a Bigtable backup to a new table",
-		Args: cobra.ExactArgs(1), RunE: runBtBkRestore,
-	}
-)
-
-func init() {
+func (s *bigtableCmds) initBigtableBackups() {
 	all := []*cobra.Command{
-		bigtableBkCreateCmd, bigtableBkDeleteCmd, bigtableBkDescribeCmd,
-		bigtableBkListCmd, bigtableBkUpdateCmd, bigtableBkRestoreCmd,
+		s.bigtableBkCreateCmd, s.bigtableBkDeleteCmd, s.bigtableBkDescribeCmd,
+		s.bigtableBkListCmd, s.bigtableBkUpdateCmd, s.bigtableBkRestoreCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagBtBkInstance, "instance", "", "Bigtable instance ID (required)")
+		c.Flags().StringVar(&s.flagBtBkInstance, "instance", "", "Bigtable instance ID (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagBtBkCluster, "cluster", "", "Bigtable cluster ID (required)")
+		c.Flags().StringVar(&s.flagBtBkCluster, "cluster", "", "Bigtable cluster ID (required)")
 		_ = c.MarkFlagRequired("cluster")
-		c.Flags().StringVar(&flagBtBkFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBtBkFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{bigtableBkCreateCmd, bigtableBkUpdateCmd} {
-		c.Flags().StringVar(&flagBtBkConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.bigtableBkCreateCmd, s.bigtableBkUpdateCmd} {
+		c.Flags().StringVar(&s.flagBtBkConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Backup body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	bigtableBkUpdateCmd.Flags().StringVar(&flagBtBkUpdateMask, "update-mask", "",
+	s.bigtableBkUpdateCmd.Flags().StringVar(&s.flagBtBkUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	bigtableBkListCmd.Flags().Int64Var(&flagBtBkPageSize, "page-size", 0, "Maximum results per page")
-	bigtableBkListCmd.Flags().StringVar(&flagBtBkFilter, "filter", "", "Backup filter expression")
-	bigtableBkListCmd.Flags().StringVar(&flagBtBkOrderBy, "order-by", "", "Server-side ordering expression")
-	bigtableBkRestoreCmd.Flags().StringVar(&flagBtBkDestTable, "destination-table", "",
+	s.bigtableBkListCmd.Flags().Int64Var(&s.flagBtBkPageSize, "page-size", 0, "Maximum results per page")
+	s.bigtableBkListCmd.Flags().StringVar(&s.flagBtBkFilter, "filter", "", "Backup filter expression")
+	s.bigtableBkListCmd.Flags().StringVar(&s.flagBtBkOrderBy, "order-by", "", "Server-side ordering expression")
+	s.bigtableBkRestoreCmd.Flags().StringVar(&s.flagBtBkDestTable, "destination-table", "",
 		"ID of the new table to create from the backup (required)")
-	_ = bigtableBkRestoreCmd.MarkFlagRequired("destination-table")
+	_ = s.bigtableBkRestoreCmd.MarkFlagRequired("destination-table")
 
-	bigtableBackupsCmd.AddCommand(all...)
-	bigtableCmd.AddCommand(bigtableBackupsCmd)
+	s.bigtableBackupsCmd.AddCommand(all...)
+	s.bigtableCmd.AddCommand(s.bigtableBackupsCmd)
 }
 
-func btBkName(id string) (string, error) {
-	parent, err := btClusterName(flagBtBkInstance, flagBtBkCluster)
+func (s *bigtableCmds) btBkName(id string) (string, error) {
+	parent, err := s.btClusterName(s.flagBtBkInstance, s.flagBtBkCluster)
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/backups/%s", parent, id), nil
 }
 
-func runBtBkCreate(cmd *cobra.Command, args []string) error {
-	parent, err := btClusterName(flagBtBkInstance, flagBtBkCluster)
+func (s *bigtableCmds) runBtBkCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.btClusterName(s.flagBtBkInstance, s.flagBtBkCluster)
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.Backup{}
-	if err := loadYAMLOrJSONInto(flagBtBkConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBtBkConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,34 +65,34 @@ func runBtBkCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating backup: %w", err)
 	}
-	fmt.Printf("Create request issued for backup [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBtBkFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for backup [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBtBkFormat)
 }
 
-func runBtBkDelete(cmd *cobra.Command, args []string) error {
-	name, err := btBkName(args[0])
+func (s *bigtableCmds) runBtBkDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.btBkName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.Clusters.Backups.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting backup: %w", err)
 	}
-	fmt.Printf("Deleted backup [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted backup [%s].\n", args[0])
 	return nil
 }
 
-func runBtBkDescribe(cmd *cobra.Command, args []string) error {
-	name, err := btBkName(args[0])
+func (s *bigtableCmds) runBtBkDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.btBkName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,16 +100,16 @@ func runBtBkDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing backup: %w", err)
 	}
-	return emitFormatted(got, flagBtBkFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBtBkFormat)
 }
 
-func runBtBkList(cmd *cobra.Command, args []string) error {
-	parent, err := btClusterName(flagBtBkInstance, flagBtBkCluster)
+func (s *bigtableCmds) runBtBkList(cmd *cobra.Command, args []string) error {
+	parent, err := s.btClusterName(s.flagBtBkInstance, s.flagBtBkCluster)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -160,14 +117,14 @@ func runBtBkList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.Clusters.Backups.List(parent).Context(ctx)
-		if flagBtBkPageSize > 0 {
-			call = call.PageSize(flagBtBkPageSize)
+		if s.flagBtBkPageSize > 0 {
+			call = call.PageSize(s.flagBtBkPageSize)
 		}
-		if flagBtBkFilter != "" {
-			call = call.Filter(flagBtBkFilter)
+		if s.flagBtBkFilter != "" {
+			call = call.Filter(s.flagBtBkFilter)
 		}
-		if flagBtBkOrderBy != "" {
-			call = call.OrderBy(flagBtBkOrderBy)
+		if s.flagBtBkOrderBy != "" {
+			call = call.OrderBy(s.flagBtBkOrderBy)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -182,24 +139,24 @@ func runBtBkList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBtBkFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBtBkFormat)
 }
 
-func runBtBkUpdate(cmd *cobra.Command, args []string) error {
-	name, err := btBkName(args[0])
+func (s *bigtableCmds) runBtBkUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.btBkName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &bigtableadmin.Backup{}
-	if err := loadYAMLOrJSONInto(flagBtBkConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBtBkConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagBtBkUpdateMask
+	mask := s.flagBtBkUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
@@ -211,31 +168,31 @@ func runBtBkUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating backup: %w", err)
 	}
-	fmt.Printf("Updated backup [%s].\n", args[0])
-	return emitFormatted(got, flagBtBkFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated backup [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagBtBkFormat)
 }
 
-func runBtBkRestore(cmd *cobra.Command, args []string) error {
-	backup, err := btBkName(args[0])
+func (s *bigtableCmds) runBtBkRestore(cmd *cobra.Command, args []string) error {
+	backup, err := s.btBkName(args[0])
 	if err != nil {
 		return err
 	}
-	instance, err := btInstanceName(flagBtBkInstance)
+	instance, err := s.btInstanceName(s.flagBtBkInstance)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BigtableAdminService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BigtableAdmin(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Instances.Tables.Restore(instance, &bigtableadmin.RestoreTableRequest{
 		Backup:  backup,
-		TableId: flagBtBkDestTable,
+		TableId: s.flagBtBkDestTable,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("restoring backup: %w", err)
 	}
-	fmt.Printf("Restore request issued for table [%s] (operation: %s).\n", flagBtBkDestTable, op.Name)
-	return emitFormatted(op, flagBtBkFormat)
+	fmt.Fprintf(s.inv.stdout, "Restore request issued for table [%s] (operation: %s).\n", s.flagBtBkDestTable, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBtBkFormat)
 }

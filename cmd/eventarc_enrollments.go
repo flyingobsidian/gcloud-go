@@ -1,156 +1,114 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	eventarc "google.golang.org/api/eventarc/v1"
 )
 
-var eventarcEnrollmentsCmd = &cobra.Command{
-	Use:   "enrollments",
-	Short: "Manage Eventarc enrollments",
-}
-
-var (
-	evEnrCreateCmd = &cobra.Command{
-		Use: "create ENROLLMENT", Short: "Create an enrollment from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runEvEnrCreate,
+func (grp *eventarcCmds) initEventarcEnrollments() {
+	for _, c := range []*cobra.Command{grp.evEnrCreateCmd, grp.evEnrDeleteCmd, grp.evEnrDescribeCmd, grp.evEnrListCmd, grp.evEnrUpdateCmd} {
+		eventarcAddRegionFlag(c, &grp.flagEvEnrLocation, true)
 	}
-	evEnrDeleteCmd = &cobra.Command{
-		Use: "delete ENROLLMENT", Short: "Delete an enrollment",
-		Args: cobra.ExactArgs(1), RunE: runEvEnrDelete,
-	}
-	evEnrDescribeCmd = &cobra.Command{
-		Use: "describe ENROLLMENT", Short: "Describe an enrollment",
-		Args: cobra.ExactArgs(1), RunE: runEvEnrDescribe,
-	}
-	evEnrListCmd = &cobra.Command{
-		Use: "list", Short: "List enrollments in a location",
-		Args: cobra.NoArgs, RunE: runEvEnrList,
-	}
-	evEnrUpdateCmd = &cobra.Command{
-		Use: "update ENROLLMENT", Short: "Update an enrollment from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runEvEnrUpdate,
-	}
-)
-
-var (
-	flagEvEnrLocation   string
-	flagEvEnrConfigFile string
-	flagEvEnrUpdateMask string
-	flagEvEnrFormat     string
-	flagEvEnrAsync      bool
-	flagEvEnrListLimit  int64
-	flagEvEnrListPage   int64
-	flagEvEnrListFilter string
-	flagEvEnrListURI    bool
-)
-
-func init() {
-	for _, c := range []*cobra.Command{evEnrCreateCmd, evEnrDeleteCmd, evEnrDescribeCmd, evEnrListCmd, evEnrUpdateCmd} {
-		eventarcAddRegionFlag(c, &flagEvEnrLocation, true)
-	}
-	for _, c := range []*cobra.Command{evEnrCreateCmd, evEnrUpdateCmd} {
-		c.Flags().StringVar(&flagEvEnrConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{grp.evEnrCreateCmd, grp.evEnrUpdateCmd} {
+		c.Flags().StringVar(&grp.flagEvEnrConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Enrollment message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	evEnrUpdateCmd.Flags().StringVar(&flagEvEnrUpdateMask, "update-mask", "",
+	grp.evEnrUpdateCmd.Flags().StringVar(&grp.flagEvEnrUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{evEnrCreateCmd, evEnrDeleteCmd, evEnrUpdateCmd} {
-		c.Flags().BoolVar(&flagEvEnrAsync, "async", false, "Return the long-running operation without waiting")
+	for _, c := range []*cobra.Command{grp.evEnrCreateCmd, grp.evEnrDeleteCmd, grp.evEnrUpdateCmd} {
+		c.Flags().BoolVar(&grp.flagEvEnrAsync, "async", false, "Return the long-running operation without waiting")
 	}
-	evEnrDescribeCmd.Flags().StringVar(&flagEvEnrFormat, "format", "", "Output format")
-	evEnrListCmd.Flags().StringVar(&flagEvEnrFormat, "format", "", "Output format")
-	evEnrListCmd.Flags().Int64Var(&flagEvEnrListPage, "page-size", 0, "Page size")
-	evEnrListCmd.Flags().Int64Var(&flagEvEnrListLimit, "limit", 0, "Cap total results (0 = no cap)")
-	evEnrListCmd.Flags().StringVar(&flagEvEnrListFilter, "filter", "", "Server-side filter expression")
-	evEnrListCmd.Flags().BoolVar(&flagEvEnrListURI, "uri", false, "Print resource names only")
+	grp.evEnrDescribeCmd.Flags().StringVar(&grp.flagEvEnrFormat, "format", "", "Output format")
+	grp.evEnrListCmd.Flags().StringVar(&grp.flagEvEnrFormat, "format", "", "Output format")
+	grp.evEnrListCmd.Flags().Int64Var(&grp.flagEvEnrListPage, "page-size", 0, "Page size")
+	grp.evEnrListCmd.Flags().Int64Var(&grp.flagEvEnrListLimit, "limit", 0, "Cap total results (0 = no cap)")
+	grp.evEnrListCmd.Flags().StringVar(&grp.flagEvEnrListFilter, "filter", "", "Server-side filter expression")
+	grp.evEnrListCmd.Flags().BoolVar(&grp.flagEvEnrListURI, "uri", false, "Print resource names only")
 
-	eventarcEnrollmentsCmd.AddCommand(evEnrCreateCmd, evEnrDeleteCmd, evEnrDescribeCmd, evEnrListCmd, evEnrUpdateCmd)
-	eventarcCmd.AddCommand(eventarcEnrollmentsCmd)
+	grp.eventarcEnrollmentsCmd.AddCommand(grp.evEnrCreateCmd, grp.evEnrDeleteCmd, grp.evEnrDescribeCmd, grp.evEnrListCmd, grp.evEnrUpdateCmd)
+	grp.eventarcCmd.AddCommand(grp.eventarcEnrollmentsCmd)
 }
 
-func runEvEnrCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvEnrCreate(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
 	e := &eventarc.Enrollment{}
-	if err := loadYAMLOrJSONInto(flagEvEnrConfigFile, e); err != nil {
+	if err := loadYAMLOrJSONInto(grp.flagEvEnrConfigFile, e); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Enrollments.Create(eventarcLocationParent(project, flagEvEnrLocation), e).
+	op, err := svc.Projects.Locations.Enrollments.Create(eventarcLocationParent(project, grp.flagEvEnrLocation), e).
 		EnrollmentId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating enrollment: %w", err)
 	}
-	return eventarcFinishOp(ctx, svc, op, "Create enrollment", args[0], flagEvEnrAsync)
+	return grp.eventarcFinishOp(ctx, svc, op, "Create enrollment", args[0], grp.flagEvEnrAsync)
 }
 
-func runEvEnrDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvEnrDelete(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Enrollments.Delete(eventarcResourceName("enrollments", args[0], project, flagEvEnrLocation)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Enrollments.Delete(eventarcResourceName("enrollments", args[0], project, grp.flagEvEnrLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting enrollment: %w", err)
 	}
-	return eventarcFinishOp(ctx, svc, op, "Delete enrollment", args[0], flagEvEnrAsync)
+	return grp.eventarcFinishOp(ctx, svc, op, "Delete enrollment", args[0], grp.flagEvEnrAsync)
 }
 
-func runEvEnrDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvEnrDescribe(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	e, err := svc.Projects.Locations.Enrollments.Get(eventarcResourceName("enrollments", args[0], project, flagEvEnrLocation)).Context(ctx).Do()
+	e, err := svc.Projects.Locations.Enrollments.Get(eventarcResourceName("enrollments", args[0], project, grp.flagEvEnrLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing enrollment: %w", err)
 	}
-	return emitFormatted(e, flagEvEnrFormat)
+	return emitFormattedTo(grp.inv.stdout, e, grp.flagEvEnrFormat)
 }
 
-func runEvEnrList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvEnrList(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	parent := eventarcLocationParent(project, flagEvEnrLocation)
+	parent := eventarcLocationParent(project, grp.flagEvEnrLocation)
 	var all []*eventarc.Enrollment
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Enrollments.List(parent).Context(ctx)
-		if flagEvEnrListFilter != "" {
-			call = call.Filter(flagEvEnrListFilter)
+		if grp.flagEvEnrListFilter != "" {
+			call = call.Filter(grp.flagEvEnrListFilter)
 		}
-		if flagEvEnrListPage > 0 {
-			call = call.PageSize(flagEvEnrListPage)
+		if grp.flagEvEnrListPage > 0 {
+			call = call.PageSize(grp.flagEvEnrListPage)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -160,8 +118,8 @@ func runEvEnrList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing enrollments: %w", err)
 		}
 		all = append(all, resp.Enrollments...)
-		if flagEvEnrListLimit > 0 && int64(len(all)) >= flagEvEnrListLimit {
-			all = all[:flagEvEnrListLimit]
+		if grp.flagEvEnrListLimit > 0 && int64(len(all)) >= grp.flagEvEnrListLimit {
+			all = all[:grp.flagEvEnrListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -169,44 +127,44 @@ func runEvEnrList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagEvEnrListURI {
+	if grp.flagEvEnrListURI {
 		for _, e := range all {
-			fmt.Println(e.Name)
+			fmt.Fprintln(grp.inv.stdout, e.Name)
 		}
 		return nil
 	}
-	if flagEvEnrFormat != "" {
-		return emitFormatted(all, flagEvEnrFormat)
+	if grp.flagEvEnrFormat != "" {
+		return emitFormattedTo(grp.inv.stdout, all, grp.flagEvEnrFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "MESSAGE_BUS")
+	printTableHeadingTo(grp.inv.stdout, len(all), "%-40s %s\n", "NAME", "MESSAGE_BUS")
 	for _, e := range all {
-		fmt.Printf("%-40s %s\n", path.Base(e.Name), e.MessageBus)
+		fmt.Fprintf(grp.inv.stdout, "%-40s %s\n", path.Base(e.Name), e.MessageBus)
 	}
 	return nil
 }
 
-func runEvEnrUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvEnrUpdate(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
 	e := &eventarc.Enrollment{}
-	if err := loadYAMLOrJSONInto(flagEvEnrConfigFile, e); err != nil {
+	if err := loadYAMLOrJSONInto(grp.flagEvEnrConfigFile, e); err != nil {
 		return err
 	}
-	mask := flagEvEnrUpdateMask
+	mask := grp.flagEvEnrUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(e))
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Enrollments.Patch(eventarcResourceName("enrollments", args[0], project, flagEvEnrLocation), e).
+	op, err := svc.Projects.Locations.Enrollments.Patch(eventarcResourceName("enrollments", args[0], project, grp.flagEvEnrLocation), e).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating enrollment: %w", err)
 	}
-	return eventarcFinishOp(ctx, svc, op, "Update enrollment", args[0], flagEvEnrAsync)
+	return grp.eventarcFinishOp(ctx, svc, op, "Update enrollment", args[0], grp.flagEvEnrAsync)
 }

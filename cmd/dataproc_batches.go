@@ -5,101 +5,60 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dataproc "google.golang.org/api/dataproc/v1"
 )
 
 // --- gcloud dataproc batches (#1511) ---
 
-var dpBatchesCmd = &cobra.Command{Use: "batches", Short: "Manage Dataproc serverless batches"}
-
-var (
-	flagDPBatchRegion     string
-	flagDPBatchFormat     string
-	flagDPBatchConfigFile string
-	flagDPBatchRequestID  string
-	flagDPBatchFilter     string
-	flagDPBatchOrderBy    string
-	flagDPBatchPageSize   int64
-	flagDPBatchWaitTO     time.Duration
-)
-
-var (
-	dpBatchCancelCmd = &cobra.Command{
-		Use: "cancel BATCH", Short: "Cancel a batch (via its underlying operation)",
-		Args: cobra.ExactArgs(1), RunE: runDPBatchCancel,
-	}
-	dpBatchDeleteCmd = &cobra.Command{
-		Use: "delete BATCH", Short: "Delete a batch",
-		Args: cobra.ExactArgs(1), RunE: runDPBatchDelete,
-	}
-	dpBatchDescribeCmd = &cobra.Command{
-		Use: "describe BATCH", Short: "Describe a batch",
-		Args: cobra.ExactArgs(1), RunE: runDPBatchDescribe,
-	}
-	dpBatchListCmd = &cobra.Command{
-		Use: "list", Short: "List batches",
-		Args: cobra.NoArgs, RunE: runDPBatchList,
-	}
-	dpBatchSubmitCmd = &cobra.Command{
-		Use: "submit BATCH", Short: "Submit a batch (body loaded from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runDPBatchSubmit,
-	}
-	dpBatchWaitCmd = &cobra.Command{
-		Use: "wait BATCH", Short: "Wait for a batch to reach a terminal state",
-		Args: cobra.ExactArgs(1), RunE: runDPBatchWait,
-	}
-)
-
-func init() {
+func (s *dataprocCmds) initDataprocBatches() {
 	all := []*cobra.Command{
-		dpBatchCancelCmd, dpBatchDeleteCmd, dpBatchDescribeCmd,
-		dpBatchListCmd, dpBatchSubmitCmd, dpBatchWaitCmd,
+		s.dpBatchCancelCmd, s.dpBatchDeleteCmd, s.dpBatchDescribeCmd,
+		s.dpBatchListCmd, s.dpBatchSubmitCmd, s.dpBatchWaitCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDPBatchRegion, "region", "", "Dataproc region (required)")
+		c.Flags().StringVar(&s.flagDPBatchRegion, "region", "", "Dataproc region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDPBatchFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDPBatchFormat, "format", "", "Output format")
 	}
-	dpBatchSubmitCmd.Flags().StringVar(&flagDPBatchConfigFile, "config-file", "",
+	s.dpBatchSubmitCmd.Flags().StringVar(&s.flagDPBatchConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the Batch body (required)")
-	_ = dpBatchSubmitCmd.MarkFlagRequired("config-file")
-	dpBatchSubmitCmd.Flags().StringVar(&flagDPBatchRequestID, "request-id", "",
+	_ = s.dpBatchSubmitCmd.MarkFlagRequired("config-file")
+	s.dpBatchSubmitCmd.Flags().StringVar(&s.flagDPBatchRequestID, "request-id", "",
 		"Optional client-supplied ID for idempotent submission")
-	dpBatchListCmd.Flags().StringVar(&flagDPBatchFilter, "filter", "", "Server-side filter expression")
-	dpBatchListCmd.Flags().StringVar(&flagDPBatchOrderBy, "order-by", "", "Order-by expression")
-	dpBatchListCmd.Flags().Int64Var(&flagDPBatchPageSize, "page-size", 0, "Maximum results per page")
-	dpBatchWaitCmd.Flags().DurationVar(&flagDPBatchWaitTO, "timeout", 30*time.Minute,
+	s.dpBatchListCmd.Flags().StringVar(&s.flagDPBatchFilter, "filter", "", "Server-side filter expression")
+	s.dpBatchListCmd.Flags().StringVar(&s.flagDPBatchOrderBy, "order-by", "", "Order-by expression")
+	s.dpBatchListCmd.Flags().Int64Var(&s.flagDPBatchPageSize, "page-size", 0, "Maximum results per page")
+	s.dpBatchWaitCmd.Flags().DurationVar(&s.flagDPBatchWaitTO, "timeout", 30*time.Minute,
 		"Maximum time to wait for the batch to reach a terminal state")
 
-	dpBatchesCmd.AddCommand(all...)
-	dataprocCmd.AddCommand(dpBatchesCmd)
+	s.dpBatchesCmd.AddCommand(all...)
+	s.dataprocCmd.AddCommand(s.dpBatchesCmd)
 }
 
-func dpBatchParent() (string, error) {
-	project, err := resolveProject()
+func (s *dataprocCmds) dpBatchParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return dpLocationParent(project, flagDPBatchRegion), nil
+	return dpLocationParent(project, s.flagDPBatchRegion), nil
 }
 
-func dpBatchName(id string) (string, error) {
-	parent, err := dpBatchParent()
+func (s *dataprocCmds) dpBatchName(id string) (string, error) {
+	parent, err := s.dpBatchParent()
 	if err != nil {
 		return "", err
 	}
 	return dpChild("batches", id, parent), nil
 }
 
-func runDPBatchCancel(cmd *cobra.Command, args []string) error {
-	name, err := dpBatchName(args[0])
+func (s *dataprocCmds) runDPBatchCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.dpBatchName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPBatchRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPBatchRegion)
 	if err != nil {
 		return err
 	}
@@ -113,34 +72,34 @@ func runDPBatchCancel(cmd *cobra.Command, args []string) error {
 	if _, err := svc.Projects.Regions.Operations.Cancel(batch.Operation).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling batch: %w", err)
 	}
-	fmt.Printf("Cancel request issued for batch [%s] (operation: %s).\n", args[0], batch.Operation)
+	fmt.Fprintf(s.inv.stdout, "Cancel request issued for batch [%s] (operation: %s).\n", args[0], batch.Operation)
 	return nil
 }
 
-func runDPBatchDelete(cmd *cobra.Command, args []string) error {
-	name, err := dpBatchName(args[0])
+func (s *dataprocCmds) runDPBatchDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.dpBatchName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPBatchRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPBatchRegion)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Batches.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting batch: %w", err)
 	}
-	fmt.Printf("Deleted batch [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted batch [%s].\n", args[0])
 	return nil
 }
 
-func runDPBatchDescribe(cmd *cobra.Command, args []string) error {
-	name, err := dpBatchName(args[0])
+func (s *dataprocCmds) runDPBatchDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.dpBatchName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPBatchRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPBatchRegion)
 	if err != nil {
 		return err
 	}
@@ -148,16 +107,16 @@ func runDPBatchDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing batch: %w", err)
 	}
-	return emitFormatted(got, flagDPBatchFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPBatchFormat)
 }
 
-func runDPBatchList(cmd *cobra.Command, args []string) error {
-	parent, err := dpBatchParent()
+func (s *dataprocCmds) runDPBatchList(cmd *cobra.Command, args []string) error {
+	parent, err := s.dpBatchParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPBatchRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPBatchRegion)
 	if err != nil {
 		return err
 	}
@@ -165,14 +124,14 @@ func runDPBatchList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Batches.List(parent).Context(ctx)
-		if flagDPBatchFilter != "" {
-			call = call.Filter(flagDPBatchFilter)
+		if s.flagDPBatchFilter != "" {
+			call = call.Filter(s.flagDPBatchFilter)
 		}
-		if flagDPBatchOrderBy != "" {
-			call = call.OrderBy(flagDPBatchOrderBy)
+		if s.flagDPBatchOrderBy != "" {
+			call = call.OrderBy(s.flagDPBatchOrderBy)
 		}
-		if flagDPBatchPageSize > 0 {
-			call = call.PageSize(flagDPBatchPageSize)
+		if s.flagDPBatchPageSize > 0 {
+			call = call.PageSize(s.flagDPBatchPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -187,43 +146,43 @@ func runDPBatchList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDPBatchFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDPBatchFormat)
 }
 
-func runDPBatchSubmit(cmd *cobra.Command, args []string) error {
-	parent, err := dpBatchParent()
+func (s *dataprocCmds) runDPBatchSubmit(cmd *cobra.Command, args []string) error {
+	parent, err := s.dpBatchParent()
 	if err != nil {
 		return err
 	}
 	body := &dataproc.Batch{}
-	if err := loadYAMLOrJSONInto(flagDPBatchConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDPBatchConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPBatchRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPBatchRegion)
 	if err != nil {
 		return err
 	}
 	call := svc.Projects.Locations.Batches.Create(parent, body).BatchId(args[0]).Context(ctx)
-	if flagDPBatchRequestID != "" {
-		call = call.RequestId(flagDPBatchRequestID)
+	if s.flagDPBatchRequestID != "" {
+		call = call.RequestId(s.flagDPBatchRequestID)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("submitting batch: %w", err)
 	}
-	fmt.Printf("Submit request issued for batch [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDPBatchFormat)
+	fmt.Fprintf(s.inv.stdout, "Submit request issued for batch [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDPBatchFormat)
 }
 
-func runDPBatchWait(cmd *cobra.Command, args []string) error {
-	name, err := dpBatchName(args[0])
+func (s *dataprocCmds) runDPBatchWait(cmd *cobra.Command, args []string) error {
+	name, err := s.dpBatchName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), flagDPBatchWaitTO)
+	ctx, cancel := context.WithTimeout(cmd.Context(), s.flagDPBatchWaitTO)
 	defer cancel()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPBatchRegion)
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPBatchRegion)
 	if err != nil {
 		return err
 	}
@@ -235,8 +194,8 @@ func runDPBatchWait(cmd *cobra.Command, args []string) error {
 		}
 		switch batch.State {
 		case "SUCCEEDED":
-			fmt.Printf("Batch [%s] succeeded.\n", args[0])
-			return emitFormatted(batch, flagDPBatchFormat)
+			fmt.Fprintf(s.inv.stdout, "Batch [%s] succeeded.\n", args[0])
+			return emitFormattedTo(s.inv.stdout, batch, s.flagDPBatchFormat)
 		case "FAILED", "CANCELLED":
 			return fmt.Errorf("batch [%s] ended in state %s", args[0], batch.State)
 		}

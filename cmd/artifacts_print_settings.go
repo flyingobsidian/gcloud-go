@@ -9,75 +9,31 @@ import (
 	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
-	"github.com/flyingobsidian/gcloud-go/internal/config"
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
 
 const artifactRegistryExtensionVersion = "2.2.0"
 
-var (
-	flagArtPrintLocation   string
-	flagArtPrintRepository string
-	flagArtPrintJSONKey    string
-	flagArtPrintNpmScope   string
-)
-
-var artifactsPrintSettingsCmd = &cobra.Command{
-	Use:   "print-settings",
-	Short: "Print snippets to add to native tools settings files",
-	Long: `The snippets provide a credentials placeholder and configurations to allow
-native tools to interact with Artifact Registry repositories.`,
-}
-
-var artifactsPrintSettingsGradleCmd = &cobra.Command{
-	Use:   "gradle",
-	Short: "Print a snippet to add a repository to the Gradle build.gradle file",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsPrintSettingsGradle,
-}
-
-var artifactsPrintSettingsMvnCmd = &cobra.Command{
-	Use:   "mvn",
-	Short: "Print a snippet to add a Maven repository to the pom.xml file",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsPrintSettingsMvn,
-}
-
-var artifactsPrintSettingsNpmCmd = &cobra.Command{
-	Use:   "npm",
-	Short: "Print credential settings to add to the .npmrc file",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsPrintSettingsNpm,
-}
-
-var artifactsPrintSettingsPythonCmd = &cobra.Command{
-	Use:   "python",
-	Short: "Print credential settings to add to the .pypirc and pip.conf files",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsPrintSettingsPython,
-}
-
-func init() {
+func (s *artifactsCmds) initArtifactsPrintSettings() {
 	subs := []*cobra.Command{
-		artifactsPrintSettingsGradleCmd,
-		artifactsPrintSettingsMvnCmd,
-		artifactsPrintSettingsNpmCmd,
-		artifactsPrintSettingsPythonCmd,
+		s.artifactsPrintSettingsGradleCmd,
+		s.artifactsPrintSettingsMvnCmd,
+		s.artifactsPrintSettingsNpmCmd,
+		s.artifactsPrintSettingsPythonCmd,
 	}
 	for _, c := range subs {
-		c.Flags().StringVar(&flagArtPrintLocation, "location", "", "Location of the repository")
-		c.Flags().StringVar(&flagArtPrintRepository, "repository", "", "ID of the repository")
-		c.Flags().StringVar(&flagArtPrintJSONKey, "json-key", "", "Path to service account JSON key")
+		c.Flags().StringVar(&s.flagArtPrintLocation, "location", "", "Location of the repository")
+		c.Flags().StringVar(&s.flagArtPrintRepository, "repository", "", "ID of the repository")
+		c.Flags().StringVar(&s.flagArtPrintJSONKey, "json-key", "", "Path to service account JSON key")
 	}
-	artifactsPrintSettingsNpmCmd.Flags().StringVar(&flagArtPrintNpmScope, "scope", "",
+	s.artifactsPrintSettingsNpmCmd.Flags().StringVar(&s.flagArtPrintNpmScope, "scope", "",
 		"Scope to associate with the Artifact Registry registry (must start with '@')")
 
 	for _, c := range subs {
-		artifactsPrintSettingsCmd.AddCommand(c)
+		s.artifactsPrintSettingsCmd.AddCommand(c)
 	}
-	artifactsCmd.AddCommand(artifactsPrintSettingsCmd)
+	s.artifactsCmd.AddCommand(s.artifactsPrintSettingsCmd)
 }
 
 // printSettingsInputs holds the resolved user inputs for a print-settings run.
@@ -88,19 +44,19 @@ type printSettingsInputs struct {
 	jsonKey    string
 }
 
-func resolvePrintSettingsInputs() (*printSettingsInputs, error) {
-	project, err := resolveProject()
+func (s *artifactsCmds) resolvePrintSettingsInputs() (*printSettingsInputs, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return nil, err
 	}
-	location := config.Resolve(flagArtPrintLocation, "CLOUDSDK_ARTIFACTS_LOCATION", "")
+	location := s.inv.resolve(s.flagArtPrintLocation, "CLOUDSDK_ARTIFACTS_LOCATION", "")
 	if location == "" {
 		return nil, fmt.Errorf("Failed to find attribute [location]. " +
 			"The attribute can be set in the following ways:\n" +
 			"- provide the argument [--location] on the command line\n" +
 			"- set the environment variable [CLOUDSDK_ARTIFACTS_LOCATION]")
 	}
-	repository := config.Resolve(flagArtPrintRepository, "CLOUDSDK_ARTIFACTS_REPOSITORY", "")
+	repository := s.inv.resolve(s.flagArtPrintRepository, "CLOUDSDK_ARTIFACTS_REPOSITORY", "")
 	if repository == "" {
 		return nil, fmt.Errorf("Failed to find attribute [repository]. " +
 			"The attribute can be set in the following ways:\n" +
@@ -111,14 +67,14 @@ func resolvePrintSettingsInputs() (*printSettingsInputs, error) {
 		project:    project,
 		location:   location,
 		repository: repository,
-		jsonKey:    flagArtPrintJSONKey,
+		jsonKey:    s.flagArtPrintJSONKey,
 	}, nil
 }
 
 // fetchRepository loads the Repository resource and verifies its format matches
 // the expected value (case-insensitive), matching gcloud-python's behaviour.
-func fetchRepository(ctx context.Context, in *printSettingsInputs, expectFormat string) (*artifactregistry.Repository, error) {
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+func (s *artifactsCmds) fetchRepository(ctx context.Context, in *printSettingsInputs, expectFormat string) (*artifactregistry.Repository, error) {
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +93,7 @@ func fetchRepository(ctx context.Context, in *printSettingsInputs, expectFormat 
 // or "" when no service account credentials are available. When jsonKey is set,
 // it is read from the given file; otherwise the active account credentials are
 // consulted and only returned when they are of type service_account.
-func getServiceAccountCreds(jsonKey string) (string, error) {
+func (s *artifactsCmds) getServiceAccountCreds(jsonKey string) (string, error) {
 	if jsonKey != "" {
 		content, err := os.ReadFile(jsonKey)
 		if err != nil {
@@ -150,9 +106,9 @@ func getServiceAccountCreds(jsonKey string) (string, error) {
 		return base64.StdEncoding.EncodeToString(content), nil
 	}
 
-	account := flagAccount
+	account := s.inv.flags.account
 	if account == "" {
-		props, err := config.Load()
+		props, err := s.inv.properties()
 		if err == nil {
 			account = props.Core.Account
 		}
@@ -160,7 +116,7 @@ func getServiceAccountCreds(jsonKey string) (string, error) {
 	if account == "" {
 		return "", nil
 	}
-	store, err := auth.NewStore()
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return "", nil
 	}
@@ -180,21 +136,21 @@ func getServiceAccountCreds(jsonKey string) (string, error) {
 
 // --- gradle ---
 
-func runArtifactsPrintSettingsGradle(cmd *cobra.Command, args []string) error {
-	in, err := resolvePrintSettingsInputs()
+func (s *artifactsCmds) runArtifactsPrintSettingsGradle(cmd *cobra.Command, args []string) error {
+	in, err := s.resolvePrintSettingsInputs()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	repo, err := fetchRepository(ctx, in, "MAVEN")
+	ctx := cmd.Context()
+	repo, err := s.fetchRepository(ctx, in, "MAVEN")
 	if err != nil {
 		return err
 	}
-	saCreds, err := getServiceAccountCreds(in.jsonKey)
+	saCreds, err := s.getServiceAccountCreds(in.jsonKey)
 	if err != nil {
 		return err
 	}
-	fmt.Print(renderGradleSnippet(in, repo.MavenConfig, saCreds))
+	fmt.Fprint(s.inv.stdout, renderGradleSnippet(in, repo.MavenConfig, saCreds))
 	return nil
 }
 
@@ -236,21 +192,21 @@ func selectGradleTemplate(cfg *artifactregistry.MavenRepositoryConfig, saCreds s
 
 // --- mvn ---
 
-func runArtifactsPrintSettingsMvn(cmd *cobra.Command, args []string) error {
-	in, err := resolvePrintSettingsInputs()
+func (s *artifactsCmds) runArtifactsPrintSettingsMvn(cmd *cobra.Command, args []string) error {
+	in, err := s.resolvePrintSettingsInputs()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	repo, err := fetchRepository(ctx, in, "MAVEN")
+	ctx := cmd.Context()
+	repo, err := s.fetchRepository(ctx, in, "MAVEN")
 	if err != nil {
 		return err
 	}
-	saCreds, err := getServiceAccountCreds(in.jsonKey)
+	saCreds, err := s.getServiceAccountCreds(in.jsonKey)
 	if err != nil {
 		return err
 	}
-	fmt.Print(renderMavenSnippet(in, repo.MavenConfig, saCreds))
+	fmt.Fprint(s.inv.stdout, renderMavenSnippet(in, repo.MavenConfig, saCreds))
 	return nil
 }
 
@@ -296,24 +252,24 @@ func selectMavenTemplate(cfg *artifactregistry.MavenRepositoryConfig, saCreds st
 
 // --- npm ---
 
-func runArtifactsPrintSettingsNpm(cmd *cobra.Command, args []string) error {
-	in, err := resolvePrintSettingsInputs()
+func (s *artifactsCmds) runArtifactsPrintSettingsNpm(cmd *cobra.Command, args []string) error {
+	in, err := s.resolvePrintSettingsInputs()
 	if err != nil {
 		return err
 	}
-	scope := flagArtPrintNpmScope
+	scope := s.flagArtPrintNpmScope
 	if scope != "" && (!strings.HasPrefix(scope, "@") || len(scope) <= 1) {
 		return fmt.Errorf(`Scope name must start with "@" and be longer than 1 character.`)
 	}
-	ctx := context.Background()
-	if _, err := fetchRepository(ctx, in, "NPM"); err != nil {
+	ctx := cmd.Context()
+	if _, err := s.fetchRepository(ctx, in, "NPM"); err != nil {
 		return err
 	}
-	saCreds, err := getServiceAccountCreds(in.jsonKey)
+	saCreds, err := s.getServiceAccountCreds(in.jsonKey)
 	if err != nil {
 		return err
 	}
-	fmt.Print(renderNpmSnippet(in, scope, saCreds))
+	fmt.Fprint(s.inv.stdout, renderNpmSnippet(in, scope, saCreds))
 	return nil
 }
 
@@ -339,20 +295,20 @@ func renderNpmSnippet(in *printSettingsInputs, scope, saCreds string) string {
 
 // --- python ---
 
-func runArtifactsPrintSettingsPython(cmd *cobra.Command, args []string) error {
-	in, err := resolvePrintSettingsInputs()
+func (s *artifactsCmds) runArtifactsPrintSettingsPython(cmd *cobra.Command, args []string) error {
+	in, err := s.resolvePrintSettingsInputs()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if _, err := fetchRepository(ctx, in, "PYTHON"); err != nil {
+	ctx := cmd.Context()
+	if _, err := s.fetchRepository(ctx, in, "PYTHON"); err != nil {
 		return err
 	}
-	saCreds, err := getServiceAccountCreds(in.jsonKey)
+	saCreds, err := s.getServiceAccountCreds(in.jsonKey)
 	if err != nil {
 		return err
 	}
-	fmt.Print(renderPythonSnippet(in, saCreds))
+	fmt.Fprint(s.inv.stdout, renderPythonSnippet(in, saCreds))
 	return nil
 }
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	iap "google.golang.org/api/iap/v1"
 )
@@ -18,58 +17,25 @@ import (
 
 const iapTcpIamKind = "iap tcp iam resource"
 
-var (
-	iapTcpGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy", Short: "Get IAM policy for an IAP TCP IAM resource",
-		Args: cobra.NoArgs, RunE: runIapTcpGetIam,
-	}
-	iapTcpSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy POLICY_FILE", Short: "Set the IAM policy for an IAP TCP IAM resource",
-		Args: cobra.ExactArgs(1), RunE: runIapTcpSetIam,
-	}
-	iapTcpAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding", Short: "Add IAM policy binding to an IAP TCP IAM resource",
-		Args: cobra.NoArgs, RunE: runIapTcpAddIam,
-	}
-	iapTcpRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding", Short: "Remove IAM policy binding from an IAP TCP IAM resource",
-		Args: cobra.NoArgs, RunE: runIapTcpRemoveIam,
-	}
-)
-
-var (
-	flagIapTcpResourceType string
-	flagIapTcpService      string
-	flagIapTcpInstance     string
-	flagIapTcpRegion       string
-	flagIapTcpFormat       string
-	flagIapTcpIamMember    string
-	flagIapTcpIamRole      string
-	flagIapTcpIamCondExpr  string
-	flagIapTcpIamCondT     string
-	flagIapTcpIamCondD     string
-	flagIapTcpIamAllCond   bool
-)
-
-func init() {
-	all := []*cobra.Command{iapTcpGetIamCmd, iapTcpSetIamCmd, iapTcpAddIamCmd, iapTcpRemoveIamCmd}
+func (s *iapCmds) initIapTcpIam() {
+	all := []*cobra.Command{s.iapTcpGetIamCmd, s.iapTcpSetIamCmd, s.iapTcpAddIamCmd, s.iapTcpRemoveIamCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagIapTcpResourceType, "resource-type", "",
+		c.Flags().StringVar(&s.flagIapTcpResourceType, "resource-type", "",
 			"Resource type of the IAP resource. One of: cloud-run")
-		c.Flags().StringVar(&flagIapTcpService, "service", "", "Service name")
-		c.Flags().StringVar(&flagIapTcpInstance, "instance", "", "Instance ID")
+		c.Flags().StringVar(&s.flagIapTcpService, "service", "", "Service name")
+		c.Flags().StringVar(&s.flagIapTcpInstance, "instance", "", "Instance ID")
 		c.MarkFlagsMutuallyExclusive("service", "instance")
-		c.Flags().StringVar(&flagIapTcpRegion, "region", "",
+		c.Flags().StringVar(&s.flagIapTcpRegion, "region", "",
 			"Region name. Required when --service or --instance is specified for resource-type=cloud-run")
-		c.Flags().StringVar(&flagIapTcpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagIapTcpFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{iapTcpAddIamCmd, iapTcpRemoveIamCmd} {
-		iapIamMemberFlags(c, &flagIapTcpIamMember, &flagIapTcpIamRole,
-			&flagIapTcpIamCondExpr, &flagIapTcpIamCondT, &flagIapTcpIamCondD)
+	for _, c := range []*cobra.Command{s.iapTcpAddIamCmd, s.iapTcpRemoveIamCmd} {
+		iapIamMemberFlags(c, &s.flagIapTcpIamMember, &s.flagIapTcpIamRole,
+			&s.flagIapTcpIamCondExpr, &s.flagIapTcpIamCondT, &s.flagIapTcpIamCondD)
 	}
-	iapTcpRemoveIamCmd.Flags().BoolVar(&flagIapTcpIamAllCond, "all", false,
+	s.iapTcpRemoveIamCmd.Flags().BoolVar(&s.flagIapTcpIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
-	iapTcpCmd.AddCommand(all...)
+	s.iapTcpCmd.AddCommand(all...)
 }
 
 // iapTcpIamValidate checks the resource flags as ParseIapTcpIamResource does.
@@ -106,15 +72,15 @@ func iapTcpIamResourceName(projectNumber, service, instance, region string) stri
 
 // iapTcpIamResource validates the flags, resolves the project number and
 // returns the IAP service with the resource name.
-func iapTcpIamResource(ctx context.Context) (*iap.Service, string, error) {
-	if err := iapTcpIamValidate(flagIapTcpResourceType, flagIapTcpService, flagIapTcpInstance, flagIapTcpRegion); err != nil {
+func (s *iapCmds) iapTcpIamResource(ctx context.Context) (*iap.Service, string, error) {
+	if err := iapTcpIamValidate(s.flagIapTcpResourceType, s.flagIapTcpService, s.flagIapTcpInstance, s.flagIapTcpRegion); err != nil {
 		return nil, "", err
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return nil, "", err
 	}
-	crm, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	crm, err := s.inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -122,12 +88,12 @@ func iapTcpIamResource(ctx context.Context) (*iap.Service, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("getting project %s: %w", project, err)
 	}
-	svc, err := gcp.IAPService(ctx, flagAccount)
+	svc, err := s.inv.clients().IAP(ctx)
 	if err != nil {
 		return nil, "", err
 	}
 	number := strings.TrimPrefix(proj.Name, "projects/")
-	return svc, iapTcpIamResourceName(number, flagIapTcpService, flagIapTcpInstance, flagIapTcpRegion), nil
+	return svc, iapTcpIamResourceName(number, s.flagIapTcpService, s.flagIapTcpInstance, s.flagIapTcpRegion), nil
 }
 
 func iapTcpGetPolicy(ctx context.Context, svc *iap.Service, name string) (*iap.Policy, error) {
@@ -140,19 +106,19 @@ func iapTcpGetPolicy(ctx context.Context, svc *iap.Service, name string) (*iap.P
 	return policy, nil
 }
 
-func iapTcpSetPolicy(ctx context.Context, svc *iap.Service, name string, policy *iap.Policy) (*iap.Policy, error) {
+func (s *iapCmds) iapTcpSetPolicy(ctx context.Context, svc *iap.Service, name string, policy *iap.Policy) (*iap.Policy, error) {
 	policy.Version = 3
 	updated, err := svc.V1.SetIamPolicy(name, &iap.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("setting IAM policy: %w", err)
 	}
-	iapUpdatedIam(fmt.Sprintf("%s [%s]", iapTcpIamKind, name))
+	s.iapUpdatedIam(fmt.Sprintf("%s [%s]", iapTcpIamKind, name))
 	return updated, nil
 }
 
-func runIapTcpGetIam(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, name, err := iapTcpIamResource(ctx)
+func (s *iapCmds) runIapTcpGetIam(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, name, err := s.iapTcpIamResource(ctx)
 	if err != nil {
 		return err
 	}
@@ -160,32 +126,32 @@ func runIapTcpGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(policy, flagIapTcpFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagIapTcpFormat)
 }
 
-func runIapTcpSetIam(cmd *cobra.Command, args []string) error {
+func (s *iapCmds) runIapTcpSetIam(cmd *cobra.Command, args []string) error {
 	policy := &iap.Policy{}
 	if err := loadYAMLOrJSONInto(args[0], policy); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, name, err := iapTcpIamResource(ctx)
+	ctx := cmd.Context()
+	svc, name, err := s.iapTcpIamResource(ctx)
 	if err != nil {
 		return err
 	}
-	updated, err := iapTcpSetPolicy(ctx, svc, name, policy)
+	updated, err := s.iapTcpSetPolicy(ctx, svc, name, policy)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(updated, flagIapTcpFormat)
+	return emitFormattedTo(s.inv.stdout, updated, s.flagIapTcpFormat)
 }
 
 // Python's add/remove-iam-policy-binding return nothing, so only the
 // "Updated IAM policy" status line is printed unless --format is given.
 
-func runIapTcpAddIam(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, name, err := iapTcpIamResource(ctx)
+func (s *iapCmds) runIapTcpAddIam(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, name, err := s.iapTcpIamResource(ctx)
 	if err != nil {
 		return err
 	}
@@ -193,21 +159,21 @@ func runIapTcpAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	iapIamAddBinding(policy, flagIapTcpIamRole, flagIapTcpIamMember,
-		iapIamBuildCondition(flagIapTcpIamCondExpr, flagIapTcpIamCondT, flagIapTcpIamCondD))
-	updated, err := iapTcpSetPolicy(ctx, svc, name, policy)
+	iapIamAddBinding(policy, s.flagIapTcpIamRole, s.flagIapTcpIamMember,
+		iapIamBuildCondition(s.flagIapTcpIamCondExpr, s.flagIapTcpIamCondT, s.flagIapTcpIamCondD))
+	updated, err := s.iapTcpSetPolicy(ctx, svc, name, policy)
 	if err != nil {
 		return err
 	}
-	if flagIapTcpFormat != "" {
-		return emitFormatted(updated, flagIapTcpFormat)
+	if s.flagIapTcpFormat != "" {
+		return emitFormattedTo(s.inv.stdout, updated, s.flagIapTcpFormat)
 	}
 	return nil
 }
 
-func runIapTcpRemoveIam(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, name, err := iapTcpIamResource(ctx)
+func (s *iapCmds) runIapTcpRemoveIam(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, name, err := s.iapTcpIamResource(ctx)
 	if err != nil {
 		return err
 	}
@@ -215,17 +181,17 @@ func runIapTcpRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if !iapIamRemoveBinding(policy, flagIapTcpIamRole, flagIapTcpIamMember,
-		iapIamBuildCondition(flagIapTcpIamCondExpr, flagIapTcpIamCondT, flagIapTcpIamCondD), flagIapTcpIamAllCond) {
+	if !iapIamRemoveBinding(policy, s.flagIapTcpIamRole, s.flagIapTcpIamMember,
+		iapIamBuildCondition(s.flagIapTcpIamCondExpr, s.flagIapTcpIamCondT, s.flagIapTcpIamCondD), s.flagIapTcpIamAllCond) {
 		return fmt.Errorf("policy binding not found for role [%s] and member [%s]",
-			flagIapTcpIamRole, flagIapTcpIamMember)
+			s.flagIapTcpIamRole, s.flagIapTcpIamMember)
 	}
-	updated, err := iapTcpSetPolicy(ctx, svc, name, policy)
+	updated, err := s.iapTcpSetPolicy(ctx, svc, name, policy)
 	if err != nil {
 		return err
 	}
-	if flagIapTcpFormat != "" {
-		return emitFormatted(updated, flagIapTcpFormat)
+	if s.flagIapTcpFormat != "" {
+		return emitFormattedTo(s.inv.stdout, updated, s.flagIapTcpFormat)
 	}
 	return nil
 }

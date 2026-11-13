@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	agentidentityalpha "google.golang.org/api/agentidentity/v1alpha"
 	"google.golang.org/api/googleapi"
@@ -29,82 +28,42 @@ import (
 // IAM spec in the reference YAML sets enable_condition: false, so the binding
 // commands take no condition flags.
 
-var (
-	flagAIAuthzLocation     string
-	flagAIAuthzAuthProvider string
-	flagAIAuthzEndpointMode string
-	flagAIAuthzMember       string
-	flagAIAuthzRole         string
-	flagAIAuthzPermissions  []string
-	flagAIAuthzLimit        int64
-	flagAIAuthzPageSize     int64
-	flagAIAuthzSortBy       []string
-)
-
 const (
 	aiEndpointModeGlobal            = "global"
 	aiEndpointModeRegional          = "regional"
 	aiEndpointModeRegionalPreferred = "regional-preferred"
 )
 
-var agentIdentityAuthorizationsCmd = &cobra.Command{
-	Use:   "authorizations",
-	Short: "Manage Authorization resources",
-}
-
-var (
-	aiAuthzGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy AUTHORIZATION", Short: "Get the IAM policy for an Agent Identity authorization",
-		Args: cobra.ExactArgs(1), RunE: runAIAuthzGetIam,
-	}
-	aiAuthzSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy AUTHORIZATION POLICY_FILE", Short: "Set the IAM policy for an Agent Identity authorization",
-		Args: cobra.ExactArgs(2), RunE: runAIAuthzSetIam,
-	}
-	aiAuthzAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding AUTHORIZATION", Short: "Add IAM policy binding to an Agent Identity authorization",
-		Args: cobra.ExactArgs(1), RunE: runAIAuthzAddIam,
-	}
-	aiAuthzRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding AUTHORIZATION", Short: "Remove IAM policy binding from an Agent Identity authorization",
-		Args: cobra.ExactArgs(1), RunE: runAIAuthzRemoveIam,
-	}
-	aiAuthzTestIamCmd = &cobra.Command{
-		Use: "test-iam-permissions AUTHORIZATION", Short: "Test IAM permissions for an Agent Identity authorization",
-		Args: cobra.ExactArgs(1), RunE: runAIAuthzTestIam,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{aiAuthzGetIamCmd, aiAuthzSetIamCmd, aiAuthzAddIamCmd, aiAuthzRemoveIamCmd, aiAuthzTestIamCmd}
+func (g *agentIdentityCmds) initAgentIdentityAuthorizations() {
+	all := []*cobra.Command{g.aiAuthzGetIamCmd, g.aiAuthzSetIamCmd, g.aiAuthzAddIamCmd, g.aiAuthzRemoveIamCmd, g.aiAuthzTestIamCmd}
 	for _, c := range all {
 		// --location and --auth-provider are resource-argument fallthroughs:
 		// they are only needed when AUTHORIZATION is not a full resource name.
-		c.Flags().StringVar(&flagAIAuthzLocation, "location", "", "The location id of the authorization resource")
-		c.Flags().StringVar(&flagAIAuthzAuthProvider, "auth-provider", "", "The authProvider id of the authorization resource")
-		c.Flags().StringVar(&flagAIAuthzEndpointMode, "endpoint-mode", "",
+		c.Flags().StringVar(&g.flagAIAuthzLocation, "location", "", "The location id of the authorization resource")
+		c.Flags().StringVar(&g.flagAIAuthzAuthProvider, "auth-provider", "", "The authProvider id of the authorization resource")
+		c.Flags().StringVar(&g.flagAIAuthzEndpointMode, "endpoint-mode", "",
 			"Endpoint mode: global (default), regional, or regional-preferred")
 	}
 
 	// get-iam-policy is a ListCommand in gcloud-python. The policy is a single
 	// resource, so --limit/--page-size/--sort-by are accepted for parity but
 	// do not change the output.
-	aiAuthzGetIamCmd.Flags().Int64Var(&flagAIAuthzLimit, "limit", 0, "Maximum number of resources to list")
-	aiAuthzGetIamCmd.Flags().Int64Var(&flagAIAuthzPageSize, "page-size", 0, "Number of resources per page")
-	aiAuthzGetIamCmd.Flags().StringSliceVar(&flagAIAuthzSortBy, "sort-by", nil, "Comma-separated list of resource field keys to sort by")
+	g.aiAuthzGetIamCmd.Flags().Int64Var(&g.flagAIAuthzLimit, "limit", 0, "Maximum number of resources to list")
+	g.aiAuthzGetIamCmd.Flags().Int64Var(&g.flagAIAuthzPageSize, "page-size", 0, "Number of resources per page")
+	g.aiAuthzGetIamCmd.Flags().StringSliceVar(&g.flagAIAuthzSortBy, "sort-by", nil, "Comma-separated list of resource field keys to sort by")
 
-	for _, c := range []*cobra.Command{aiAuthzAddIamCmd, aiAuthzRemoveIamCmd} {
-		c.Flags().StringVar(&flagAIAuthzMember, "member", "", "The principal to add/remove the binding for (required)")
-		c.Flags().StringVar(&flagAIAuthzRole, "role", "", "The role to add/remove the principal from (required)")
+	for _, c := range []*cobra.Command{g.aiAuthzAddIamCmd, g.aiAuthzRemoveIamCmd} {
+		c.Flags().StringVar(&g.flagAIAuthzMember, "member", "", "The principal to add/remove the binding for (required)")
+		c.Flags().StringVar(&g.flagAIAuthzRole, "role", "", "The role to add/remove the principal from (required)")
 		_ = c.MarkFlagRequired("member")
 		_ = c.MarkFlagRequired("role")
 	}
 
-	aiAuthzTestIamCmd.Flags().StringSliceVar(&flagAIAuthzPermissions, "permissions", nil, "The permissions to test (required)")
-	_ = aiAuthzTestIamCmd.MarkFlagRequired("permissions")
+	g.aiAuthzTestIamCmd.Flags().StringSliceVar(&g.flagAIAuthzPermissions, "permissions", nil, "The permissions to test (required)")
+	_ = g.aiAuthzTestIamCmd.MarkFlagRequired("permissions")
 
-	agentIdentityAuthorizationsCmd.AddCommand(all...)
-	agentIdentityAuthProvidersCmd.AddCommand(agentIdentityAuthorizationsCmd)
+	g.agentIdentityAuthorizationsCmd.AddCommand(all...)
+	g.agentIdentityAuthProvidersCmd.AddCommand(g.agentIdentityAuthorizationsCmd)
 }
 
 // --- helpers ---
@@ -113,7 +72,7 @@ func init() {
 // resource name. A full `projects/.../authorizations/ID` name is used as-is;
 // otherwise --location and --auth-provider (and the active project) fill in
 // the parent.
-func aiAuthorizationName(arg string) (string, error) {
+func (g *agentIdentityCmds) aiAuthorizationName(arg string) (string, error) {
 	if strings.HasPrefix(arg, "projects/") {
 		parts := strings.Split(arg, "/")
 		if len(parts) != 8 || parts[2] != "locations" || parts[4] != "authProviders" || parts[6] != "authorizations" {
@@ -121,18 +80,18 @@ func aiAuthorizationName(arg string) (string, error) {
 		}
 		return arg, nil
 	}
-	if flagAIAuthzLocation == "" {
+	if g.flagAIAuthzLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	if flagAIAuthzAuthProvider == "" {
+	if g.flagAIAuthzAuthProvider == "" {
 		return "", fmt.Errorf("--auth-provider is required")
 	}
-	project, err := resolveProject()
+	project, err := g.inv.project()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("projects/%s/locations/%s/authProviders/%s/authorizations/%s",
-		project, flagAIAuthzLocation, flagAIAuthzAuthProvider, arg), nil
+		project, g.flagAIAuthzLocation, g.flagAIAuthzAuthProvider, arg), nil
 }
 
 // aiAuthzEndpoint returns the base URL override for the given endpoint mode
@@ -156,16 +115,16 @@ func aiAuthzEndpoint(mode, location string) (string, error) {
 
 // aiAuthzService resolves the authorization name and returns a v1alpha client
 // pointed at the endpoint selected by --endpoint-mode.
-func aiAuthzService(ctx context.Context, arg string) (*agentidentityalpha.Service, string, error) {
-	name, err := aiAuthorizationName(arg)
+func (g *agentIdentityCmds) aiAuthzService(ctx context.Context, arg string) (*agentidentityalpha.Service, string, error) {
+	name, err := g.aiAuthorizationName(arg)
 	if err != nil {
 		return nil, "", err
 	}
-	endpoint, err := aiAuthzEndpoint(flagAIAuthzEndpointMode, strings.Split(name, "/")[3])
+	endpoint, err := aiAuthzEndpoint(g.flagAIAuthzEndpointMode, strings.Split(name, "/")[3])
 	if err != nil {
 		return nil, "", err
 	}
-	svc, err := gcp.AgentIdentityAlphaService(ctx, flagAccount, endpoint)
+	svc, err := g.inv.clients().AgentIdentityAlpha(ctx, endpoint)
 	if err != nil {
 		return nil, "", err
 	}
@@ -249,25 +208,25 @@ func aiAuthzPolicyUpdateMask(policyFile string) (string, error) {
 
 // aiAuthzLintHint prints gcloud-python's lint-condition hint when a policy
 // write is rejected with HTTP 400.
-func aiAuthzLintHint(err error, binding bool) {
+func (g *agentIdentityCmds) aiAuthzLintHint(err error, binding bool) {
 	var gerr *googleapi.Error
 	if !errors.As(err, &gerr) || gerr.Code != http.StatusBadRequest {
 		return
 	}
 	if binding {
-		fmt.Fprintln(os.Stderr, `ERROR: Policy modification failed. For a binding with condition, run "gcloud alpha iam policies lint-condition" to identify issues in condition.`)
+		fmt.Fprintln(g.inv.stderr, `ERROR: Policy modification failed. For a binding with condition, run "gcloud alpha iam policies lint-condition" to identify issues in condition.`)
 		return
 	}
-	fmt.Fprintln(os.Stderr, `ERROR: Policy modification failed. For bindings with conditions, run "gcloud alpha iam policies lint-condition" to identify issues in conditions.`)
+	fmt.Fprintln(g.inv.stderr, `ERROR: Policy modification failed. For bindings with conditions, run "gcloud alpha iam policies lint-condition" to identify issues in conditions.`)
 }
 
-func aiAuthzLogSetIamPolicy(name string) {
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for authorization [%s].\n", path.Base(name))
+func (g *agentIdentityCmds) aiAuthzLogSetIamPolicy(name string) {
+	fmt.Fprintf(g.inv.stderr, "Updated IAM policy for authorization [%s].\n", path.Base(name))
 }
 
 // --- implementations ---
 
-func runAIAuthzGetIam(cmd *cobra.Command, args []string) error {
+func (g *agentIdentityCmds) runAIAuthzGetIam(cmd *cobra.Command, args []string) error {
 	for _, f := range []string{"limit", "page-size"} {
 		if cmd.Flags().Changed(f) {
 			if v, _ := cmd.Flags().GetInt64(f); v < 1 {
@@ -275,8 +234,8 @@ func runAIAuthzGetIam(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
-	ctx := context.Background()
-	svc, name, err := aiAuthzService(ctx, args[0])
+	ctx := cmd.Context()
+	svc, name, err := g.aiAuthzService(ctx, args[0])
 	if err != nil {
 		return err
 	}
@@ -284,10 +243,10 @@ func runAIAuthzGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitWithPipeline(pol)
+	return g.inv.emitWithPipeline(pol)
 }
 
-func runAIAuthzSetIam(cmd *cobra.Command, args []string) error {
+func (g *agentIdentityCmds) runAIAuthzSetIam(cmd *cobra.Command, args []string) error {
 	pol := &agentidentityalpha.Policy{}
 	if err := loadYAMLOrJSONInto(args[1], pol); err != nil {
 		return err
@@ -296,24 +255,24 @@ func runAIAuthzSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, name, err := aiAuthzService(ctx, args[0])
+	ctx := cmd.Context()
+	svc, name, err := g.aiAuthzService(ctx, args[0])
 	if err != nil {
 		return err
 	}
 	out, err := svc.Projects.Locations.AuthProviders.Authorizations.SetIamPolicy(name,
 		&agentidentityalpha.SetIamPolicyRequest{Policy: pol, UpdateMask: mask}).Context(ctx).Do()
 	if err != nil {
-		aiAuthzLintHint(err, false)
+		g.aiAuthzLintHint(err, false)
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	aiAuthzLogSetIamPolicy(name)
-	return emitFormatted(out, flagFormat)
+	g.aiAuthzLogSetIamPolicy(name)
+	return emitFormattedTo(g.inv.stdout, out, g.inv.flags.format)
 }
 
-func runAIAuthzAddIam(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, name, err := aiAuthzService(ctx, args[0])
+func (g *agentIdentityCmds) runAIAuthzAddIam(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, name, err := g.aiAuthzService(ctx, args[0])
 	if err != nil {
 		return err
 	}
@@ -322,19 +281,19 @@ func runAIAuthzAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	aiAuthzAddBinding(pol, flagAIAuthzRole, flagAIAuthzMember)
+	aiAuthzAddBinding(pol, g.flagAIAuthzRole, g.flagAIAuthzMember)
 	out, err := authz.SetIamPolicy(name, &agentidentityalpha.SetIamPolicyRequest{Policy: pol}).Context(ctx).Do()
 	if err != nil {
-		aiAuthzLintHint(err, true)
+		g.aiAuthzLintHint(err, true)
 		return fmt.Errorf("adding IAM binding: %w", err)
 	}
-	aiAuthzLogSetIamPolicy(name)
-	return emitFormatted(out, flagFormat)
+	g.aiAuthzLogSetIamPolicy(name)
+	return emitFormattedTo(g.inv.stdout, out, g.inv.flags.format)
 }
 
-func runAIAuthzRemoveIam(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, name, err := aiAuthzService(ctx, args[0])
+func (g *agentIdentityCmds) runAIAuthzRemoveIam(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, name, err := g.aiAuthzService(ctx, args[0])
 	if err != nil {
 		return err
 	}
@@ -343,27 +302,27 @@ func runAIAuthzRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if err := aiAuthzRemoveBinding(pol, flagAIAuthzRole, flagAIAuthzMember); err != nil {
+	if err := aiAuthzRemoveBinding(pol, g.flagAIAuthzRole, g.flagAIAuthzMember); err != nil {
 		return err
 	}
 	out, err := authz.SetIamPolicy(name, &agentidentityalpha.SetIamPolicyRequest{Policy: pol}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("removing IAM binding: %w", err)
 	}
-	aiAuthzLogSetIamPolicy(name)
-	return emitFormatted(out, flagFormat)
+	g.aiAuthzLogSetIamPolicy(name)
+	return emitFormattedTo(g.inv.stdout, out, g.inv.flags.format)
 }
 
-func runAIAuthzTestIam(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, name, err := aiAuthzService(ctx, args[0])
+func (g *agentIdentityCmds) runAIAuthzTestIam(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, name, err := g.aiAuthzService(ctx, args[0])
 	if err != nil {
 		return err
 	}
 	resp, err := svc.Projects.Locations.AuthProviders.Authorizations.TestIamPermissions(name,
-		&agentidentityalpha.TestIamPermissionsRequest{Permissions: flagAIAuthzPermissions}).Context(ctx).Do()
+		&agentidentityalpha.TestIamPermissionsRequest{Permissions: g.flagAIAuthzPermissions}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("testing IAM permissions: %w", err)
 	}
-	return emitFormatted(resp, flagFormat)
+	return emitFormattedTo(g.inv.stdout, resp, g.inv.flags.format)
 }

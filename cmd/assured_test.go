@@ -11,41 +11,44 @@ import (
 )
 
 func TestAssuredParent(t *testing.T) {
-	flagAssuredOrg = "123"
-	flagAssuredLocation = "us-central1"
-	if got := assuredParent(); got != "organizations/123/locations/us-central1" {
+	grp := newAssuredCmds(legacyTestInvocation())
+	grp.flagAssuredOrg = "123"
+	grp.flagAssuredLocation = "us-central1"
+	if got := grp.assuredParent(); got != "organizations/123/locations/us-central1" {
 		t.Errorf("assuredParent = %q", got)
 	}
-	flagAssuredOrg = "organizations/456"
-	if got := assuredParent(); got != "organizations/456/locations/us-central1" {
+	grp.flagAssuredOrg = "organizations/456"
+	if got := grp.assuredParent(); got != "organizations/456/locations/us-central1" {
 		t.Errorf("assuredParent with prefix = %q", got)
 	}
-	flagAssuredOrg = ""
-	flagAssuredLocation = ""
+	grp.flagAssuredOrg = ""
+	grp.flagAssuredLocation = ""
 }
 
 func TestAssuredWorkloadName(t *testing.T) {
-	flagAssuredOrg = "123"
-	flagAssuredLocation = "us-central1"
-	t.Cleanup(func() { flagAssuredOrg = ""; flagAssuredLocation = "" })
+	grp := newAssuredCmds(legacyTestInvocation())
+	grp.flagAssuredOrg = "123"
+	grp.flagAssuredLocation = "us-central1"
+	t.Cleanup(func() { grp.flagAssuredOrg = ""; grp.flagAssuredLocation = "" })
 
-	if got := assuredWorkloadName("abc"); got != "organizations/123/locations/us-central1/workloads/abc" {
+	if got := grp.assuredWorkloadName("abc"); got != "organizations/123/locations/us-central1/workloads/abc" {
 		t.Errorf("assuredWorkloadName(abc) = %q", got)
 	}
 	full := "organizations/999/locations/foo/workloads/xyz"
-	if got := assuredWorkloadName(full); got != full {
+	if got := grp.assuredWorkloadName(full); got != full {
 		t.Errorf("passthrough failed: %q", got)
 	}
 }
 
 func TestAssuredOperationRegion(t *testing.T) {
-	flagAssuredLocation = "europe-west2"
-	t.Cleanup(func() { flagAssuredLocation = "" })
+	grp := newAssuredCmds(legacyTestInvocation())
+	grp.flagAssuredLocation = "europe-west2"
+	t.Cleanup(func() { grp.flagAssuredLocation = "" })
 
-	if got := assuredOperationRegion("organizations/1/locations/us-central1/operations/op1"); got != "us-central1" {
+	if got := grp.assuredOperationRegion("organizations/1/locations/us-central1/operations/op1"); got != "us-central1" {
 		t.Errorf("assuredOperationRegion(full) = %q, want us-central1", got)
 	}
-	if got := assuredOperationRegion("op1"); got != "europe-west2" {
+	if got := grp.assuredOperationRegion("op1"); got != "europe-west2" {
 		t.Errorf("assuredOperationRegion(id) = %q, want europe-west2", got)
 	}
 }
@@ -53,6 +56,7 @@ func TestAssuredOperationRegion(t *testing.T) {
 // Verifies the v1 client targets REGION-assuredworkloads.googleapis.com and
 // logs "Using endpoint [...]" to stderr, as gcloud-python does.
 func TestAssuredV1ServiceRegionalEndpoint(t *testing.T) {
+	grp := newAssuredCmds(legacyTestInvocation())
 	creds := filepath.Join(t.TempDir(), "creds.json")
 	if err := os.WriteFile(creds, []byte(`{"type":"authorized_user","client_id":"c","client_secret":"s","refresh_token":"r"}`), 0o600); err != nil {
 		t.Fatal(err)
@@ -69,7 +73,7 @@ func TestAssuredV1ServiceRegionalEndpoint(t *testing.T) {
 		var svc *aw.Service
 		stderr := captureAssuredStderr(t, func() {
 			var err error
-			svc, err = assuredV1Service(context.Background(), c.region)
+			svc, err = grp.assuredV1Service(context.Background(), c.region)
 			if err != nil {
 				t.Fatalf("assuredV1Service(%q): %v", c.region, err)
 			}

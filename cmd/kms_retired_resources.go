@@ -1,51 +1,24 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 )
 
 // --- gcloud kms retired-resources (#1110) ---
 
-var kmsRetiredCmd = &cobra.Command{
-	Use:   "retired-resources",
-	Short: "Manage Cloud KMS retired resources",
-}
-
-var (
-	flagKmsRRLocation string
-	flagKmsRRFormat   string
-	flagKmsRRPageSize int64
-)
-
-var kmsRRDescribeCmd = &cobra.Command{
-	Use:   "describe RESOURCE",
-	Short: "Describe a retired resource",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsRRDescribe,
-}
-
-var kmsRRListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List retired resources in a location",
-	Args:  cobra.NoArgs,
-	RunE:  runKmsRRList,
-}
-
-func init() {
-	for _, c := range []*cobra.Command{kmsRRDescribeCmd, kmsRRListCmd} {
-		c.Flags().StringVar(&flagKmsRRLocation, "location", "", "Location (required)")
-		c.Flags().StringVar(&flagKmsRRFormat, "format", "", "Output format")
+func (s *kmsCmds) initKmsRetiredResources() {
+	for _, c := range []*cobra.Command{s.kmsRRDescribeCmd, s.kmsRRListCmd} {
+		c.Flags().StringVar(&s.flagKmsRRLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagKmsRRFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("location")
 	}
-	kmsRRListCmd.Flags().Int64Var(&flagKmsRRPageSize, "page-size", 0, "Page size")
+	s.kmsRRListCmd.Flags().Int64Var(&s.flagKmsRRPageSize, "page-size", 0, "Page size")
 
-	kmsRetiredCmd.AddCommand(kmsRRDescribeCmd, kmsRRListCmd)
-	kmsCmd.AddCommand(kmsRetiredCmd)
+	s.kmsRetiredCmd.AddCommand(s.kmsRRDescribeCmd, s.kmsRRListCmd)
+	s.kmsCmd.AddCommand(s.kmsRetiredCmd)
 }
 
 func kmsRRName(project, location, raw string) string {
@@ -53,41 +26,41 @@ func kmsRRName(project, location, raw string) string {
 	return kmsFullName(parent, raw)
 }
 
-func runKmsRRDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsRRDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsRRName(project, flagKmsRRLocation, args[0])
+	name := kmsRRName(project, s.flagKmsRRLocation, args[0])
 	out, err := svc.Projects.Locations.RetiredResources.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing retired resource: %w", err)
 	}
-	return emitFormatted(out, flagKmsRRFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsRRFormat)
 }
 
-func runKmsRRList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsRRList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	parent := kmsLocationParent(project, flagKmsRRLocation)
+	parent := kmsLocationParent(project, s.flagKmsRRLocation)
 	var all []*cloudkms.RetiredResource
 	token := ""
 	for {
 		call := svc.Projects.Locations.RetiredResources.List(parent).Context(ctx)
-		if flagKmsRRPageSize > 0 {
-			call = call.PageSize(flagKmsRRPageSize)
+		if s.flagKmsRRPageSize > 0 {
+			call = call.PageSize(s.flagKmsRRPageSize)
 		}
 		if token != "" {
 			call = call.PageToken(token)
@@ -102,5 +75,5 @@ func runKmsRRList(cmd *cobra.Command, args []string) error {
 		}
 		token = resp.NextPageToken
 	}
-	return emitFormatted(all, flagKmsRRFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagKmsRRFormat)
 }

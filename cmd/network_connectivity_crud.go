@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkconnectivity "google.golang.org/api/networkconnectivity/v1"
 )
@@ -13,6 +12,7 @@ import (
 // connectivity resources. Each resource plugs API service calls in via
 // closures so registerNC* only has to build the cobra subcommands.
 type ncCRUD[T any] struct {
+	s          *networkConnectivityCmds
 	group      string
 	singular   string
 	collection string
@@ -31,52 +31,52 @@ type ncCRUD[T any] struct {
 	secondaryHeader string
 }
 
-func (b *ncCRUD[T]) runCreate(_ *cobra.Command, args []string) error {
+func (b *ncCRUD[T]) runCreate(c *cobra.Command, args []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
 	body := new(T)
-	if err := loadYAMLOrJSONInto(flagNCConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(b.s.flagNCConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := b.createFn(ctx, svc, parent, args[0], body, flagNCRequestID)
+	op, err := b.createFn(ctx, svc, parent, args[0], body, b.s.flagNCRequestID)
 	if err != nil {
 		return fmt.Errorf("creating %s: %w", b.singular, err)
 	}
-	return ncFinishOp(ctx, svc, op, "Create "+b.singular, args[0])
+	return b.s.ncFinishOp(ctx, svc, op, "Create "+b.singular, args[0])
 }
 
-func (b *ncCRUD[T]) runDelete(_ *cobra.Command, args []string) error {
+func (b *ncCRUD[T]) runDelete(c *cobra.Command, args []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
 	name := ncChild(parent, b.collection, args[0])
-	op, err := b.deleteFn(ctx, svc, name, flagNCRequestID)
+	op, err := b.deleteFn(ctx, svc, name, b.s.flagNCRequestID)
 	if err != nil {
 		return fmt.Errorf("deleting %s: %w", b.singular, err)
 	}
-	return ncFinishOp(ctx, svc, op, "Delete "+b.singular, args[0])
+	return b.s.ncFinishOp(ctx, svc, op, "Delete "+b.singular, args[0])
 }
 
-func (b *ncCRUD[T]) runDescribe(_ *cobra.Command, args []string) error {
+func (b *ncCRUD[T]) runDescribe(c *cobra.Command, args []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
@@ -85,23 +85,23 @@ func (b *ncCRUD[T]) runDescribe(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing %s: %w", b.singular, err)
 	}
-	return emitFormatted(got, flagNCFormat)
+	return emitFormattedTo(b.s.inv.stdout, got, b.s.flagNCFormat)
 }
 
-func (b *ncCRUD[T]) runList(_ *cobra.Command, _ []string) error {
+func (b *ncCRUD[T]) runList(c *cobra.Command, _ []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*T
 	pageToken := ""
 	for {
-		items, next, err := b.listFn(ctx, svc, parent, pageToken, flagNCFilter)
+		items, next, err := b.listFn(ctx, svc, parent, pageToken, b.s.flagNCFilter)
 		if err != nil {
 			return fmt.Errorf("listing %s: %w", b.group, err)
 		}
@@ -111,47 +111,47 @@ func (b *ncCRUD[T]) runList(_ *cobra.Command, _ []string) error {
 		}
 		pageToken = next
 	}
-	if flagNCFormat != "" {
-		return emitFormatted(all, flagNCFormat)
+	if b.s.flagNCFormat != "" {
+		return emitFormattedTo(b.s.inv.stdout, all, b.s.flagNCFormat)
 	}
 	if b.nameCol == nil {
-		return emitFormatted(all, "")
+		return emitFormattedTo(b.s.inv.stdout, all, "")
 	}
 	if b.secondaryCol == nil {
-		printTableHeading(len(all), "%-50s\n", "NAME")
+		printTableHeadingTo(b.s.inv.stdout, len(all), "%-50s\n", "NAME")
 		for _, it := range all {
-			fmt.Printf("%-50s\n", b.nameCol(it))
+			fmt.Fprintf(b.s.inv.stdout, "%-50s\n", b.nameCol(it))
 		}
 		return nil
 	}
-	printTableHeading(len(all), "%-50s %s\n", "NAME", b.secondaryHeader)
+	printTableHeadingTo(b.s.inv.stdout, len(all), "%-50s %s\n", "NAME", b.secondaryHeader)
 	for _, it := range all {
-		fmt.Printf("%-50s %s\n", b.nameCol(it), b.secondaryCol(it))
+		fmt.Fprintf(b.s.inv.stdout, "%-50s %s\n", b.nameCol(it), b.secondaryCol(it))
 	}
 	return nil
 }
 
-func (b *ncCRUD[T]) runUpdate(_ *cobra.Command, args []string) error {
+func (b *ncCRUD[T]) runUpdate(c *cobra.Command, args []string) error {
 	parent, err := b.parentFn()
 	if err != nil {
 		return err
 	}
 	body := new(T)
-	if err := loadYAMLOrJSONInto(flagNCConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(b.s.flagNCConfigFile, body); err != nil {
 		return err
 	}
-	mask := ncResolveMask(body)
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+	mask := b.s.ncResolveMask(body)
+	ctx := c.Context()
+	svc, err := b.s.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
 	name := ncChild(parent, b.collection, args[0])
-	op, err := b.patchFn(ctx, svc, name, body, mask, flagNCRequestID)
+	op, err := b.patchFn(ctx, svc, name, body, mask, b.s.flagNCRequestID)
 	if err != nil {
 		return fmt.Errorf("updating %s: %w", b.singular, err)
 	}
-	return ncFinishOp(ctx, svc, op, "Update "+b.singular, args[0])
+	return b.s.ncFinishOp(ctx, svc, op, "Update "+b.singular, args[0])
 }
 
 // build wires the CRUD subcommands under group. hasUpdate controls whether the
@@ -188,16 +188,16 @@ func (b *ncCRUD[T]) build(parent *cobra.Command, group, groupShort string, scope
 	}
 
 	scopeFlags(leaves...)
-	addNCFormatFlag(desc, list)
-	addNCFilterFlag(list)
-	addNCCreateConfigFlag(create)
+	b.s.addNCFormatFlag(desc, list)
+	b.s.addNCFilterFlag(list)
+	b.s.addNCCreateConfigFlag(create)
 	if upd != nil {
-		addNCUpdateConfigFlag(upd)
-		addNCAsyncFlag(create, del, upd)
-		addNCRequestIDFlag(create, del, upd)
+		b.s.addNCUpdateConfigFlag(upd)
+		b.s.addNCAsyncFlag(create, del, upd)
+		b.s.addNCRequestIDFlag(create, del, upd)
 	} else {
-		addNCAsyncFlag(create, del)
-		addNCRequestIDFlag(create, del)
+		b.s.addNCAsyncFlag(create, del)
+		b.s.addNCRequestIDFlag(create, del)
 	}
 
 	g.AddCommand(leaves...)

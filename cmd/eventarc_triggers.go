@@ -1,156 +1,114 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	eventarc "google.golang.org/api/eventarc/v1"
 )
 
-var eventarcTriggersCmd = &cobra.Command{
-	Use:   "triggers",
-	Short: "Manage Eventarc triggers",
-}
-
-var (
-	evTrgCreateCmd = &cobra.Command{
-		Use: "create TRIGGER", Short: "Create a trigger from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runEvTrgCreate,
+func (grp *eventarcCmds) initEventarcTriggers() {
+	for _, c := range []*cobra.Command{grp.evTrgCreateCmd, grp.evTrgDeleteCmd, grp.evTrgDescribeCmd, grp.evTrgListCmd, grp.evTrgUpdateCmd} {
+		eventarcAddRegionFlag(c, &grp.flagEvTrgLocation, true)
 	}
-	evTrgDeleteCmd = &cobra.Command{
-		Use: "delete TRIGGER", Short: "Delete a trigger",
-		Args: cobra.ExactArgs(1), RunE: runEvTrgDelete,
-	}
-	evTrgDescribeCmd = &cobra.Command{
-		Use: "describe TRIGGER", Short: "Describe a trigger",
-		Args: cobra.ExactArgs(1), RunE: runEvTrgDescribe,
-	}
-	evTrgListCmd = &cobra.Command{
-		Use: "list", Short: "List triggers in a location",
-		Args: cobra.NoArgs, RunE: runEvTrgList,
-	}
-	evTrgUpdateCmd = &cobra.Command{
-		Use: "update TRIGGER", Short: "Update a trigger from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runEvTrgUpdate,
-	}
-)
-
-var (
-	flagEvTrgLocation   string
-	flagEvTrgConfigFile string
-	flagEvTrgUpdateMask string
-	flagEvTrgFormat     string
-	flagEvTrgAsync      bool
-	flagEvTrgListLimit  int64
-	flagEvTrgListPage   int64
-	flagEvTrgListFilter string
-	flagEvTrgListURI    bool
-)
-
-func init() {
-	for _, c := range []*cobra.Command{evTrgCreateCmd, evTrgDeleteCmd, evTrgDescribeCmd, evTrgListCmd, evTrgUpdateCmd} {
-		eventarcAddRegionFlag(c, &flagEvTrgLocation, true)
-	}
-	for _, c := range []*cobra.Command{evTrgCreateCmd, evTrgUpdateCmd} {
-		c.Flags().StringVar(&flagEvTrgConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{grp.evTrgCreateCmd, grp.evTrgUpdateCmd} {
+		c.Flags().StringVar(&grp.flagEvTrgConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Trigger message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	evTrgUpdateCmd.Flags().StringVar(&flagEvTrgUpdateMask, "update-mask", "",
+	grp.evTrgUpdateCmd.Flags().StringVar(&grp.flagEvTrgUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{evTrgCreateCmd, evTrgDeleteCmd, evTrgUpdateCmd} {
-		c.Flags().BoolVar(&flagEvTrgAsync, "async", false, "Return the long-running operation without waiting")
+	for _, c := range []*cobra.Command{grp.evTrgCreateCmd, grp.evTrgDeleteCmd, grp.evTrgUpdateCmd} {
+		c.Flags().BoolVar(&grp.flagEvTrgAsync, "async", false, "Return the long-running operation without waiting")
 	}
-	evTrgDescribeCmd.Flags().StringVar(&flagEvTrgFormat, "format", "", "Output format")
-	evTrgListCmd.Flags().StringVar(&flagEvTrgFormat, "format", "", "Output format")
-	evTrgListCmd.Flags().Int64Var(&flagEvTrgListPage, "page-size", 0, "Page size")
-	evTrgListCmd.Flags().Int64Var(&flagEvTrgListLimit, "limit", 0, "Cap total results (0 = no cap)")
-	evTrgListCmd.Flags().StringVar(&flagEvTrgListFilter, "filter", "", "Server-side filter expression")
-	evTrgListCmd.Flags().BoolVar(&flagEvTrgListURI, "uri", false, "Print resource names only")
+	grp.evTrgDescribeCmd.Flags().StringVar(&grp.flagEvTrgFormat, "format", "", "Output format")
+	grp.evTrgListCmd.Flags().StringVar(&grp.flagEvTrgFormat, "format", "", "Output format")
+	grp.evTrgListCmd.Flags().Int64Var(&grp.flagEvTrgListPage, "page-size", 0, "Page size")
+	grp.evTrgListCmd.Flags().Int64Var(&grp.flagEvTrgListLimit, "limit", 0, "Cap total results (0 = no cap)")
+	grp.evTrgListCmd.Flags().StringVar(&grp.flagEvTrgListFilter, "filter", "", "Server-side filter expression")
+	grp.evTrgListCmd.Flags().BoolVar(&grp.flagEvTrgListURI, "uri", false, "Print resource names only")
 
-	eventarcTriggersCmd.AddCommand(evTrgCreateCmd, evTrgDeleteCmd, evTrgDescribeCmd, evTrgListCmd, evTrgUpdateCmd)
-	eventarcCmd.AddCommand(eventarcTriggersCmd)
+	grp.eventarcTriggersCmd.AddCommand(grp.evTrgCreateCmd, grp.evTrgDeleteCmd, grp.evTrgDescribeCmd, grp.evTrgListCmd, grp.evTrgUpdateCmd)
+	grp.eventarcCmd.AddCommand(grp.eventarcTriggersCmd)
 }
 
-func runEvTrgCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvTrgCreate(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
 	t := &eventarc.Trigger{}
-	if err := loadYAMLOrJSONInto(flagEvTrgConfigFile, t); err != nil {
+	if err := loadYAMLOrJSONInto(grp.flagEvTrgConfigFile, t); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Triggers.Create(eventarcLocationParent(project, flagEvTrgLocation), t).
+	op, err := svc.Projects.Locations.Triggers.Create(eventarcLocationParent(project, grp.flagEvTrgLocation), t).
 		TriggerId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating trigger: %w", err)
 	}
-	return eventarcFinishOp(ctx, svc, op, "Create trigger", args[0], flagEvTrgAsync)
+	return grp.eventarcFinishOp(ctx, svc, op, "Create trigger", args[0], grp.flagEvTrgAsync)
 }
 
-func runEvTrgDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvTrgDelete(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Triggers.Delete(eventarcResourceName("triggers", args[0], project, flagEvTrgLocation)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Triggers.Delete(eventarcResourceName("triggers", args[0], project, grp.flagEvTrgLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting trigger: %w", err)
 	}
-	return eventarcFinishOp(ctx, svc, op, "Delete trigger", args[0], flagEvTrgAsync)
+	return grp.eventarcFinishOp(ctx, svc, op, "Delete trigger", args[0], grp.flagEvTrgAsync)
 }
 
-func runEvTrgDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvTrgDescribe(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	t, err := svc.Projects.Locations.Triggers.Get(eventarcResourceName("triggers", args[0], project, flagEvTrgLocation)).Context(ctx).Do()
+	t, err := svc.Projects.Locations.Triggers.Get(eventarcResourceName("triggers", args[0], project, grp.flagEvTrgLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing trigger: %w", err)
 	}
-	return emitFormatted(t, flagEvTrgFormat)
+	return emitFormattedTo(grp.inv.stdout, t, grp.flagEvTrgFormat)
 }
 
-func runEvTrgList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvTrgList(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	parent := eventarcLocationParent(project, flagEvTrgLocation)
+	parent := eventarcLocationParent(project, grp.flagEvTrgLocation)
 	var all []*eventarc.Trigger
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Triggers.List(parent).Context(ctx)
-		if flagEvTrgListFilter != "" {
-			call = call.Filter(flagEvTrgListFilter)
+		if grp.flagEvTrgListFilter != "" {
+			call = call.Filter(grp.flagEvTrgListFilter)
 		}
-		if flagEvTrgListPage > 0 {
-			call = call.PageSize(flagEvTrgListPage)
+		if grp.flagEvTrgListPage > 0 {
+			call = call.PageSize(grp.flagEvTrgListPage)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -160,8 +118,8 @@ func runEvTrgList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing triggers: %w", err)
 		}
 		all = append(all, resp.Triggers...)
-		if flagEvTrgListLimit > 0 && int64(len(all)) >= flagEvTrgListLimit {
-			all = all[:flagEvTrgListLimit]
+		if grp.flagEvTrgListLimit > 0 && int64(len(all)) >= grp.flagEvTrgListLimit {
+			all = all[:grp.flagEvTrgListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -169,18 +127,18 @@ func runEvTrgList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagEvTrgListURI {
+	if grp.flagEvTrgListURI {
 		for _, t := range all {
-			fmt.Println(t.Name)
+			fmt.Fprintln(grp.inv.stdout, t.Name)
 		}
 		return nil
 	}
-	if flagEvTrgFormat != "" {
-		return emitFormatted(all, flagEvTrgFormat)
+	if grp.flagEvTrgFormat != "" {
+		return emitFormattedTo(grp.inv.stdout, all, grp.flagEvTrgFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "TYPE")
+	printTableHeadingTo(grp.inv.stdout, len(all), "%-40s %s\n", "NAME", "TYPE")
 	for _, t := range all {
-		fmt.Printf("%-40s %s\n", path.Base(t.Name), triggerEventType(t))
+		fmt.Fprintf(grp.inv.stdout, "%-40s %s\n", path.Base(t.Name), triggerEventType(t))
 	}
 	return nil
 }
@@ -194,28 +152,28 @@ func triggerEventType(t *eventarc.Trigger) string {
 	return ""
 }
 
-func runEvTrgUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (grp *eventarcCmds) runEvTrgUpdate(cmd *cobra.Command, args []string) error {
+	project, err := grp.inv.project()
 	if err != nil {
 		return err
 	}
 	t := &eventarc.Trigger{}
-	if err := loadYAMLOrJSONInto(flagEvTrgConfigFile, t); err != nil {
+	if err := loadYAMLOrJSONInto(grp.flagEvTrgConfigFile, t); err != nil {
 		return err
 	}
-	mask := flagEvTrgUpdateMask
+	mask := grp.flagEvTrgUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(t))
 	}
-	ctx := context.Background()
-	svc, err := gcp.EventarcService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().Eventarc(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Triggers.Patch(eventarcResourceName("triggers", args[0], project, flagEvTrgLocation), t).
+	op, err := svc.Projects.Locations.Triggers.Patch(eventarcResourceName("triggers", args[0], project, grp.flagEvTrgLocation), t).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating trigger: %w", err)
 	}
-	return eventarcFinishOp(ctx, svc, op, "Update trigger", args[0], flagEvTrgAsync)
+	return grp.eventarcFinishOp(ctx, svc, op, "Update trigger", args[0], grp.flagEvTrgAsync)
 }

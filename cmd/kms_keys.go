@@ -1,179 +1,61 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 )
 
 // --- gcloud kms keys (#1107) ---
 
-var kmsKeysCmd = &cobra.Command{
-	Use:   "keys",
-	Short: "Manage Cloud KMS crypto keys",
-}
-
-var (
-	flagKmsKLocation   string
-	flagKmsKKeyring    string
-	flagKmsKFormat     string
-	flagKmsKFilter     string
-	flagKmsKPageSize   int64
-	flagKmsKConfigFile string
-	flagKmsKMask       string
-	flagKmsKAllConds   bool
-
-	flagKmsKIamMember    string
-	flagKmsKIamRole      string
-	flagKmsKIamCondExpr  string
-	flagKmsKIamCondTitle string
-	flagKmsKIamCondDesc  string
-
-	flagKmsKPurpose            string
-	flagKmsKProtectionLevel    string
-	flagKmsKAlgorithm          string
-	flagKmsKRotationPeriod     string
-	flagKmsKNextRotation       string
-	flagKmsKHsmTrustedWrapping bool
-	flagKmsKBackend            string
-	flagKmsKPrimaryVersion  string
-)
-
-var kmsKCreateCmd = &cobra.Command{
-	Use:   "create KEY",
-	Short: "Create a crypto key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKCreate,
-}
-
-var kmsKDeleteCmd = &cobra.Command{
-	Use:   "delete KEY",
-	Short: "Destroy all versions of a crypto key (Cloud KMS keys cannot be deleted directly)",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKDelete,
-}
-
-var kmsKDescribeCmd = &cobra.Command{
-	Use:   "describe KEY",
-	Short: "Describe a crypto key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKDescribe,
-}
-
-var kmsKListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List crypto keys in a keyring",
-	Args:  cobra.NoArgs,
-	RunE:  runKmsKList,
-}
-
-var kmsKUpdateCmd = &cobra.Command{
-	Use:   "update KEY",
-	Short: "Update a crypto key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKUpdate,
-}
-
-var kmsKSetPrimaryCmd = &cobra.Command{
-	Use:   "set-primary-version KEY",
-	Short: "Set the primary version of a crypto key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKSetPrimary,
-}
-
-var kmsKSetRotationCmd = &cobra.Command{
-	Use:   "set-rotation-schedule KEY",
-	Short: "Set the rotation schedule on a crypto key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKSetRotation,
-}
-
-var kmsKRemoveRotationCmd = &cobra.Command{
-	Use:   "remove-rotation-schedule KEY",
-	Short: "Clear the rotation schedule on a crypto key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKRemoveRotation,
-}
-
-var kmsKGetIamCmd = &cobra.Command{
-	Use:   "get-iam-policy KEY",
-	Short: "Get the IAM policy for a crypto key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKGetIam,
-}
-
-var kmsKSetIamCmd = &cobra.Command{
-	Use:   "set-iam-policy KEY POLICY_FILE",
-	Short: "Set the IAM policy for a crypto key",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runKmsKSetIam,
-}
-
-var kmsKAddIamCmd = &cobra.Command{
-	Use:   "add-iam-policy-binding KEY",
-	Short: "Add an IAM policy binding on a crypto key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKAddIam,
-}
-
-var kmsKRemoveIamCmd = &cobra.Command{
-	Use:   "remove-iam-policy-binding KEY",
-	Short: "Remove an IAM policy binding from a crypto key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsKRemoveIam,
-}
-
-func init() {
+func (s *kmsCmds) initKmsKeys() {
 	all := []*cobra.Command{
-		kmsKCreateCmd, kmsKDeleteCmd, kmsKDescribeCmd, kmsKListCmd, kmsKUpdateCmd,
-		kmsKSetPrimaryCmd, kmsKSetRotationCmd, kmsKRemoveRotationCmd,
-		kmsKGetIamCmd, kmsKSetIamCmd, kmsKAddIamCmd, kmsKRemoveIamCmd,
+		s.kmsKCreateCmd, s.kmsKDeleteCmd, s.kmsKDescribeCmd, s.kmsKListCmd, s.kmsKUpdateCmd,
+		s.kmsKSetPrimaryCmd, s.kmsKSetRotationCmd, s.kmsKRemoveRotationCmd,
+		s.kmsKGetIamCmd, s.kmsKSetIamCmd, s.kmsKAddIamCmd, s.kmsKRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagKmsKLocation, "location", "", "Location (required)")
-		c.Flags().StringVar(&flagKmsKKeyring, "keyring", "", "Parent key ring (required)")
-		c.Flags().StringVar(&flagKmsKFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagKmsKLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagKmsKKeyring, "keyring", "", "Parent key ring (required)")
+		c.Flags().StringVar(&s.flagKmsKFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("location")
 		_ = c.MarkFlagRequired("keyring")
 	}
 
-	kmsKCreateCmd.Flags().StringVar(&flagKmsKConfigFile, "config-file", "", "YAML/JSON body for the CryptoKey (optional)")
-	kmsKCreateCmd.Flags().StringVar(&flagKmsKPurpose, "purpose", "ENCRYPT_DECRYPT", "CryptoKey purpose")
-	kmsKCreateCmd.Flags().StringVar(&flagKmsKProtectionLevel, "protection-level", "", "ProtectionLevel for the default VersionTemplate")
-	kmsKCreateCmd.Flags().StringVar(&flagKmsKAlgorithm, "default-algorithm", "", "Algorithm for the default VersionTemplate")
-	kmsKCreateCmd.Flags().StringVar(&flagKmsKRotationPeriod, "rotation-period", "", "Rotation period (e.g. 30d, 7776000s)")
-	kmsKCreateCmd.Flags().StringVar(&flagKmsKNextRotation, "next-rotation-time", "", "RFC 3339 timestamp for next rotation")
-	kmsKCreateCmd.Flags().BoolVar(&flagKmsKHsmTrustedWrapping, "hsm-trusted-wrapping", false, "Enable trusted wrapping for HSM keys (added in 576.0.0)")
-	kmsKCreateCmd.Flags().StringVar(&flagKmsKBackend, "crypto-key-backend", "", "CryptoKeyBackend resource name (single-tenant HSM)")
+	s.kmsKCreateCmd.Flags().StringVar(&s.flagKmsKConfigFile, "config-file", "", "YAML/JSON body for the CryptoKey (optional)")
+	s.kmsKCreateCmd.Flags().StringVar(&s.flagKmsKPurpose, "purpose", "ENCRYPT_DECRYPT", "CryptoKey purpose")
+	s.kmsKCreateCmd.Flags().StringVar(&s.flagKmsKProtectionLevel, "protection-level", "", "ProtectionLevel for the default VersionTemplate")
+	s.kmsKCreateCmd.Flags().StringVar(&s.flagKmsKAlgorithm, "default-algorithm", "", "Algorithm for the default VersionTemplate")
+	s.kmsKCreateCmd.Flags().StringVar(&s.flagKmsKRotationPeriod, "rotation-period", "", "Rotation period (e.g. 30d, 7776000s)")
+	s.kmsKCreateCmd.Flags().StringVar(&s.flagKmsKNextRotation, "next-rotation-time", "", "RFC 3339 timestamp for next rotation")
+	s.kmsKCreateCmd.Flags().BoolVar(&s.flagKmsKHsmTrustedWrapping, "hsm-trusted-wrapping", false, "Enable trusted wrapping for HSM keys (added in 576.0.0)")
+	s.kmsKCreateCmd.Flags().StringVar(&s.flagKmsKBackend, "crypto-key-backend", "", "CryptoKeyBackend resource name (single-tenant HSM)")
 
-	kmsKListCmd.Flags().StringVar(&flagKmsKFilter, "filter", "", "Filter expression")
-	kmsKListCmd.Flags().Int64Var(&flagKmsKPageSize, "page-size", 0, "Page size")
+	s.kmsKListCmd.Flags().StringVar(&s.flagKmsKFilter, "filter", "", "Filter expression")
+	s.kmsKListCmd.Flags().Int64Var(&s.flagKmsKPageSize, "page-size", 0, "Page size")
 
-	kmsKUpdateCmd.Flags().StringVar(&flagKmsKConfigFile, "config-file", "", "YAML/JSON body for the CryptoKey update (required)")
-	kmsKUpdateCmd.Flags().StringVar(&flagKmsKMask, "update-mask", "", "Fields to update; defaults to populated fields")
-	_ = kmsKUpdateCmd.MarkFlagRequired("config-file")
+	s.kmsKUpdateCmd.Flags().StringVar(&s.flagKmsKConfigFile, "config-file", "", "YAML/JSON body for the CryptoKey update (required)")
+	s.kmsKUpdateCmd.Flags().StringVar(&s.flagKmsKMask, "update-mask", "", "Fields to update; defaults to populated fields")
+	_ = s.kmsKUpdateCmd.MarkFlagRequired("config-file")
 
-	kmsKSetPrimaryCmd.Flags().StringVar(&flagKmsKPrimaryVersion, "version", "", "CryptoKeyVersion id to promote (required)")
-	_ = kmsKSetPrimaryCmd.MarkFlagRequired("version")
+	s.kmsKSetPrimaryCmd.Flags().StringVar(&s.flagKmsKPrimaryVersion, "version", "", "CryptoKeyVersion id to promote (required)")
+	_ = s.kmsKSetPrimaryCmd.MarkFlagRequired("version")
 
-	kmsKSetRotationCmd.Flags().StringVar(&flagKmsKRotationPeriod, "rotation-period", "", "Rotation period (e.g. 30d, 7776000s) (required)")
-	kmsKSetRotationCmd.Flags().StringVar(&flagKmsKNextRotation, "next-rotation-time", "", "RFC 3339 timestamp for next rotation (required)")
-	_ = kmsKSetRotationCmd.MarkFlagRequired("rotation-period")
-	_ = kmsKSetRotationCmd.MarkFlagRequired("next-rotation-time")
+	s.kmsKSetRotationCmd.Flags().StringVar(&s.flagKmsKRotationPeriod, "rotation-period", "", "Rotation period (e.g. 30d, 7776000s) (required)")
+	s.kmsKSetRotationCmd.Flags().StringVar(&s.flagKmsKNextRotation, "next-rotation-time", "", "RFC 3339 timestamp for next rotation (required)")
+	_ = s.kmsKSetRotationCmd.MarkFlagRequired("rotation-period")
+	_ = s.kmsKSetRotationCmd.MarkFlagRequired("next-rotation-time")
 
-	kmsIamMemberFlags(kmsKAddIamCmd, &flagKmsKIamMember, &flagKmsKIamRole,
-		&flagKmsKIamCondExpr, &flagKmsKIamCondTitle, &flagKmsKIamCondDesc)
-	kmsIamMemberFlags(kmsKRemoveIamCmd, &flagKmsKIamMember, &flagKmsKIamRole,
-		&flagKmsKIamCondExpr, &flagKmsKIamCondTitle, &flagKmsKIamCondDesc)
-	kmsKRemoveIamCmd.Flags().BoolVar(&flagKmsKAllConds, "all", false, "Match bindings for the role across all conditions")
+	kmsIamMemberFlags(s.kmsKAddIamCmd, &s.flagKmsKIamMember, &s.flagKmsKIamRole,
+		&s.flagKmsKIamCondExpr, &s.flagKmsKIamCondTitle, &s.flagKmsKIamCondDesc)
+	kmsIamMemberFlags(s.kmsKRemoveIamCmd, &s.flagKmsKIamMember, &s.flagKmsKIamRole,
+		&s.flagKmsKIamCondExpr, &s.flagKmsKIamCondTitle, &s.flagKmsKIamCondDesc)
+	s.kmsKRemoveIamCmd.Flags().BoolVar(&s.flagKmsKAllConds, "all", false, "Match bindings for the role across all conditions")
 
-	kmsKeysCmd.AddCommand(all...)
-	kmsKeysCmd.AddCommand(kmsVersionsCmd)
-	kmsCmd.AddCommand(kmsKeysCmd)
+	s.kmsKeysCmd.AddCommand(all...)
+	s.kmsKeysCmd.AddCommand(s.kmsVersionsCmd)
+	s.kmsCmd.AddCommand(s.kmsKeysCmd)
 }
 
 func kmsKeyResource(project, location, keyring, raw string) string {
@@ -181,71 +63,71 @@ func kmsKeyResource(project, location, keyring, raw string) string {
 	return kmsFullName(parent, raw)
 }
 
-func runKmsKCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
 	body := &cloudkms.CryptoKey{}
-	if flagKmsKConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagKmsKConfigFile, body); err != nil {
+	if s.flagKmsKConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagKmsKConfigFile, body); err != nil {
 			return err
 		}
 	}
-	if flagKmsKPurpose != "" && body.Purpose == "" {
-		body.Purpose = flagKmsKPurpose
+	if s.flagKmsKPurpose != "" && body.Purpose == "" {
+		body.Purpose = s.flagKmsKPurpose
 	}
-	if flagKmsKProtectionLevel != "" || flagKmsKAlgorithm != "" {
+	if s.flagKmsKProtectionLevel != "" || s.flagKmsKAlgorithm != "" {
 		if body.VersionTemplate == nil {
 			body.VersionTemplate = &cloudkms.CryptoKeyVersionTemplate{}
 		}
-		if flagKmsKProtectionLevel != "" {
-			body.VersionTemplate.ProtectionLevel = flagKmsKProtectionLevel
+		if s.flagKmsKProtectionLevel != "" {
+			body.VersionTemplate.ProtectionLevel = s.flagKmsKProtectionLevel
 		}
-		if flagKmsKAlgorithm != "" {
-			body.VersionTemplate.Algorithm = flagKmsKAlgorithm
+		if s.flagKmsKAlgorithm != "" {
+			body.VersionTemplate.Algorithm = s.flagKmsKAlgorithm
 		}
 	}
-	if flagKmsKRotationPeriod != "" {
-		body.RotationPeriod = flagKmsKRotationPeriod
+	if s.flagKmsKRotationPeriod != "" {
+		body.RotationPeriod = s.flagKmsKRotationPeriod
 	}
-	if flagKmsKNextRotation != "" {
-		body.NextRotationTime = flagKmsKNextRotation
+	if s.flagKmsKNextRotation != "" {
+		body.NextRotationTime = s.flagKmsKNextRotation
 	}
-	if flagKmsKBackend != "" {
-		body.CryptoKeyBackend = flagKmsKBackend
+	if s.flagKmsKBackend != "" {
+		body.CryptoKeyBackend = s.flagKmsKBackend
 	}
-	parent := kmsKeyringParent(project, flagKmsKLocation, flagKmsKKeyring)
+	parent := kmsKeyringParent(project, s.flagKmsKLocation, s.flagKmsKKeyring)
 	call := svc.Projects.Locations.KeyRings.CryptoKeys.Create(parent, body).CryptoKeyId(args[0])
-	if flagKmsKHsmTrustedWrapping {
+	if s.flagKmsKHsmTrustedWrapping {
 		call = call.TrustedWrappingEnabled(true)
 	}
 	out, err := call.Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating crypto key: %w", err)
 	}
-	return emitFormatted(out, flagKmsKFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKFormat)
 }
 
 // runKmsKDelete iterates through all versions of a crypto key and schedules
 // each non-destroyed one for destruction. Cloud KMS does not permit deleting
 // keys directly; this mirrors gcloud Python's behavior for `keys delete`.
-func runKmsKDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	keyName := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
+	keyName := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
 	var destroyed []*cloudkms.CryptoKeyVersion
 	token := ""
 	for {
@@ -274,48 +156,48 @@ func runKmsKDelete(cmd *cobra.Command, args []string) error {
 		}
 		token = resp.NextPageToken
 	}
-	fmt.Fprintf(os.Stderr, "Scheduled %d version(s) of %s for destruction.\n", len(destroyed), keyName)
-	return emitFormatted(destroyed, flagKmsKFormat)
+	fmt.Fprintf(s.inv.stderr, "Scheduled %d version(s) of %s for destruction.\n", len(destroyed), keyName)
+	return emitFormattedTo(s.inv.stdout, destroyed, s.flagKmsKFormat)
 }
 
-func runKmsKDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
+	name := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing crypto key: %w", err)
 	}
-	return emitFormatted(out, flagKmsKFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKFormat)
 }
 
-func runKmsKList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	parent := kmsKeyringParent(project, flagKmsKLocation, flagKmsKKeyring)
+	parent := kmsKeyringParent(project, s.flagKmsKLocation, s.flagKmsKKeyring)
 	var all []*cloudkms.CryptoKey
 	token := ""
 	for {
 		call := svc.Projects.Locations.KeyRings.CryptoKeys.List(parent).Context(ctx)
-		if flagKmsKFilter != "" {
-			call = call.Filter(flagKmsKFilter)
+		if s.flagKmsKFilter != "" {
+			call = call.Filter(s.flagKmsKFilter)
 		}
-		if flagKmsKPageSize > 0 {
-			call = call.PageSize(flagKmsKPageSize)
+		if s.flagKmsKPageSize > 0 {
+			call = call.PageSize(s.flagKmsKPageSize)
 		}
 		if token != "" {
 			call = call.PageToken(token)
@@ -330,28 +212,28 @@ func runKmsKList(cmd *cobra.Command, args []string) error {
 		}
 		token = resp.NextPageToken
 	}
-	return emitFormatted(all, flagKmsKFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagKmsKFormat)
 }
 
-func runKmsKUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
 	body := &cloudkms.CryptoKey{}
-	if err := loadYAMLOrJSONInto(flagKmsKConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagKmsKConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagKmsKMask
+	mask := s.flagKmsKMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	name := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
+	name := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
 	call := svc.Projects.Locations.KeyRings.CryptoKeys.Patch(name, body).Context(ctx)
 	if mask != "" {
 		call = call.UpdateMask(mask)
@@ -360,98 +242,98 @@ func runKmsKUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating crypto key: %w", err)
 	}
-	return emitFormatted(out, flagKmsKFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKFormat)
 }
 
-func runKmsKSetPrimary(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKSetPrimary(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
-	req := &cloudkms.UpdateCryptoKeyPrimaryVersionRequest{CryptoKeyVersionId: flagKmsKPrimaryVersion}
+	name := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
+	req := &cloudkms.UpdateCryptoKeyPrimaryVersionRequest{CryptoKeyVersionId: s.flagKmsKPrimaryVersion}
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.UpdatePrimaryVersion(name, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting primary version: %w", err)
 	}
-	return emitFormatted(out, flagKmsKFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKFormat)
 }
 
-func runKmsKSetRotation(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKSetRotation(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
 	body := &cloudkms.CryptoKey{
-		RotationPeriod:   flagKmsKRotationPeriod,
-		NextRotationTime: flagKmsKNextRotation,
+		RotationPeriod:   s.flagKmsKRotationPeriod,
+		NextRotationTime: s.flagKmsKNextRotation,
 	}
-	name := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
+	name := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.Patch(name, body).
 		UpdateMask("rotationPeriod,nextRotationTime").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting rotation schedule: %w", err)
 	}
-	return emitFormatted(out, flagKmsKFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKFormat)
 }
 
-func runKmsKRemoveRotation(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKRemoveRotation(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
 	body := &cloudkms.CryptoKey{
 		NullFields: []string{"RotationPeriod", "NextRotationTime"},
 	}
-	name := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
+	name := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.Patch(name, body).
 		UpdateMask("rotationPeriod,nextRotationTime").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("removing rotation schedule: %w", err)
 	}
-	return emitFormatted(out, flagKmsKFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKFormat)
 }
 
-func runKmsKGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKGetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
+	name := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
 	pol, err := svc.Projects.Locations.KeyRings.CryptoKeys.GetIamPolicy(name).OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(pol, flagKmsKFormat)
+	return emitFormattedTo(s.inv.stdout, pol, s.flagKmsKFormat)
 }
 
-func runKmsKSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKSetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
@@ -459,33 +341,33 @@ func runKmsKSetIam(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
-	name := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
+	name := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
 	req := &cloudkms.SetIamPolicyRequest{Policy: policy}
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.SetIamPolicy(name, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	kmsUpdatedIam(name)
-	return emitFormatted(out, flagKmsKFormat)
+	s.kmsUpdatedIam(name)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKFormat)
 }
 
-func runKmsKAddIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKAddIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
+	name := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
 	pol, err := svc.Projects.Locations.KeyRings.CryptoKeys.GetIamPolicy(name).OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	cond := kmsIamBuildCondition(flagKmsKIamCondExpr, flagKmsKIamCondTitle, flagKmsKIamCondDesc)
-	kmsIamAddBinding(pol, flagKmsKIamRole, flagKmsKIamMember, cond)
+	cond := kmsIamBuildCondition(s.flagKmsKIamCondExpr, s.flagKmsKIamCondTitle, s.flagKmsKIamCondDesc)
+	kmsIamAddBinding(pol, s.flagKmsKIamRole, s.flagKmsKIamMember, cond)
 	if cond != nil && pol.Version < 3 {
 		pol.Version = 3
 	}
@@ -494,27 +376,27 @@ func runKmsKAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("adding IAM binding: %w", err)
 	}
-	kmsUpdatedIam(name)
-	return emitFormatted(out, flagKmsKFormat)
+	s.kmsUpdatedIam(name)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKFormat)
 }
 
-func runKmsKRemoveIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsKRemoveIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, args[0])
+	name := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, args[0])
 	pol, err := svc.Projects.Locations.KeyRings.CryptoKeys.GetIamPolicy(name).OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	cond := kmsIamBuildCondition(flagKmsKIamCondExpr, flagKmsKIamCondTitle, flagKmsKIamCondDesc)
-	if !kmsIamRemoveBinding(pol, flagKmsKIamRole, flagKmsKIamMember, cond, flagKmsKAllConds) {
+	cond := kmsIamBuildCondition(s.flagKmsKIamCondExpr, s.flagKmsKIamCondTitle, s.flagKmsKIamCondDesc)
+	if !kmsIamRemoveBinding(pol, s.flagKmsKIamRole, s.flagKmsKIamMember, cond, s.flagKmsKAllConds) {
 		return fmt.Errorf("no matching binding to remove")
 	}
 	req := &cloudkms.SetIamPolicyRequest{Policy: pol}
@@ -522,117 +404,40 @@ func runKmsKRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("removing IAM binding: %w", err)
 	}
-	kmsUpdatedIam(name)
-	return emitFormatted(out, flagKmsKFormat)
+	s.kmsUpdatedIam(name)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsKFormat)
 }
 
 // --- versions subgroup ---
 
-var kmsVersionsCmd = &cobra.Command{
-	Use:   "versions",
-	Short: "Manage crypto key versions",
-}
-
-var (
-	flagKmsVKey        string
-	flagKmsVFormat     string
-	flagKmsVFilter     string
-	flagKmsVPageSize   int64
-	flagKmsVConfigFile string
-	flagKmsVAlgorithm  string
-	flagKmsVProtection string
-	flagKmsVBackend    string
-	flagKmsVState      string
-	flagKmsVMask       string
-)
-
-var kmsVCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a new CryptoKeyVersion",
-	Args:  cobra.NoArgs,
-	RunE:  runKmsVCreate,
-}
-
-var kmsVDescribeCmd = &cobra.Command{
-	Use:   "describe VERSION",
-	Short: "Describe a CryptoKeyVersion",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsVDescribe,
-}
-
-var kmsVDestroyCmd = &cobra.Command{
-	Use:   "destroy VERSION",
-	Short: "Schedule a CryptoKeyVersion for destruction",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsVDestroy,
-}
-
-var kmsVDisableCmd = &cobra.Command{
-	Use:   "disable VERSION",
-	Short: "Disable a CryptoKeyVersion",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsVDisable,
-}
-
-var kmsVEnableCmd = &cobra.Command{
-	Use:   "enable VERSION",
-	Short: "Enable a CryptoKeyVersion",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsVEnable,
-}
-
-var kmsVListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List CryptoKeyVersions for a CryptoKey",
-	Args:  cobra.NoArgs,
-	RunE:  runKmsVList,
-}
-
-var kmsVRestoreCmd = &cobra.Command{
-	Use:   "restore VERSION",
-	Short: "Restore a CryptoKeyVersion pending destruction",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsVRestore,
-}
-
-// kmsVUpdateCmd was added in gcloud-python 582.0.0. It supports patching
-// individual CryptoKeyVersion fields via named flags in addition to
-// --config-file / --update-mask.
-var kmsVUpdateCmd = &cobra.Command{
-	Use:   "update VERSION",
-	Short: "Update a CryptoKeyVersion",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runKmsVUpdate,
-}
-
-func init() {
+func (s *kmsCmds) initKmsKeys9() {
 	all := []*cobra.Command{
-		kmsVCreateCmd, kmsVDescribeCmd, kmsVDestroyCmd, kmsVDisableCmd,
-		kmsVEnableCmd, kmsVListCmd, kmsVRestoreCmd, kmsVUpdateCmd,
+		s.kmsVCreateCmd, s.kmsVDescribeCmd, s.kmsVDestroyCmd, s.kmsVDisableCmd,
+		s.kmsVEnableCmd, s.kmsVListCmd, s.kmsVRestoreCmd, s.kmsVUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagKmsKLocation, "location", "", "Location (required)")
-		c.Flags().StringVar(&flagKmsKKeyring, "keyring", "", "Parent key ring (required)")
-		c.Flags().StringVar(&flagKmsVKey, "key", "", "Parent CryptoKey id (required)")
-		c.Flags().StringVar(&flagKmsVFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagKmsKLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagKmsKKeyring, "keyring", "", "Parent key ring (required)")
+		c.Flags().StringVar(&s.flagKmsVKey, "key", "", "Parent CryptoKey id (required)")
+		c.Flags().StringVar(&s.flagKmsVFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("location")
 		_ = c.MarkFlagRequired("keyring")
 		_ = c.MarkFlagRequired("key")
 	}
-	kmsVCreateCmd.Flags().StringVar(&flagKmsVConfigFile, "config-file", "", "YAML/JSON body for the CryptoKeyVersion (optional)")
-	kmsVCreateCmd.Flags().StringVar(&flagKmsVAlgorithm, "algorithm", "", "CryptoKeyVersion algorithm")
-	kmsVCreateCmd.Flags().StringVar(&flagKmsVProtection, "protection-level", "", "CryptoKeyVersion protection level")
+	s.kmsVCreateCmd.Flags().StringVar(&s.flagKmsVConfigFile, "config-file", "", "YAML/JSON body for the CryptoKeyVersion (optional)")
+	s.kmsVCreateCmd.Flags().StringVar(&s.flagKmsVAlgorithm, "algorithm", "", "CryptoKeyVersion algorithm")
+	s.kmsVCreateCmd.Flags().StringVar(&s.flagKmsVProtection, "protection-level", "", "CryptoKeyVersion protection level")
 
-	kmsVListCmd.Flags().StringVar(&flagKmsVFilter, "filter", "", "Filter expression")
-	kmsVListCmd.Flags().Int64Var(&flagKmsVPageSize, "page-size", 0, "Page size")
+	s.kmsVListCmd.Flags().StringVar(&s.flagKmsVFilter, "filter", "", "Filter expression")
+	s.kmsVListCmd.Flags().Int64Var(&s.flagKmsVPageSize, "page-size", 0, "Page size")
 
-	kmsVUpdateCmd.Flags().StringVar(&flagKmsVConfigFile, "config-file", "", "YAML/JSON body for the CryptoKeyVersion update")
-	kmsVUpdateCmd.Flags().StringVar(&flagKmsVMask, "update-mask", "", "Fields to update; defaults to populated fields")
-	kmsVUpdateCmd.Flags().StringVar(&flagKmsVProtection, "protection-level", "", "CryptoKeyVersion protection level (added in 582.0.0)")
-	kmsVUpdateCmd.Flags().StringVar(&flagKmsVBackend, "crypto-key-backend", "", "CryptoKeyBackend resource name (added in 582.0.0)")
-	kmsVUpdateCmd.Flags().StringVar(&flagKmsVState, "state", "", "CryptoKeyVersion state (e.g. ENABLED, DISABLED)")
+	s.kmsVUpdateCmd.Flags().StringVar(&s.flagKmsVConfigFile, "config-file", "", "YAML/JSON body for the CryptoKeyVersion update")
+	s.kmsVUpdateCmd.Flags().StringVar(&s.flagKmsVMask, "update-mask", "", "Fields to update; defaults to populated fields")
+	s.kmsVUpdateCmd.Flags().StringVar(&s.flagKmsVProtection, "protection-level", "", "CryptoKeyVersion protection level (added in 582.0.0)")
+	s.kmsVUpdateCmd.Flags().StringVar(&s.flagKmsVBackend, "crypto-key-backend", "", "CryptoKeyBackend resource name (added in 582.0.0)")
+	s.kmsVUpdateCmd.Flags().StringVar(&s.flagKmsVState, "state", "", "CryptoKeyVersion state (e.g. ENABLED, DISABLED)")
 
-	kmsVersionsCmd.AddCommand(all...)
+	s.kmsVersionsCmd.AddCommand(all...)
 }
 
 func kmsVersionName(project, location, keyring, key, raw string) string {
@@ -640,121 +445,121 @@ func kmsVersionName(project, location, keyring, key, raw string) string {
 	return kmsFullName(parent, raw)
 }
 
-func runKmsVCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsVCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
 	body := &cloudkms.CryptoKeyVersion{}
-	if flagKmsVConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagKmsVConfigFile, body); err != nil {
+	if s.flagKmsVConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagKmsVConfigFile, body); err != nil {
 			return err
 		}
 	}
-	if flagKmsVAlgorithm != "" {
-		body.Algorithm = flagKmsVAlgorithm
+	if s.flagKmsVAlgorithm != "" {
+		body.Algorithm = s.flagKmsVAlgorithm
 	}
-	if flagKmsVProtection != "" {
-		body.ProtectionLevel = flagKmsVProtection
+	if s.flagKmsVProtection != "" {
+		body.ProtectionLevel = s.flagKmsVProtection
 	}
-	parent := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, flagKmsVKey)
+	parent := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, s.flagKmsVKey)
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.Create(parent, body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating crypto key version: %w", err)
 	}
-	return emitFormatted(out, flagKmsVFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsVFormat)
 }
 
-func runKmsVDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsVDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsVersionName(project, flagKmsKLocation, flagKmsKKeyring, flagKmsVKey, args[0])
+	name := kmsVersionName(project, s.flagKmsKLocation, s.flagKmsKKeyring, s.flagKmsVKey, args[0])
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing crypto key version: %w", err)
 	}
-	return emitFormatted(out, flagKmsVFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsVFormat)
 }
 
-func runKmsVDestroy(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsVDestroy(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsVersionName(project, flagKmsKLocation, flagKmsKKeyring, flagKmsVKey, args[0])
+	name := kmsVersionName(project, s.flagKmsKLocation, s.flagKmsKKeyring, s.flagKmsVKey, args[0])
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
 		Destroy(name, &cloudkms.DestroyCryptoKeyVersionRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("destroying crypto key version: %w", err)
 	}
-	return emitFormatted(out, flagKmsVFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsVFormat)
 }
 
-func runKmsVDisable(cmd *cobra.Command, args []string) error {
-	return kmsVSetState(args[0], "DISABLED")
+func (s *kmsCmds) runKmsVDisable(cmd *cobra.Command, args []string) error {
+	return s.kmsVSetState(args[0], "DISABLED")
 }
 
-func runKmsVEnable(cmd *cobra.Command, args []string) error {
-	return kmsVSetState(args[0], "ENABLED")
+func (s *kmsCmds) runKmsVEnable(cmd *cobra.Command, args []string) error {
+	return s.kmsVSetState(args[0], "ENABLED")
 }
 
-func kmsVSetState(id, state string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) kmsVSetState(id, state string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := s.inv.context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsVersionName(project, flagKmsKLocation, flagKmsKKeyring, flagKmsVKey, id)
+	name := kmsVersionName(project, s.flagKmsKLocation, s.flagKmsKKeyring, s.flagKmsVKey, id)
 	body := &cloudkms.CryptoKeyVersion{State: state}
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
 		Patch(name, body).UpdateMask("state").Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating version state: %w", err)
 	}
-	return emitFormatted(out, flagKmsVFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsVFormat)
 }
 
-func runKmsVList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsVList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	parent := kmsKeyResource(project, flagKmsKLocation, flagKmsKKeyring, flagKmsVKey)
+	parent := kmsKeyResource(project, s.flagKmsKLocation, s.flagKmsKKeyring, s.flagKmsVKey)
 	var all []*cloudkms.CryptoKeyVersion
 	token := ""
 	for {
 		call := svc.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.List(parent).Context(ctx)
-		if flagKmsVFilter != "" {
-			call = call.Filter(flagKmsVFilter)
+		if s.flagKmsVFilter != "" {
+			call = call.Filter(s.flagKmsVFilter)
 		}
-		if flagKmsVPageSize > 0 {
-			call = call.PageSize(flagKmsVPageSize)
+		if s.flagKmsVPageSize > 0 {
+			call = call.PageSize(s.flagKmsVPageSize)
 		}
 		if token != "" {
 			call = call.PageToken(token)
@@ -769,45 +574,45 @@ func runKmsVList(cmd *cobra.Command, args []string) error {
 		}
 		token = resp.NextPageToken
 	}
-	return emitFormatted(all, flagKmsVFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagKmsVFormat)
 }
 
-func runKmsVUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsVUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
 	body := &cloudkms.CryptoKeyVersion{}
-	if flagKmsVConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagKmsVConfigFile, body); err != nil {
+	if s.flagKmsVConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagKmsVConfigFile, body); err != nil {
 			return err
 		}
 	}
 	// Named flags override values from --config-file.
-	if flagKmsVProtection != "" {
-		body.ProtectionLevel = flagKmsVProtection
+	if s.flagKmsVProtection != "" {
+		body.ProtectionLevel = s.flagKmsVProtection
 	}
-	if flagKmsVState != "" {
-		body.State = flagKmsVState
+	if s.flagKmsVState != "" {
+		body.State = s.flagKmsVState
 	}
 	// crypto-key-backend belongs on the enclosing CryptoKey, but Cloud KMS
 	// accepts patches against the CryptoKeyVersion for parity with gcloud
 	// Python; the API rejects unsupported fields cleanly if the backend cannot
 	// be updated in place.
-	if flagKmsVBackend != "" {
+	if s.flagKmsVBackend != "" {
 		if body.ExternalProtectionLevelOptions == nil {
 			body.ExternalProtectionLevelOptions = &cloudkms.ExternalProtectionLevelOptions{}
 		}
-		body.ExternalProtectionLevelOptions.EkmConnectionBackendOverride = flagKmsVBackend
+		body.ExternalProtectionLevelOptions.EkmConnectionBackendOverride = s.flagKmsVBackend
 	}
-	name := kmsVersionName(project, flagKmsKLocation, flagKmsKKeyring, flagKmsVKey, args[0])
+	name := kmsVersionName(project, s.flagKmsKLocation, s.flagKmsKKeyring, s.flagKmsVKey, args[0])
 	body.Name = name
-	mask := flagKmsVMask
+	mask := s.flagKmsVMask
 	if mask == "" {
 		fields := nonEmptyJSONFields(body)
 		// Drop "name" from the auto-computed mask; the API path already carries it.
@@ -828,24 +633,24 @@ func runKmsVUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating crypto key version: %w", err)
 	}
-	return emitFormatted(out, flagKmsVFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsVFormat)
 }
 
-func runKmsVRestore(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsVRestore(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
-	name := kmsVersionName(project, flagKmsKLocation, flagKmsKKeyring, flagKmsVKey, args[0])
+	name := kmsVersionName(project, s.flagKmsKLocation, s.flagKmsKKeyring, s.flagKmsVKey, args[0])
 	out, err := svc.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
 		Restore(name, &cloudkms.RestoreCryptoKeyVersionRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("restoring crypto key version: %w", err)
 	}
-	return emitFormatted(out, flagKmsVFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsVFormat)
 }

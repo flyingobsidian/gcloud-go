@@ -9,7 +9,8 @@ import (
 )
 
 func TestDataflowJobsRunPipelineOptionsFlag(t *testing.T) {
-	if dataflowJobsRunCmd.Flags().Lookup("additional-pipeline-options") == nil {
+	grp := newDataflowCmds(legacyTestInvocation())
+	if grp.dataflowJobsRunCmd.Flags().Lookup("additional-pipeline-options") == nil {
 		t.Fatal("jobs run missing --additional-pipeline-options")
 	}
 }

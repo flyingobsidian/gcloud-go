@@ -7,7 +7,8 @@ import (
 )
 
 func batchSubgroup(name string) *cobra.Command {
-	for _, c := range batchCmd.Commands() {
+	grp := newBatchCmds(legacyTestInvocation())
+	for _, c := range grp.batchCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

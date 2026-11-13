@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	gkehub "google.golang.org/api/gkehub/v1"
 )
@@ -15,141 +13,58 @@ import (
 // `hub` is registered as a compatibility alias that delegates to the same
 // implementations as `fleet`.
 
-var containerFleetCmd = &cobra.Command{Use: "fleet", Short: "Manage GKE Hub fleets, features, and memberships"}
-var containerHubCmd = &cobra.Command{Use: "hub", Short: "Alias for gcloud container fleet"}
-
-var containerFleetFleetsCmd = &cobra.Command{Use: "fleets", Short: "Manage fleets"}
-var containerFleetFeaturesCmd = &cobra.Command{Use: "features", Short: "Manage fleet features"}
-var containerFleetMembershipsCmd = &cobra.Command{Use: "memberships", Short: "Manage fleet memberships"}
-
-var (
-	flagCfLocation   string
-	flagCfFormat     string
-	flagCfConfigFile string
-	flagCfUpdateMask string
-	flagCfPageSize   int64
-)
-
-var (
-	// fleets: create/delete/describe/list/update
-	containerFleetsCreateCmd = &cobra.Command{
-		Use: "create FLEET", Short: "Create a fleet",
-		Args: cobra.ExactArgs(1), RunE: runCfFleetsCreate,
-	}
-	containerFleetsDeleteCmd = &cobra.Command{
-		Use: "delete FLEET", Short: "Delete a fleet",
-		Args: cobra.ExactArgs(1), RunE: runCfFleetsDelete,
-	}
-	containerFleetsDescribeCmd = &cobra.Command{
-		Use: "describe FLEET", Short: "Describe a fleet",
-		Args: cobra.ExactArgs(1), RunE: runCfFleetsDescribe,
-	}
-	containerFleetsListCmd = &cobra.Command{
-		Use: "list", Short: "List fleets in the organization",
-		Args: cobra.NoArgs, RunE: runCfFleetsList,
-	}
-	containerFleetsUpdateCmd = &cobra.Command{
-		Use: "update FLEET", Short: "Update a fleet",
-		Args: cobra.ExactArgs(1), RunE: runCfFleetsUpdate,
-	}
-
-	// features: create/delete/describe/list/update
-	containerFeaturesCreateCmd = &cobra.Command{
-		Use: "create FEATURE", Short: "Create a fleet feature",
-		Args: cobra.ExactArgs(1), RunE: runCfFeaturesCreate,
-	}
-	containerFeaturesDeleteCmd = &cobra.Command{
-		Use: "delete FEATURE", Short: "Delete a fleet feature",
-		Args: cobra.ExactArgs(1), RunE: runCfFeaturesDelete,
-	}
-	containerFeaturesDescribeCmd = &cobra.Command{
-		Use: "describe FEATURE", Short: "Describe a fleet feature",
-		Args: cobra.ExactArgs(1), RunE: runCfFeaturesDescribe,
-	}
-	containerFeaturesListCmd = &cobra.Command{
-		Use: "list", Short: "List fleet features in a location",
-		Args: cobra.NoArgs, RunE: runCfFeaturesList,
-	}
-	containerFeaturesUpdateCmd = &cobra.Command{
-		Use: "update FEATURE", Short: "Update a fleet feature",
-		Args: cobra.ExactArgs(1), RunE: runCfFeaturesUpdate,
-	}
-
-	// memberships: create/delete/describe/list/update
-	containerMembershipsCreateCmd = &cobra.Command{
-		Use: "create MEMBERSHIP", Short: "Create a fleet membership",
-		Args: cobra.ExactArgs(1), RunE: runCfMembershipsCreate,
-	}
-	containerMembershipsDeleteCmd = &cobra.Command{
-		Use: "delete MEMBERSHIP", Short: "Delete a fleet membership",
-		Args: cobra.ExactArgs(1), RunE: runCfMembershipsDelete,
-	}
-	containerMembershipsDescribeCmd = &cobra.Command{
-		Use: "describe MEMBERSHIP", Short: "Describe a fleet membership",
-		Args: cobra.ExactArgs(1), RunE: runCfMembershipsDescribe,
-	}
-	containerMembershipsListCmd = &cobra.Command{
-		Use: "list", Short: "List fleet memberships in a location",
-		Args: cobra.NoArgs, RunE: runCfMembershipsList,
-	}
-	containerMembershipsUpdateCmd = &cobra.Command{
-		Use: "update MEMBERSHIP", Short: "Update a fleet membership",
-		Args: cobra.ExactArgs(1), RunE: runCfMembershipsUpdate,
-	}
-)
-
-func init() {
+func (s *containerCmds) initContainerFleet() {
 	all := []*cobra.Command{
-		containerFleetsCreateCmd, containerFleetsDeleteCmd, containerFleetsDescribeCmd,
-		containerFleetsListCmd, containerFleetsUpdateCmd,
-		containerFeaturesCreateCmd, containerFeaturesDeleteCmd, containerFeaturesDescribeCmd,
-		containerFeaturesListCmd, containerFeaturesUpdateCmd,
-		containerMembershipsCreateCmd, containerMembershipsDeleteCmd, containerMembershipsDescribeCmd,
-		containerMembershipsListCmd, containerMembershipsUpdateCmd,
+		s.containerFleetsCreateCmd, s.containerFleetsDeleteCmd, s.containerFleetsDescribeCmd,
+		s.containerFleetsListCmd, s.containerFleetsUpdateCmd,
+		s.containerFeaturesCreateCmd, s.containerFeaturesDeleteCmd, s.containerFeaturesDescribeCmd,
+		s.containerFeaturesListCmd, s.containerFeaturesUpdateCmd,
+		s.containerMembershipsCreateCmd, s.containerMembershipsDeleteCmd, s.containerMembershipsDescribeCmd,
+		s.containerMembershipsListCmd, s.containerMembershipsUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagCfLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagCfLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagCfFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagCfFormat, "format", "", "Output format")
 	}
 	for _, c := range []*cobra.Command{
-		containerFleetsCreateCmd, containerFleetsUpdateCmd,
-		containerFeaturesCreateCmd, containerFeaturesUpdateCmd,
-		containerMembershipsCreateCmd, containerMembershipsUpdateCmd,
+		s.containerFleetsCreateCmd, s.containerFleetsUpdateCmd,
+		s.containerFeaturesCreateCmd, s.containerFeaturesUpdateCmd,
+		s.containerMembershipsCreateCmd, s.containerMembershipsUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagCfConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
+		c.Flags().StringVar(&s.flagCfConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
 	for _, c := range []*cobra.Command{
-		containerFleetsUpdateCmd, containerFeaturesUpdateCmd, containerMembershipsUpdateCmd,
+		s.containerFleetsUpdateCmd, s.containerFeaturesUpdateCmd, s.containerMembershipsUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagCfUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+		c.Flags().StringVar(&s.flagCfUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 	}
 	for _, c := range []*cobra.Command{
-		containerFleetsListCmd, containerFeaturesListCmd, containerMembershipsListCmd,
+		s.containerFleetsListCmd, s.containerFeaturesListCmd, s.containerMembershipsListCmd,
 	} {
-		c.Flags().Int64Var(&flagCfPageSize, "page-size", 0, "Maximum results per page")
+		c.Flags().Int64Var(&s.flagCfPageSize, "page-size", 0, "Maximum results per page")
 	}
 
-	containerFleetFleetsCmd.AddCommand(
-		containerFleetsCreateCmd, containerFleetsDeleteCmd, containerFleetsDescribeCmd,
-		containerFleetsListCmd, containerFleetsUpdateCmd,
+	s.containerFleetFleetsCmd.AddCommand(
+		s.containerFleetsCreateCmd, s.containerFleetsDeleteCmd, s.containerFleetsDescribeCmd,
+		s.containerFleetsListCmd, s.containerFleetsUpdateCmd,
 	)
-	containerFleetFeaturesCmd.AddCommand(
-		containerFeaturesCreateCmd, containerFeaturesDeleteCmd, containerFeaturesDescribeCmd,
-		containerFeaturesListCmd, containerFeaturesUpdateCmd,
+	s.containerFleetFeaturesCmd.AddCommand(
+		s.containerFeaturesCreateCmd, s.containerFeaturesDeleteCmd, s.containerFeaturesDescribeCmd,
+		s.containerFeaturesListCmd, s.containerFeaturesUpdateCmd,
 	)
-	containerFleetMembershipsCmd.AddCommand(
-		containerMembershipsCreateCmd, containerMembershipsDeleteCmd, containerMembershipsDescribeCmd,
-		containerMembershipsListCmd, containerMembershipsUpdateCmd,
+	s.containerFleetMembershipsCmd.AddCommand(
+		s.containerMembershipsCreateCmd, s.containerMembershipsDeleteCmd, s.containerMembershipsDescribeCmd,
+		s.containerMembershipsListCmd, s.containerMembershipsUpdateCmd,
 	)
-	containerFleetCmd.AddCommand(containerFleetFleetsCmd, containerFleetFeaturesCmd, containerFleetMembershipsCmd)
-	containerHubCmd.AddCommand(containerFleetFleetsCmd, containerFleetFeaturesCmd, containerFleetMembershipsCmd)
+	s.containerFleetCmd.AddCommand(s.containerFleetFleetsCmd, s.containerFleetFeaturesCmd, s.containerFleetMembershipsCmd)
+	s.containerHubCmd.AddCommand(s.containerFleetFleetsCmd, s.containerFleetFeaturesCmd, s.containerFleetMembershipsCmd)
 
 	// config-management surface added upstream through 580.0.0 (#1805). Register
 	// the subcommands as stubs so `gcloud container fleet|hub config-management`
 	// is discoverable; a follow-up will wire them up to the GKE Hub API.
-	for _, parent := range []*cobra.Command{containerFleetCmd, containerHubCmd} {
+	for _, parent := range []*cobra.Command{s.containerFleetCmd, s.containerHubCmd} {
 		registerStubGroup(parent, "config-management",
 			"Manage Config Management fleet feature",
 			"apply", "delete", "describe", "disable", "enable",
@@ -158,33 +73,33 @@ func init() {
 
 	// rollouts and rolloutsequences promoted to GA in 575.0.0 (#1805). Register
 	// as stub groups until the underlying GKE Hub rollout API is wired up.
-	registerStubGroup(containerFleetCmd, "rollouts",
+	registerStubGroup(s.containerFleetCmd, "rollouts",
 		"Manage GKE Hub fleet rollouts",
 		"cancel", "create", "delete", "describe", "force-complete-stage",
 		"list", "pause", "resume")
-	registerStubGroup(containerFleetCmd, "rolloutsequences",
+	registerStubGroup(s.containerFleetCmd, "rolloutsequences",
 		"Manage GKE Hub fleet rollout sequences",
 		"create", "delete", "describe", "list", "update", "upgrade")
 
-	containerCmd.AddCommand(containerFleetCmd, containerHubCmd)
+	s.containerCmd.AddCommand(s.containerFleetCmd, s.containerHubCmd)
 }
 
-func cfLocationParent() (string, error) {
-	project, err := resolveProject()
+func (s *containerCmds) cfLocationParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	if flagCfLocation == "" {
+	if s.flagCfLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagCfLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagCfLocation), nil
 }
 
-func cfResource(collection, id string) (string, error) {
+func (s *containerCmds) cfResource(collection, id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := cfLocationParent()
+	parent, err := s.cfLocationParent()
 	if err != nil {
 		return "", err
 	}
@@ -193,17 +108,17 @@ func cfResource(collection, id string) (string, error) {
 
 // fleets
 
-func runCfFleetsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := cfLocationParent()
+func (s *containerCmds) runCfFleetsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.cfLocationParent()
 	if err != nil {
 		return err
 	}
 	body := &gkehub.Fleet{}
-	if err := loadYAMLOrJSONInto(flagCfConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCfConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -211,17 +126,17 @@ func runCfFleetsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating fleet: %w", err)
 	}
-	fmt.Printf("Create fleet [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCfFormat)
+	fmt.Fprintf(s.inv.stdout, "Create fleet [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCfFormat)
 }
 
-func runCfFleetsDelete(cmd *cobra.Command, args []string) error {
-	name, err := cfResource("fleets", args[0])
+func (s *containerCmds) runCfFleetsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.cfResource("fleets", args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -229,17 +144,17 @@ func runCfFleetsDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting fleet: %w", err)
 	}
-	fmt.Printf("Delete fleet [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCfFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete fleet [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCfFormat)
 }
 
-func runCfFleetsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := cfResource("fleets", args[0])
+func (s *containerCmds) runCfFleetsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.cfResource("fleets", args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -247,16 +162,16 @@ func runCfFleetsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing fleet: %w", err)
 	}
-	return emitFormatted(got, flagCfFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagCfFormat)
 }
 
-func runCfFleetsList(cmd *cobra.Command, args []string) error {
-	parent, err := cfLocationParent()
+func (s *containerCmds) runCfFleetsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.cfLocationParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -264,8 +179,8 @@ func runCfFleetsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Fleets.List(parent).Context(ctx)
-		if flagCfPageSize > 0 {
-			call = call.PageSize(flagCfPageSize)
+		if s.flagCfPageSize > 0 {
+			call = call.PageSize(s.flagCfPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -280,24 +195,24 @@ func runCfFleetsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagCfFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagCfFormat)
 }
 
-func runCfFleetsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := cfResource("fleets", args[0])
+func (s *containerCmds) runCfFleetsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.cfResource("fleets", args[0])
 	if err != nil {
 		return err
 	}
 	body := &gkehub.Fleet{}
-	if err := loadYAMLOrJSONInto(flagCfConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCfConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagCfUpdateMask
+	mask := s.flagCfUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -309,23 +224,23 @@ func runCfFleetsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating fleet: %w", err)
 	}
-	fmt.Printf("Update fleet [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCfFormat)
+	fmt.Fprintf(s.inv.stdout, "Update fleet [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCfFormat)
 }
 
 // features
 
-func runCfFeaturesCreate(cmd *cobra.Command, args []string) error {
-	parent, err := cfLocationParent()
+func (s *containerCmds) runCfFeaturesCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.cfLocationParent()
 	if err != nil {
 		return err
 	}
 	body := &gkehub.Feature{}
-	if err := loadYAMLOrJSONInto(flagCfConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCfConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -333,17 +248,17 @@ func runCfFeaturesCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating feature: %w", err)
 	}
-	fmt.Printf("Create feature [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCfFormat)
+	fmt.Fprintf(s.inv.stdout, "Create feature [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCfFormat)
 }
 
-func runCfFeaturesDelete(cmd *cobra.Command, args []string) error {
-	name, err := cfResource("features", args[0])
+func (s *containerCmds) runCfFeaturesDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.cfResource("features", args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -351,17 +266,17 @@ func runCfFeaturesDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting feature: %w", err)
 	}
-	fmt.Printf("Delete feature [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCfFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete feature [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCfFormat)
 }
 
-func runCfFeaturesDescribe(cmd *cobra.Command, args []string) error {
-	name, err := cfResource("features", args[0])
+func (s *containerCmds) runCfFeaturesDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.cfResource("features", args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -369,16 +284,16 @@ func runCfFeaturesDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing feature: %w", err)
 	}
-	return emitFormatted(got, flagCfFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagCfFormat)
 }
 
-func runCfFeaturesList(cmd *cobra.Command, args []string) error {
-	parent, err := cfLocationParent()
+func (s *containerCmds) runCfFeaturesList(cmd *cobra.Command, args []string) error {
+	parent, err := s.cfLocationParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -386,8 +301,8 @@ func runCfFeaturesList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Features.List(parent).Context(ctx)
-		if flagCfPageSize > 0 {
-			call = call.PageSize(flagCfPageSize)
+		if s.flagCfPageSize > 0 {
+			call = call.PageSize(s.flagCfPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -402,24 +317,24 @@ func runCfFeaturesList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagCfFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagCfFormat)
 }
 
-func runCfFeaturesUpdate(cmd *cobra.Command, args []string) error {
-	name, err := cfResource("features", args[0])
+func (s *containerCmds) runCfFeaturesUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.cfResource("features", args[0])
 	if err != nil {
 		return err
 	}
 	body := &gkehub.Feature{}
-	if err := loadYAMLOrJSONInto(flagCfConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCfConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagCfUpdateMask
+	mask := s.flagCfUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -431,23 +346,23 @@ func runCfFeaturesUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating feature: %w", err)
 	}
-	fmt.Printf("Update feature [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCfFormat)
+	fmt.Fprintf(s.inv.stdout, "Update feature [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCfFormat)
 }
 
 // memberships
 
-func runCfMembershipsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := cfLocationParent()
+func (s *containerCmds) runCfMembershipsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.cfLocationParent()
 	if err != nil {
 		return err
 	}
 	body := &gkehub.Membership{}
-	if err := loadYAMLOrJSONInto(flagCfConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCfConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -455,17 +370,17 @@ func runCfMembershipsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating membership: %w", err)
 	}
-	fmt.Printf("Create membership [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCfFormat)
+	fmt.Fprintf(s.inv.stdout, "Create membership [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCfFormat)
 }
 
-func runCfMembershipsDelete(cmd *cobra.Command, args []string) error {
-	name, err := cfResource("memberships", args[0])
+func (s *containerCmds) runCfMembershipsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.cfResource("memberships", args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -473,17 +388,17 @@ func runCfMembershipsDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting membership: %w", err)
 	}
-	fmt.Printf("Delete membership [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCfFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete membership [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCfFormat)
 }
 
-func runCfMembershipsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := cfResource("memberships", args[0])
+func (s *containerCmds) runCfMembershipsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.cfResource("memberships", args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -491,16 +406,16 @@ func runCfMembershipsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing membership: %w", err)
 	}
-	return emitFormatted(got, flagCfFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagCfFormat)
 }
 
-func runCfMembershipsList(cmd *cobra.Command, args []string) error {
-	parent, err := cfLocationParent()
+func (s *containerCmds) runCfMembershipsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.cfLocationParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -508,8 +423,8 @@ func runCfMembershipsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Memberships.List(parent).Context(ctx)
-		if flagCfPageSize > 0 {
-			call = call.PageSize(flagCfPageSize)
+		if s.flagCfPageSize > 0 {
+			call = call.PageSize(s.flagCfPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -524,24 +439,24 @@ func runCfMembershipsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagCfFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagCfFormat)
 }
 
-func runCfMembershipsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := cfResource("memberships", args[0])
+func (s *containerCmds) runCfMembershipsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.cfResource("memberships", args[0])
 	if err != nil {
 		return err
 	}
 	body := &gkehub.Membership{}
-	if err := loadYAMLOrJSONInto(flagCfConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCfConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagCfUpdateMask
+	mask := s.flagCfUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -553,6 +468,6 @@ func runCfMembershipsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating membership: %w", err)
 	}
-	fmt.Printf("Update membership [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCfFormat)
+	fmt.Fprintf(s.inv.stdout, "Update membership [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCfFormat)
 }

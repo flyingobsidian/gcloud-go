@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -72,19 +71,19 @@ func fromFirestoreOp(op *firestore.GoogleLongrunningOperation) *GoogleLongrunnin
 }
 
 // firestoreFinishOp either reports the operation name (async) or waits.
-func firestoreFinishOp(ctx context.Context, svc *firestore.Service, op *firestore.GoogleLongrunningOperation, verb, name string, async bool) error {
+func (g *firestoreCmds) firestoreFinishOp(ctx context.Context, svc *firestore.Service, op *firestore.GoogleLongrunningOperation, verb, name string, async bool) error {
 	wrapped := fromFirestoreOp(op)
 	if async {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, wrapped.Name)
-		return emitFormatted(op, "")
+		fmt.Fprintf(g.inv.stderr, "%s in progress (operation: %s).\n", verb, wrapped.Name)
+		return emitFormattedTo(g.inv.stdout, op, "")
 	}
 	final, err := firestoreWaitOp(ctx, svc, wrapped)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
+	fmt.Fprintf(g.inv.stderr, "%s [%s] completed.\n", verb, name)
 	if final.Response != nil {
-		return emitFormatted(final.Response, "")
+		return emitFormattedTo(g.inv.stdout, final.Response, "")
 	}
 	return nil
 }

@@ -7,7 +7,8 @@ import (
 )
 
 func sccSubgroup(name string) *cobra.Command {
-	for _, c := range sccCmd.Commands() {
+	grp := newSccCmds(legacyTestInvocation())
+	for _, c := range grp.sccCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -227,6 +228,7 @@ func TestSccFindingsListAcceptsPositional(t *testing.T) {
 }
 
 func TestSccResolveParentFromArg(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	cases := []struct {
 		name    string
 		arg     string
@@ -241,7 +243,7 @@ func TestSccResolveParentFromArg(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := sccResolveParentFromArg(tc.arg)
+			got, err := grp.sccResolveParentFromArg(tc.arg)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("want error, got nil (result=%q)", got)

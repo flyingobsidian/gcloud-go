@@ -85,10 +85,11 @@ func TestAssuredValidateUpdateAndDeleteFlags(t *testing.T) {
 }
 
 func TestAssuredCloudControlConfigs(t *testing.T) {
-	t.Cleanup(func() { flagAssuredCloudControlCfg, flagAssuredCloudControlFile = nil, "" })
+	grp := newAssuredCmds(legacyTestInvocation())
+	t.Cleanup(func() { grp.flagAssuredCloudControlCfg, grp.flagAssuredCloudControlFile = nil, "" })
 
-	flagAssuredCloudControlCfg = []string{"cloud_control=c1,revision=2,enforcement_mode=detective"}
-	got, err := assuredCloudControlConfigs()
+	grp.flagAssuredCloudControlCfg = []string{"cloud_control=c1,revision=2,enforcement_mode=detective"}
+	got, err := grp.assuredCloudControlConfigs()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,8 +111,8 @@ func TestAssuredCloudControlConfigs(t *testing.T) {
 	if err := os.WriteFile(f, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	flagAssuredCloudControlCfg, flagAssuredCloudControlFile = nil, f
-	got, err = assuredCloudControlConfigs()
+	grp.flagAssuredCloudControlCfg, grp.flagAssuredCloudControlFile = nil, f
+	got, err = grp.assuredCloudControlConfigs()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,36 +130,37 @@ func TestAssuredCloudControlConfigs(t *testing.T) {
 		t.Errorf("file: got %v\nwant %v", got, want)
 	}
 
-	flagAssuredCloudControlFile = ""
-	flagAssuredCloudControlCfg = []string{"cloud_control=c1,revision=2,enforcement_mode=bogus"}
-	if _, err := assuredCloudControlConfigs(); err == nil || !strings.Contains(err.Error(), "Invalid enforcement mode: bogus") {
+	grp.flagAssuredCloudControlFile = ""
+	grp.flagAssuredCloudControlCfg = []string{"cloud_control=c1,revision=2,enforcement_mode=bogus"}
+	if _, err := grp.assuredCloudControlConfigs(); err == nil || !strings.Contains(err.Error(), "Invalid enforcement mode: bogus") {
 		t.Errorf("bad mode: %v", err)
 	}
 }
 
 func TestAssuredResourceAndCmekConfig(t *testing.T) {
+	grp := newAssuredCmds(legacyTestInvocation())
 	t.Cleanup(func() {
-		flagAssuredTargetProject, flagAssuredNewProjectConfig = "", nil
-		flagAssuredCmekKeyRing, flagAssuredCmekDedicated = "", nil
+		grp.flagAssuredTargetProject, grp.flagAssuredNewProjectConfig = "", nil
+		grp.flagAssuredCmekKeyRing, grp.flagAssuredCmekDedicated = "", nil
 	})
-	flagAssuredNewProjectConfig = map[string]string{"parent": "folders/1", "display_name": "P", "billing_account": "billingAccounts/B"}
-	rc, err := assuredResourceConfig()
+	grp.flagAssuredNewProjectConfig = map[string]string{"parent": "folders/1", "display_name": "P", "billing_account": "billingAccounts/B"}
+	rc, err := grp.assuredResourceConfig()
 	if err != nil || !reflect.DeepEqual(rc, map[string]any{"newProjectConfig": map[string]any{
 		"parent": "folders/1", "displayName": "P", "billingAccount": "billingAccounts/B"}}) {
 		t.Errorf("new project config = %v, %v", rc, err)
 	}
-	flagAssuredNewProjectConfig = map[string]string{"parent": "folders/1"}
-	if _, err := assuredResourceConfig(); err == nil {
+	grp.flagAssuredNewProjectConfig = map[string]string{"parent": "folders/1"}
+	if _, err := grp.assuredResourceConfig(); err == nil {
 		t.Error("expected error for incomplete new-project-config")
 	}
 
-	flagAssuredCmekKeyRing = "projects/k/locations/us/keyRings/r"
-	flagAssuredCmekDedicated = map[string]string{"billing_account": "billingAccounts/B"}
-	if _, err := assuredCmekConfig(false); err == nil {
+	grp.flagAssuredCmekKeyRing = "projects/k/locations/us/keyRings/r"
+	grp.flagAssuredCmekDedicated = map[string]string{"billing_account": "billingAccounts/B"}
+	if _, err := grp.assuredCmekConfig(false); err == nil {
 		t.Error("expected error for dedicated CMEK project on non-folder target")
 	}
-	cfg, err := assuredCmekConfig(true)
-	if err != nil || !reflect.DeepEqual(cfg, map[string]any{"keyRingId": flagAssuredCmekKeyRing,
+	cfg, err := grp.assuredCmekConfig(true)
+	if err != nil || !reflect.DeepEqual(cfg, map[string]any{"keyRingId": grp.flagAssuredCmekKeyRing,
 		"dedicatedProjectConfig": map[string]any{"billingAccount": "billingAccounts/B"}}) {
 		t.Errorf("cmek config = %v, %v", cfg, err)
 	}
@@ -187,12 +189,13 @@ func TestEmitAssuredV2List(t *testing.T) {
 }
 
 func TestAssuredWorkloadRef(t *testing.T) {
-	t.Cleanup(func() { flagAssuredOrg, flagAssuredLocation = "", "" })
-	if _, err := assuredWorkloadRef("w"); err == nil {
+	grp := newAssuredCmds(legacyTestInvocation())
+	t.Cleanup(func() { grp.flagAssuredOrg, grp.flagAssuredLocation = "", "" })
+	if _, err := grp.assuredWorkloadRef("w"); err == nil {
 		t.Error("expected error without --organization/--location")
 	}
 	full := "organizations/1/locations/us-central1/workloads/w"
-	if got, err := assuredWorkloadRef(full); err != nil || got != full {
+	if got, err := grp.assuredWorkloadRef(full); err != nil || got != full {
 		t.Errorf("full name = %q, %v", got, err)
 	}
 	if got := assuredRegionOf(full); got != "us-central1" {

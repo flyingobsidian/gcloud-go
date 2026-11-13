@@ -7,7 +7,8 @@ import (
 )
 
 func sourceSubgroup(name string) *cobra.Command {
-	for _, c := range sourceCmd.Commands() {
+	grp := newSourceCmds(legacyTestInvocation())
+	for _, c := range grp.sourceCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

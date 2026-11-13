@@ -4,81 +4,46 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	iamv2 "google.golang.org/api/iam/v2"
 )
 
 // --- gcloud iam policies (#1010, IAM v2 Deny policies) ---
 
-var iamPoliciesCmd = &cobra.Command{Use: "policies", Short: "Manage custom IAM Deny policies"}
-
-var (
-	iamPolCreateCmd = &cobra.Command{
-		Use: "create POLICY_ID", Short: "Create a Deny policy from a --policy-file",
-		Args: cobra.ExactArgs(1), RunE: runIAMPolCreate,
-	}
-	iamPolDeleteCmd = &cobra.Command{
-		Use: "delete POLICY_ID", Short: "Delete a Deny policy",
-		Args: cobra.ExactArgs(1), RunE: runIAMPolDelete,
-	}
-	iamPolGetCmd = &cobra.Command{
-		Use: "get POLICY_ID", Short: "Get a Deny policy",
-		Args: cobra.ExactArgs(1), RunE: runIAMPolGet,
-	}
-	iamPolListCmd = &cobra.Command{
-		Use: "list", Short: "List Deny policies on an attachment point",
-		Args: cobra.NoArgs, RunE: runIAMPolList,
-	}
-	iamPolUpdateCmd = &cobra.Command{
-		Use: "update POLICY_ID", Short: "Update a Deny policy from a --policy-file",
-		Args: cobra.ExactArgs(1), RunE: runIAMPolUpdate,
-	}
-)
-
-var (
-	flagIAMPolAttach string
-	flagIAMPolKind   string
-	flagIAMPolFile   string
-	flagIAMPolFmt    string
-	flagIAMPolAsync  bool
-)
-
-func init() {
-	all := []*cobra.Command{iamPolCreateCmd, iamPolDeleteCmd, iamPolGetCmd, iamPolListCmd, iamPolUpdateCmd}
+func (s *iamCmds) initIamPolicies() {
+	all := []*cobra.Command{s.iamPolCreateCmd, s.iamPolDeleteCmd, s.iamPolGetCmd, s.iamPolListCmd, s.iamPolUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagIAMPolAttach, "attachment-point", "",
+		c.Flags().StringVar(&s.flagIAMPolAttach, "attachment-point", "",
 			"Resource the policy is attached to, e.g. cloudresourcemanager.googleapis.com/projects/PROJECT (required)")
 		_ = c.MarkFlagRequired("attachment-point")
-		c.Flags().StringVar(&flagIAMPolKind, "kind", "denypolicies",
+		c.Flags().StringVar(&s.flagIAMPolKind, "kind", "denypolicies",
 			"Policy kind (currently only 'denypolicies' is supported)")
 	}
-	for _, c := range []*cobra.Command{iamPolCreateCmd, iamPolUpdateCmd} {
-		c.Flags().StringVar(&flagIAMPolFile, "policy-file", "",
+	for _, c := range []*cobra.Command{s.iamPolCreateCmd, s.iamPolUpdateCmd} {
+		c.Flags().StringVar(&s.flagIAMPolFile, "policy-file", "",
 			"Path to a JSON/YAML file with the Policy body (required)")
 		_ = c.MarkFlagRequired("policy-file")
-		c.Flags().BoolVar(&flagIAMPolAsync, "async", false,
+		c.Flags().BoolVar(&s.flagIAMPolAsync, "async", false,
 			"Return the long-running operation without waiting")
 	}
-	iamPolDeleteCmd.Flags().BoolVar(&flagIAMPolAsync, "async", false,
+	s.iamPolDeleteCmd.Flags().BoolVar(&s.flagIAMPolAsync, "async", false,
 		"Return the long-running operation without waiting")
-	for _, c := range []*cobra.Command{iamPolGetCmd, iamPolListCmd} {
-		c.Flags().StringVar(&flagIAMPolFmt, "format", "", "Output format")
+	for _, c := range []*cobra.Command{s.iamPolGetCmd, s.iamPolListCmd} {
+		c.Flags().StringVar(&s.flagIAMPolFmt, "format", "", "Output format")
 	}
 
-	iamPoliciesCmd.AddCommand(all...)
-	iamCmd.AddCommand(iamPoliciesCmd)
+	s.iamPoliciesCmd.AddCommand(all...)
+	s.iamCmd.AddCommand(s.iamPoliciesCmd)
 }
 
-func iamPolParent() string {
-	return fmt.Sprintf("policies/%s/%s", url.PathEscape(flagIAMPolAttach), flagIAMPolKind)
+func (s *iamCmds) iamPolParent() string {
+	return fmt.Sprintf("policies/%s/%s", url.PathEscape(s.flagIAMPolAttach), s.flagIAMPolKind)
 }
 
-func iamPolName(id string) string {
-	return fmt.Sprintf("%s/%s", iamPolParent(), id)
+func (s *iamCmds) iamPolName(id string) string {
+	return fmt.Sprintf("%s/%s", s.iamPolParent(), id)
 }
 
 func iamWaitOp(ctx context.Context, svc *iamv2.Service, op *iamv2.GoogleLongrunningOperation) (*iamv2.GoogleLongrunningOperation, error) {
@@ -95,75 +60,75 @@ func iamWaitOp(ctx context.Context, svc *iamv2.Service, op *iamv2.GoogleLongrunn
 	return op, nil
 }
 
-func iamFinishOp(ctx context.Context, svc *iamv2.Service, op *iamv2.GoogleLongrunningOperation, verb, name string, async bool) error {
+func (s *iamCmds) iamFinishOp(ctx context.Context, svc *iamv2.Service, op *iamv2.GoogleLongrunningOperation, verb, name string, async bool) error {
 	if async {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, "")
+		fmt.Fprintf(s.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	final, err := iamWaitOp(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
+	fmt.Fprintf(s.inv.stderr, "%s [%s] completed.\n", verb, name)
 	if final.Response != nil {
-		return emitFormatted(final.Response, "")
+		return emitFormattedTo(s.inv.stdout, final.Response, "")
 	}
 	return nil
 }
 
-func runIAMPolCreate(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runIAMPolCreate(cmd *cobra.Command, args []string) error {
 	p := &iamv2.GoogleIamV2Policy{}
-	if err := loadYAMLOrJSONInto(flagIAMPolFile, p); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagIAMPolFile, p); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMV2Service(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAMV2(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Policies.CreatePolicy(iamPolParent(), p).PolicyId(args[0]).Context(ctx).Do()
+	op, err := svc.Policies.CreatePolicy(s.iamPolParent(), p).PolicyId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating policy: %w", err)
 	}
-	return iamFinishOp(ctx, svc, op, "Create policy", args[0], flagIAMPolAsync)
+	return s.iamFinishOp(ctx, svc, op, "Create policy", args[0], s.flagIAMPolAsync)
 }
 
-func runIAMPolDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMV2Service(ctx, flagAccount)
+func (s *iamCmds) runIAMPolDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAMV2(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Policies.Delete(iamPolName(args[0])).Context(ctx).Do()
+	op, err := svc.Policies.Delete(s.iamPolName(args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting policy: %w", err)
 	}
-	return iamFinishOp(ctx, svc, op, "Delete policy", args[0], flagIAMPolAsync)
+	return s.iamFinishOp(ctx, svc, op, "Delete policy", args[0], s.flagIAMPolAsync)
 }
 
-func runIAMPolGet(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMV2Service(ctx, flagAccount)
+func (s *iamCmds) runIAMPolGet(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAMV2(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Policies.Get(iamPolName(args[0])).Context(ctx).Do()
+	got, err := svc.Policies.Get(s.iamPolName(args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting policy: %w", err)
 	}
-	return emitFormatted(got, flagIAMPolFmt)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIAMPolFmt)
 }
 
-func runIAMPolList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMV2Service(ctx, flagAccount)
+func (s *iamCmds) runIAMPolList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAMV2(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*iamv2.GoogleIamV2Policy
 	pageToken := ""
 	for {
-		call := svc.Policies.ListPolicies(iamPolParent()).Context(ctx)
+		call := svc.Policies.ListPolicies(s.iamPolParent()).Context(ctx)
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
@@ -177,29 +142,29 @@ func runIAMPolList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagIAMPolFmt != "" {
-		return emitFormatted(all, flagIAMPolFmt)
+	if s.flagIAMPolFmt != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagIAMPolFmt)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, p := range all {
-		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.DisplayName)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(p.Name), p.DisplayName)
 	}
 	return nil
 }
 
-func runIAMPolUpdate(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runIAMPolUpdate(cmd *cobra.Command, args []string) error {
 	p := &iamv2.GoogleIamV2Policy{}
-	if err := loadYAMLOrJSONInto(flagIAMPolFile, p); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagIAMPolFile, p); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMV2Service(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAMV2(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Policies.Update(iamPolName(args[0]), p).Context(ctx).Do()
+	op, err := svc.Policies.Update(s.iamPolName(args[0]), p).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating policy: %w", err)
 	}
-	return iamFinishOp(ctx, svc, op, "Update policy", args[0], flagIAMPolAsync)
+	return s.iamFinishOp(ctx, svc, op, "Update policy", args[0], s.flagIAMPolAsync)
 }

@@ -7,7 +7,8 @@ import (
 )
 
 func filestoreSubgroup(name string) *cobra.Command {
-	for _, c := range filestoreCmd.Commands() {
+	grp := newFilestoreCmds(legacyTestInvocation())
+	for _, c := range grp.filestoreCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

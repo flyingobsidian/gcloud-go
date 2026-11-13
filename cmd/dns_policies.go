@@ -1,75 +1,42 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dns "google.golang.org/api/dns/v1"
 )
 
 // --- gcloud dns policies (#1539) ---
 
-var dnsPolCmd = &cobra.Command{Use: "policies", Short: "Manage Cloud DNS policies"}
-
-var (
-	flagDNSPolFormat     string
-	flagDNSPolConfigFile string
-	flagDNSPolMaxResults int64
-)
-
-var (
-	dnsPolCreateCmd = &cobra.Command{
-		Use: "create POLICY", Short: "Create a DNS policy",
-		Args: cobra.ExactArgs(1), RunE: runDNSPolCreate,
-	}
-	dnsPolDeleteCmd = &cobra.Command{
-		Use: "delete POLICY", Short: "Delete a DNS policy",
-		Args: cobra.ExactArgs(1), RunE: runDNSPolDelete,
-	}
-	dnsPolDescribeCmd = &cobra.Command{
-		Use: "describe POLICY", Short: "Describe a DNS policy",
-		Args: cobra.ExactArgs(1), RunE: runDNSPolDescribe,
-	}
-	dnsPolListCmd = &cobra.Command{
-		Use: "list", Short: "List DNS policies",
-		Args: cobra.NoArgs, RunE: runDNSPolList,
-	}
-	dnsPolUpdateCmd = &cobra.Command{
-		Use: "update POLICY", Short: "Update a DNS policy",
-		Args: cobra.ExactArgs(1), RunE: runDNSPolUpdate,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{dnsPolCreateCmd, dnsPolDeleteCmd, dnsPolDescribeCmd, dnsPolListCmd, dnsPolUpdateCmd}
+func (s *dnsCmds) initDnsPolicies() {
+	all := []*cobra.Command{s.dnsPolCreateCmd, s.dnsPolDeleteCmd, s.dnsPolDescribeCmd, s.dnsPolListCmd, s.dnsPolUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDNSPolFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDNSPolFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dnsPolCreateCmd, dnsPolUpdateCmd} {
-		c.Flags().StringVar(&flagDNSPolConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dnsPolCreateCmd, s.dnsPolUpdateCmd} {
+		c.Flags().StringVar(&s.flagDNSPolConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Policy body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dnsPolListCmd.Flags().Int64Var(&flagDNSPolMaxResults, "limit", 0, "Maximum results per page")
+	s.dnsPolListCmd.Flags().Int64Var(&s.flagDNSPolMaxResults, "limit", 0, "Maximum results per page")
 
-	dnsPolCmd.AddCommand(all...)
-	dnsCmd.AddCommand(dnsPolCmd)
+	s.dnsPolCmd.AddCommand(all...)
+	s.dnsCmd.AddCommand(s.dnsPolCmd)
 }
 
-func runDNSPolCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSPolCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dns.Policy{}
-	if err := loadYAMLOrJSONInto(flagDNSPolConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDNSPolConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = args[0]
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -77,34 +44,34 @@ func runDNSPolCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating DNS policy: %w", err)
 	}
-	fmt.Printf("Created DNS policy [%s].\n", args[0])
-	return emitFormatted(got, flagDNSPolFormat)
+	fmt.Fprintf(s.inv.stdout, "Created DNS policy [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSPolFormat)
 }
 
-func runDNSPolDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSPolDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
 	if err := svc.Policies.Delete(project, args[0]).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting DNS policy: %w", err)
 	}
-	fmt.Printf("Deleted DNS policy [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted DNS policy [%s].\n", args[0])
 	return nil
 }
 
-func runDNSPolDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSPolDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -112,16 +79,16 @@ func runDNSPolDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing DNS policy: %w", err)
 	}
-	return emitFormatted(got, flagDNSPolFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSPolFormat)
 }
 
-func runDNSPolList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSPolList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,8 +96,8 @@ func runDNSPolList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Policies.List(project).Context(ctx)
-		if flagDNSPolMaxResults > 0 {
-			call = call.MaxResults(flagDNSPolMaxResults)
+		if s.flagDNSPolMaxResults > 0 {
+			call = call.MaxResults(s.flagDNSPolMaxResults)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -145,20 +112,20 @@ func runDNSPolList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDNSPolFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDNSPolFormat)
 }
 
-func runDNSPolUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSPolUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dns.Policy{}
-	if err := loadYAMLOrJSONInto(flagDNSPolConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDNSPolConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -166,6 +133,6 @@ func runDNSPolUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating DNS policy: %w", err)
 	}
-	fmt.Printf("Updated DNS policy [%s].\n", args[0])
-	return emitFormatted(got, flagDNSPolFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated DNS policy [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSPolFormat)
 }

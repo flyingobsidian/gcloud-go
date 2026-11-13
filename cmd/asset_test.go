@@ -79,13 +79,14 @@ func TestNormalizeContentType(t *testing.T) {
 }
 
 func TestBuildAssetExportOutputConfigGCS(t *testing.T) {
-	flagAssetExportGCS = "gs://bucket/object"
-	flagAssetExportGCSPrefix = ""
-	flagAssetExportBQDataset = ""
-	flagAssetExportBQTable = ""
-	t.Cleanup(func() { flagAssetExportGCS, flagAssetExportGCSPrefix = "", "" })
+	grp := newAssetCmds(legacyTestInvocation())
+	grp.flagAssetExportGCS = "gs://bucket/object"
+	grp.flagAssetExportGCSPrefix = ""
+	grp.flagAssetExportBQDataset = ""
+	grp.flagAssetExportBQTable = ""
+	t.Cleanup(func() { grp.flagAssetExportGCS, grp.flagAssetExportGCSPrefix = "", "" })
 
-	cfg, err := buildAssetExportOutputConfig()
+	cfg, err := grp.buildAssetExportOutputConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,16 +99,17 @@ func TestBuildAssetExportOutputConfigGCS(t *testing.T) {
 }
 
 func TestBuildAssetExportOutputConfigBQ(t *testing.T) {
-	flagAssetExportGCS = ""
-	flagAssetExportGCSPrefix = ""
-	flagAssetExportBQDataset = "projects/p/datasets/d"
-	flagAssetExportBQTable = "assets_snapshot"
-	flagAssetExportBQForce = true
+	grp := newAssetCmds(legacyTestInvocation())
+	grp.flagAssetExportGCS = ""
+	grp.flagAssetExportGCSPrefix = ""
+	grp.flagAssetExportBQDataset = "projects/p/datasets/d"
+	grp.flagAssetExportBQTable = "assets_snapshot"
+	grp.flagAssetExportBQForce = true
 	t.Cleanup(func() {
-		flagAssetExportBQDataset, flagAssetExportBQTable, flagAssetExportBQForce = "", "", false
+		grp.flagAssetExportBQDataset, grp.flagAssetExportBQTable, grp.flagAssetExportBQForce = "", "", false
 	})
 
-	cfg, err := buildAssetExportOutputConfig()
+	cfg, err := grp.buildAssetExportOutputConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,46 +120,48 @@ func TestBuildAssetExportOutputConfigBQ(t *testing.T) {
 }
 
 func TestBuildAssetExportOutputConfigErrors(t *testing.T) {
-	flagAssetExportGCS, flagAssetExportGCSPrefix = "", ""
-	flagAssetExportBQDataset, flagAssetExportBQTable = "", ""
-	if _, err := buildAssetExportOutputConfig(); err == nil {
+	grp := newAssetCmds(legacyTestInvocation())
+	grp.flagAssetExportGCS, grp.flagAssetExportGCSPrefix = "", ""
+	grp.flagAssetExportBQDataset, grp.flagAssetExportBQTable = "", ""
+	if _, err := grp.buildAssetExportOutputConfig(); err == nil {
 		t.Error("expected error for no destination")
 	}
 
-	flagAssetExportGCS = "gs://bucket/o"
-	flagAssetExportBQDataset = "projects/p/datasets/d"
-	if _, err := buildAssetExportOutputConfig(); err == nil {
+	grp.flagAssetExportGCS = "gs://bucket/o"
+	grp.flagAssetExportBQDataset = "projects/p/datasets/d"
+	if _, err := grp.buildAssetExportOutputConfig(); err == nil {
 		t.Error("expected error when both GCS and BQ set")
 	}
-	t.Cleanup(func() { flagAssetExportGCS, flagAssetExportBQDataset = "", "" })
+	t.Cleanup(func() { grp.flagAssetExportGCS, grp.flagAssetExportBQDataset = "", "" })
 
-	flagAssetExportGCS = ""
-	flagAssetExportBQTable = ""
-	if _, err := buildAssetExportOutputConfig(); err == nil {
+	grp.flagAssetExportGCS = ""
+	grp.flagAssetExportBQTable = ""
+	if _, err := grp.buildAssetExportOutputConfig(); err == nil {
 		t.Error("expected error when only BQ dataset set")
 	}
 }
 
 func TestBuildIamPolicyAnalysisQuery(t *testing.T) {
-	flagAssetAnalyzeFullResourceName = "//cloudresourcemanager.googleapis.com/projects/123"
-	flagAssetAnalyzeIdentity = "user:alice@example.com"
-	flagAssetAnalyzePermissions = []string{"compute.instances.get"}
-	flagAssetAnalyzeExpandGroups = true
+	grp := newAssetCmds(legacyTestInvocation())
+	grp.flagAssetAnalyzeFullResourceName = "//cloudresourcemanager.googleapis.com/projects/123"
+	grp.flagAssetAnalyzeIdentity = "user:alice@example.com"
+	grp.flagAssetAnalyzePermissions = []string{"compute.instances.get"}
+	grp.flagAssetAnalyzeExpandGroups = true
 	t.Cleanup(func() {
-		flagAssetAnalyzeFullResourceName = ""
-		flagAssetAnalyzeIdentity = ""
-		flagAssetAnalyzePermissions = nil
-		flagAssetAnalyzeExpandGroups = false
+		grp.flagAssetAnalyzeFullResourceName = ""
+		grp.flagAssetAnalyzeIdentity = ""
+		grp.flagAssetAnalyzePermissions = nil
+		grp.flagAssetAnalyzeExpandGroups = false
 	})
 
-	q := buildIamPolicyAnalysisQuery("projects/my-project")
+	q := grp.buildIamPolicyAnalysisQuery("projects/my-project")
 	if q.Scope != "projects/my-project" {
 		t.Errorf("Scope = %q", q.Scope)
 	}
-	if q.ResourceSelector == nil || q.ResourceSelector.FullResourceName != flagAssetAnalyzeFullResourceName {
+	if q.ResourceSelector == nil || q.ResourceSelector.FullResourceName != grp.flagAssetAnalyzeFullResourceName {
 		t.Errorf("ResourceSelector = %+v", q.ResourceSelector)
 	}
-	if q.IdentitySelector == nil || q.IdentitySelector.Identity != flagAssetAnalyzeIdentity {
+	if q.IdentitySelector == nil || q.IdentitySelector.Identity != grp.flagAssetAnalyzeIdentity {
 		t.Errorf("IdentitySelector = %+v", q.IdentitySelector)
 	}
 	if q.AccessSelector == nil || len(q.AccessSelector.Permissions) != 1 {
@@ -169,18 +173,19 @@ func TestBuildIamPolicyAnalysisQuery(t *testing.T) {
 }
 
 func TestBuildIamPolicyAnalysisQueryMinimal(t *testing.T) {
-	flagAssetAnalyzeFullResourceName = ""
-	flagAssetAnalyzeIdentity = ""
-	flagAssetAnalyzePermissions = nil
-	flagAssetAnalyzeRoles = nil
-	flagAssetAnalyzeExpandGroups = false
-	flagAssetAnalyzeExpandRoles = false
-	flagAssetAnalyzeExpandResources = false
-	flagAssetAnalyzeGroupEdges = false
-	flagAssetAnalyzeResourceEdges = false
-	flagAssetAnalyzeSAImp = false
+	grp := newAssetCmds(legacyTestInvocation())
+	grp.flagAssetAnalyzeFullResourceName = ""
+	grp.flagAssetAnalyzeIdentity = ""
+	grp.flagAssetAnalyzePermissions = nil
+	grp.flagAssetAnalyzeRoles = nil
+	grp.flagAssetAnalyzeExpandGroups = false
+	grp.flagAssetAnalyzeExpandRoles = false
+	grp.flagAssetAnalyzeExpandResources = false
+	grp.flagAssetAnalyzeGroupEdges = false
+	grp.flagAssetAnalyzeResourceEdges = false
+	grp.flagAssetAnalyzeSAImp = false
 
-	q := buildIamPolicyAnalysisQuery("organizations/1")
+	q := grp.buildIamPolicyAnalysisQuery("organizations/1")
 	if q.Scope != "organizations/1" || q.Options != nil || q.ResourceSelector != nil ||
 		q.IdentitySelector != nil || q.AccessSelector != nil {
 		t.Errorf("expected only Scope populated, got %+v", q)

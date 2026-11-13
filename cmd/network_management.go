@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkmanagement "google.golang.org/api/networkmanagement/v1"
 )
@@ -18,285 +16,116 @@ import (
 // surface and is implemented via the shared restClient in
 // network_management_network_monitoring_providers.go.
 
-var networkManagementCmd = &cobra.Command{
-	Use:   "network-management",
-	Short: "Manage Network Management (Network Intelligence Center)",
-}
-
 // netmgmtMonRest talks to the v1beta1 REST surface of
 // networkmanagement.googleapis.com which exposes networkMonitoringProviders.
 var netmgmtMonRest = newRESTClient("https://networkmanagement.googleapis.com/v1beta1")
 
-// Common flags across the network-management surface. Connectivity tests and
-// network-monitoring providers all live under `locations/global`, so we
-// default there. VPC flow logs configs and operations are regional.
-var (
-	flagNMLocation string
-	flagNMFile     string
-	flagNMFilter   string
-	flagNMOrderBy  string
-	flagNMPageSize int64
-	flagNMLimit    int64
-
-	// Connectivity test short-form flags.
-	flagNMTestDescription string
-	flagNMTestProtocol    string
-	flagNMTestSourceIP    string
-	flagNMTestSourceProj  string
-	flagNMTestSourceNet   string
-	flagNMTestDestIP      string
-	flagNMTestDestPort    int64
-	flagNMTestDestProj    string
-	flagNMTestDestNet     string
-	flagNMTestLabels      map[string]string
-
-	// VPC flow logs config short-form flags.
-	flagNMVFLDescription     string
-	flagNMVFLInterconnectAtt string
-	flagNMVFLVpnTunnel       string
-	flagNMVFLSubnet          string
-	flagNMVFLNetwork         string
-	flagNMVFLAggInterval     string
-	flagNMVFLFlowSampling    float64
-	flagNMVFLMetadata        string
-	flagNMVFLFilterExpr      string
-	flagNMVFLState           string
-	flagNMVFLLabels          map[string]string
-)
-
 // --- Connectivity tests ---
-
-var netmgmtConnectivityTestsCmd = &cobra.Command{
-	Use:   "connectivity-tests",
-	Short: "Manage connectivity tests (Network Intelligence Center)",
-}
-
-var netmgmtCTCreateCmd = &cobra.Command{
-	Use:   "create TEST",
-	Short: "Create a connectivity test",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMCTCreate,
-}
-
-var netmgmtCTDeleteCmd = &cobra.Command{
-	Use:   "delete TEST",
-	Short: "Delete a connectivity test",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMCTDelete,
-}
-
-var netmgmtCTDescribeCmd = &cobra.Command{
-	Use:   "describe TEST",
-	Short: "Describe a connectivity test",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMCTDescribe,
-}
-
-var netmgmtCTListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List connectivity tests",
-	Args:  cobra.NoArgs,
-	RunE:  runNMCTList,
-}
-
-var netmgmtCTRerunCmd = &cobra.Command{
-	Use:   "rerun TEST",
-	Short: "Rerun a connectivity test",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMCTRerun,
-}
-
-var netmgmtCTUpdateCmd = &cobra.Command{
-	Use:   "update TEST",
-	Short: "Update a connectivity test",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMCTUpdate,
-}
 
 // --- Operations ---
 
-var netmgmtOperationsCmd = &cobra.Command{
-	Use:   "operations",
-	Short: "Manage Network Management operations",
-}
-
-var netmgmtOpsCancelCmd = &cobra.Command{
-	Use:   "cancel OPERATION",
-	Short: "Cancel an operation",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMOpsCancel,
-}
-
-var netmgmtOpsDeleteCmd = &cobra.Command{
-	Use:   "delete OPERATION",
-	Short: "Delete an operation record",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMOpsDelete,
-}
-
-var netmgmtOpsDescribeCmd = &cobra.Command{
-	Use:   "describe OPERATION",
-	Short: "Describe an operation",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMOpsDescribe,
-}
-
-var netmgmtOpsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List operations",
-	Args:  cobra.NoArgs,
-	RunE:  runNMOpsList,
-}
-
-var netmgmtOpsWaitCmd = &cobra.Command{
-	Use:   "wait OPERATION",
-	Short: "Poll an operation until it completes",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMOpsWait,
-}
-
 // --- VPC Flow Logs configs ---
 
-var netmgmtVFLCmd = &cobra.Command{
-	Use:   "vpc-flow-logs-configs",
-	Short: "Manage VPC Flow Logs configs",
-}
-
-var netmgmtVFLCreateCmd = &cobra.Command{
-	Use:   "create CONFIG",
-	Short: "Create a VPC flow logs config",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMVFLCreate,
-}
-
-var netmgmtVFLDeleteCmd = &cobra.Command{
-	Use:   "delete CONFIG",
-	Short: "Delete a VPC flow logs config",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMVFLDelete,
-}
-
-var netmgmtVFLDescribeCmd = &cobra.Command{
-	Use:   "describe CONFIG",
-	Short: "Describe a VPC flow logs config",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMVFLDescribe,
-}
-
-var netmgmtVFLListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List VPC flow logs configs",
-	Args:  cobra.NoArgs,
-	RunE:  runNMVFLList,
-}
-
-var netmgmtVFLUpdateCmd = &cobra.Command{
-	Use:   "update CONFIG",
-	Short: "Update a VPC flow logs config",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runNMVFLUpdate,
-}
-
-func init() {
+func (s *networkManagementCmds) initNetworkManagement() {
 	// Connectivity tests always live under locations/global; the flag exists
 	// only for parity with other network-management resources.
 	for _, c := range []*cobra.Command{
-		netmgmtCTCreateCmd, netmgmtCTDeleteCmd, netmgmtCTDescribeCmd,
-		netmgmtCTRerunCmd, netmgmtCTUpdateCmd,
+		s.netmgmtCTCreateCmd, s.netmgmtCTDeleteCmd, s.netmgmtCTDescribeCmd,
+		s.netmgmtCTRerunCmd, s.netmgmtCTUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagNMLocation, "location", "global", "Location containing the test")
+		c.Flags().StringVar(&s.flagNMLocation, "location", "global", "Location containing the test")
 	}
-	netmgmtCTCreateCmd.Flags().StringVar(&flagNMFile, "config-from-file", "", "YAML/JSON file with the ConnectivityTest spec")
-	netmgmtCTCreateCmd.Flags().StringVar(&flagNMTestDescription, "description", "", "Description of the test")
-	netmgmtCTCreateCmd.Flags().StringVar(&flagNMTestProtocol, "protocol", "", "IP protocol (e.g. TCP, UDP, ICMP)")
-	netmgmtCTCreateCmd.Flags().StringVar(&flagNMTestSourceIP, "source-ip-address", "", "Source IP")
-	netmgmtCTCreateCmd.Flags().StringVar(&flagNMTestSourceProj, "source-project", "", "Source project ID")
-	netmgmtCTCreateCmd.Flags().StringVar(&flagNMTestSourceNet, "source-network", "", "Source network URI")
-	netmgmtCTCreateCmd.Flags().StringVar(&flagNMTestDestIP, "destination-ip-address", "", "Destination IP")
-	netmgmtCTCreateCmd.Flags().Int64Var(&flagNMTestDestPort, "destination-port", 0, "Destination port")
-	netmgmtCTCreateCmd.Flags().StringVar(&flagNMTestDestProj, "destination-project", "", "Destination project ID")
-	netmgmtCTCreateCmd.Flags().StringVar(&flagNMTestDestNet, "destination-network", "", "Destination network URI")
-	netmgmtCTCreateCmd.Flags().StringToStringVar(&flagNMTestLabels, "labels", nil, "Labels (key=value)")
+	s.netmgmtCTCreateCmd.Flags().StringVar(&s.flagNMFile, "config-from-file", "", "YAML/JSON file with the ConnectivityTest spec")
+	s.netmgmtCTCreateCmd.Flags().StringVar(&s.flagNMTestDescription, "description", "", "Description of the test")
+	s.netmgmtCTCreateCmd.Flags().StringVar(&s.flagNMTestProtocol, "protocol", "", "IP protocol (e.g. TCP, UDP, ICMP)")
+	s.netmgmtCTCreateCmd.Flags().StringVar(&s.flagNMTestSourceIP, "source-ip-address", "", "Source IP")
+	s.netmgmtCTCreateCmd.Flags().StringVar(&s.flagNMTestSourceProj, "source-project", "", "Source project ID")
+	s.netmgmtCTCreateCmd.Flags().StringVar(&s.flagNMTestSourceNet, "source-network", "", "Source network URI")
+	s.netmgmtCTCreateCmd.Flags().StringVar(&s.flagNMTestDestIP, "destination-ip-address", "", "Destination IP")
+	s.netmgmtCTCreateCmd.Flags().Int64Var(&s.flagNMTestDestPort, "destination-port", 0, "Destination port")
+	s.netmgmtCTCreateCmd.Flags().StringVar(&s.flagNMTestDestProj, "destination-project", "", "Destination project ID")
+	s.netmgmtCTCreateCmd.Flags().StringVar(&s.flagNMTestDestNet, "destination-network", "", "Destination network URI")
+	s.netmgmtCTCreateCmd.Flags().StringToStringVar(&s.flagNMTestLabels, "labels", nil, "Labels (key=value)")
 
-	netmgmtCTUpdateCmd.Flags().StringVar(&flagNMFile, "config-from-file", "", "YAML/JSON file with the ConnectivityTest patch")
-	netmgmtCTUpdateCmd.Flags().StringVar(&flagNMTestDescription, "description", "", "New description")
-	netmgmtCTUpdateCmd.Flags().StringToStringVar(&flagNMTestLabels, "labels", nil, "Labels (replaces the existing set)")
+	s.netmgmtCTUpdateCmd.Flags().StringVar(&s.flagNMFile, "config-from-file", "", "YAML/JSON file with the ConnectivityTest patch")
+	s.netmgmtCTUpdateCmd.Flags().StringVar(&s.flagNMTestDescription, "description", "", "New description")
+	s.netmgmtCTUpdateCmd.Flags().StringToStringVar(&s.flagNMTestLabels, "labels", nil, "Labels (replaces the existing set)")
 
-	netmgmtCTListCmd.Flags().StringVar(&flagNMLocation, "location", "global", "Location to list tests in")
-	netmgmtCTListCmd.Flags().StringVar(&flagNMFilter, "filter", "", "Server-side filter expression")
-	netmgmtCTListCmd.Flags().StringVar(&flagNMOrderBy, "order-by", "", "Server-side ordering expression")
-	netmgmtCTListCmd.Flags().Int64Var(&flagNMPageSize, "page-size", 0, "Number of results per page")
-	netmgmtCTListCmd.Flags().Int64Var(&flagNMLimit, "limit", 0, "Maximum number of results to return")
+	s.netmgmtCTListCmd.Flags().StringVar(&s.flagNMLocation, "location", "global", "Location to list tests in")
+	s.netmgmtCTListCmd.Flags().StringVar(&s.flagNMFilter, "filter", "", "Server-side filter expression")
+	s.netmgmtCTListCmd.Flags().StringVar(&s.flagNMOrderBy, "order-by", "", "Server-side ordering expression")
+	s.netmgmtCTListCmd.Flags().Int64Var(&s.flagNMPageSize, "page-size", 0, "Number of results per page")
+	s.netmgmtCTListCmd.Flags().Int64Var(&s.flagNMLimit, "limit", 0, "Maximum number of results to return")
 
-	netmgmtConnectivityTestsCmd.AddCommand(
-		netmgmtCTCreateCmd, netmgmtCTDeleteCmd, netmgmtCTDescribeCmd,
-		netmgmtCTListCmd, netmgmtCTRerunCmd, netmgmtCTUpdateCmd,
+	s.netmgmtConnectivityTestsCmd.AddCommand(
+		s.netmgmtCTCreateCmd, s.netmgmtCTDeleteCmd, s.netmgmtCTDescribeCmd,
+		s.netmgmtCTListCmd, s.netmgmtCTRerunCmd, s.netmgmtCTUpdateCmd,
 	)
 
 	// Operations under locations/global.
-	for _, c := range []*cobra.Command{netmgmtOpsCancelCmd, netmgmtOpsDeleteCmd, netmgmtOpsDescribeCmd, netmgmtOpsWaitCmd} {
-		c.Flags().StringVar(&flagNMLocation, "location", "global", "Location containing the operation")
+	for _, c := range []*cobra.Command{s.netmgmtOpsCancelCmd, s.netmgmtOpsDeleteCmd, s.netmgmtOpsDescribeCmd, s.netmgmtOpsWaitCmd} {
+		c.Flags().StringVar(&s.flagNMLocation, "location", "global", "Location containing the operation")
 	}
-	netmgmtOpsListCmd.Flags().StringVar(&flagNMLocation, "location", "global", "Location to list operations in")
-	netmgmtOpsListCmd.Flags().StringVar(&flagNMFilter, "filter", "", "Server-side filter expression")
-	netmgmtOpsListCmd.Flags().Int64Var(&flagNMPageSize, "page-size", 0, "Number of results per page")
-	netmgmtOpsListCmd.Flags().Int64Var(&flagNMLimit, "limit", 0, "Maximum number of results to return")
-	netmgmtOperationsCmd.AddCommand(
-		netmgmtOpsCancelCmd, netmgmtOpsDeleteCmd, netmgmtOpsDescribeCmd,
-		netmgmtOpsListCmd, netmgmtOpsWaitCmd,
+	s.netmgmtOpsListCmd.Flags().StringVar(&s.flagNMLocation, "location", "global", "Location to list operations in")
+	s.netmgmtOpsListCmd.Flags().StringVar(&s.flagNMFilter, "filter", "", "Server-side filter expression")
+	s.netmgmtOpsListCmd.Flags().Int64Var(&s.flagNMPageSize, "page-size", 0, "Number of results per page")
+	s.netmgmtOpsListCmd.Flags().Int64Var(&s.flagNMLimit, "limit", 0, "Maximum number of results to return")
+	s.netmgmtOperationsCmd.AddCommand(
+		s.netmgmtOpsCancelCmd, s.netmgmtOpsDeleteCmd, s.netmgmtOpsDescribeCmd,
+		s.netmgmtOpsListCmd, s.netmgmtOpsWaitCmd,
 	)
 
 	// VPC Flow Logs configs.
-	for _, c := range []*cobra.Command{netmgmtVFLCreateCmd, netmgmtVFLDeleteCmd, netmgmtVFLDescribeCmd, netmgmtVFLUpdateCmd} {
-		c.Flags().StringVar(&flagNMLocation, "location", "global", "Location containing the config")
+	for _, c := range []*cobra.Command{s.netmgmtVFLCreateCmd, s.netmgmtVFLDeleteCmd, s.netmgmtVFLDescribeCmd, s.netmgmtVFLUpdateCmd} {
+		c.Flags().StringVar(&s.flagNMLocation, "location", "global", "Location containing the config")
 	}
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMFile, "config-from-file", "", "YAML/JSON file with the VpcFlowLogsConfig spec")
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMVFLDescription, "description", "", "Description")
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMVFLInterconnectAtt, "interconnect-attachment", "", "Full resource path of an interconnect attachment to monitor")
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMVFLVpnTunnel, "vpn-tunnel", "", "Full resource path of a VPN tunnel to monitor")
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMVFLSubnet, "subnet", "", "Full resource path of a subnet to monitor")
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMVFLNetwork, "network", "", "Full resource path of a VPC network to monitor")
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMVFLAggInterval, "aggregation-interval", "", "Aggregation interval (e.g. INTERVAL_5_SEC)")
-	netmgmtVFLCreateCmd.Flags().Float64Var(&flagNMVFLFlowSampling, "flow-sampling", 0, "Sampling rate (0..1)")
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMVFLMetadata, "metadata", "", "Metadata scope (INCLUDE_ALL_METADATA, EXCLUDE_ALL_METADATA, CUSTOM_METADATA)")
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMVFLFilterExpr, "filter-expr", "", "CEL filter to further select which flows are logged")
-	netmgmtVFLCreateCmd.Flags().StringVar(&flagNMVFLState, "state", "", "State (ENABLED, DISABLED)")
-	netmgmtVFLCreateCmd.Flags().StringToStringVar(&flagNMVFLLabels, "labels", nil, "Labels (key=value)")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMFile, "config-from-file", "", "YAML/JSON file with the VpcFlowLogsConfig spec")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLDescription, "description", "", "Description")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLInterconnectAtt, "interconnect-attachment", "", "Full resource path of an interconnect attachment to monitor")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLVpnTunnel, "vpn-tunnel", "", "Full resource path of a VPN tunnel to monitor")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLSubnet, "subnet", "", "Full resource path of a subnet to monitor")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLNetwork, "network", "", "Full resource path of a VPC network to monitor")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLAggInterval, "aggregation-interval", "", "Aggregation interval (e.g. INTERVAL_5_SEC)")
+	s.netmgmtVFLCreateCmd.Flags().Float64Var(&s.flagNMVFLFlowSampling, "flow-sampling", 0, "Sampling rate (0..1)")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLMetadata, "metadata", "", "Metadata scope (INCLUDE_ALL_METADATA, EXCLUDE_ALL_METADATA, CUSTOM_METADATA)")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLFilterExpr, "filter-expr", "", "CEL filter to further select which flows are logged")
+	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLState, "state", "", "State (ENABLED, DISABLED)")
+	s.netmgmtVFLCreateCmd.Flags().StringToStringVar(&s.flagNMVFLLabels, "labels", nil, "Labels (key=value)")
 
-	netmgmtVFLUpdateCmd.Flags().StringVar(&flagNMFile, "config-from-file", "", "YAML/JSON file with the VpcFlowLogsConfig patch")
-	netmgmtVFLUpdateCmd.Flags().StringVar(&flagNMVFLDescription, "description", "", "New description")
-	netmgmtVFLUpdateCmd.Flags().StringVar(&flagNMVFLAggInterval, "aggregation-interval", "", "Aggregation interval")
-	netmgmtVFLUpdateCmd.Flags().Float64Var(&flagNMVFLFlowSampling, "flow-sampling", 0, "Sampling rate (0..1)")
-	netmgmtVFLUpdateCmd.Flags().StringVar(&flagNMVFLMetadata, "metadata", "", "Metadata scope")
-	netmgmtVFLUpdateCmd.Flags().StringVar(&flagNMVFLFilterExpr, "filter-expr", "", "CEL filter")
-	netmgmtVFLUpdateCmd.Flags().StringVar(&flagNMVFLState, "state", "", "State")
-	netmgmtVFLUpdateCmd.Flags().StringToStringVar(&flagNMVFLLabels, "labels", nil, "Labels (replaces the existing set)")
+	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMFile, "config-from-file", "", "YAML/JSON file with the VpcFlowLogsConfig patch")
+	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMVFLDescription, "description", "", "New description")
+	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMVFLAggInterval, "aggregation-interval", "", "Aggregation interval")
+	s.netmgmtVFLUpdateCmd.Flags().Float64Var(&s.flagNMVFLFlowSampling, "flow-sampling", 0, "Sampling rate (0..1)")
+	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMVFLMetadata, "metadata", "", "Metadata scope")
+	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMVFLFilterExpr, "filter-expr", "", "CEL filter")
+	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMVFLState, "state", "", "State")
+	s.netmgmtVFLUpdateCmd.Flags().StringToStringVar(&s.flagNMVFLLabels, "labels", nil, "Labels (replaces the existing set)")
 
-	netmgmtVFLListCmd.Flags().StringVar(&flagNMLocation, "location", "global", "Location to list configs in")
-	netmgmtVFLListCmd.Flags().StringVar(&flagNMFilter, "filter", "", "Server-side filter expression")
-	netmgmtVFLListCmd.Flags().StringVar(&flagNMOrderBy, "order-by", "", "Server-side ordering expression")
-	netmgmtVFLListCmd.Flags().Int64Var(&flagNMPageSize, "page-size", 0, "Number of results per page")
-	netmgmtVFLListCmd.Flags().Int64Var(&flagNMLimit, "limit", 0, "Maximum number of results to return")
+	s.netmgmtVFLListCmd.Flags().StringVar(&s.flagNMLocation, "location", "global", "Location to list configs in")
+	s.netmgmtVFLListCmd.Flags().StringVar(&s.flagNMFilter, "filter", "", "Server-side filter expression")
+	s.netmgmtVFLListCmd.Flags().StringVar(&s.flagNMOrderBy, "order-by", "", "Server-side ordering expression")
+	s.netmgmtVFLListCmd.Flags().Int64Var(&s.flagNMPageSize, "page-size", 0, "Number of results per page")
+	s.netmgmtVFLListCmd.Flags().Int64Var(&s.flagNMLimit, "limit", 0, "Maximum number of results to return")
 
-	netmgmtVFLCmd.AddCommand(
-		netmgmtVFLCreateCmd, netmgmtVFLDeleteCmd, netmgmtVFLDescribeCmd,
-		netmgmtVFLListCmd, netmgmtVFLUpdateCmd,
+	s.netmgmtVFLCmd.AddCommand(
+		s.netmgmtVFLCreateCmd, s.netmgmtVFLDeleteCmd, s.netmgmtVFLDescribeCmd,
+		s.netmgmtVFLListCmd, s.netmgmtVFLUpdateCmd,
 	)
 
-	networkManagementCmd.AddCommand(
-		netmgmtConnectivityTestsCmd, netmgmtOperationsCmd, netmgmtVFLCmd,
+	s.networkManagementCmd.AddCommand(
+		s.netmgmtConnectivityTestsCmd, s.netmgmtOperationsCmd, s.netmgmtVFLCmd,
 	)
-	rootCmd.AddCommand(networkManagementCmd)
+
 }
 
 // --- Helpers ---
 
-func nmProject() (string, error) {
-	return resolveProject()
+func (s *networkManagementCmds) nmProject() (string, error) {
+	return s.inv.project()
 }
 
-func nmParent(project string) string {
-	loc := flagNMLocation
+func (s *networkManagementCmds) nmParent(project string) string {
+	loc := s.flagNMLocation
 	if loc == "" {
 		loc = "global"
 	}
@@ -306,146 +135,146 @@ func nmParent(project string) string {
 // nmQualify turns a bare id into a fully-qualified resource name under
 // projects/PROJECT/locations/LOCATION/<kind>/. A caller-supplied full path
 // (starting with "projects/") is returned unchanged.
-func nmQualify(id, project, kind string) string {
+func (s *networkManagementCmds) nmQualify(id, project, kind string) string {
 	if strings.HasPrefix(id, "projects/") {
 		return id
 	}
-	return fmt.Sprintf("%s/%s/%s", nmParent(project), kind, id)
+	return fmt.Sprintf("%s/%s/%s", s.nmParent(project), kind, id)
 }
 
 // --- Connectivity tests impl ---
 
-func buildConnectivityTest(base *networkmanagement.ConnectivityTest) *networkmanagement.ConnectivityTest {
+func (s *networkManagementCmds) buildConnectivityTest(base *networkmanagement.ConnectivityTest) *networkmanagement.ConnectivityTest {
 	t := base
 	if t == nil {
 		t = &networkmanagement.ConnectivityTest{}
 	}
-	if flagNMTestDescription != "" {
-		t.Description = flagNMTestDescription
+	if s.flagNMTestDescription != "" {
+		t.Description = s.flagNMTestDescription
 	}
-	if flagNMTestProtocol != "" {
-		t.Protocol = flagNMTestProtocol
+	if s.flagNMTestProtocol != "" {
+		t.Protocol = s.flagNMTestProtocol
 	}
-	if len(flagNMTestLabels) > 0 {
-		t.Labels = flagNMTestLabels
+	if len(s.flagNMTestLabels) > 0 {
+		t.Labels = s.flagNMTestLabels
 	}
-	if flagNMTestSourceIP != "" || flagNMTestSourceProj != "" || flagNMTestSourceNet != "" {
+	if s.flagNMTestSourceIP != "" || s.flagNMTestSourceProj != "" || s.flagNMTestSourceNet != "" {
 		if t.Source == nil {
 			t.Source = &networkmanagement.Endpoint{}
 		}
-		if flagNMTestSourceIP != "" {
-			t.Source.IpAddress = flagNMTestSourceIP
+		if s.flagNMTestSourceIP != "" {
+			t.Source.IpAddress = s.flagNMTestSourceIP
 		}
-		if flagNMTestSourceProj != "" {
-			t.Source.ProjectId = flagNMTestSourceProj
+		if s.flagNMTestSourceProj != "" {
+			t.Source.ProjectId = s.flagNMTestSourceProj
 		}
-		if flagNMTestSourceNet != "" {
-			t.Source.Network = flagNMTestSourceNet
+		if s.flagNMTestSourceNet != "" {
+			t.Source.Network = s.flagNMTestSourceNet
 		}
 	}
-	if flagNMTestDestIP != "" || flagNMTestDestPort > 0 || flagNMTestDestProj != "" || flagNMTestDestNet != "" {
+	if s.flagNMTestDestIP != "" || s.flagNMTestDestPort > 0 || s.flagNMTestDestProj != "" || s.flagNMTestDestNet != "" {
 		if t.Destination == nil {
 			t.Destination = &networkmanagement.Endpoint{}
 		}
-		if flagNMTestDestIP != "" {
-			t.Destination.IpAddress = flagNMTestDestIP
+		if s.flagNMTestDestIP != "" {
+			t.Destination.IpAddress = s.flagNMTestDestIP
 		}
-		if flagNMTestDestPort > 0 {
-			t.Destination.Port = flagNMTestDestPort
+		if s.flagNMTestDestPort > 0 {
+			t.Destination.Port = s.flagNMTestDestPort
 		}
-		if flagNMTestDestProj != "" {
-			t.Destination.ProjectId = flagNMTestDestProj
+		if s.flagNMTestDestProj != "" {
+			t.Destination.ProjectId = s.flagNMTestDestProj
 		}
-		if flagNMTestDestNet != "" {
-			t.Destination.Network = flagNMTestDestNet
+		if s.flagNMTestDestNet != "" {
+			t.Destination.Network = s.flagNMTestDestNet
 		}
 	}
 	return t
 }
 
-func runNMCTCreate(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMCTCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
 	var base *networkmanagement.ConnectivityTest
-	if flagNMFile != "" {
+	if s.flagNMFile != "" {
 		base = &networkmanagement.ConnectivityTest{}
-		if err := loadYAMLOrJSONInto(flagNMFile, base); err != nil {
+		if err := loadYAMLOrJSONInto(s.flagNMFile, base); err != nil {
 			return err
 		}
 	}
-	test := buildConnectivityTest(base)
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	test := s.buildConnectivityTest(base)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Global.ConnectivityTests.Create(nmParent(project), test).TestId(args[0]).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Global.ConnectivityTests.Create(s.nmParent(project), test).TestId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating connectivity test: %w", err)
 	}
-	fmt.Printf("Create request issued for connectivity test [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for connectivity test [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
-func runNMCTDelete(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMCTDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Global.ConnectivityTests.Delete(nmQualify(args[0], project, "connectivityTests")).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Global.ConnectivityTests.Delete(s.nmQualify(args[0], project, "connectivityTests")).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting connectivity test: %w", err)
 	}
-	fmt.Printf("Delete request issued for connectivity test [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for connectivity test [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
-func runNMCTDescribe(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMCTDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Global.ConnectivityTests.Get(nmQualify(args[0], project, "connectivityTests")).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Global.ConnectivityTests.Get(s.nmQualify(args[0], project, "connectivityTests")).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing connectivity test: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runNMCTList(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMCTList(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*networkmanagement.ConnectivityTest
 	pageToken := ""
 	for {
-		call := svc.Projects.Locations.Global.ConnectivityTests.List(nmParent(project)).Context(ctx)
-		if flagNMPageSize > 0 {
-			call = call.PageSize(flagNMPageSize)
+		call := svc.Projects.Locations.Global.ConnectivityTests.List(s.nmParent(project)).Context(ctx)
+		if s.flagNMPageSize > 0 {
+			call = call.PageSize(s.flagNMPageSize)
 		}
-		if flagNMFilter != "" {
-			call = call.Filter(flagNMFilter)
+		if s.flagNMFilter != "" {
+			call = call.Filter(s.flagNMFilter)
 		}
-		if flagNMOrderBy != "" {
-			call = call.OrderBy(flagNMOrderBy)
+		if s.flagNMOrderBy != "" {
+			call = call.OrderBy(s.flagNMOrderBy)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -455,8 +284,8 @@ func runNMCTList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing connectivity tests: %w", err)
 		}
 		all = append(all, resp.Resources...)
-		if flagNMLimit > 0 && int64(len(all)) >= flagNMLimit {
-			all = all[:flagNMLimit]
+		if s.flagNMLimit > 0 && int64(len(all)) >= s.flagNMLimit {
+			all = all[:s.flagNMLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -464,148 +293,148 @@ func runNMCTList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, "")
+	return emitFormattedTo(s.inv.stdout, all, "")
 }
 
-func runNMCTRerun(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMCTRerun(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Global.ConnectivityTests.Rerun(nmQualify(args[0], project, "connectivityTests"), &networkmanagement.RerunConnectivityTestRequest{}).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Global.ConnectivityTests.Rerun(s.nmQualify(args[0], project, "connectivityTests"), &networkmanagement.RerunConnectivityTestRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("rerunning connectivity test: %w", err)
 	}
-	fmt.Printf("Rerun request issued for connectivity test [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Rerun request issued for connectivity test [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
-func runNMCTUpdate(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMCTUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
 	var base *networkmanagement.ConnectivityTest
-	if flagNMFile != "" {
+	if s.flagNMFile != "" {
 		base = &networkmanagement.ConnectivityTest{}
-		if err := loadYAMLOrJSONInto(flagNMFile, base); err != nil {
+		if err := loadYAMLOrJSONInto(s.flagNMFile, base); err != nil {
 			return err
 		}
 	}
-	test := buildConnectivityTest(base)
+	test := s.buildConnectivityTest(base)
 	var mask []string
-	if flagNMTestDescription != "" {
+	if s.flagNMTestDescription != "" {
 		mask = append(mask, "description")
 	}
-	if flagNMTestProtocol != "" {
+	if s.flagNMTestProtocol != "" {
 		mask = append(mask, "protocol")
 	}
-	if len(flagNMTestLabels) > 0 {
+	if len(s.flagNMTestLabels) > 0 {
 		mask = append(mask, "labels")
 	}
-	if flagNMTestSourceIP != "" || flagNMTestSourceProj != "" || flagNMTestSourceNet != "" {
+	if s.flagNMTestSourceIP != "" || s.flagNMTestSourceProj != "" || s.flagNMTestSourceNet != "" {
 		mask = append(mask, "source")
 	}
-	if flagNMTestDestIP != "" || flagNMTestDestPort > 0 || flagNMTestDestProj != "" || flagNMTestDestNet != "" {
+	if s.flagNMTestDestIP != "" || s.flagNMTestDestPort > 0 || s.flagNMTestDestProj != "" || s.flagNMTestDestNet != "" {
 		mask = append(mask, "destination")
 	}
-	if flagNMFile != "" && len(mask) == 0 {
+	if s.flagNMFile != "" && len(mask) == 0 {
 		mask = nonEmptyJSONFields(test)
 	}
 	if len(mask) == 0 {
 		return fmt.Errorf("nothing to update: pass one of --description, --protocol, --labels, --source-*, --destination-*, or --config-from-file")
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Global.ConnectivityTests.Patch(nmQualify(args[0], project, "connectivityTests"), test).
+	op, err := svc.Projects.Locations.Global.ConnectivityTests.Patch(s.nmQualify(args[0], project, "connectivityTests"), test).
 		UpdateMask(strings.Join(mask, ",")).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating connectivity test: %w", err)
 	}
-	fmt.Printf("Update request issued for connectivity test [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for connectivity test [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
 // --- Operations impl ---
 
-func runNMOpsCancel(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMOpsCancel(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Global.Operations.Cancel(nmQualify(args[0], project, "operations"), &networkmanagement.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Global.Operations.Cancel(s.nmQualify(args[0], project, "operations"), &networkmanagement.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runNMOpsDelete(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMOpsDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Global.Operations.Delete(nmQualify(args[0], project, "operations")).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Global.Operations.Delete(s.nmQualify(args[0], project, "operations")).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runNMOpsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMOpsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Global.Operations.Get(nmQualify(args[0], project, "operations")).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Global.Operations.Get(s.nmQualify(args[0], project, "operations")).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, "")
+	return emitFormattedTo(s.inv.stdout, op, "")
 }
 
-func runNMOpsList(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMOpsList(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*networkmanagement.Operation
 	pageToken := ""
 	for {
-		call := svc.Projects.Locations.Global.Operations.List(nmParent(project)).Context(ctx)
-		if flagNMPageSize > 0 {
-			call = call.PageSize(flagNMPageSize)
+		call := svc.Projects.Locations.Global.Operations.List(s.nmParent(project)).Context(ctx)
+		if s.flagNMPageSize > 0 {
+			call = call.PageSize(s.flagNMPageSize)
 		}
-		if flagNMFilter != "" {
-			call = call.Filter(flagNMFilter)
+		if s.flagNMFilter != "" {
+			call = call.Filter(s.flagNMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -615,8 +444,8 @@ func runNMOpsList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing operations: %w", err)
 		}
 		all = append(all, resp.Operations...)
-		if flagNMLimit > 0 && int64(len(all)) >= flagNMLimit {
-			all = all[:flagNMLimit]
+		if s.flagNMLimit > 0 && int64(len(all)) >= s.flagNMLimit {
+			all = all[:s.flagNMLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -624,20 +453,20 @@ func runNMOpsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, "")
+	return emitFormattedTo(s.inv.stdout, all, "")
 }
 
-func runNMOpsWait(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMOpsWait(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	name := nmQualify(args[0], project, "operations")
+	name := s.nmQualify(args[0], project, "operations")
 	for {
 		op, err := svc.Projects.Locations.Global.Operations.Get(name).Context(ctx).Do()
 		if err != nil {
@@ -647,7 +476,7 @@ func runNMOpsWait(cmd *cobra.Command, args []string) error {
 			if op.Error != nil {
 				return fmt.Errorf("operation %s failed: %s", name, op.Error.Message)
 			}
-			return emitFormatted(op, "")
+			return emitFormattedTo(s.inv.stdout, op, "")
 		}
 		select {
 		case <-ctx.Done():
@@ -659,130 +488,130 @@ func runNMOpsWait(cmd *cobra.Command, args []string) error {
 
 // --- VPC Flow Logs configs impl ---
 
-func buildVpcFlowLogsConfig(base *networkmanagement.VpcFlowLogsConfig) *networkmanagement.VpcFlowLogsConfig {
+func (s *networkManagementCmds) buildVpcFlowLogsConfig(base *networkmanagement.VpcFlowLogsConfig) *networkmanagement.VpcFlowLogsConfig {
 	c := base
 	if c == nil {
 		c = &networkmanagement.VpcFlowLogsConfig{}
 	}
-	if flagNMVFLDescription != "" {
-		c.Description = flagNMVFLDescription
+	if s.flagNMVFLDescription != "" {
+		c.Description = s.flagNMVFLDescription
 	}
-	if flagNMVFLInterconnectAtt != "" {
-		c.InterconnectAttachment = flagNMVFLInterconnectAtt
+	if s.flagNMVFLInterconnectAtt != "" {
+		c.InterconnectAttachment = s.flagNMVFLInterconnectAtt
 	}
-	if flagNMVFLVpnTunnel != "" {
-		c.VpnTunnel = flagNMVFLVpnTunnel
+	if s.flagNMVFLVpnTunnel != "" {
+		c.VpnTunnel = s.flagNMVFLVpnTunnel
 	}
-	if flagNMVFLSubnet != "" {
-		c.Subnet = flagNMVFLSubnet
+	if s.flagNMVFLSubnet != "" {
+		c.Subnet = s.flagNMVFLSubnet
 	}
-	if flagNMVFLNetwork != "" {
-		c.Network = flagNMVFLNetwork
+	if s.flagNMVFLNetwork != "" {
+		c.Network = s.flagNMVFLNetwork
 	}
-	if flagNMVFLAggInterval != "" {
-		c.AggregationInterval = flagNMVFLAggInterval
+	if s.flagNMVFLAggInterval != "" {
+		c.AggregationInterval = s.flagNMVFLAggInterval
 	}
-	if flagNMVFLFlowSampling > 0 {
-		c.FlowSampling = flagNMVFLFlowSampling
+	if s.flagNMVFLFlowSampling > 0 {
+		c.FlowSampling = s.flagNMVFLFlowSampling
 	}
-	if flagNMVFLMetadata != "" {
-		c.Metadata = flagNMVFLMetadata
+	if s.flagNMVFLMetadata != "" {
+		c.Metadata = s.flagNMVFLMetadata
 	}
-	if flagNMVFLFilterExpr != "" {
-		c.FilterExpr = flagNMVFLFilterExpr
+	if s.flagNMVFLFilterExpr != "" {
+		c.FilterExpr = s.flagNMVFLFilterExpr
 	}
-	if flagNMVFLState != "" {
-		c.State = flagNMVFLState
+	if s.flagNMVFLState != "" {
+		c.State = s.flagNMVFLState
 	}
-	if len(flagNMVFLLabels) > 0 {
-		c.Labels = flagNMVFLLabels
+	if len(s.flagNMVFLLabels) > 0 {
+		c.Labels = s.flagNMVFLLabels
 	}
 	return c
 }
 
-func runNMVFLCreate(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMVFLCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
 	var base *networkmanagement.VpcFlowLogsConfig
-	if flagNMFile != "" {
+	if s.flagNMFile != "" {
 		base = &networkmanagement.VpcFlowLogsConfig{}
-		if err := loadYAMLOrJSONInto(flagNMFile, base); err != nil {
+		if err := loadYAMLOrJSONInto(s.flagNMFile, base); err != nil {
 			return err
 		}
 	}
-	cfg := buildVpcFlowLogsConfig(base)
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	cfg := s.buildVpcFlowLogsConfig(base)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.VpcFlowLogsConfigs.Create(nmParent(project), cfg).VpcFlowLogsConfigId(args[0]).Context(ctx).Do()
+	op, err := svc.Projects.Locations.VpcFlowLogsConfigs.Create(s.nmParent(project), cfg).VpcFlowLogsConfigId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating VPC flow logs config: %w", err)
 	}
-	fmt.Printf("Create request issued for VPC flow logs config [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for VPC flow logs config [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
-func runNMVFLDelete(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMVFLDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.VpcFlowLogsConfigs.Delete(nmQualify(args[0], project, "vpcFlowLogsConfigs")).Context(ctx).Do()
+	op, err := svc.Projects.Locations.VpcFlowLogsConfigs.Delete(s.nmQualify(args[0], project, "vpcFlowLogsConfigs")).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting VPC flow logs config: %w", err)
 	}
-	fmt.Printf("Delete request issued for VPC flow logs config [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for VPC flow logs config [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
-func runNMVFLDescribe(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMVFLDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.VpcFlowLogsConfigs.Get(nmQualify(args[0], project, "vpcFlowLogsConfigs")).Context(ctx).Do()
+	got, err := svc.Projects.Locations.VpcFlowLogsConfigs.Get(s.nmQualify(args[0], project, "vpcFlowLogsConfigs")).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing VPC flow logs config: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runNMVFLList(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMVFLList(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*networkmanagement.VpcFlowLogsConfig
 	pageToken := ""
 	for {
-		call := svc.Projects.Locations.VpcFlowLogsConfigs.List(nmParent(project)).Context(ctx)
-		if flagNMPageSize > 0 {
-			call = call.PageSize(flagNMPageSize)
+		call := svc.Projects.Locations.VpcFlowLogsConfigs.List(s.nmParent(project)).Context(ctx)
+		if s.flagNMPageSize > 0 {
+			call = call.PageSize(s.flagNMPageSize)
 		}
-		if flagNMFilter != "" {
-			call = call.Filter(flagNMFilter)
+		if s.flagNMFilter != "" {
+			call = call.Filter(s.flagNMFilter)
 		}
-		if flagNMOrderBy != "" {
-			call = call.OrderBy(flagNMOrderBy)
+		if s.flagNMOrderBy != "" {
+			call = call.OrderBy(s.flagNMOrderBy)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -792,8 +621,8 @@ func runNMVFLList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing VPC flow logs configs: %w", err)
 		}
 		all = append(all, resp.VpcFlowLogsConfigs...)
-		if flagNMLimit > 0 && int64(len(all)) >= flagNMLimit {
-			all = all[:flagNMLimit]
+		if s.flagNMLimit > 0 && int64(len(all)) >= s.flagNMLimit {
+			all = all[:s.flagNMLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -801,60 +630,282 @@ func runNMVFLList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, "")
+	return emitFormattedTo(s.inv.stdout, all, "")
 }
 
-func runNMVFLUpdate(cmd *cobra.Command, args []string) error {
-	project, err := nmProject()
+func (s *networkManagementCmds) runNMVFLUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.nmProject()
 	if err != nil {
 		return err
 	}
 	var base *networkmanagement.VpcFlowLogsConfig
-	if flagNMFile != "" {
+	if s.flagNMFile != "" {
 		base = &networkmanagement.VpcFlowLogsConfig{}
-		if err := loadYAMLOrJSONInto(flagNMFile, base); err != nil {
+		if err := loadYAMLOrJSONInto(s.flagNMFile, base); err != nil {
 			return err
 		}
 	}
-	cfg := buildVpcFlowLogsConfig(base)
+	cfg := s.buildVpcFlowLogsConfig(base)
 	var mask []string
-	if flagNMVFLDescription != "" {
+	if s.flagNMVFLDescription != "" {
 		mask = append(mask, "description")
 	}
-	if flagNMVFLAggInterval != "" {
+	if s.flagNMVFLAggInterval != "" {
 		mask = append(mask, "aggregation_interval")
 	}
-	if flagNMVFLFlowSampling > 0 {
+	if s.flagNMVFLFlowSampling > 0 {
 		mask = append(mask, "flow_sampling")
 	}
-	if flagNMVFLMetadata != "" {
+	if s.flagNMVFLMetadata != "" {
 		mask = append(mask, "metadata")
 	}
-	if flagNMVFLFilterExpr != "" {
+	if s.flagNMVFLFilterExpr != "" {
 		mask = append(mask, "filter_expr")
 	}
-	if flagNMVFLState != "" {
+	if s.flagNMVFLState != "" {
 		mask = append(mask, "state")
 	}
-	if len(flagNMVFLLabels) > 0 {
+	if len(s.flagNMVFLLabels) > 0 {
 		mask = append(mask, "labels")
 	}
-	if flagNMFile != "" && len(mask) == 0 {
+	if s.flagNMFile != "" && len(mask) == 0 {
 		mask = nonEmptyJSONFields(cfg)
 	}
 	if len(mask) == 0 {
 		return fmt.Errorf("nothing to update: pass at least one of --description, --aggregation-interval, --flow-sampling, --metadata, --filter-expr, --state, --labels, or --config-from-file")
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkManagementService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.VpcFlowLogsConfigs.Patch(nmQualify(args[0], project, "vpcFlowLogsConfigs"), cfg).
+	op, err := svc.Projects.Locations.VpcFlowLogsConfigs.Patch(s.nmQualify(args[0], project, "vpcFlowLogsConfigs"), cfg).
 		UpdateMask(strings.Join(mask, ",")).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating VPC flow logs config: %w", err)
 	}
-	fmt.Printf("Update request issued for VPC flow logs config [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for VPC flow logs config [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
+}
+
+// networkManagementCmds holds the commands and flag values of one invocation's "networkManagement"
+// command group, so invocations don't share state (#2070).
+type networkManagementCmds struct {
+	inv *invocation
+
+	networkManagementCmd *cobra.Command
+	flagNMLocation       string
+	flagNMFile           string
+	flagNMFilter         string
+	flagNMOrderBy        string
+	flagNMPageSize       int64
+	flagNMLimit          int64
+	// Connectivity test short-form flags.
+	flagNMTestDescription string
+	flagNMTestProtocol    string
+	flagNMTestSourceIP    string
+	flagNMTestSourceProj  string
+	flagNMTestSourceNet   string
+	flagNMTestDestIP      string
+	flagNMTestDestPort    int64
+	flagNMTestDestProj    string
+	flagNMTestDestNet     string
+	flagNMTestLabels      map[string]string
+	// VPC flow logs config short-form flags.
+	flagNMVFLDescription        string
+	flagNMVFLInterconnectAtt    string
+	flagNMVFLVpnTunnel          string
+	flagNMVFLSubnet             string
+	flagNMVFLNetwork            string
+	flagNMVFLAggInterval        string
+	flagNMVFLFlowSampling       float64
+	flagNMVFLMetadata           string
+	flagNMVFLFilterExpr         string
+	flagNMVFLState              string
+	flagNMVFLLabels             map[string]string
+	netmgmtConnectivityTestsCmd *cobra.Command
+	netmgmtCTCreateCmd          *cobra.Command
+	netmgmtCTDeleteCmd          *cobra.Command
+	netmgmtCTDescribeCmd        *cobra.Command
+	netmgmtCTListCmd            *cobra.Command
+	netmgmtCTRerunCmd           *cobra.Command
+	netmgmtCTUpdateCmd          *cobra.Command
+	netmgmtOperationsCmd        *cobra.Command
+	netmgmtOpsCancelCmd         *cobra.Command
+	netmgmtOpsDeleteCmd         *cobra.Command
+	netmgmtOpsDescribeCmd       *cobra.Command
+	netmgmtOpsListCmd           *cobra.Command
+	netmgmtOpsWaitCmd           *cobra.Command
+	netmgmtVFLCmd               *cobra.Command
+	netmgmtVFLCreateCmd         *cobra.Command
+	netmgmtVFLDeleteCmd         *cobra.Command
+	netmgmtVFLDescribeCmd       *cobra.Command
+	netmgmtVFLListCmd           *cobra.Command
+	netmgmtVFLUpdateCmd         *cobra.Command
+	netmgmtMonCmd               *cobra.Command
+	flagNMMonLocation           string
+	flagNMMonFormat             string
+	flagNMMonConfigFile         string
+	flagNMMonPageSize           int64
+	netmgmtMonCreateCmd         *cobra.Command
+	netmgmtMonDeleteCmd         *cobra.Command
+	netmgmtMonDescribeCmd       *cobra.Command
+	netmgmtMonGenMPConfigCmd    *cobra.Command
+	netmgmtMonGenAccessTokenCmd *cobra.Command
+	netmgmtMonListCmd           *cobra.Command
+}
+
+// newNetworkManagementCmd returns the "networkManagement" command group for inv.
+func newNetworkManagementCmd(inv *invocation) *cobra.Command {
+	return newNetworkManagementCmds(inv).networkManagementCmd
+}
+
+// newNetworkManagementCmds builds the "networkManagement" command group for inv and returns its state.
+func newNetworkManagementCmds(inv *invocation) *networkManagementCmds {
+	s := &networkManagementCmds{inv: inv}
+	s.networkManagementCmd = &cobra.Command{
+		Use:   "network-management",
+		Short: "Manage Network Management (Network Intelligence Center)",
+	}
+	s.netmgmtConnectivityTestsCmd = &cobra.Command{
+		Use:   "connectivity-tests",
+		Short: "Manage connectivity tests (Network Intelligence Center)",
+	}
+	s.netmgmtCTCreateCmd = &cobra.Command{
+		Use:   "create TEST",
+		Short: "Create a connectivity test",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMCTCreate,
+	}
+	s.netmgmtCTDeleteCmd = &cobra.Command{
+		Use:   "delete TEST",
+		Short: "Delete a connectivity test",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMCTDelete,
+	}
+	s.netmgmtCTDescribeCmd = &cobra.Command{
+		Use:   "describe TEST",
+		Short: "Describe a connectivity test",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMCTDescribe,
+	}
+	s.netmgmtCTListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List connectivity tests",
+		Args:  cobra.NoArgs,
+		RunE:  s.runNMCTList,
+	}
+	s.netmgmtCTRerunCmd = &cobra.Command{
+		Use:   "rerun TEST",
+		Short: "Rerun a connectivity test",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMCTRerun,
+	}
+	s.netmgmtCTUpdateCmd = &cobra.Command{
+		Use:   "update TEST",
+		Short: "Update a connectivity test",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMCTUpdate,
+	}
+	s.netmgmtOperationsCmd = &cobra.Command{
+		Use:   "operations",
+		Short: "Manage Network Management operations",
+	}
+	s.netmgmtOpsCancelCmd = &cobra.Command{
+		Use:   "cancel OPERATION",
+		Short: "Cancel an operation",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMOpsCancel,
+	}
+	s.netmgmtOpsDeleteCmd = &cobra.Command{
+		Use:   "delete OPERATION",
+		Short: "Delete an operation record",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMOpsDelete,
+	}
+	s.netmgmtOpsDescribeCmd = &cobra.Command{
+		Use:   "describe OPERATION",
+		Short: "Describe an operation",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMOpsDescribe,
+	}
+	s.netmgmtOpsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List operations",
+		Args:  cobra.NoArgs,
+		RunE:  s.runNMOpsList,
+	}
+	s.netmgmtOpsWaitCmd = &cobra.Command{
+		Use:   "wait OPERATION",
+		Short: "Poll an operation until it completes",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMOpsWait,
+	}
+	s.netmgmtVFLCmd = &cobra.Command{
+		Use:   "vpc-flow-logs-configs",
+		Short: "Manage VPC Flow Logs configs",
+	}
+	s.netmgmtVFLCreateCmd = &cobra.Command{
+		Use:   "create CONFIG",
+		Short: "Create a VPC flow logs config",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMVFLCreate,
+	}
+	s.netmgmtVFLDeleteCmd = &cobra.Command{
+		Use:   "delete CONFIG",
+		Short: "Delete a VPC flow logs config",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMVFLDelete,
+	}
+	s.netmgmtVFLDescribeCmd = &cobra.Command{
+		Use:   "describe CONFIG",
+		Short: "Describe a VPC flow logs config",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMVFLDescribe,
+	}
+	s.netmgmtVFLListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List VPC flow logs configs",
+		Args:  cobra.NoArgs,
+		RunE:  s.runNMVFLList,
+	}
+	s.netmgmtVFLUpdateCmd = &cobra.Command{
+		Use:   "update CONFIG",
+		Short: "Update a VPC flow logs config",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runNMVFLUpdate,
+	}
+	s.netmgmtMonCmd = &cobra.Command{
+		Use:   "network-monitoring-providers",
+		Short: "Manage Network Monitoring providers",
+	}
+	s.netmgmtMonCreateCmd = &cobra.Command{
+		Use: "create PROVIDER", Short: "Create a network monitoring provider",
+		Args: cobra.ExactArgs(1), RunE: s.runNMMonCreate,
+	}
+	s.netmgmtMonDeleteCmd = &cobra.Command{
+		Use: "delete PROVIDER", Short: "Delete a network monitoring provider",
+		Args: cobra.ExactArgs(1), RunE: s.runNMMonDelete,
+	}
+	s.netmgmtMonDescribeCmd = &cobra.Command{
+		Use: "describe PROVIDER", Short: "Describe a network monitoring provider",
+		Args: cobra.ExactArgs(1), RunE: s.runNMMonDescribe,
+	}
+	s.netmgmtMonGenMPConfigCmd = &cobra.Command{
+		Use:   "generate-monitoring-point-config PROVIDER",
+		Short: "Generate a monitoring point config for a network monitoring provider",
+		Args:  cobra.ExactArgs(1), RunE: s.runNMMonGenMPConfig,
+	}
+	s.netmgmtMonGenAccessTokenCmd = &cobra.Command{
+		Use:   "generate-provider-access-token PROVIDER",
+		Short: "Generate a provider access token for a network monitoring provider",
+		Args:  cobra.ExactArgs(1), RunE: s.runNMMonGenAccessToken,
+	}
+	s.netmgmtMonListCmd = &cobra.Command{
+		Use: "list", Short: "List network monitoring providers",
+		Args: cobra.NoArgs, RunE: s.runNMMonList,
+	}
+	s.initNetworkManagement()
+	s.initNetworkManagementNetworkMonitoringProviders()
+	return s
 }

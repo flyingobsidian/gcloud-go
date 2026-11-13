@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	iamcredentials "google.golang.org/api/iamcredentials/v1"
 )
@@ -16,56 +14,42 @@ import (
 // service account. If --impersonate-service-account isn't given (either
 // via the flag or the global env), --account is required.
 
-var (
-	flagAuthPitAudiences     []string
-	flagAuthPitIncludeEmail  bool
-	flagAuthPitTokenFormat   string
-	flagAuthPitImpersonation string
-)
+func (s *authCmds) initAuthPrintIdentityToken() {
+	s.authPrintIdentityTokenCmd.Flags().StringVar(&s.flagAuthPitImpersonation, "impersonate-service-account", "", "Service account email to impersonate (falls back to --account)")
+	s.authPrintIdentityTokenCmd.Flags().StringSliceVar(&s.flagAuthPitAudiences, "audiences", nil, "Audience(s) to embed in the token (required, may repeat)")
+	s.authPrintIdentityTokenCmd.Flags().BoolVar(&s.flagAuthPitIncludeEmail, "include-email", true, "Include the impersonated service account email in the token")
+	s.authPrintIdentityTokenCmd.Flags().StringVar(&s.flagAuthPitTokenFormat, "token-format", "standard", "Token format: standard or full")
+	_ = s.authPrintIdentityTokenCmd.MarkFlagRequired("audiences")
 
-var authPrintIdentityTokenCmd = &cobra.Command{
-	Use:   "print-identity-token",
-	Short: "Print an OpenID Connect identity token by impersonating a service account",
-	Args:  cobra.NoArgs,
-	RunE:  runAuthPrintIdentityToken,
+	s.authCmd.AddCommand(s.authPrintIdentityTokenCmd)
 }
 
-func init() {
-	authPrintIdentityTokenCmd.Flags().StringVar(&flagAuthPitImpersonation, "impersonate-service-account", "", "Service account email to impersonate (falls back to --account)")
-	authPrintIdentityTokenCmd.Flags().StringSliceVar(&flagAuthPitAudiences, "audiences", nil, "Audience(s) to embed in the token (required, may repeat)")
-	authPrintIdentityTokenCmd.Flags().BoolVar(&flagAuthPitIncludeEmail, "include-email", true, "Include the impersonated service account email in the token")
-	authPrintIdentityTokenCmd.Flags().StringVar(&flagAuthPitTokenFormat, "token-format", "standard", "Token format: standard or full")
-	_ = authPrintIdentityTokenCmd.MarkFlagRequired("audiences")
-
-	authCmd.AddCommand(authPrintIdentityTokenCmd)
-}
-
-func runAuthPrintIdentityToken(cmd *cobra.Command, args []string) error {
-	sa := flagAuthPitImpersonation
+func (s *authCmds) runAuthPrintIdentityToken(cmd *cobra.Command, args []string) error {
+	sa := s.flagAuthPitImpersonation
 	if sa == "" {
-		sa = flagAccount
+		sa = s.inv.flags.account
 	}
 	if sa == "" || !strings.Contains(sa, "@") {
 		return fmt.Errorf("service account email required (via --impersonate-service-account or --account)")
 	}
-	if len(flagAuthPitAudiences) == 0 {
+	if len(s.flagAuthPitAudiences) == 0 {
 		return fmt.Errorf("--audiences is required")
 	}
 	name := "projects/-/serviceAccounts/" + sa
-	audience := strings.Join(flagAuthPitAudiences, ",")
-	ctx := context.Background()
-	svc, err := gcp.IAMCredentialsService(ctx, flagAccount)
+	audience := strings.Join(s.flagAuthPitAudiences, ",")
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAMCredentials(ctx)
 	if err != nil {
 		return err
 	}
 	req := &iamcredentials.GenerateIdTokenRequest{
 		Audience:     audience,
-		IncludeEmail: flagAuthPitIncludeEmail,
+		IncludeEmail: s.flagAuthPitIncludeEmail,
 	}
 	resp, err := svc.Projects.ServiceAccounts.GenerateIdToken(name, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("generating identity token: %w", err)
 	}
-	fmt.Println(resp.Token)
+	fmt.Fprintln(s.inv.stdout, resp.Token)
 	return nil
 }

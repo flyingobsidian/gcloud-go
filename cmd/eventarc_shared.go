@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -50,18 +49,18 @@ func eventarcWaitOp(ctx context.Context, svc *eventarc.Service, op *eventarc.Goo
 
 // eventarcFinishOp reports the outcome of an LRO, mirroring the pattern used by
 // the database-migration commands.
-func eventarcFinishOp(ctx context.Context, svc *eventarc.Service, op *eventarc.GoogleLongrunningOperation, verb, name string, async bool) error {
+func (grp *eventarcCmds) eventarcFinishOp(ctx context.Context, svc *eventarc.Service, op *eventarc.GoogleLongrunningOperation, verb, name string, async bool) error {
 	if async {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, "")
+		fmt.Fprintf(grp.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(grp.inv.stdout, op, "")
 	}
 	op, err := eventarcWaitOp(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
+	fmt.Fprintf(grp.inv.stderr, "%s [%s] completed.\n", verb, name)
 	if op.Response != nil {
-		return emitFormatted(op.Response, "")
+		return emitFormattedTo(grp.inv.stdout, op.Response, "")
 	}
 	return nil
 }

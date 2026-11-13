@@ -1,127 +1,70 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	datacatalog "google.golang.org/api/datacatalog/v1"
 )
 
 // --- gcloud data-catalog entry-groups (#1505) ---
 
-var dcEntryGroupsCmd = &cobra.Command{Use: "entry-groups", Short: "Manage Data Catalog entry groups"}
-
-var (
-	flagDCEGLocation    string
-	flagDCEGFormat      string
-	flagDCEGConfigFile  string
-	flagDCEGUpdateMask  string
-	flagDCEGPageSize    int64
-	flagDCEGIamMember   string
-	flagDCEGIamRole     string
-	flagDCEGIamCondExpr string
-	flagDCEGIamCondT    string
-	flagDCEGIamCondD    string
-	flagDCEGIamAllCond  bool
-)
-
-var (
-	dcEGCreateCmd = &cobra.Command{
-		Use: "create ENTRY_GROUP", Short: "Create an entry group",
-		Args: cobra.ExactArgs(1), RunE: runDCEGCreate,
-	}
-	dcEGDeleteCmd = &cobra.Command{
-		Use: "delete ENTRY_GROUP", Short: "Delete an entry group",
-		Args: cobra.ExactArgs(1), RunE: runDCEGDelete,
-	}
-	dcEGDescribeCmd = &cobra.Command{
-		Use: "describe ENTRY_GROUP", Short: "Describe an entry group",
-		Args: cobra.ExactArgs(1), RunE: runDCEGDescribe,
-	}
-	dcEGListCmd = &cobra.Command{
-		Use: "list", Short: "List entry groups",
-		Args: cobra.NoArgs, RunE: runDCEGList,
-	}
-	dcEGUpdateCmd = &cobra.Command{
-		Use: "update ENTRY_GROUP", Short: "Update an entry group",
-		Args: cobra.ExactArgs(1), RunE: runDCEGUpdate,
-	}
-	dcEGGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy ENTRY_GROUP", Short: "Get the IAM policy for an entry group",
-		Args: cobra.ExactArgs(1), RunE: runDCEGGetIam,
-	}
-	dcEGSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy ENTRY_GROUP POLICY_FILE", Short: "Set the IAM policy for an entry group",
-		Args: cobra.ExactArgs(2), RunE: runDCEGSetIam,
-	}
-	dcEGAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding ENTRY_GROUP", Short: "Add an IAM policy binding to an entry group",
-		Args: cobra.ExactArgs(1), RunE: runDCEGAddIam,
-	}
-	dcEGRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding ENTRY_GROUP", Short: "Remove an IAM policy binding from an entry group",
-		Args: cobra.ExactArgs(1), RunE: runDCEGRemoveIam,
-	}
-)
-
-func init() {
+func (s *dataCatalogCmds) initDataCatalogEntryGroups() {
 	all := []*cobra.Command{
-		dcEGCreateCmd, dcEGDeleteCmd, dcEGDescribeCmd, dcEGListCmd, dcEGUpdateCmd,
-		dcEGGetIamCmd, dcEGSetIamCmd, dcEGAddIamCmd, dcEGRemoveIamCmd,
+		s.dcEGCreateCmd, s.dcEGDeleteCmd, s.dcEGDescribeCmd, s.dcEGListCmd, s.dcEGUpdateCmd,
+		s.dcEGGetIamCmd, s.dcEGSetIamCmd, s.dcEGAddIamCmd, s.dcEGRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDCEGLocation, "location", "", "Location for the entry group (required)")
+		c.Flags().StringVar(&s.flagDCEGLocation, "location", "", "Location for the entry group (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagDCEGFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDCEGFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dcEGCreateCmd, dcEGUpdateCmd} {
-		c.Flags().StringVar(&flagDCEGConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dcEGCreateCmd, s.dcEGUpdateCmd} {
+		c.Flags().StringVar(&s.flagDCEGConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the EntryGroup body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dcEGUpdateCmd.Flags().StringVar(&flagDCEGUpdateMask, "update-mask", "",
+	s.dcEGUpdateCmd.Flags().StringVar(&s.flagDCEGUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	dcEGListCmd.Flags().Int64Var(&flagDCEGPageSize, "page-size", 0, "Maximum results per page")
+	s.dcEGListCmd.Flags().Int64Var(&s.flagDCEGPageSize, "page-size", 0, "Maximum results per page")
 
-	for _, c := range []*cobra.Command{dcEGAddIamCmd, dcEGRemoveIamCmd} {
-		dcIamMemberFlags(c, &flagDCEGIamMember, &flagDCEGIamRole, &flagDCEGIamCondExpr, &flagDCEGIamCondT, &flagDCEGIamCondD)
+	for _, c := range []*cobra.Command{s.dcEGAddIamCmd, s.dcEGRemoveIamCmd} {
+		dcIamMemberFlags(c, &s.flagDCEGIamMember, &s.flagDCEGIamRole, &s.flagDCEGIamCondExpr, &s.flagDCEGIamCondT, &s.flagDCEGIamCondD)
 	}
-	dcEGRemoveIamCmd.Flags().BoolVar(&flagDCEGIamAllCond, "all", false,
+	s.dcEGRemoveIamCmd.Flags().BoolVar(&s.flagDCEGIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	dcEntryGroupsCmd.AddCommand(all...)
-	dataCatalogCmd.AddCommand(dcEntryGroupsCmd)
+	s.dcEntryGroupsCmd.AddCommand(all...)
+	s.dataCatalogCmd.AddCommand(s.dcEntryGroupsCmd)
 }
 
-func dcEGParent() (string, error) {
-	project, err := resolveProject()
+func (s *dataCatalogCmds) dcEGParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return dcLocationParent(project, flagDCEGLocation), nil
+	return dcLocationParent(project, s.flagDCEGLocation), nil
 }
 
-func dcEGName(id string) (string, error) {
-	parent, err := dcEGParent()
+func (s *dataCatalogCmds) dcEGName(id string) (string, error) {
+	parent, err := s.dcEGParent()
 	if err != nil {
 		return "", err
 	}
 	return dcChild("entryGroups", id, parent), nil
 }
 
-func runDCEGCreate(cmd *cobra.Command, args []string) error {
-	parent, err := dcEGParent()
+func (s *dataCatalogCmds) runDCEGCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.dcEGParent()
 	if err != nil {
 		return err
 	}
 	body := &datacatalog.GoogleCloudDatacatalogV1EntryGroup{}
-	if err := loadYAMLOrJSONInto(flagDCEGConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDCEGConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,34 +72,34 @@ func runDCEGCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating entry group: %w", err)
 	}
-	fmt.Printf("Created entry group [%s].\n", args[0])
-	return emitFormatted(got, flagDCEGFormat)
+	fmt.Fprintf(s.inv.stdout, "Created entry group [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCEGFormat)
 }
 
-func runDCEGDelete(cmd *cobra.Command, args []string) error {
-	name, err := dcEGName(args[0])
+func (s *dataCatalogCmds) runDCEGDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.dcEGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.EntryGroups.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting entry group: %w", err)
 	}
-	fmt.Printf("Deleted entry group [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted entry group [%s].\n", args[0])
 	return nil
 }
 
-func runDCEGDescribe(cmd *cobra.Command, args []string) error {
-	name, err := dcEGName(args[0])
+func (s *dataCatalogCmds) runDCEGDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.dcEGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -164,16 +107,16 @@ func runDCEGDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing entry group: %w", err)
 	}
-	return emitFormatted(got, flagDCEGFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCEGFormat)
 }
 
-func runDCEGList(cmd *cobra.Command, args []string) error {
-	parent, err := dcEGParent()
+func (s *dataCatalogCmds) runDCEGList(cmd *cobra.Command, args []string) error {
+	parent, err := s.dcEGParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -181,8 +124,8 @@ func runDCEGList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.EntryGroups.List(parent).Context(ctx)
-		if flagDCEGPageSize > 0 {
-			call = call.PageSize(flagDCEGPageSize)
+		if s.flagDCEGPageSize > 0 {
+			call = call.PageSize(s.flagDCEGPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -197,24 +140,24 @@ func runDCEGList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDCEGFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDCEGFormat)
 }
 
-func runDCEGUpdate(cmd *cobra.Command, args []string) error {
-	name, err := dcEGName(args[0])
+func (s *dataCatalogCmds) runDCEGUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.dcEGName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &datacatalog.GoogleCloudDatacatalogV1EntryGroup{}
-	if err := loadYAMLOrJSONInto(flagDCEGConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDCEGConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagDCEGUpdateMask
+	mask := s.flagDCEGUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -226,17 +169,17 @@ func runDCEGUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating entry group: %w", err)
 	}
-	fmt.Printf("Updated entry group [%s].\n", args[0])
-	return emitFormatted(got, flagDCEGFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated entry group [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCEGFormat)
 }
 
-func runDCEGGetIam(cmd *cobra.Command, args []string) error {
-	name, err := dcEGName(args[0])
+func (s *dataCatalogCmds) runDCEGGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dcEGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -246,11 +189,11 @@ func runDCEGGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagDCEGFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagDCEGFormat)
 }
 
-func runDCEGSetIam(cmd *cobra.Command, args []string) error {
-	name, err := dcEGName(args[0])
+func (s *dataCatalogCmds) runDCEGSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dcEGName(args[0])
 	if err != nil {
 		return err
 	}
@@ -259,8 +202,8 @@ func runDCEGSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -270,17 +213,17 @@ func runDCEGSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	dcUpdatedIam(fmt.Sprintf("entry group [%s]", args[0]))
-	return emitFormatted(updated, flagDCEGFormat)
+	s.dcUpdatedIam(fmt.Sprintf("entry group [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDCEGFormat)
 }
 
-func runDCEGAddIam(cmd *cobra.Command, args []string) error {
-	name, err := dcEGName(args[0])
+func (s *dataCatalogCmds) runDCEGAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dcEGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -290,8 +233,8 @@ func runDCEGAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	dcAddBinding(policy, flagDCEGIamRole, flagDCEGIamMember,
-		dcBuildCondition(flagDCEGIamCondExpr, flagDCEGIamCondT, flagDCEGIamCondD))
+	dcAddBinding(policy, s.flagDCEGIamRole, s.flagDCEGIamMember,
+		dcBuildCondition(s.flagDCEGIamCondExpr, s.flagDCEGIamCondT, s.flagDCEGIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Locations.EntryGroups.SetIamPolicy(name, &datacatalog.SetIamPolicyRequest{
 		Policy: policy,
@@ -299,17 +242,17 @@ func runDCEGAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	dcUpdatedIam(fmt.Sprintf("entry group [%s]", args[0]))
-	return emitFormatted(updated, flagDCEGFormat)
+	s.dcUpdatedIam(fmt.Sprintf("entry group [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDCEGFormat)
 }
 
-func runDCEGRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := dcEGName(args[0])
+func (s *dataCatalogCmds) runDCEGRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dcEGName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -319,9 +262,9 @@ func runDCEGRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !dcRemoveBinding(policy, flagDCEGIamRole, flagDCEGIamMember,
-		dcBuildCondition(flagDCEGIamCondExpr, flagDCEGIamCondT, flagDCEGIamCondD), flagDCEGIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagDCEGIamRole, flagDCEGIamMember)
+	if !dcRemoveBinding(policy, s.flagDCEGIamRole, s.flagDCEGIamMember,
+		dcBuildCondition(s.flagDCEGIamCondExpr, s.flagDCEGIamCondT, s.flagDCEGIamCondD), s.flagDCEGIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagDCEGIamRole, s.flagDCEGIamMember)
 	}
 	updated, err := svc.Projects.Locations.EntryGroups.SetIamPolicy(name, &datacatalog.SetIamPolicyRequest{
 		Policy: policy,
@@ -329,6 +272,6 @@ func runDCEGRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	dcUpdatedIam(fmt.Sprintf("entry group [%s]", args[0]))
-	return emitFormatted(updated, flagDCEGFormat)
+	s.dcUpdatedIam(fmt.Sprintf("entry group [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDCEGFormat)
 }

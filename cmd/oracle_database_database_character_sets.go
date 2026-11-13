@@ -1,54 +1,35 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database database-character-sets (#1280) ---
 
-var oracleDatabaseCharacterSetsCmd = &cobra.Command{
-	Use:   "database-character-sets",
-	Short: "Manage Oracle Database character sets",
-}
-
-var (
-	flagOdbDbCsLocation string
-	flagOdbDbCsFormat   string
-	flagOdbDbCsFilter   string
-	flagOdbDbCsPageSize int64
-)
-
-var oracleDbCsListCmd = &cobra.Command{
-	Use: "list", Short: "List Oracle Database character sets in a location",
-	Args: cobra.NoArgs, RunE: runOracleDbCsList,
-}
-
-func init() {
-	all := []*cobra.Command{oracleDbCsListCmd}
+func (s *oracleDatabaseCmds) initOracleDatabaseDatabaseCharacterSets() {
+	all := []*cobra.Command{s.oracleDbCsListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbDbCsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbDbCsLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbDbCsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbDbCsFormat, "format", "", "Output format")
 	}
-	oracleDbCsListCmd.Flags().StringVar(&flagOdbDbCsFilter, "filter", "", "Server-side filter expression")
-	oracleDbCsListCmd.Flags().Int64Var(&flagOdbDbCsPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleDbCsListCmd.Flags().StringVar(&s.flagOdbDbCsFilter, "filter", "", "Server-side filter expression")
+	s.oracleDbCsListCmd.Flags().Int64Var(&s.flagOdbDbCsPageSize, "page-size", 0, "Maximum results per page")
 
-	oracleDatabaseCharacterSetsCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleDatabaseCharacterSetsCmd)
+	s.oracleDatabaseCharacterSetsCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleDatabaseCharacterSetsCmd)
 }
 
-func runOracleDbCsList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbDbCsLocation)
+func (s *oracleDatabaseCmds) runOracleDbCsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbDbCsLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -56,11 +37,11 @@ func runOracleDbCsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DatabaseCharacterSets.List(parent).Context(ctx)
-		if flagOdbDbCsFilter != "" {
-			call = call.Filter(flagOdbDbCsFilter)
+		if s.flagOdbDbCsFilter != "" {
+			call = call.Filter(s.flagOdbDbCsFilter)
 		}
-		if flagOdbDbCsPageSize > 0 {
-			call = call.PageSize(flagOdbDbCsPageSize)
+		if s.flagOdbDbCsPageSize > 0 {
+			call = call.PageSize(s.flagOdbDbCsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -75,5 +56,5 @@ func runOracleDbCsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbDbCsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbDbCsFormat)
 }

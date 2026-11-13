@@ -7,7 +7,8 @@ import (
 )
 
 func policyIntSubgroup(name string) *cobra.Command {
-	for _, c := range policyIntelligenceCmd.Commands() {
+	grp := newPolicyIntelligenceCmds(legacyTestInvocation())
+	for _, c := range grp.policyIntelligenceCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

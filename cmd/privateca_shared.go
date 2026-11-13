@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -30,18 +29,18 @@ func pcaWaitOp(ctx context.Context, svc *privateca.Service, op *privateca.Operat
 	return op, nil
 }
 
-func pcaFinishOp(ctx context.Context, svc *privateca.Service, op *privateca.Operation, verb, name string, async bool) error {
+func (s *privatecaCmds) pcaFinishOp(ctx context.Context, svc *privateca.Service, op *privateca.Operation, verb, name string, async bool) error {
 	if async {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, "")
+		fmt.Fprintf(s.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	final, err := pcaWaitOp(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
+	fmt.Fprintf(s.inv.stderr, "%s [%s] completed.\n", verb, name)
 	if final.Response != nil {
-		return emitFormatted(final.Response, "")
+		return emitFormattedTo(s.inv.stdout, final.Response, "")
 	}
 	return nil
 }

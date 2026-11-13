@@ -7,7 +7,8 @@ import (
 )
 
 func recommenderSubgroup(name string) *cobra.Command {
-	for _, c := range recommenderCmd.Commands() {
+	grp := newRecommenderCmds(legacyTestInvocation())
+	for _, c := range grp.recommenderCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

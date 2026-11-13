@@ -1,48 +1,31 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	container "google.golang.org/api/container/v1"
 )
 
 // --- gcloud container subnets (#1142) ---
 
-var containerSubnetsCmd = &cobra.Command{Use: "subnets", Short: "Inspect subnets usable by GKE"}
+func (s *containerCmds) initContainerSubnets() {
+	s.containerSubnetsListUsableCmd.Flags().StringVar(&s.flagCtnSnFormat, "format", "", "Output format")
+	s.containerSubnetsListUsableCmd.Flags().StringVar(&s.flagCtnSnFilter, "filter", "", "Server-side filter expression")
+	s.containerSubnetsListUsableCmd.Flags().Int64Var(&s.flagCtnSnPageSize, "page-size", 0, "Maximum results per page")
 
-var (
-	flagCtnSnFormat   string
-	flagCtnSnFilter   string
-	flagCtnSnPageSize int64
-)
-
-var containerSubnetsListUsableCmd = &cobra.Command{
-	Use:   "list-usable",
-	Short: "List subnets usable for creating GKE clusters in the current project",
-	Args:  cobra.NoArgs,
-	RunE:  runCtnSnListUsable,
+	s.containerSubnetsCmd.AddCommand(s.containerSubnetsListUsableCmd)
+	s.containerCmd.AddCommand(s.containerSubnetsCmd)
 }
 
-func init() {
-	containerSubnetsListUsableCmd.Flags().StringVar(&flagCtnSnFormat, "format", "", "Output format")
-	containerSubnetsListUsableCmd.Flags().StringVar(&flagCtnSnFilter, "filter", "", "Server-side filter expression")
-	containerSubnetsListUsableCmd.Flags().Int64Var(&flagCtnSnPageSize, "page-size", 0, "Maximum results per page")
-
-	containerSubnetsCmd.AddCommand(containerSubnetsListUsableCmd)
-	containerCmd.AddCommand(containerSubnetsCmd)
-}
-
-func runCtnSnListUsable(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *containerCmds) runCtnSnListUsable(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	parent := "projects/" + project
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -50,11 +33,11 @@ func runCtnSnListUsable(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Aggregated.UsableSubnetworks.List(parent).Context(ctx)
-		if flagCtnSnFilter != "" {
-			call = call.Filter(flagCtnSnFilter)
+		if s.flagCtnSnFilter != "" {
+			call = call.Filter(s.flagCtnSnFilter)
 		}
-		if flagCtnSnPageSize > 0 {
-			call = call.PageSize(flagCtnSnPageSize)
+		if s.flagCtnSnPageSize > 0 {
+			call = call.PageSize(s.flagCtnSnPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -69,5 +52,5 @@ func runCtnSnListUsable(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagCtnSnFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagCtnSnFormat)
 }

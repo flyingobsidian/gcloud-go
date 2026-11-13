@@ -8,22 +8,23 @@ import (
 )
 
 func TestDataplexDataProductsRegistered(t *testing.T) {
-	c, _, err := dataplexCmd.Find([]string{"data-products"})
-	if err != nil || c != dataplexDataProductsCmd {
+	grp := newDataplexCmds(legacyTestInvocation())
+	c, _, err := grp.dataplexCmd.Find([]string{"data-products"})
+	if err != nil || c != grp.dataplexDataProductsCmd {
 		t.Fatalf("dataplex data-products not registered: %v", err)
 	}
 	assertSubcommands(t, c, []string{
 		"add-iam-policy-binding", "create", "data-assets", "delete", "describe",
 		"get-iam-policy", "list", "remove-iam-policy-binding", "set-iam-policy", "update",
 	})
-	assertSubcommands(t, dataplexDataAssetsCmd, []string{"create", "delete", "describe", "list", "update"})
+	assertSubcommands(t, grp.dataplexDataAssetsCmd, []string{"create", "delete", "describe", "list", "update"})
 	for _, f := range []string{"display-name", "owner-emails", "access-groups", "labels", "async", "location"} {
-		if dpCreateCmd.Flags().Lookup(f) == nil {
+		if grp.dpCreateCmd.Flags().Lookup(f) == nil {
 			t.Errorf("data-products create missing --%s", f)
 		}
 	}
 	for _, f := range []string{"data-product", "resource", "access-groups"} {
-		if daCreateCmd.Flags().Lookup(f) == nil {
+		if grp.daCreateCmd.Flags().Lookup(f) == nil {
 			t.Errorf("data-assets create missing --%s", f)
 		}
 	}

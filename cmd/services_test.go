@@ -18,6 +18,7 @@ func TestServiceResourceName(t *testing.T) {
 }
 
 func TestServicesListFilter(t *testing.T) {
+	grp := newServicesCmds(legacyTestInvocation())
 	cases := []struct {
 		enabled, avail bool
 		want           string
@@ -28,14 +29,14 @@ func TestServicesListFilter(t *testing.T) {
 		{true, true, "state:ENABLED"},
 	}
 	for _, c := range cases {
-		flagServicesEnabled = c.enabled
-		flagServicesAvail = c.avail
-		if got := servicesListFilter(); got != c.want {
+		grp.flagServicesEnabled = c.enabled
+		grp.flagServicesAvail = c.avail
+		if got := grp.servicesListFilter(); got != c.want {
 			t.Errorf("servicesListFilter(enabled=%v,avail=%v) = %q, want %q", c.enabled, c.avail, got, c.want)
 		}
 	}
-	flagServicesEnabled = false
-	flagServicesAvail = false
+	grp.flagServicesEnabled = false
+	grp.flagServicesAvail = false
 }
 
 func TestAPIKeyName(t *testing.T) {
@@ -73,34 +74,36 @@ func TestParseAPITargets(t *testing.T) {
 }
 
 func TestBuildAPIKeyRestrictionsNil(t *testing.T) {
-	flagAPIKeyAllowedIPs = nil
-	flagAPIKeyAllowedReferrers = nil
-	flagAPIKeyAllowedBundleIDs = nil
-	flagAPIKeyAllowedAndroidPackages = nil
-	flagAPIKeyAllowedAndroidSHAs = nil
-	flagAPIKeyAPITargets = nil
-	if buildAPIKeyRestrictions() != nil {
+	grp := newServicesCmds(legacyTestInvocation())
+	grp.flagAPIKeyAllowedIPs = nil
+	grp.flagAPIKeyAllowedReferrers = nil
+	grp.flagAPIKeyAllowedBundleIDs = nil
+	grp.flagAPIKeyAllowedAndroidPackages = nil
+	grp.flagAPIKeyAllowedAndroidSHAs = nil
+	grp.flagAPIKeyAPITargets = nil
+	if grp.buildAPIKeyRestrictions() != nil {
 		t.Error("expected nil when no restriction flags set")
 	}
 }
 
 func TestBuildAPIKeyRestrictionsPopulated(t *testing.T) {
-	flagAPIKeyAllowedIPs = []string{"1.2.3.4"}
-	flagAPIKeyAllowedReferrers = []string{"example.com/*"}
-	flagAPIKeyAllowedBundleIDs = []string{"com.example.app"}
-	flagAPIKeyAllowedAndroidPackages = []string{"com.example.android"}
-	flagAPIKeyAllowedAndroidSHAs = []string{"AB:CD:EF"}
-	flagAPIKeyAPITargets = []string{"compute.googleapis.com:instances.get"}
+	grp := newServicesCmds(legacyTestInvocation())
+	grp.flagAPIKeyAllowedIPs = []string{"1.2.3.4"}
+	grp.flagAPIKeyAllowedReferrers = []string{"example.com/*"}
+	grp.flagAPIKeyAllowedBundleIDs = []string{"com.example.app"}
+	grp.flagAPIKeyAllowedAndroidPackages = []string{"com.example.android"}
+	grp.flagAPIKeyAllowedAndroidSHAs = []string{"AB:CD:EF"}
+	grp.flagAPIKeyAPITargets = []string{"compute.googleapis.com:instances.get"}
 	t.Cleanup(func() {
-		flagAPIKeyAllowedIPs = nil
-		flagAPIKeyAllowedReferrers = nil
-		flagAPIKeyAllowedBundleIDs = nil
-		flagAPIKeyAllowedAndroidPackages = nil
-		flagAPIKeyAllowedAndroidSHAs = nil
-		flagAPIKeyAPITargets = nil
+		grp.flagAPIKeyAllowedIPs = nil
+		grp.flagAPIKeyAllowedReferrers = nil
+		grp.flagAPIKeyAllowedBundleIDs = nil
+		grp.flagAPIKeyAllowedAndroidPackages = nil
+		grp.flagAPIKeyAllowedAndroidSHAs = nil
+		grp.flagAPIKeyAPITargets = nil
 	})
 
-	r := buildAPIKeyRestrictions()
+	r := grp.buildAPIKeyRestrictions()
 	if r == nil {
 		t.Fatal("expected non-nil restrictions")
 	}

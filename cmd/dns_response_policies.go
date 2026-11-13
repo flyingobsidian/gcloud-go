@@ -1,118 +1,60 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dns "google.golang.org/api/dns/v1"
 )
 
 // --- gcloud dns response-policies (#1542) ---
 
-var dnsRPCmd = &cobra.Command{Use: "response-policies", Short: "Manage Cloud DNS response policies"}
-
-var (
-	flagDNSRPFormat     string
-	flagDNSRPConfigFile string
-	flagDNSRPMaxResults int64
-
-	dnsRPRulesCmd = &cobra.Command{Use: "rules", Short: "Manage response policy rules"}
-
-	flagDNSRPRulePolicy string
-)
-
-var (
-	dnsRPCreateCmd = &cobra.Command{
-		Use: "create RESPONSE_POLICY", Short: "Create a response policy",
-		Args: cobra.ExactArgs(1), RunE: runDNSRPCreate,
-	}
-	dnsRPDeleteCmd = &cobra.Command{
-		Use: "delete RESPONSE_POLICY", Short: "Delete a response policy",
-		Args: cobra.ExactArgs(1), RunE: runDNSRPDelete,
-	}
-	dnsRPDescribeCmd = &cobra.Command{
-		Use: "describe RESPONSE_POLICY", Short: "Describe a response policy",
-		Args: cobra.ExactArgs(1), RunE: runDNSRPDescribe,
-	}
-	dnsRPListCmd = &cobra.Command{
-		Use: "list", Short: "List response policies",
-		Args: cobra.NoArgs, RunE: runDNSRPList,
-	}
-	dnsRPUpdateCmd = &cobra.Command{
-		Use: "update RESPONSE_POLICY", Short: "Update a response policy",
-		Args: cobra.ExactArgs(1), RunE: runDNSRPUpdate,
-	}
-
-	dnsRPRuleCreateCmd = &cobra.Command{
-		Use: "create RULE", Short: "Create a response policy rule",
-		Args: cobra.ExactArgs(1), RunE: runDNSRPRuleCreate,
-	}
-	dnsRPRuleDeleteCmd = &cobra.Command{
-		Use: "delete RULE", Short: "Delete a response policy rule",
-		Args: cobra.ExactArgs(1), RunE: runDNSRPRuleDelete,
-	}
-	dnsRPRuleDescribeCmd = &cobra.Command{
-		Use: "describe RULE", Short: "Describe a response policy rule",
-		Args: cobra.ExactArgs(1), RunE: runDNSRPRuleDescribe,
-	}
-	dnsRPRuleListCmd = &cobra.Command{
-		Use: "list", Short: "List response policy rules",
-		Args: cobra.NoArgs, RunE: runDNSRPRuleList,
-	}
-	dnsRPRuleUpdateCmd = &cobra.Command{
-		Use: "update RULE", Short: "Update a response policy rule",
-		Args: cobra.ExactArgs(1), RunE: runDNSRPRuleUpdate,
-	}
-)
-
-func init() {
-	base := []*cobra.Command{dnsRPCreateCmd, dnsRPDeleteCmd, dnsRPDescribeCmd, dnsRPListCmd, dnsRPUpdateCmd}
+func (s *dnsCmds) initDnsResponsePolicies() {
+	base := []*cobra.Command{s.dnsRPCreateCmd, s.dnsRPDeleteCmd, s.dnsRPDescribeCmd, s.dnsRPListCmd, s.dnsRPUpdateCmd}
 	for _, c := range base {
-		c.Flags().StringVar(&flagDNSRPFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDNSRPFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dnsRPCreateCmd, dnsRPUpdateCmd} {
-		c.Flags().StringVar(&flagDNSRPConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dnsRPCreateCmd, s.dnsRPUpdateCmd} {
+		c.Flags().StringVar(&s.flagDNSRPConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the ResponsePolicy body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dnsRPListCmd.Flags().Int64Var(&flagDNSRPMaxResults, "limit", 0, "Maximum results per page")
-	dnsRPCmd.AddCommand(base...)
+	s.dnsRPListCmd.Flags().Int64Var(&s.flagDNSRPMaxResults, "limit", 0, "Maximum results per page")
+	s.dnsRPCmd.AddCommand(base...)
 
 	rules := []*cobra.Command{
-		dnsRPRuleCreateCmd, dnsRPRuleDeleteCmd, dnsRPRuleDescribeCmd, dnsRPRuleListCmd, dnsRPRuleUpdateCmd,
+		s.dnsRPRuleCreateCmd, s.dnsRPRuleDeleteCmd, s.dnsRPRuleDescribeCmd, s.dnsRPRuleListCmd, s.dnsRPRuleUpdateCmd,
 	}
 	for _, c := range rules {
-		c.Flags().StringVar(&flagDNSRPRulePolicy, "response-policy", "",
+		c.Flags().StringVar(&s.flagDNSRPRulePolicy, "response-policy", "",
 			"Response policy that owns the rule (required)")
 		_ = c.MarkFlagRequired("response-policy")
-		c.Flags().StringVar(&flagDNSRPFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDNSRPFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dnsRPRuleCreateCmd, dnsRPRuleUpdateCmd} {
-		c.Flags().StringVar(&flagDNSRPConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dnsRPRuleCreateCmd, s.dnsRPRuleUpdateCmd} {
+		c.Flags().StringVar(&s.flagDNSRPConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the ResponsePolicyRule body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dnsRPRuleListCmd.Flags().Int64Var(&flagDNSRPMaxResults, "limit", 0, "Maximum results per page")
-	dnsRPRulesCmd.AddCommand(rules...)
-	dnsRPCmd.AddCommand(dnsRPRulesCmd)
+	s.dnsRPRuleListCmd.Flags().Int64Var(&s.flagDNSRPMaxResults, "limit", 0, "Maximum results per page")
+	s.dnsRPRulesCmd.AddCommand(rules...)
+	s.dnsRPCmd.AddCommand(s.dnsRPRulesCmd)
 
-	dnsCmd.AddCommand(dnsRPCmd)
+	s.dnsCmd.AddCommand(s.dnsRPCmd)
 }
 
-func runDNSRPCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dns.ResponsePolicy{}
-	if err := loadYAMLOrJSONInto(flagDNSRPConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDNSRPConfigFile, body); err != nil {
 		return err
 	}
 	body.ResponsePolicyName = args[0]
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,34 +62,34 @@ func runDNSRPCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating response policy: %w", err)
 	}
-	fmt.Printf("Created response policy [%s].\n", args[0])
-	return emitFormatted(got, flagDNSRPFormat)
+	fmt.Fprintf(s.inv.stdout, "Created response policy [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSRPFormat)
 }
 
-func runDNSRPDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
 	if err := svc.ResponsePolicies.Delete(project, args[0]).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting response policy: %w", err)
 	}
-	fmt.Printf("Deleted response policy [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted response policy [%s].\n", args[0])
 	return nil
 }
 
-func runDNSRPDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -155,16 +97,16 @@ func runDNSRPDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing response policy: %w", err)
 	}
-	return emitFormatted(got, flagDNSRPFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSRPFormat)
 }
 
-func runDNSRPList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -172,8 +114,8 @@ func runDNSRPList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.ResponsePolicies.List(project).Context(ctx)
-		if flagDNSRPMaxResults > 0 {
-			call = call.MaxResults(flagDNSRPMaxResults)
+		if s.flagDNSRPMaxResults > 0 {
+			call = call.MaxResults(s.flagDNSRPMaxResults)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -188,20 +130,20 @@ func runDNSRPList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDNSRPFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDNSRPFormat)
 }
 
-func runDNSRPUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dns.ResponsePolicy{}
-	if err := loadYAMLOrJSONInto(flagDNSRPConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDNSRPConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
@@ -209,83 +151,83 @@ func runDNSRPUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating response policy: %w", err)
 	}
-	fmt.Printf("Updated response policy [%s].\n", args[0])
-	return emitFormatted(got, flagDNSRPFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated response policy [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSRPFormat)
 }
 
-func runDNSRPRuleCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPRuleCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dns.ResponsePolicyRule{}
-	if err := loadYAMLOrJSONInto(flagDNSRPConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDNSRPConfigFile, body); err != nil {
 		return err
 	}
 	body.RuleName = args[0]
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.ResponsePolicyRules.Create(project, flagDNSRPRulePolicy, body).Context(ctx).Do()
+	got, err := svc.ResponsePolicyRules.Create(project, s.flagDNSRPRulePolicy, body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating response policy rule: %w", err)
 	}
-	fmt.Printf("Created response policy rule [%s].\n", args[0])
-	return emitFormatted(got, flagDNSRPFormat)
+	fmt.Fprintf(s.inv.stdout, "Created response policy rule [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSRPFormat)
 }
 
-func runDNSRPRuleDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPRuleDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
-	if err := svc.ResponsePolicyRules.Delete(project, flagDNSRPRulePolicy, args[0]).Context(ctx).Do(); err != nil {
+	if err := svc.ResponsePolicyRules.Delete(project, s.flagDNSRPRulePolicy, args[0]).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting response policy rule: %w", err)
 	}
-	fmt.Printf("Deleted response policy rule [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted response policy rule [%s].\n", args[0])
 	return nil
 }
 
-func runDNSRPRuleDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPRuleDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.ResponsePolicyRules.Get(project, flagDNSRPRulePolicy, args[0]).Context(ctx).Do()
+	got, err := svc.ResponsePolicyRules.Get(project, s.flagDNSRPRulePolicy, args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing response policy rule: %w", err)
 	}
-	return emitFormatted(got, flagDNSRPFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSRPFormat)
 }
 
-func runDNSRPRuleList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPRuleList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*dns.ResponsePolicyRule
 	pageToken := ""
 	for {
-		call := svc.ResponsePolicyRules.List(project, flagDNSRPRulePolicy).Context(ctx)
-		if flagDNSRPMaxResults > 0 {
-			call = call.MaxResults(flagDNSRPMaxResults)
+		call := svc.ResponsePolicyRules.List(project, s.flagDNSRPRulePolicy).Context(ctx)
+		if s.flagDNSRPMaxResults > 0 {
+			call = call.MaxResults(s.flagDNSRPMaxResults)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -300,27 +242,27 @@ func runDNSRPRuleList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDNSRPFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDNSRPFormat)
 }
 
-func runDNSRPRuleUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dnsCmds) runDNSRPRuleUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dns.ResponsePolicyRule{}
-	if err := loadYAMLOrJSONInto(flagDNSRPConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDNSRPConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DNSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DNS(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.ResponsePolicyRules.Patch(project, flagDNSRPRulePolicy, args[0], body).Context(ctx).Do()
+	got, err := svc.ResponsePolicyRules.Patch(project, s.flagDNSRPRulePolicy, args[0], body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating response policy rule: %w", err)
 	}
-	fmt.Printf("Updated response policy rule [%s].\n", args[0])
-	return emitFormatted(got, flagDNSRPFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated response policy rule [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDNSRPFormat)
 }

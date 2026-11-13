@@ -1,83 +1,48 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	spanner "google.golang.org/api/spanner/v1"
 )
 
 // --- gcloud spanner instance-partitions (#1209) ---
 
-var spannerInstancePartitionsCmd = &cobra.Command{Use: "instance-partitions", Short: "Manage Cloud Spanner instance partitions"}
-
-var (
-	flagSpIPInstance   string
-	flagSpIPFormat     string
-	flagSpIPConfigFile string
-	flagSpIPUpdateMask string
-	flagSpIPPageSize   int64
-)
-
-var (
-	spannerIPCreateCmd = &cobra.Command{
-		Use: "create PARTITION", Short: "Create a Cloud Spanner instance partition",
-		Args: cobra.ExactArgs(1), RunE: runSpIPCreate,
-	}
-	spannerIPDeleteCmd = &cobra.Command{
-		Use: "delete PARTITION", Short: "Delete a Cloud Spanner instance partition",
-		Args: cobra.ExactArgs(1), RunE: runSpIPDelete,
-	}
-	spannerIPDescribeCmd = &cobra.Command{
-		Use: "describe PARTITION", Short: "Describe a Cloud Spanner instance partition",
-		Args: cobra.ExactArgs(1), RunE: runSpIPDescribe,
-	}
-	spannerIPListCmd = &cobra.Command{
-		Use: "list", Short: "List Cloud Spanner instance partitions",
-		Args: cobra.NoArgs, RunE: runSpIPList,
-	}
-	spannerIPUpdateCmd = &cobra.Command{
-		Use: "update PARTITION", Short: "Update a Cloud Spanner instance partition",
-		Args: cobra.ExactArgs(1), RunE: runSpIPUpdate,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{spannerIPCreateCmd, spannerIPDeleteCmd, spannerIPDescribeCmd, spannerIPListCmd, spannerIPUpdateCmd}
+func (s *spannerCmds) initSpannerInstancePartitions() {
+	all := []*cobra.Command{s.spannerIPCreateCmd, s.spannerIPDeleteCmd, s.spannerIPDescribeCmd, s.spannerIPListCmd, s.spannerIPUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSpIPInstance, "instance", "", "Spanner instance (required)")
+		c.Flags().StringVar(&s.flagSpIPInstance, "instance", "", "Spanner instance (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagSpIPFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSpIPFormat, "format", "", "Output format")
 	}
-	spannerIPCreateCmd.Flags().StringVar(&flagSpIPConfigFile, "config-file", "", "YAML/JSON file for the InstancePartition body (required)")
-	_ = spannerIPCreateCmd.MarkFlagRequired("config-file")
-	spannerIPUpdateCmd.Flags().StringVar(&flagSpIPConfigFile, "config-file", "", "YAML/JSON file for the InstancePartition body (required)")
-	_ = spannerIPUpdateCmd.MarkFlagRequired("config-file")
-	spannerIPUpdateCmd.Flags().StringVar(&flagSpIPUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.spannerIPCreateCmd.Flags().StringVar(&s.flagSpIPConfigFile, "config-file", "", "YAML/JSON file for the InstancePartition body (required)")
+	_ = s.spannerIPCreateCmd.MarkFlagRequired("config-file")
+	s.spannerIPUpdateCmd.Flags().StringVar(&s.flagSpIPConfigFile, "config-file", "", "YAML/JSON file for the InstancePartition body (required)")
+	_ = s.spannerIPUpdateCmd.MarkFlagRequired("config-file")
+	s.spannerIPUpdateCmd.Flags().StringVar(&s.flagSpIPUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 
-	spannerIPListCmd.Flags().Int64Var(&flagSpIPPageSize, "page-size", 0, "Maximum results per page")
+	s.spannerIPListCmd.Flags().Int64Var(&s.flagSpIPPageSize, "page-size", 0, "Maximum results per page")
 
-	spannerInstancePartitionsCmd.AddCommand(all...)
-	spannerCmd.AddCommand(spannerInstancePartitionsCmd)
+	s.spannerInstancePartitionsCmd.AddCommand(all...)
+	s.spannerCmd.AddCommand(s.spannerInstancePartitionsCmd)
 }
 
-func runSpIPCreate(cmd *cobra.Command, args []string) error {
-	parent, err := spannerInstance(flagSpIPInstance)
+func (s *spannerCmds) runSpIPCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerInstance(s.flagSpIPInstance)
 	if err != nil {
 		return err
 	}
 	part := &spanner.InstancePartition{}
-	if err := loadYAMLOrJSONInto(flagSpIPConfigFile, part); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSpIPConfigFile, part); err != nil {
 		return err
 	}
 	body := &spanner.CreateInstancePartitionRequest{
 		InstancePartition:   part,
 		InstancePartitionId: args[0],
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -85,34 +50,34 @@ func runSpIPCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating instance partition: %w", err)
 	}
-	fmt.Printf("Create instance partition [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSpIPFormat)
+	fmt.Fprintf(s.inv.stdout, "Create instance partition [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpIPFormat)
 }
 
-func runSpIPDelete(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstancePartition(flagSpIPInstance, args[0])
+func (s *spannerCmds) runSpIPDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstancePartition(s.flagSpIPInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.InstancePartitions.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting instance partition: %w", err)
 	}
-	fmt.Printf("Deleted instance partition [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted instance partition [%s].\n", args[0])
 	return nil
 }
 
-func runSpIPDescribe(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstancePartition(flagSpIPInstance, args[0])
+func (s *spannerCmds) runSpIPDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstancePartition(s.flagSpIPInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,16 +85,16 @@ func runSpIPDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing instance partition: %w", err)
 	}
-	return emitFormatted(got, flagSpIPFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSpIPFormat)
 }
 
-func runSpIPList(cmd *cobra.Command, args []string) error {
-	parent, err := spannerInstance(flagSpIPInstance)
+func (s *spannerCmds) runSpIPList(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerInstance(s.flagSpIPInstance)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -137,8 +102,8 @@ func runSpIPList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.InstancePartitions.List(parent).Context(ctx)
-		if flagSpIPPageSize > 0 {
-			call = call.PageSize(flagSpIPPageSize)
+		if s.flagSpIPPageSize > 0 {
+			call = call.PageSize(s.flagSpIPPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -153,20 +118,20 @@ func runSpIPList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSpIPFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSpIPFormat)
 }
 
-func runSpIPUpdate(cmd *cobra.Command, args []string) error {
-	name, err := spannerInstancePartition(flagSpIPInstance, args[0])
+func (s *spannerCmds) runSpIPUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerInstancePartition(s.flagSpIPInstance, args[0])
 	if err != nil {
 		return err
 	}
 	part := &spanner.InstancePartition{}
-	if err := loadYAMLOrJSONInto(flagSpIPConfigFile, part); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSpIPConfigFile, part); err != nil {
 		return err
 	}
 	part.Name = name
-	mask := flagSpIPUpdateMask
+	mask := s.flagSpIPUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(part))
 	}
@@ -174,8 +139,8 @@ func runSpIPUpdate(cmd *cobra.Command, args []string) error {
 		InstancePartition: part,
 		FieldMask:         mask,
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -183,5 +148,5 @@ func runSpIPUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating instance partition: %w", err)
 	}
-	return emitFormatted(op, flagSpIPFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpIPFormat)
 }

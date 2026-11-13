@@ -1,106 +1,61 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	healthcare "google.golang.org/api/healthcare/v1"
 )
 
 // --- gcloud healthcare fhir-stores (#1223) ---
 
-var healthcareFhirStoresCmd = &cobra.Command{Use: "fhir-stores", Short: "Manage Healthcare FHIR stores"}
-
-var (
-	flagHcFsLocation   string
-	flagHcFsDataset    string
-	flagHcFsFormat     string
-	flagHcFsConfigFile string
-	flagHcFsUpdateMask string
-	flagHcFsPageSize   int64
-)
-
-var (
-	hcFsCreateCmd = &cobra.Command{
-		Use: "create FHIR_STORE", Short: "Create a Healthcare FHIR store",
-		Args: cobra.ExactArgs(1), RunE: runHcFsCreate,
-	}
-	hcFsDeleteCmd = &cobra.Command{
-		Use: "delete FHIR_STORE", Short: "Delete a Healthcare FHIR store",
-		Args: cobra.ExactArgs(1), RunE: runHcFsDelete,
-	}
-	hcFsDescribeCmd = &cobra.Command{
-		Use: "describe FHIR_STORE", Short: "Describe a Healthcare FHIR store",
-		Args: cobra.ExactArgs(1), RunE: runHcFsDescribe,
-	}
-	hcFsListCmd = &cobra.Command{
-		Use: "list", Short: "List Healthcare FHIR stores in a dataset",
-		Args: cobra.NoArgs, RunE: runHcFsList,
-	}
-	hcFsUpdateCmd = &cobra.Command{
-		Use: "update FHIR_STORE", Short: "Update a Healthcare FHIR store",
-		Args: cobra.ExactArgs(1), RunE: runHcFsUpdate,
-	}
-	hcFsGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy FHIR_STORE", Short: "Get the IAM policy for a Healthcare FHIR store",
-		Args: cobra.ExactArgs(1), RunE: runHcFsGetIam,
-	}
-	hcFsSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy FHIR_STORE POLICY_FILE", Short: "Set the IAM policy for a Healthcare FHIR store",
-		Args: cobra.ExactArgs(2), RunE: runHcFsSetIam,
-	}
-)
-
-func init() {
+func (s *healthcareCmds) initHealthcareFhirStores() {
 	all := []*cobra.Command{
-		hcFsCreateCmd, hcFsDeleteCmd, hcFsDescribeCmd,
-		hcFsListCmd, hcFsUpdateCmd, hcFsGetIamCmd, hcFsSetIamCmd,
+		s.hcFsCreateCmd, s.hcFsDeleteCmd, s.hcFsDescribeCmd,
+		s.hcFsListCmd, s.hcFsUpdateCmd, s.hcFsGetIamCmd, s.hcFsSetIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagHcFsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagHcFsLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagHcFsDataset, "dataset", "", "Parent dataset (required)")
+		c.Flags().StringVar(&s.flagHcFsDataset, "dataset", "", "Parent dataset (required)")
 		_ = c.MarkFlagRequired("dataset")
-		c.Flags().StringVar(&flagHcFsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagHcFsFormat, "format", "", "Output format")
 	}
-	hcFsCreateCmd.Flags().StringVar(&flagHcFsConfigFile, "config-file", "", "YAML/JSON file with the FhirStore body (required)")
-	_ = hcFsCreateCmd.MarkFlagRequired("config-file")
-	hcFsListCmd.Flags().Int64Var(&flagHcFsPageSize, "page-size", 0, "Maximum results per page")
-	hcFsUpdateCmd.Flags().StringVar(&flagHcFsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
-	_ = hcFsUpdateCmd.MarkFlagRequired("config-file")
-	hcFsUpdateCmd.Flags().StringVar(&flagHcFsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.hcFsCreateCmd.Flags().StringVar(&s.flagHcFsConfigFile, "config-file", "", "YAML/JSON file with the FhirStore body (required)")
+	_ = s.hcFsCreateCmd.MarkFlagRequired("config-file")
+	s.hcFsListCmd.Flags().Int64Var(&s.flagHcFsPageSize, "page-size", 0, "Maximum results per page")
+	s.hcFsUpdateCmd.Flags().StringVar(&s.flagHcFsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
+	_ = s.hcFsUpdateCmd.MarkFlagRequired("config-file")
+	s.hcFsUpdateCmd.Flags().StringVar(&s.flagHcFsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 
-	healthcareFhirStoresCmd.AddCommand(all...)
-	healthcareCmd.AddCommand(healthcareFhirStoresCmd)
+	s.healthcareFhirStoresCmd.AddCommand(all...)
+	s.healthcareCmd.AddCommand(s.healthcareFhirStoresCmd)
 }
 
 // hcFhirStoreName returns projects/.../datasets/DATASET/fhirStores/ID.
-func hcFhirStoreName(location, dataset, id string) (string, error) {
+func (s *healthcareCmds) hcFhirStoreName(location, dataset, id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	ds, err := hcDatasetName(location, dataset)
+	ds, err := s.hcDatasetName(location, dataset)
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/fhirStores/%s", ds, id), nil
 }
 
-func runHcFsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := hcDatasetName(flagHcFsLocation, flagHcFsDataset)
+func (s *healthcareCmds) runHcFsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.hcDatasetName(s.flagHcFsLocation, s.flagHcFsDataset)
 	if err != nil {
 		return err
 	}
 	body := &healthcare.FhirStore{}
-	if err := loadYAMLOrJSONInto(flagHcFsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagHcFsConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,34 +63,34 @@ func runHcFsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating FHIR store: %w", err)
 	}
-	fmt.Printf("Created FHIR store [%s].\n", args[0])
-	return emitFormatted(got, flagHcFsFormat)
+	fmt.Fprintf(s.inv.stdout, "Created FHIR store [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagHcFsFormat)
 }
 
-func runHcFsDelete(cmd *cobra.Command, args []string) error {
-	name, err := hcFhirStoreName(flagHcFsLocation, flagHcFsDataset, args[0])
+func (s *healthcareCmds) runHcFsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.hcFhirStoreName(s.flagHcFsLocation, s.flagHcFsDataset, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Datasets.FhirStores.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting FHIR store: %w", err)
 	}
-	fmt.Printf("Deleted FHIR store [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted FHIR store [%s].\n", args[0])
 	return nil
 }
 
-func runHcFsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := hcFhirStoreName(flagHcFsLocation, flagHcFsDataset, args[0])
+func (s *healthcareCmds) runHcFsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.hcFhirStoreName(s.flagHcFsLocation, s.flagHcFsDataset, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,16 +98,16 @@ func runHcFsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing FHIR store: %w", err)
 	}
-	return emitFormatted(got, flagHcFsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagHcFsFormat)
 }
 
-func runHcFsList(cmd *cobra.Command, args []string) error {
-	parent, err := hcDatasetName(flagHcFsLocation, flagHcFsDataset)
+func (s *healthcareCmds) runHcFsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.hcDatasetName(s.flagHcFsLocation, s.flagHcFsDataset)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -160,8 +115,8 @@ func runHcFsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Datasets.FhirStores.List(parent).Context(ctx)
-		if flagHcFsPageSize > 0 {
-			call = call.PageSize(flagHcFsPageSize)
+		if s.flagHcFsPageSize > 0 {
+			call = call.PageSize(s.flagHcFsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -176,25 +131,25 @@ func runHcFsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagHcFsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagHcFsFormat)
 }
 
-func runHcFsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := hcFhirStoreName(flagHcFsLocation, flagHcFsDataset, args[0])
+func (s *healthcareCmds) runHcFsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.hcFhirStoreName(s.flagHcFsLocation, s.flagHcFsDataset, args[0])
 	if err != nil {
 		return err
 	}
 	body := &healthcare.FhirStore{}
-	if err := loadYAMLOrJSONInto(flagHcFsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagHcFsConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagHcFsUpdateMask
+	mask := s.flagHcFsUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -206,17 +161,17 @@ func runHcFsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating FHIR store: %w", err)
 	}
-	fmt.Printf("Updated FHIR store [%s].\n", args[0])
-	return emitFormatted(got, flagHcFsFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated FHIR store [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagHcFsFormat)
 }
 
-func runHcFsGetIam(cmd *cobra.Command, args []string) error {
-	name, err := hcFhirStoreName(flagHcFsLocation, flagHcFsDataset, args[0])
+func (s *healthcareCmds) runHcFsGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.hcFhirStoreName(s.flagHcFsLocation, s.flagHcFsDataset, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -224,11 +179,11 @@ func runHcFsGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagHcFsFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagHcFsFormat)
 }
 
-func runHcFsSetIam(cmd *cobra.Command, args []string) error {
-	name, err := hcFhirStoreName(flagHcFsLocation, flagHcFsDataset, args[0])
+func (s *healthcareCmds) runHcFsSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.hcFhirStoreName(s.flagHcFsLocation, s.flagHcFsDataset, args[0])
 	if err != nil {
 		return err
 	}
@@ -237,8 +192,8 @@ func runHcFsSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -246,6 +201,6 @@ func runHcFsSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for FHIR store [%s].\n", args[0])
-	return emitFormatted(updated, flagHcFsFormat)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for FHIR store [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, updated, s.flagHcFsFormat)
 }

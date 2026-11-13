@@ -1,60 +1,26 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	firestore "google.golang.org/api/firestore/v1"
 )
 
-var firestoreOperationsCmd = &cobra.Command{
-	Use:   "operations",
-	Short: "Manage Firestore admin operations",
-}
+func (g *firestoreCmds) initFirestoreOperations() {
+	for _, c := range []*cobra.Command{g.fsOpDescribeCmd, g.fsOpCancelCmd, g.fsOpDeleteCmd, g.fsOpListCmd} {
+		firestoreAddDatabaseFlag(c, &g.flagFSOpDatabase, false)
+	}
+	g.fsOpDescribeCmd.Flags().StringVar(&g.flagFSOpFormat, "format", "", "Output format")
+	g.fsOpListCmd.Flags().StringVar(&g.flagFSOpFormat, "format", "", "Output format")
+	g.fsOpListCmd.Flags().StringVar(&g.flagFSOpFilter, "filter", "", "Server-side filter expression")
+	g.fsOpListCmd.Flags().Int64Var(&g.flagFSOpPageSize, "page-size", 0, "Page size")
+	g.fsOpListCmd.Flags().Int64Var(&g.flagFSOpLimit, "limit", 0, "Cap total results (0 = no cap)")
 
-var (
-	fsOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Firestore admin operation",
-		Args: cobra.ExactArgs(1), RunE: runFSOpDescribe,
-	}
-	fsOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a running Firestore admin operation",
-		Args: cobra.ExactArgs(1), RunE: runFSOpCancel,
-	}
-	fsOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete a completed Firestore admin operation",
-		Args: cobra.ExactArgs(1), RunE: runFSOpDelete,
-	}
-	fsOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Firestore admin operations for a database",
-		Args: cobra.NoArgs, RunE: runFSOpList,
-	}
-)
-
-var (
-	flagFSOpDatabase string
-	flagFSOpFormat   string
-	flagFSOpFilter   string
-	flagFSOpPageSize int64
-	flagFSOpLimit    int64
-)
-
-func init() {
-	for _, c := range []*cobra.Command{fsOpDescribeCmd, fsOpCancelCmd, fsOpDeleteCmd, fsOpListCmd} {
-		firestoreAddDatabaseFlag(c, &flagFSOpDatabase, false)
-	}
-	fsOpDescribeCmd.Flags().StringVar(&flagFSOpFormat, "format", "", "Output format")
-	fsOpListCmd.Flags().StringVar(&flagFSOpFormat, "format", "", "Output format")
-	fsOpListCmd.Flags().StringVar(&flagFSOpFilter, "filter", "", "Server-side filter expression")
-	fsOpListCmd.Flags().Int64Var(&flagFSOpPageSize, "page-size", 0, "Page size")
-	fsOpListCmd.Flags().Int64Var(&flagFSOpLimit, "limit", 0, "Cap total results (0 = no cap)")
-
-	firestoreOperationsCmd.AddCommand(fsOpCancelCmd, fsOpDeleteCmd, fsOpDescribeCmd, fsOpListCmd)
-	firestoreCmd.AddCommand(firestoreOperationsCmd)
+	g.firestoreOperationsCmd.AddCommand(g.fsOpCancelCmd, g.fsOpDeleteCmd, g.fsOpDescribeCmd, g.fsOpListCmd)
+	g.firestoreCmd.AddCommand(g.firestoreOperationsCmd)
 }
 
 func firestoreOpName(id, project, db string) string {
@@ -71,77 +37,77 @@ func defaultDB(db string) string {
 	return db
 }
 
-func runFSOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSOpDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Databases.Operations.Get(firestoreOpName(args[0], project, flagFSOpDatabase)).Context(ctx).Do()
+	op, err := svc.Projects.Databases.Operations.Get(firestoreOpName(args[0], project, g.flagFSOpDatabase)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagFSOpFormat)
+	return emitFormattedTo(g.inv.stdout, op, g.flagFSOpFormat)
 }
 
-func runFSOpCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSOpCancel(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Databases.Operations.Cancel(firestoreOpName(args[0], project, flagFSOpDatabase), &firestore.GoogleLongrunningCancelOperationRequest{}).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Databases.Operations.Cancel(firestoreOpName(args[0], project, g.flagFSOpDatabase), &firestore.GoogleLongrunningCancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runFSOpDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSOpDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Databases.Operations.Delete(firestoreOpName(args[0], project, flagFSOpDatabase)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Databases.Operations.Delete(firestoreOpName(args[0], project, g.flagFSOpDatabase)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runFSOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *firestoreCmds) runFSOpList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.FirestoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Firestore(ctx)
 	if err != nil {
 		return err
 	}
-	parent := firestoreDatabaseName(project, defaultDB(flagFSOpDatabase))
+	parent := firestoreDatabaseName(project, defaultDB(g.flagFSOpDatabase))
 	var all []*firestore.GoogleLongrunningOperation
 	pageToken := ""
 	for {
 		call := svc.Projects.Databases.Operations.List(parent).Context(ctx)
-		if flagFSOpFilter != "" {
-			call = call.Filter(flagFSOpFilter)
+		if g.flagFSOpFilter != "" {
+			call = call.Filter(g.flagFSOpFilter)
 		}
-		if flagFSOpPageSize > 0 {
-			call = call.PageSize(flagFSOpPageSize)
+		if g.flagFSOpPageSize > 0 {
+			call = call.PageSize(g.flagFSOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -151,8 +117,8 @@ func runFSOpList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing operations: %w", err)
 		}
 		all = append(all, resp.Operations...)
-		if flagFSOpLimit > 0 && int64(len(all)) >= flagFSOpLimit {
-			all = all[:flagFSOpLimit]
+		if g.flagFSOpLimit > 0 && int64(len(all)) >= g.flagFSOpLimit {
+			all = all[:g.flagFSOpLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -160,12 +126,12 @@ func runFSOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagFSOpFormat != "" {
-		return emitFormatted(all, flagFSOpFormat)
+	if g.flagFSOpFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagFSOpFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range all {
-		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(g.inv.stdout, "%-40s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }

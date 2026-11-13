@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,94 +9,61 @@ import (
 
 // --- gcloud apigee archives (#1377) ---
 
-var apigeeArchivesCmd = &cobra.Command{Use: "archives", Short: "Manage Apigee archive deployments"}
-
-var (
-	flagApigeeArcOrganization string
-	flagApigeeArcEnvironment  string
-	flagApigeeArcFormat       string
-	flagApigeeArcConfigFile   string
-	flagApigeeArcPageSize     int64
-)
-
-var (
-	apigeeArcCreateCmd = &cobra.Command{
-		Use: "create RESOURCE", Short: "Create an archive deployment",
-		Args: cobra.ExactArgs(1), RunE: runApigeeArcCreate,
-	}
-	apigeeArcDeleteCmd = &cobra.Command{
-		Use: "delete RESOURCE", Short: "Delete an archive deployment",
-		Args: cobra.ExactArgs(1), RunE: runApigeeArcDelete,
-	}
-	apigeeArcDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe an archive deployment",
-		Args: cobra.ExactArgs(1), RunE: runApigeeArcDescribe,
-	}
-	apigeeArcListCmd = &cobra.Command{
-		Use: "list", Short: "List archive deployments in an environment",
-		Args: cobra.NoArgs, RunE: runApigeeArcList,
-	}
-	apigeeArcUpdateCmd = &cobra.Command{
-		Use: "update RESOURCE", Short: "Update an archive deployment",
-		Args: cobra.ExactArgs(1), RunE: runApigeeArcUpdate,
-	}
-)
-
-func init() {
+func (s *apigeeCmds) initApigeeArchives() {
 	all := []*cobra.Command{
-		apigeeArcCreateCmd, apigeeArcDeleteCmd, apigeeArcDescribeCmd,
-		apigeeArcListCmd, apigeeArcUpdateCmd,
+		s.apigeeArcCreateCmd, s.apigeeArcDeleteCmd, s.apigeeArcDescribeCmd,
+		s.apigeeArcListCmd, s.apigeeArcUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApigeeArcOrganization, "organization", "", "Apigee organization (required)")
+		c.Flags().StringVar(&s.flagApigeeArcOrganization, "organization", "", "Apigee organization (required)")
 		_ = c.MarkFlagRequired("organization")
-		c.Flags().StringVar(&flagApigeeArcEnvironment, "environment", "", "Apigee environment (required)")
+		c.Flags().StringVar(&s.flagApigeeArcEnvironment, "environment", "", "Apigee environment (required)")
 		_ = c.MarkFlagRequired("environment")
-		c.Flags().StringVar(&flagApigeeArcFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagApigeeArcFormat, "format", "", "Output format")
 	}
-	apigeeArcCreateCmd.Flags().StringVar(&flagApigeeArcConfigFile, "config-file", "", "Path to YAML/JSON archive deployment definition (required)")
-	_ = apigeeArcCreateCmd.MarkFlagRequired("config-file")
-	apigeeArcUpdateCmd.Flags().StringVar(&flagApigeeArcConfigFile, "config-file", "", "Path to YAML/JSON archive deployment definition (required)")
-	_ = apigeeArcUpdateCmd.MarkFlagRequired("config-file")
-	apigeeArcListCmd.Flags().Int64Var(&flagApigeeArcPageSize, "page-size", 0, "Maximum results per page")
+	s.apigeeArcCreateCmd.Flags().StringVar(&s.flagApigeeArcConfigFile, "config-file", "", "Path to YAML/JSON archive deployment definition (required)")
+	_ = s.apigeeArcCreateCmd.MarkFlagRequired("config-file")
+	s.apigeeArcUpdateCmd.Flags().StringVar(&s.flagApigeeArcConfigFile, "config-file", "", "Path to YAML/JSON archive deployment definition (required)")
+	_ = s.apigeeArcUpdateCmd.MarkFlagRequired("config-file")
+	s.apigeeArcListCmd.Flags().Int64Var(&s.flagApigeeArcPageSize, "page-size", 0, "Maximum results per page")
 
-	apigeeArchivesCmd.AddCommand(all...)
-	apigeeCmd.AddCommand(apigeeArchivesCmd)
+	s.apigeeArchivesCmd.AddCommand(all...)
+	s.apigeeCmd.AddCommand(s.apigeeArchivesCmd)
 }
 
-func apigeeArcParent() (string, error) {
-	if flagApigeeArcEnvironment == "" {
+func (s *apigeeCmds) apigeeArcParent() (string, error) {
+	if s.flagApigeeArcEnvironment == "" {
 		return "", fmt.Errorf("--environment is required")
 	}
-	org, err := apigeeOrgName(flagApigeeArcOrganization)
+	org, err := apigeeOrgName(s.flagApigeeArcOrganization)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s/environments/%s", org, flagApigeeArcEnvironment), nil
+	return fmt.Sprintf("%s/environments/%s", org, s.flagApigeeArcEnvironment), nil
 }
 
-func apigeeArcName(id string) (string, error) {
-	parent, err := apigeeArcParent()
+func (s *apigeeCmds) apigeeArcName(id string) (string, error) {
+	parent, err := s.apigeeArcParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/archiveDeployments/%s", parent, id), nil
 }
 
-func runApigeeArcCreate(cmd *cobra.Command, args []string) error {
-	parent, err := apigeeArcParent()
+func (s *apigeeCmds) runApigeeArcCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.apigeeArcParent()
 	if err != nil {
 		return err
 	}
 	body := &apigee.GoogleCloudApigeeV1ArchiveDeployment{}
-	if err := loadYAMLOrJSONInto(flagApigeeArcConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagApigeeArcConfigFile, body); err != nil {
 		return err
 	}
 	if body.Name == "" {
 		body.Name = args[0]
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, parent)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -105,33 +71,33 @@ func runApigeeArcCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating archive deployment: %w", err)
 	}
-	return emitFormatted(op, flagApigeeArcFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagApigeeArcFormat)
 }
 
-func runApigeeArcDelete(cmd *cobra.Command, args []string) error {
-	name, err := apigeeArcName(args[0])
+func (s *apigeeCmds) runApigeeArcDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeeArcName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Organizations.Environments.ArchiveDeployments.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting archive deployment: %w", err)
 	}
-	fmt.Printf("Deleted archive deployment [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted archive deployment [%s].\n", args[0])
 	return nil
 }
 
-func runApigeeArcDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apigeeArcName(args[0])
+func (s *apigeeCmds) runApigeeArcDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeeArcName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -139,16 +105,16 @@ func runApigeeArcDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing archive deployment: %w", err)
 	}
-	return emitFormatted(got, flagApigeeArcFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeeArcFormat)
 }
 
-func runApigeeArcList(cmd *cobra.Command, args []string) error {
-	parent, err := apigeeArcParent()
+func (s *apigeeCmds) runApigeeArcList(cmd *cobra.Command, args []string) error {
+	parent, err := s.apigeeArcParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, parent)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -156,8 +122,8 @@ func runApigeeArcList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Organizations.Environments.ArchiveDeployments.List(parent).Context(ctx)
-		if flagApigeeArcPageSize > 0 {
-			call = call.PageSize(flagApigeeArcPageSize)
+		if s.flagApigeeArcPageSize > 0 {
+			call = call.PageSize(s.flagApigeeArcPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -172,21 +138,21 @@ func runApigeeArcList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagApigeeArcFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagApigeeArcFormat)
 }
 
-func runApigeeArcUpdate(cmd *cobra.Command, args []string) error {
-	name, err := apigeeArcName(args[0])
+func (s *apigeeCmds) runApigeeArcUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeeArcName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &apigee.GoogleCloudApigeeV1ArchiveDeployment{}
-	if err := loadYAMLOrJSONInto(flagApigeeArcConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagApigeeArcConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -194,5 +160,5 @@ func runApigeeArcUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating archive deployment: %w", err)
 	}
-	return emitFormatted(got, flagApigeeArcFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeeArcFormat)
 }

@@ -7,7 +7,8 @@ import (
 )
 
 func kmsSub(names ...string) *cobra.Command {
-	var cur *cobra.Command = kmsCmd
+	grp := newKmsCmds(legacyTestInvocation())
+	var cur *cobra.Command = grp.kmsCmd
 	for _, n := range names {
 		cur = findSub(cur, n)
 		if cur == nil {

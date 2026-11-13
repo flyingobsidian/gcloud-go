@@ -7,7 +7,8 @@ import (
 )
 
 func iamSubgroup(name string) *cobra.Command {
-	for _, c := range iamCmd.Commands() {
+	grp := newIamCmds(legacyTestInvocation())
+	for _, c := range grp.iamCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

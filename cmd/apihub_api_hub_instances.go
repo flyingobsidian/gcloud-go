@@ -1,87 +1,53 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
 
 // --- gcloud apihub api-hub-instances (#1167) ---
 
-var apihubAHICmd = &cobra.Command{Use: "api-hub-instances", Short: "Manage API Hub instances"}
-
-var (
-	flagAHILocation      string
-	flagAHIFormat        string
-	flagAHIDescription   string
-	flagAHILabels        []string
-	flagAHICmekKey       string
-	flagAHIDisableSearch bool
-	flagAHIVertexLoc     string
-	flagAHIEncryption    string
-)
-
-var (
-	apihubAHICreateCmd = &cobra.Command{
-		Use: "create API_HUB_INSTANCE", Short: "Create an API Hub instance",
-		Args: cobra.ExactArgs(1), RunE: runAHICreate,
-	}
-	apihubAHIDeleteCmd = &cobra.Command{
-		Use: "delete API_HUB_INSTANCE", Short: "Delete an API Hub instance",
-		Args: cobra.ExactArgs(1), RunE: runAHIDelete,
-	}
-	apihubAHIDescribeCmd = &cobra.Command{
-		Use: "describe API_HUB_INSTANCE", Short: "Describe an API Hub instance",
-		Args: cobra.ExactArgs(1), RunE: runAHIDescribe,
-	}
-	apihubAHILookupCmd = &cobra.Command{
-		Use: "lookup", Short: "Look up the API Hub instance for a project location",
-		Args: cobra.NoArgs, RunE: runAHILookup,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{apihubAHICreateCmd, apihubAHIDeleteCmd, apihubAHIDescribeCmd, apihubAHILookupCmd}
+func (g *apihubCmds) initApihubApiHubInstances() {
+	all := []*cobra.Command{g.apihubAHICreateCmd, g.apihubAHIDeleteCmd, g.apihubAHIDescribeCmd, g.apihubAHILookupCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAHILocation, "location", "",
+		c.Flags().StringVar(&g.flagAHILocation, "location", "",
 			"Location that owns the API Hub instance (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagAHIFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagAHIFormat, "format", "", "Output format")
 	}
-	apihubAHICreateCmd.Flags().StringVar(&flagAHIDescription, "description", "",
+	g.apihubAHICreateCmd.Flags().StringVar(&g.flagAHIDescription, "description", "",
 		"Description of the API Hub instance")
-	apihubAHICreateCmd.Flags().StringSliceVar(&flagAHILabels, "labels", nil,
+	g.apihubAHICreateCmd.Flags().StringSliceVar(&g.flagAHILabels, "labels", nil,
 		"Labels as KEY=VALUE pairs")
-	apihubAHICreateCmd.Flags().StringVar(&flagAHICmekKey, "config-cmek-key-name", "",
+	g.apihubAHICreateCmd.Flags().StringVar(&g.flagAHICmekKey, "config-cmek-key-name", "",
 		"Fully qualified CMEK key (projects/*/locations/*/keyRings/*/cryptoKeys/*)")
-	apihubAHICreateCmd.Flags().BoolVar(&flagAHIDisableSearch, "config-disable-search", false,
+	g.apihubAHICreateCmd.Flags().BoolVar(&g.flagAHIDisableSearch, "config-disable-search", false,
 		"Disable search on the instance")
-	apihubAHICreateCmd.Flags().StringVar(&flagAHIVertexLoc, "config-vertex-location", "",
+	g.apihubAHICreateCmd.Flags().StringVar(&g.flagAHIVertexLoc, "config-vertex-location", "",
 		"Vertex AI location where the data store is stored")
-	apihubAHICreateCmd.Flags().StringVar(&flagAHIEncryption, "config-encryption-type", "",
+	g.apihubAHICreateCmd.Flags().StringVar(&g.flagAHIEncryption, "config-encryption-type", "",
 		"Encryption type: gmek or cmek")
 
-	apihubAHICmd.AddCommand(all...)
-	apihubCmd.AddCommand(apihubAHICmd)
+	g.apihubAHICmd.AddCommand(all...)
+	g.apihubCmd.AddCommand(g.apihubAHICmd)
 }
 
-func ahiParent() (string, error) {
-	project, err := resolveProject()
+func (g *apihubCmds) ahiParent() (string, error) {
+	project, err := g.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagAHILocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, g.flagAHILocation), nil
 }
 
-func ahiName(id string) (string, error) {
+func (g *apihubCmds) ahiName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := ahiParent()
+	parent, err := g.ahiParent()
 	if err != nil {
 		return "", err
 	}
@@ -103,12 +69,12 @@ func ahiEncryptionEnum(v string) (string, error) {
 	}
 }
 
-func ahiLabelsFromFlag() map[string]string {
-	if len(flagAHILabels) == 0 {
+func (g *apihubCmds) ahiLabelsFromFlag() map[string]string {
+	if len(g.flagAHILabels) == 0 {
 		return nil
 	}
 	out := map[string]string{}
-	for _, kv := range flagAHILabels {
+	for _, kv := range g.flagAHILabels {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok {
 			continue
@@ -118,27 +84,27 @@ func ahiLabelsFromFlag() map[string]string {
 	return out
 }
 
-func runAHICreate(cmd *cobra.Command, args []string) error {
-	parent, err := ahiParent()
+func (g *apihubCmds) runAHICreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.ahiParent()
 	if err != nil {
 		return err
 	}
-	enc, err := ahiEncryptionEnum(flagAHIEncryption)
+	enc, err := ahiEncryptionEnum(g.flagAHIEncryption)
 	if err != nil {
 		return err
 	}
 	body := &apihub.GoogleCloudApihubV1ApiHubInstance{
-		Description: flagAHIDescription,
-		Labels:      ahiLabelsFromFlag(),
+		Description: g.flagAHIDescription,
+		Labels:      g.ahiLabelsFromFlag(),
 		Config: &apihub.GoogleCloudApihubV1Config{
-			CmekKeyName:    flagAHICmekKey,
-			DisableSearch:  flagAHIDisableSearch,
+			CmekKeyName:    g.flagAHICmekKey,
+			DisableSearch:  g.flagAHIDisableSearch,
 			EncryptionType: enc,
-			VertexLocation: flagAHIVertexLoc,
+			VertexLocation: g.flagAHIVertexLoc,
 		},
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -147,17 +113,17 @@ func runAHICreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating api hub instance: %w", err)
 	}
-	fmt.Printf("Create request issued for api hub instance [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAHIFormat)
+	fmt.Fprintf(g.inv.stdout, "Create request issued for api hub instance [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(g.inv.stdout, op, g.flagAHIFormat)
 }
 
-func runAHIDelete(cmd *cobra.Command, args []string) error {
-	name, err := ahiName(args[0])
+func (g *apihubCmds) runAHIDelete(cmd *cobra.Command, args []string) error {
+	name, err := g.ahiName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -165,17 +131,17 @@ func runAHIDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting api hub instance: %w", err)
 	}
-	fmt.Printf("Delete request issued for api hub instance [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAHIFormat)
+	fmt.Fprintf(g.inv.stdout, "Delete request issued for api hub instance [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(g.inv.stdout, op, g.flagAHIFormat)
 }
 
-func runAHIDescribe(cmd *cobra.Command, args []string) error {
-	name, err := ahiName(args[0])
+func (g *apihubCmds) runAHIDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.ahiName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -183,16 +149,16 @@ func runAHIDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing api hub instance: %w", err)
 	}
-	return emitFormatted(got, flagAHIFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAHIFormat)
 }
 
-func runAHILookup(cmd *cobra.Command, args []string) error {
-	parent, err := ahiParent()
+func (g *apihubCmds) runAHILookup(cmd *cobra.Command, args []string) error {
+	parent, err := g.ahiParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -200,5 +166,5 @@ func runAHILookup(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("looking up api hub instance: %w", err)
 	}
-	return emitFormatted(got, flagAHIFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAHIFormat)
 }

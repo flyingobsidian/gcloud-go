@@ -7,7 +7,8 @@ import (
 )
 
 func transcoderSubgroup(name string) *cobra.Command {
-	for _, c := range transcoderCmd.Commands() {
+	grp := newTranscoderCmds(legacyTestInvocation())
+	for _, c := range grp.transcoderCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

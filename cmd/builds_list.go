@@ -5,13 +5,10 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/config"
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudbuild "google.golang.org/api/cloudbuild/v1"
 )
@@ -24,35 +21,28 @@ const buildsDefaultRegion = "global"
 // buildsOngoingFilter is the server-side filter gcloud sends for --ongoing.
 const buildsOngoingFilter = `status="WORKING" OR status="QUEUED"`
 
-var (
-	flagBuildsListRegion   string
-	flagBuildsListOngoing  bool
-	flagBuildsListLimit    int64
-	flagBuildsListPageSize int64
-)
-
-func init() {
+func (s *buildsCmds) initBuildsList() {
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List builds",
 		Args:  cobra.NoArgs,
-		RunE:  runBuildsList,
+		RunE:  s.runBuildsList,
 	}
-	list.Flags().StringVar(&flagBuildsListRegion, "region", "",
+	list.Flags().StringVar(&s.flagBuildsListRegion, "region", "",
 		"The region of the Cloud Build Service to use; default the builds/region property, else global")
-	list.Flags().BoolVar(&flagBuildsListOngoing, "ongoing", false, "Only list builds that are currently QUEUED or WORKING")
-	list.Flags().Int64Var(&flagBuildsListLimit, "limit", 50, "Maximum number of builds to list (0 = no limit)")
-	list.Flags().Int64Var(&flagBuildsListPageSize, "page-size", 20, "Number of builds fetched per request")
-	buildsCmd.AddCommand(list)
+	list.Flags().BoolVar(&s.flagBuildsListOngoing, "ongoing", false, "Only list builds that are currently QUEUED or WORKING")
+	list.Flags().Int64Var(&s.flagBuildsListLimit, "limit", 50, "Maximum number of builds to list (0 = no limit)")
+	list.Flags().Int64Var(&s.flagBuildsListPageSize, "page-size", 20, "Number of builds fetched per request")
+	s.buildsCmd.AddCommand(list)
 }
 
 // buildsListRegion returns --region, else the builds/region property, else
 // gcloud's default region.
-func buildsListRegion() (string, error) {
-	if flagBuildsListRegion != "" {
-		return flagBuildsListRegion, nil
+func (s *buildsCmds) buildsListRegion() (string, error) {
+	if s.flagBuildsListRegion != "" {
+		return s.flagBuildsListRegion, nil
 	}
-	region, err := config.Property("builds", "region")
+	region, err := s.inv.env.Property("builds", "region")
 	if err != nil {
 		return "", fmt.Errorf("reading builds/region: %w", err)
 	}
@@ -86,27 +76,27 @@ func listBuilds(ctx context.Context, page buildsPager, limit int64) ([]*cloudbui
 	}
 }
 
-func runBuildsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *buildsCmds) runBuildsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	region, err := buildsListRegion()
+	region, err := s.buildsListRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudBuildService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBuild(ctx)
 	if err != nil {
 		return err
 	}
 	parent := buildsLocationParent(project, region)
 	page := func(ctx context.Context, pageToken string) (*cloudbuild.ListBuildsResponse, error) {
 		call := svc.Projects.Locations.Builds.List(parent).Context(ctx)
-		if flagBuildsListPageSize > 0 {
-			call = call.PageSize(flagBuildsListPageSize)
+		if s.flagBuildsListPageSize > 0 {
+			call = call.PageSize(s.flagBuildsListPageSize)
 		}
-		if flagBuildsListOngoing {
+		if s.flagBuildsListOngoing {
 			call = call.Filter(buildsOngoingFilter)
 		}
 		if pageToken != "" {
@@ -114,11 +104,11 @@ func runBuildsList(cmd *cobra.Command, args []string) error {
 		}
 		return call.Do()
 	}
-	builds, err := listBuilds(ctx, page, flagBuildsListLimit)
+	builds, err := listBuilds(ctx, page, s.flagBuildsListLimit)
 	if err != nil {
 		return err
 	}
-	return emitBuildsList(os.Stdout, os.Stderr, builds, flagFormat, time.Now(), time.Local)
+	return emitBuildsList(s.inv.stdout, s.inv.stderr, builds, s.inv.flags.format, time.Now(), time.Local)
 }
 
 // buildsListFormat is gcloud's default `builds list` table, over the rows

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,77 +10,46 @@ import (
 
 // --- gcloud artifacts settings (#1082) ---
 
-var artifactsSettingsCmd = &cobra.Command{
-	Use:   "settings",
-	Short: "Manage Artifact Registry per-location settings",
-}
-
-var (
-	flagArtSettingsLocation string
-	flagArtSettingsFormat   string
-)
-
-var artifactsSettingsDescribeCmd = &cobra.Command{
-	Use:   "describe",
-	Short: "Describe the settings for a location",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsSettingsDescribe,
-}
-
-var artifactsSettingsEnableRedirCmd = &cobra.Command{
-	Use:   "enable-upgrade-redirection",
-	Short: "Enable redirection of legacy container registry traffic to Artifact Registry",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsSettingsEnableRedir,
-}
-
-var artifactsSettingsDisableRedirCmd = &cobra.Command{
-	Use:   "disable-upgrade-redirection",
-	Short: "Disable redirection of legacy container registry traffic",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsSettingsDisableRedir,
-}
-
-func init() {
+func (s *artifactsCmds) initArtifactsSettings() {
 	for _, c := range []*cobra.Command{
-		artifactsSettingsDescribeCmd, artifactsSettingsEnableRedirCmd, artifactsSettingsDisableRedirCmd,
+		s.artifactsSettingsDescribeCmd, s.artifactsSettingsEnableRedirCmd, s.artifactsSettingsDisableRedirCmd,
 	} {
-		c.Flags().StringVar(&flagArtSettingsLocation, "location", "", "Location (required)")
-		c.Flags().StringVar(&flagArtSettingsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagArtSettingsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagArtSettingsFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("location")
 	}
-	artifactsSettingsCmd.AddCommand(
-		artifactsSettingsDescribeCmd, artifactsSettingsEnableRedirCmd, artifactsSettingsDisableRedirCmd,
+	s.artifactsSettingsCmd.AddCommand(
+		s.artifactsSettingsDescribeCmd, s.artifactsSettingsEnableRedirCmd, s.artifactsSettingsDisableRedirCmd,
 	)
-	artifactsCmd.AddCommand(artifactsSettingsCmd)
+	s.artifactsCmd.AddCommand(s.artifactsSettingsCmd)
 }
 
-func artSettingsName(project string) string {
-	return artLocationParent(project, flagArtSettingsLocation) + "/settings"
+func (s *artifactsCmds) artSettingsName(project string) string {
+	return artLocationParent(project, s.flagArtSettingsLocation) + "/settings"
 }
 
-func runArtifactsSettingsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsSettingsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	var out map[string]any
-	if err := artifactsRest.do(context.Background(), http.MethodGet, "/"+artSettingsName(project), nil, nil, &out); err != nil {
+	if err := s.inv.rest(artifactsRest).do(cmd.Context(), http.MethodGet, "/"+s.artSettingsName(project), nil, nil, &out); err != nil {
 		return fmt.Errorf("describing settings: %w", err)
 	}
-	return emitFormatted(out, flagArtSettingsFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtSettingsFormat)
 }
 
-func runArtifactsSettingsEnableRedir(cmd *cobra.Command, args []string) error {
-	return patchSettingsRedirection("REDIRECTION_FROM_GCR_IO_ENABLED")
+func (s *artifactsCmds) runArtifactsSettingsEnableRedir(cmd *cobra.Command, args []string) error {
+	return s.patchSettingsRedirection("REDIRECTION_FROM_GCR_IO_ENABLED")
 }
 
-func runArtifactsSettingsDisableRedir(cmd *cobra.Command, args []string) error {
-	return patchSettingsRedirection("REDIRECTION_FROM_GCR_IO_DISABLED")
+func (s *artifactsCmds) runArtifactsSettingsDisableRedir(cmd *cobra.Command, args []string) error {
+	return s.patchSettingsRedirection("REDIRECTION_FROM_GCR_IO_DISABLED")
 }
 
-func patchSettingsRedirection(state string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) patchSettingsRedirection(state string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
@@ -89,8 +57,8 @@ func patchSettingsRedirection(state string) error {
 	q := url.Values{}
 	q.Set("updateMask", "legacyRedirectionState")
 	var out map[string]any
-	if err := artifactsRest.do(context.Background(), http.MethodPatch, "/"+artSettingsName(project), q, body, &out); err != nil {
+	if err := s.inv.rest(artifactsRest).do(s.inv.context(), http.MethodPatch, "/"+s.artSettingsName(project), q, body, &out); err != nil {
 		return fmt.Errorf("updating settings: %w", err)
 	}
-	return emitFormatted(out, flagArtSettingsFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtSettingsFormat)
 }

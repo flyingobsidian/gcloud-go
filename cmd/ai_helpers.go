@@ -7,8 +7,8 @@ import (
 
 // aiParent returns "projects/PROJECT/locations/REGION" from the resolved
 // project (via config) and the supplied --region value. REGION is required.
-func aiParent(region string) (string, error) {
-	project, err := resolveProject()
+func (s *aiCmds) aiParent(region string) (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}

@@ -50,9 +50,8 @@ func TestRunConcurrent(t *testing.T) {
 func TestRunNotInProcess(t *testing.T) {
 	r := testRunner(t)
 	for _, args := range [][]string{
-		{"secrets", "list"},
-		{"--project", "p", "secrets", "list"},
 		{"no-such-group"},
+		{"--project", "p", "no-such-group"},
 	} {
 		if err := r.Run(context.Background(), Invocation{Args: args}); !errors.Is(err, ErrNotInProcess) {
 			t.Errorf("Run(%q) = %v, want ErrNotInProcess", args, err)

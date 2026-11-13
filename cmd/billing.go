@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path"
@@ -9,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	billingbudgets "google.golang.org/api/billingbudgets/v1"
 	cloudbilling "google.golang.org/api/cloudbilling/v1"
@@ -18,243 +16,95 @@ import (
 
 // --- gcloud billing (#309, #519) ---
 
-var billingCmd = &cobra.Command{Use: "billing", Short: "Manage Cloud Billing"}
-
 // --- billing accounts ---
-
-var billingAccountsCmd = &cobra.Command{Use: "accounts", Short: "Manage billing accounts"}
-
-var billingAcctDescribeCmd = &cobra.Command{
-	Use:   "describe ACCOUNT_ID",
-	Short: "Show metadata for a billing account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingAcctDescribe,
-}
-
-var billingAcctListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all active billing accounts",
-	Args:  cobra.NoArgs,
-	RunE:  runBillingAcctList,
-}
-
-var billingAcctGetIamPolicyCmd = &cobra.Command{
-	Use:   "get-iam-policy ACCOUNT_ID",
-	Short: "Get the IAM policy for a billing account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingAcctGetIamPolicy,
-}
-
-var billingAcctSetIamPolicyCmd = &cobra.Command{
-	Use:   "set-iam-policy ACCOUNT_ID POLICY_FILE",
-	Short: "Set the IAM policy for a billing account",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runBillingAcctSetIamPolicy,
-}
-
-var billingAcctAddIamBindingCmd = &cobra.Command{
-	Use:   "add-iam-policy-binding ACCOUNT_ID",
-	Short: "Add an IAM policy binding to a billing account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingAcctAddIamBinding,
-}
-
-var billingAcctRemoveIamBindingCmd = &cobra.Command{
-	Use:   "remove-iam-policy-binding ACCOUNT_ID",
-	Short: "Remove an IAM policy binding from a billing account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingAcctRemoveIamBinding,
-}
 
 // --- billing budgets ---
 
-var billingBudgetsCmd = &cobra.Command{Use: "budgets", Short: "Manage the budgets of your billing accounts"}
-
-var billingBudgetCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a budget",
-	Args:  cobra.NoArgs,
-	RunE:  runBillingBudgetCreate,
-}
-
-var billingBudgetDeleteCmd = &cobra.Command{
-	Use:   "delete BUDGET",
-	Short: "Delete a budget",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingBudgetDelete,
-}
-
-var billingBudgetDescribeCmd = &cobra.Command{
-	Use:   "describe BUDGET",
-	Short: "Describe a budget",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingBudgetDescribe,
-}
-
-var billingBudgetListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List budgets under a billing account",
-	Args:  cobra.NoArgs,
-	RunE:  runBillingBudgetList,
-}
-
-var billingBudgetUpdateCmd = &cobra.Command{
-	Use:   "update BUDGET",
-	Short: "Update a budget",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingBudgetUpdate,
-}
-
 // --- billing projects ---
 
-var billingProjectsCmd = &cobra.Command{Use: "projects", Short: "Manage the billing configuration of your projects"}
-
-var billingProjectDescribeCmd = &cobra.Command{
-	Use:   "describe PROJECT_ID",
-	Short: "Show detailed billing information for a project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingProjectDescribe,
-}
-
-var billingProjectLinkCmd = &cobra.Command{
-	Use:   "link PROJECT_ID",
-	Short: "Link a project with a billing account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingProjectLink,
-}
-
-var billingProjectListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all active projects associated with the specified billing account",
-	Args:  cobra.NoArgs,
-	RunE:  runBillingProjectList,
-}
-
-var billingProjectUnlinkCmd = &cobra.Command{
-	Use:   "unlink PROJECT_ID",
-	Short: "Unlink the billing account (if any) linked with a project",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runBillingProjectUnlink,
-}
-
-var (
-	flagBillingAcctListLimit  int64
-	flagBillingAcctListFormat string
-	flagBillingAcctListURI    bool
-	flagBillingAcctIamMember  string
-	flagBillingAcctIamRole    string
-	flagBillingAcctIamCondEx  string
-	flagBillingAcctIamCondT   string
-	flagBillingAcctIamCondD   string
-	flagBillingAcctIamAllCond bool
-
-	flagBudgetAccount           string
-	flagBudgetDisplayName       string
-	flagBudgetAmount            string
-	flagBudgetLastPeriodAmount  bool
-	flagBudgetThresholdRules    []string
-	flagBudgetOwnershipScope    string
-	flagBudgetFilterProjects    []string
-	flagBudgetFilterServices    []string
-	flagBudgetFilterCreditTypes []string
-	flagBudgetCreditTreatment   string
-	flagBudgetCalendarPeriod    string
-	flagBudgetPubsubTopic       string
-	flagBudgetNotifChannels     []string
-	flagBudgetDisableDefaultIam bool
-	flagBudgetListLimit         int64
-	flagBudgetListPageSize      int64
-	flagBudgetListFormat        string
-
-	flagBillingProjectBillingAcct  string
-	flagBillingProjectListLimit    int64
-	flagBillingProjectListPageSize int64
-	flagBillingProjectListFormat   string
-)
-
-func init() {
+func (s *billingCmds) initBilling() {
 	// billing accounts wiring
-	billingAcctListCmd.Flags().Int64Var(&flagBillingAcctListLimit, "limit", 0, "Maximum number of billing accounts to list (0 = no limit)")
-	billingAcctListCmd.Flags().StringVar(&flagBillingAcctListFormat, "format", "", "Output format (json, yaml, or table)")
-	billingAcctListCmd.Flags().BoolVar(&flagBillingAcctListURI, "uri", false, "Print resource names only")
+	s.billingAcctListCmd.Flags().Int64Var(&s.flagBillingAcctListLimit, "limit", 0, "Maximum number of billing accounts to list (0 = no limit)")
+	s.billingAcctListCmd.Flags().StringVar(&s.flagBillingAcctListFormat, "format", "", "Output format (json, yaml, or table)")
+	s.billingAcctListCmd.Flags().BoolVar(&s.flagBillingAcctListURI, "uri", false, "Print resource names only")
 
-	for _, c := range []*cobra.Command{billingAcctAddIamBindingCmd, billingAcctRemoveIamBindingCmd} {
-		c.Flags().StringVar(&flagBillingAcctIamMember, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
-		c.Flags().StringVar(&flagBillingAcctIamRole, "role", "", "IAM role to bind (e.g. roles/billing.viewer) (required)")
-		c.Flags().StringVar(&flagBillingAcctIamCondEx, "condition-expression", "", "CEL expression for a conditional binding")
-		c.Flags().StringVar(&flagBillingAcctIamCondT, "condition-title", "", "Title for a conditional binding")
-		c.Flags().StringVar(&flagBillingAcctIamCondD, "condition-description", "", "Description for a conditional binding")
+	for _, c := range []*cobra.Command{s.billingAcctAddIamBindingCmd, s.billingAcctRemoveIamBindingCmd} {
+		c.Flags().StringVar(&s.flagBillingAcctIamMember, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
+		c.Flags().StringVar(&s.flagBillingAcctIamRole, "role", "", "IAM role to bind (e.g. roles/billing.viewer) (required)")
+		c.Flags().StringVar(&s.flagBillingAcctIamCondEx, "condition-expression", "", "CEL expression for a conditional binding")
+		c.Flags().StringVar(&s.flagBillingAcctIamCondT, "condition-title", "", "Title for a conditional binding")
+		c.Flags().StringVar(&s.flagBillingAcctIamCondD, "condition-description", "", "Description for a conditional binding")
 		c.MarkFlagRequired("member")
 		c.MarkFlagRequired("role")
 	}
-	billingAcctRemoveIamBindingCmd.Flags().BoolVar(&flagBillingAcctIamAllCond, "all", false, "Remove the member from all bindings for the role, regardless of condition")
+	s.billingAcctRemoveIamBindingCmd.Flags().BoolVar(&s.flagBillingAcctIamAllCond, "all", false, "Remove the member from all bindings for the role, regardless of condition")
 
-	billingAccountsCmd.AddCommand(
-		billingAcctAddIamBindingCmd,
-		billingAcctDescribeCmd,
-		billingAcctGetIamPolicyCmd,
-		billingAcctListCmd,
-		billingAcctRemoveIamBindingCmd,
-		billingAcctSetIamPolicyCmd,
+	s.billingAccountsCmd.AddCommand(
+		s.billingAcctAddIamBindingCmd,
+		s.billingAcctDescribeCmd,
+		s.billingAcctGetIamPolicyCmd,
+		s.billingAcctListCmd,
+		s.billingAcctRemoveIamBindingCmd,
+		s.billingAcctSetIamPolicyCmd,
 	)
 
 	// billing budgets wiring
-	for _, c := range []*cobra.Command{billingBudgetCreateCmd, billingBudgetListCmd} {
-		c.Flags().StringVar(&flagBudgetAccount, "billing-account", "", "Billing account ID (required)")
+	for _, c := range []*cobra.Command{s.billingBudgetCreateCmd, s.billingBudgetListCmd} {
+		c.Flags().StringVar(&s.flagBudgetAccount, "billing-account", "", "Billing account ID (required)")
 		c.MarkFlagRequired("billing-account")
 	}
-	for _, c := range []*cobra.Command{billingBudgetDeleteCmd, billingBudgetDescribeCmd, billingBudgetUpdateCmd} {
-		c.Flags().StringVar(&flagBudgetAccount, "billing-account", "", "Billing account ID (required when BUDGET is not fully qualified)")
+	for _, c := range []*cobra.Command{s.billingBudgetDeleteCmd, s.billingBudgetDescribeCmd, s.billingBudgetUpdateCmd} {
+		c.Flags().StringVar(&s.flagBudgetAccount, "billing-account", "", "Billing account ID (required when BUDGET is not fully qualified)")
 	}
 
-	billingBudgetCreateCmd.Flags().StringVar(&flagBudgetDisplayName, "display-name", "", "Display name for the budget (required)")
-	billingBudgetCreateCmd.MarkFlagRequired("display-name")
-	for _, c := range []*cobra.Command{billingBudgetCreateCmd, billingBudgetUpdateCmd} {
-		c.Flags().StringVar(&flagBudgetAmount, "budget-amount", "", "Budget amount, optionally with 3-letter currency code (e.g. 100.75USD)")
-		c.Flags().BoolVar(&flagBudgetLastPeriodAmount, "last-period-amount", false, "Use the amount of last period's budget as this period's budget")
-		c.Flags().StringSliceVar(&flagBudgetThresholdRules, "threshold-rule", nil, "Repeatable threshold rule, e.g. percent=0.5[,basis=current-spend|forecasted-spend]")
-		c.Flags().StringVar(&flagBudgetOwnershipScope, "ownership-scope", "", "Budget ownership scope (ALL_USERS or BILLING_ACCOUNT)")
-		c.Flags().StringSliceVar(&flagBudgetFilterProjects, "filter-projects", nil, "projects/{project_id} to include in the budget")
-		c.Flags().StringSliceVar(&flagBudgetFilterServices, "filter-services", nil, "services/{service_id} to include in the budget")
-		c.Flags().StringSliceVar(&flagBudgetFilterCreditTypes, "filter-credit-types", nil, "Credit types to include; requires --credit-types-treatment=include-specified-credits")
-		c.Flags().StringVar(&flagBudgetCreditTreatment, "credit-types-treatment", "", "How to treat credits (include-all-credits, exclude-all-credits, or include-specified-credits)")
-		c.Flags().StringVar(&flagBudgetCalendarPeriod, "calendar-period", "", "Recurring calendar period (MONTH, QUARTER, YEAR)")
-		c.Flags().StringVar(&flagBudgetPubsubTopic, "notifications-rule-pubsub-topic", "", "projects/{project}/topics/{topic} for programmatic notifications")
-		c.Flags().StringSliceVar(&flagBudgetNotifChannels, "notifications-rule-monitoring-notification-channels", nil, "Monitoring notification channels to notify on threshold breaches")
-		c.Flags().BoolVar(&flagBudgetDisableDefaultIam, "disable-default-iam-recipients", false, "Do not send default IAM-recipient email notifications on threshold breaches")
+	s.billingBudgetCreateCmd.Flags().StringVar(&s.flagBudgetDisplayName, "display-name", "", "Display name for the budget (required)")
+	s.billingBudgetCreateCmd.MarkFlagRequired("display-name")
+	for _, c := range []*cobra.Command{s.billingBudgetCreateCmd, s.billingBudgetUpdateCmd} {
+		c.Flags().StringVar(&s.flagBudgetAmount, "budget-amount", "", "Budget amount, optionally with 3-letter currency code (e.g. 100.75USD)")
+		c.Flags().BoolVar(&s.flagBudgetLastPeriodAmount, "last-period-amount", false, "Use the amount of last period's budget as this period's budget")
+		c.Flags().StringSliceVar(&s.flagBudgetThresholdRules, "threshold-rule", nil, "Repeatable threshold rule, e.g. percent=0.5[,basis=current-spend|forecasted-spend]")
+		c.Flags().StringVar(&s.flagBudgetOwnershipScope, "ownership-scope", "", "Budget ownership scope (ALL_USERS or BILLING_ACCOUNT)")
+		c.Flags().StringSliceVar(&s.flagBudgetFilterProjects, "filter-projects", nil, "projects/{project_id} to include in the budget")
+		c.Flags().StringSliceVar(&s.flagBudgetFilterServices, "filter-services", nil, "services/{service_id} to include in the budget")
+		c.Flags().StringSliceVar(&s.flagBudgetFilterCreditTypes, "filter-credit-types", nil, "Credit types to include; requires --credit-types-treatment=include-specified-credits")
+		c.Flags().StringVar(&s.flagBudgetCreditTreatment, "credit-types-treatment", "", "How to treat credits (include-all-credits, exclude-all-credits, or include-specified-credits)")
+		c.Flags().StringVar(&s.flagBudgetCalendarPeriod, "calendar-period", "", "Recurring calendar period (MONTH, QUARTER, YEAR)")
+		c.Flags().StringVar(&s.flagBudgetPubsubTopic, "notifications-rule-pubsub-topic", "", "projects/{project}/topics/{topic} for programmatic notifications")
+		c.Flags().StringSliceVar(&s.flagBudgetNotifChannels, "notifications-rule-monitoring-notification-channels", nil, "Monitoring notification channels to notify on threshold breaches")
+		c.Flags().BoolVar(&s.flagBudgetDisableDefaultIam, "disable-default-iam-recipients", false, "Do not send default IAM-recipient email notifications on threshold breaches")
 	}
 
-	billingBudgetListCmd.Flags().Int64Var(&flagBudgetListLimit, "limit", 0, "Maximum number of budgets to list (0 = no limit)")
-	billingBudgetListCmd.Flags().Int64Var(&flagBudgetListPageSize, "page-size", 0, "Page size for API pagination")
-	billingBudgetListCmd.Flags().StringVar(&flagBudgetListFormat, "format", "", "Output format (json, yaml, or table)")
+	s.billingBudgetListCmd.Flags().Int64Var(&s.flagBudgetListLimit, "limit", 0, "Maximum number of budgets to list (0 = no limit)")
+	s.billingBudgetListCmd.Flags().Int64Var(&s.flagBudgetListPageSize, "page-size", 0, "Page size for API pagination")
+	s.billingBudgetListCmd.Flags().StringVar(&s.flagBudgetListFormat, "format", "", "Output format (json, yaml, or table)")
 
-	billingBudgetsCmd.AddCommand(
-		billingBudgetCreateCmd,
-		billingBudgetDeleteCmd,
-		billingBudgetDescribeCmd,
-		billingBudgetListCmd,
-		billingBudgetUpdateCmd,
+	s.billingBudgetsCmd.AddCommand(
+		s.billingBudgetCreateCmd,
+		s.billingBudgetDeleteCmd,
+		s.billingBudgetDescribeCmd,
+		s.billingBudgetListCmd,
+		s.billingBudgetUpdateCmd,
 	)
 
 	// billing projects wiring
-	billingProjectLinkCmd.Flags().StringVar(&flagBillingProjectBillingAcct, "billing-account", "", "Billing account ID to link (required)")
-	billingProjectLinkCmd.MarkFlagRequired("billing-account")
+	s.billingProjectLinkCmd.Flags().StringVar(&s.flagBillingProjectBillingAcct, "billing-account", "", "Billing account ID to link (required)")
+	s.billingProjectLinkCmd.MarkFlagRequired("billing-account")
 
-	billingProjectListCmd.Flags().StringVar(&flagBillingProjectBillingAcct, "billing-account", "", "Billing account ID whose linked projects to list (required)")
-	billingProjectListCmd.MarkFlagRequired("billing-account")
-	billingProjectListCmd.Flags().Int64Var(&flagBillingProjectListLimit, "limit", 0, "Maximum number of projects to list (0 = no limit)")
-	billingProjectListCmd.Flags().Int64Var(&flagBillingProjectListPageSize, "page-size", 0, "Page size for API pagination")
-	billingProjectListCmd.Flags().StringVar(&flagBillingProjectListFormat, "format", "", "Output format (json, yaml, or table)")
+	s.billingProjectListCmd.Flags().StringVar(&s.flagBillingProjectBillingAcct, "billing-account", "", "Billing account ID whose linked projects to list (required)")
+	s.billingProjectListCmd.MarkFlagRequired("billing-account")
+	s.billingProjectListCmd.Flags().Int64Var(&s.flagBillingProjectListLimit, "limit", 0, "Maximum number of projects to list (0 = no limit)")
+	s.billingProjectListCmd.Flags().Int64Var(&s.flagBillingProjectListPageSize, "page-size", 0, "Page size for API pagination")
+	s.billingProjectListCmd.Flags().StringVar(&s.flagBillingProjectListFormat, "format", "", "Output format (json, yaml, or table)")
 
-	billingProjectsCmd.AddCommand(
-		billingProjectDescribeCmd,
-		billingProjectLinkCmd,
-		billingProjectListCmd,
-		billingProjectUnlinkCmd,
+	s.billingProjectsCmd.AddCommand(
+		s.billingProjectDescribeCmd,
+		s.billingProjectLinkCmd,
+		s.billingProjectListCmd,
+		s.billingProjectUnlinkCmd,
 	)
 
-	billingCmd.AddCommand(billingAccountsCmd, billingBudgetsCmd, billingProjectsCmd)
-	rootCmd.AddCommand(billingCmd)
+	s.billingCmd.AddCommand(s.billingAccountsCmd, s.billingBudgetsCmd, s.billingProjectsCmd)
+
 }
 
 // billingAccountResourceName returns the fully qualified billing account name.
@@ -282,9 +132,9 @@ func budgetResourceName(id, billingAccount string) (string, error) {
 	return billingAccountResourceName(billingAccount) + "/budgets/" + id, nil
 }
 
-func runBillingAcctDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+func (s *billingCmds) runBillingAcctDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
@@ -292,12 +142,12 @@ func runBillingAcctDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing billing account: %w", err)
 	}
-	return yamlEncode(account)
+	return s.inv.yaml(account)
 }
 
-func runBillingAcctList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+func (s *billingCmds) runBillingAcctList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
@@ -314,8 +164,8 @@ func runBillingAcctList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing billing accounts: %w", err)
 		}
 		all = append(all, resp.BillingAccounts...)
-		if flagBillingAcctListLimit > 0 && int64(len(all)) >= flagBillingAcctListLimit {
-			all = all[:flagBillingAcctListLimit]
+		if s.flagBillingAcctListLimit > 0 && int64(len(all)) >= s.flagBillingAcctListLimit {
+			all = all[:s.flagBillingAcctListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -324,28 +174,28 @@ func runBillingAcctList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagBillingAcctListURI {
+	if s.flagBillingAcctListURI {
 		for _, a := range all {
-			fmt.Println(a.Name)
+			fmt.Fprintln(s.inv.stdout, a.Name)
 		}
 		return nil
 	}
-	switch flagBillingAcctListFormat {
+	switch s.flagBillingAcctListFormat {
 	case "json":
-		return printJSON(all)
+		return s.inv.printJSON(all)
 	case "yaml":
-		return yamlEncode(all)
+		return s.inv.yaml(all)
 	}
-	printTableHeading(len(all), "%-25s %-40s %-6s %s\n", "ACCOUNT_ID", "NAME", "OPEN", "MASTER_ACCOUNT_ID")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-25s %-40s %-6s %s\n", "ACCOUNT_ID", "NAME", "OPEN", "MASTER_ACCOUNT_ID")
 	for _, a := range all {
-		fmt.Printf("%-25s %-40s %-6t %s\n", path.Base(a.Name), a.DisplayName, a.Open, path.Base(a.MasterBillingAccount))
+		fmt.Fprintf(s.inv.stdout, "%-25s %-40s %-6t %s\n", path.Base(a.Name), a.DisplayName, a.Open, path.Base(a.MasterBillingAccount))
 	}
 	return nil
 }
 
-func runBillingAcctGetIamPolicy(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+func (s *billingCmds) runBillingAcctGetIamPolicy(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
@@ -354,7 +204,7 @@ func runBillingAcctGetIamPolicy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return yamlEncode(policy)
+	return s.inv.yaml(policy)
 }
 
 // parseBillingPolicyFile reads and decodes a cloudbilling IAM policy from JSON
@@ -371,13 +221,13 @@ func parseBillingPolicyFile(pathname string) (*cloudbilling.Policy, error) {
 	return policy, nil
 }
 
-func runBillingAcctSetIamPolicy(cmd *cobra.Command, args []string) error {
+func (s *billingCmds) runBillingAcctSetIamPolicy(cmd *cobra.Command, args []string) error {
 	policy, err := parseBillingPolicyFile(args[1])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
@@ -389,18 +239,18 @@ func runBillingAcctSetIamPolicy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for billing account [%s].\n", strings.TrimPrefix(args[0], "billingAccounts/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for billing account [%s].\n", strings.TrimPrefix(args[0], "billingAccounts/"))
+	return s.inv.yaml(updated)
 }
 
-func billingBuildCondition() *cloudbilling.Expr {
-	if flagBillingAcctIamCondEx == "" && flagBillingAcctIamCondT == "" && flagBillingAcctIamCondD == "" {
+func (s *billingCmds) billingBuildCondition() *cloudbilling.Expr {
+	if s.flagBillingAcctIamCondEx == "" && s.flagBillingAcctIamCondT == "" && s.flagBillingAcctIamCondD == "" {
 		return nil
 	}
 	return &cloudbilling.Expr{
-		Expression:  flagBillingAcctIamCondEx,
-		Title:       flagBillingAcctIamCondT,
-		Description: flagBillingAcctIamCondD,
+		Expression:  s.flagBillingAcctIamCondEx,
+		Title:       s.flagBillingAcctIamCondT,
+		Description: s.flagBillingAcctIamCondD,
 	}
 }
 
@@ -463,9 +313,9 @@ func billingRemoveBindingFromPolicy(policy *cloudbilling.Policy, role, member st
 	return changed
 }
 
-func runBillingAcctAddIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+func (s *billingCmds) runBillingAcctAddIamBinding(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
@@ -476,7 +326,7 @@ func runBillingAcctAddIamBinding(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	billingAddBindingToPolicy(policy, flagBillingAcctIamRole, flagBillingAcctIamMember, billingBuildCondition())
+	billingAddBindingToPolicy(policy, s.flagBillingAcctIamRole, s.flagBillingAcctIamMember, s.billingBuildCondition())
 	policy.Version = 3
 
 	updated, err := svc.BillingAccounts.SetIamPolicy(resource, &cloudbilling.SetIamPolicyRequest{
@@ -486,13 +336,13 @@ func runBillingAcctAddIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for billing account [%s].\n", strings.TrimPrefix(args[0], "billingAccounts/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for billing account [%s].\n", strings.TrimPrefix(args[0], "billingAccounts/"))
+	return s.inv.yaml(updated)
 }
 
-func runBillingAcctRemoveIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+func (s *billingCmds) runBillingAcctRemoveIamBinding(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
@@ -503,8 +353,8 @@ func runBillingAcctRemoveIamBinding(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	if !billingRemoveBindingFromPolicy(policy, flagBillingAcctIamRole, flagBillingAcctIamMember, billingBuildCondition(), flagBillingAcctIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagBillingAcctIamRole, flagBillingAcctIamMember)
+	if !billingRemoveBindingFromPolicy(policy, s.flagBillingAcctIamRole, s.flagBillingAcctIamMember, s.billingBuildCondition(), s.flagBillingAcctIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagBillingAcctIamRole, s.flagBillingAcctIamMember)
 	}
 
 	updated, err := svc.BillingAccounts.SetIamPolicy(resource, &cloudbilling.SetIamPolicyRequest{
@@ -514,8 +364,8 @@ func runBillingAcctRemoveIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for billing account [%s].\n", strings.TrimPrefix(args[0], "billingAccounts/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for billing account [%s].\n", strings.TrimPrefix(args[0], "billingAccounts/"))
+	return s.inv.yaml(updated)
 }
 
 // --- budgets ---
@@ -584,22 +434,22 @@ func parseThresholdRule(spec string) (*billingbudgets.GoogleCloudBillingBudgetsV
 // buildBudgetFromFlags applies the current --* flag values to budget. When
 // updateOnly is true, only fields whose flags were explicitly set on cmd are
 // applied, so the caller can send a minimal PATCH.
-func buildBudgetFromFlags(cmd *cobra.Command, budget *billingbudgets.GoogleCloudBillingBudgetsV1Budget, updateOnly bool) ([]string, error) {
+func (s *billingCmds) buildBudgetFromFlags(cmd *cobra.Command, budget *billingbudgets.GoogleCloudBillingBudgetsV1Budget, updateOnly bool) ([]string, error) {
 	var masks []string
 	set := func(name string) bool {
 		return !updateOnly || cmd.Flags().Changed(name)
 	}
 
-	if set("display-name") && flagBudgetDisplayName != "" {
-		budget.DisplayName = flagBudgetDisplayName
+	if set("display-name") && s.flagBudgetDisplayName != "" {
+		budget.DisplayName = s.flagBudgetDisplayName
 		masks = append(masks, "displayName")
 	}
 
-	if flagBudgetAmount != "" && flagBudgetLastPeriodAmount {
+	if s.flagBudgetAmount != "" && s.flagBudgetLastPeriodAmount {
 		return nil, fmt.Errorf("specify only one of --budget-amount or --last-period-amount")
 	}
-	if set("budget-amount") && flagBudgetAmount != "" {
-		money, err := parseMoney(flagBudgetAmount)
+	if set("budget-amount") && s.flagBudgetAmount != "" {
+		money, err := parseMoney(s.flagBudgetAmount)
 		if err != nil {
 			return nil, err
 		}
@@ -609,7 +459,7 @@ func buildBudgetFromFlags(cmd *cobra.Command, budget *billingbudgets.GoogleCloud
 		budget.Amount.SpecifiedAmount = money
 		masks = append(masks, "amount.specifiedAmount")
 	}
-	if set("last-period-amount") && flagBudgetLastPeriodAmount {
+	if set("last-period-amount") && s.flagBudgetLastPeriodAmount {
 		if budget.Amount == nil {
 			budget.Amount = &billingbudgets.GoogleCloudBillingBudgetsV1BudgetAmount{}
 		}
@@ -617,9 +467,9 @@ func buildBudgetFromFlags(cmd *cobra.Command, budget *billingbudgets.GoogleCloud
 		masks = append(masks, "amount.lastPeriodAmount")
 	}
 
-	if set("threshold-rule") && len(flagBudgetThresholdRules) > 0 {
+	if set("threshold-rule") && len(s.flagBudgetThresholdRules) > 0 {
 		var rules []*billingbudgets.GoogleCloudBillingBudgetsV1ThresholdRule
-		for _, spec := range flagBudgetThresholdRules {
+		for _, spec := range s.flagBudgetThresholdRules {
 			r, err := parseThresholdRule(spec)
 			if err != nil {
 				return nil, err
@@ -630,8 +480,8 @@ func buildBudgetFromFlags(cmd *cobra.Command, budget *billingbudgets.GoogleCloud
 		masks = append(masks, "thresholdRules")
 	}
 
-	if set("ownership-scope") && flagBudgetOwnershipScope != "" {
-		budget.OwnershipScope = strings.ToUpper(flagBudgetOwnershipScope)
+	if set("ownership-scope") && s.flagBudgetOwnershipScope != "" {
+		budget.OwnershipScope = strings.ToUpper(s.flagBudgetOwnershipScope)
 		masks = append(masks, "ownershipScope")
 	}
 
@@ -643,20 +493,20 @@ func buildBudgetFromFlags(cmd *cobra.Command, budget *billingbudgets.GoogleCloud
 			budget.BudgetFilter = &billingbudgets.GoogleCloudBillingBudgetsV1Filter{}
 		}
 	}
-	if set("filter-projects") && len(flagBudgetFilterProjects) > 0 {
-		budget.BudgetFilter.Projects = flagBudgetFilterProjects
+	if set("filter-projects") && len(s.flagBudgetFilterProjects) > 0 {
+		budget.BudgetFilter.Projects = s.flagBudgetFilterProjects
 		masks = append(masks, "budgetFilter.projects")
 	}
-	if set("filter-services") && len(flagBudgetFilterServices) > 0 {
-		budget.BudgetFilter.Services = flagBudgetFilterServices
+	if set("filter-services") && len(s.flagBudgetFilterServices) > 0 {
+		budget.BudgetFilter.Services = s.flagBudgetFilterServices
 		masks = append(masks, "budgetFilter.services")
 	}
-	if set("filter-credit-types") && len(flagBudgetFilterCreditTypes) > 0 {
-		budget.BudgetFilter.CreditTypes = flagBudgetFilterCreditTypes
+	if set("filter-credit-types") && len(s.flagBudgetFilterCreditTypes) > 0 {
+		budget.BudgetFilter.CreditTypes = s.flagBudgetFilterCreditTypes
 		masks = append(masks, "budgetFilter.creditTypes")
 	}
-	if set("credit-types-treatment") && flagBudgetCreditTreatment != "" {
-		switch strings.ToLower(flagBudgetCreditTreatment) {
+	if set("credit-types-treatment") && s.flagBudgetCreditTreatment != "" {
+		switch strings.ToLower(s.flagBudgetCreditTreatment) {
 		case "include-all-credits":
 			budget.BudgetFilter.CreditTypesTreatment = "INCLUDE_ALL_CREDITS"
 		case "exclude-all-credits":
@@ -664,12 +514,12 @@ func buildBudgetFromFlags(cmd *cobra.Command, budget *billingbudgets.GoogleCloud
 		case "include-specified-credits":
 			budget.BudgetFilter.CreditTypesTreatment = "INCLUDE_SPECIFIED_CREDITS"
 		default:
-			return nil, fmt.Errorf("invalid --credit-types-treatment %q", flagBudgetCreditTreatment)
+			return nil, fmt.Errorf("invalid --credit-types-treatment %q", s.flagBudgetCreditTreatment)
 		}
 		masks = append(masks, "budgetFilter.creditTypesTreatment")
 	}
-	if set("calendar-period") && flagBudgetCalendarPeriod != "" {
-		budget.BudgetFilter.CalendarPeriod = strings.ToUpper(flagBudgetCalendarPeriod)
+	if set("calendar-period") && s.flagBudgetCalendarPeriod != "" {
+		budget.BudgetFilter.CalendarPeriod = strings.ToUpper(s.flagBudgetCalendarPeriod)
 		masks = append(masks, "budgetFilter.calendarPeriod")
 	}
 
@@ -682,15 +532,15 @@ func buildBudgetFromFlags(cmd *cobra.Command, budget *billingbudgets.GoogleCloud
 			budget.NotificationsRule = &billingbudgets.GoogleCloudBillingBudgetsV1NotificationsRule{}
 		}
 	}
-	if set("notifications-rule-pubsub-topic") && flagBudgetPubsubTopic != "" {
-		budget.NotificationsRule.PubsubTopic = flagBudgetPubsubTopic
+	if set("notifications-rule-pubsub-topic") && s.flagBudgetPubsubTopic != "" {
+		budget.NotificationsRule.PubsubTopic = s.flagBudgetPubsubTopic
 		masks = append(masks, "notificationsRule.pubsubTopic")
 	}
-	if set("notifications-rule-monitoring-notification-channels") && len(flagBudgetNotifChannels) > 0 {
-		budget.NotificationsRule.MonitoringNotificationChannels = flagBudgetNotifChannels
+	if set("notifications-rule-monitoring-notification-channels") && len(s.flagBudgetNotifChannels) > 0 {
+		budget.NotificationsRule.MonitoringNotificationChannels = s.flagBudgetNotifChannels
 		masks = append(masks, "notificationsRule.monitoringNotificationChannels")
 	}
-	if set("disable-default-iam-recipients") && flagBudgetDisableDefaultIam {
+	if set("disable-default-iam-recipients") && s.flagBudgetDisableDefaultIam {
 		budget.NotificationsRule.DisableDefaultIamRecipients = true
 		masks = append(masks, "notificationsRule.disableDefaultIamRecipients")
 	}
@@ -698,54 +548,54 @@ func buildBudgetFromFlags(cmd *cobra.Command, budget *billingbudgets.GoogleCloud
 	return masks, nil
 }
 
-func runBillingBudgetCreate(cmd *cobra.Command, args []string) error {
+func (s *billingCmds) runBillingBudgetCreate(cmd *cobra.Command, args []string) error {
 	budget := &billingbudgets.GoogleCloudBillingBudgetsV1Budget{}
-	if _, err := buildBudgetFromFlags(cmd, budget, false); err != nil {
+	if _, err := s.buildBudgetFromFlags(cmd, budget, false); err != nil {
 		return err
 	}
 	if budget.Amount == nil {
 		return fmt.Errorf("one of --budget-amount or --last-period-amount is required")
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.BillingBudgetsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BillingBudgets(ctx)
 	if err != nil {
 		return err
 	}
 
-	parent := billingAccountResourceName(flagBudgetAccount)
+	parent := billingAccountResourceName(s.flagBudgetAccount)
 	created, err := svc.BillingAccounts.Budgets.Create(parent, budget).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating budget: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Created budget [%s].\n", created.Name)
-	return yamlEncode(created)
+	fmt.Fprintf(s.inv.stderr, "Created budget [%s].\n", created.Name)
+	return s.inv.yaml(created)
 }
 
-func runBillingBudgetDelete(cmd *cobra.Command, args []string) error {
-	name, err := budgetResourceName(args[0], flagBudgetAccount)
+func (s *billingCmds) runBillingBudgetDelete(cmd *cobra.Command, args []string) error {
+	name, err := budgetResourceName(args[0], s.flagBudgetAccount)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BillingBudgetsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BillingBudgets(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.BillingAccounts.Budgets.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting budget: %w", err)
 	}
-	fmt.Printf("Deleted budget [%s].\n", name)
+	fmt.Fprintf(s.inv.stdout, "Deleted budget [%s].\n", name)
 	return nil
 }
 
-func runBillingBudgetDescribe(cmd *cobra.Command, args []string) error {
-	name, err := budgetResourceName(args[0], flagBudgetAccount)
+func (s *billingCmds) runBillingBudgetDescribe(cmd *cobra.Command, args []string) error {
+	name, err := budgetResourceName(args[0], s.flagBudgetAccount)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BillingBudgetsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BillingBudgets(ctx)
 	if err != nil {
 		return err
 	}
@@ -753,23 +603,23 @@ func runBillingBudgetDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing budget: %w", err)
 	}
-	return yamlEncode(budget)
+	return s.inv.yaml(budget)
 }
 
-func runBillingBudgetList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.BillingBudgetsService(ctx, flagAccount)
+func (s *billingCmds) runBillingBudgetList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BillingBudgets(ctx)
 	if err != nil {
 		return err
 	}
 
-	parent := billingAccountResourceName(flagBudgetAccount)
+	parent := billingAccountResourceName(s.flagBudgetAccount)
 	var all []*billingbudgets.GoogleCloudBillingBudgetsV1Budget
 	pageToken := ""
 	for {
 		call := svc.BillingAccounts.Budgets.List(parent).Context(ctx)
-		if flagBudgetListPageSize > 0 {
-			call = call.PageSize(flagBudgetListPageSize)
+		if s.flagBudgetListPageSize > 0 {
+			call = call.PageSize(s.flagBudgetListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -779,8 +629,8 @@ func runBillingBudgetList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing budgets: %w", err)
 		}
 		all = append(all, resp.Budgets...)
-		if flagBudgetListLimit > 0 && int64(len(all)) >= flagBudgetListLimit {
-			all = all[:flagBudgetListLimit]
+		if s.flagBudgetListLimit > 0 && int64(len(all)) >= s.flagBudgetListLimit {
+			all = all[:s.flagBudgetListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -789,26 +639,26 @@ func runBillingBudgetList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	switch flagBudgetListFormat {
+	switch s.flagBudgetListFormat {
 	case "json":
-		return printJSON(all)
+		return s.inv.printJSON(all)
 	case "yaml":
-		return yamlEncode(all)
+		return s.inv.yaml(all)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "BUDGET_ID", "DISPLAY_NAME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "BUDGET_ID", "DISPLAY_NAME")
 	for _, b := range all {
-		fmt.Printf("%-40s %s\n", path.Base(b.Name), b.DisplayName)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(b.Name), b.DisplayName)
 	}
 	return nil
 }
 
-func runBillingBudgetUpdate(cmd *cobra.Command, args []string) error {
-	name, err := budgetResourceName(args[0], flagBudgetAccount)
+func (s *billingCmds) runBillingBudgetUpdate(cmd *cobra.Command, args []string) error {
+	name, err := budgetResourceName(args[0], s.flagBudgetAccount)
 	if err != nil {
 		return err
 	}
 	budget := &billingbudgets.GoogleCloudBillingBudgetsV1Budget{}
-	masks, err := buildBudgetFromFlags(cmd, budget, true)
+	masks, err := s.buildBudgetFromFlags(cmd, budget, true)
 	if err != nil {
 		return err
 	}
@@ -816,8 +666,8 @@ func runBillingBudgetUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("at least one budget field flag must be provided to update")
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.BillingBudgetsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BillingBudgets(ctx)
 	if err != nil {
 		return err
 	}
@@ -827,15 +677,15 @@ func runBillingBudgetUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating budget: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated budget [%s].\n", name)
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Updated budget [%s].\n", name)
+	return s.inv.yaml(updated)
 }
 
 // --- projects ---
 
-func runBillingProjectDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+func (s *billingCmds) runBillingProjectDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
@@ -843,29 +693,29 @@ func runBillingProjectDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing project billing info: %w", err)
 	}
-	return yamlEncode(info)
+	return s.inv.yaml(info)
 }
 
-func runBillingProjectLink(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+func (s *billingCmds) runBillingProjectLink(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
 	updated, err := svc.Projects.UpdateBillingInfo(projectBillingInfoName(args[0]), &cloudbilling.ProjectBillingInfo{
-		BillingAccountName: billingAccountResourceName(flagBillingProjectBillingAcct),
+		BillingAccountName: billingAccountResourceName(s.flagBillingProjectBillingAcct),
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("linking project: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Linked project [%s] to billing account [%s].\n", args[0],
-		strings.TrimPrefix(flagBillingProjectBillingAcct, "billingAccounts/"))
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Linked project [%s] to billing account [%s].\n", args[0],
+		strings.TrimPrefix(s.flagBillingProjectBillingAcct, "billingAccounts/"))
+	return s.inv.yaml(updated)
 }
 
-func runBillingProjectUnlink(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+func (s *billingCmds) runBillingProjectUnlink(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
@@ -875,24 +725,24 @@ func runBillingProjectUnlink(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("unlinking project: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Unlinked project [%s] from its billing account.\n", args[0])
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Unlinked project [%s] from its billing account.\n", args[0])
+	return s.inv.yaml(updated)
 }
 
-func runBillingProjectList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudBillingService(ctx, flagAccount)
+func (s *billingCmds) runBillingProjectList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudBilling(ctx)
 	if err != nil {
 		return err
 	}
 
-	parent := billingAccountResourceName(flagBillingProjectBillingAcct)
+	parent := billingAccountResourceName(s.flagBillingProjectBillingAcct)
 	var all []*cloudbilling.ProjectBillingInfo
 	pageToken := ""
 	for {
 		call := svc.BillingAccounts.Projects.List(parent).Context(ctx)
-		if flagBillingProjectListPageSize > 0 {
-			call = call.PageSize(flagBillingProjectListPageSize)
+		if s.flagBillingProjectListPageSize > 0 {
+			call = call.PageSize(s.flagBillingProjectListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -902,8 +752,8 @@ func runBillingProjectList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing linked projects: %w", err)
 		}
 		all = append(all, resp.ProjectBillingInfo...)
-		if flagBillingProjectListLimit > 0 && int64(len(all)) >= flagBillingProjectListLimit {
-			all = all[:flagBillingProjectListLimit]
+		if s.flagBillingProjectListLimit > 0 && int64(len(all)) >= s.flagBillingProjectListLimit {
+			all = all[:s.flagBillingProjectListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -912,15 +762,177 @@ func runBillingProjectList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	switch flagBillingProjectListFormat {
+	switch s.flagBillingProjectListFormat {
 	case "json":
-		return printJSON(all)
+		return s.inv.printJSON(all)
 	case "yaml":
-		return yamlEncode(all)
+		return s.inv.yaml(all)
 	}
-	printTableHeading(len(all), "%-30s %-25s %s\n", "PROJECT_ID", "BILLING_ACCOUNT_ID", "BILLING_ENABLED")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-30s %-25s %s\n", "PROJECT_ID", "BILLING_ACCOUNT_ID", "BILLING_ENABLED")
 	for _, p := range all {
-		fmt.Printf("%-30s %-25s %v\n", p.ProjectId, path.Base(p.BillingAccountName), p.BillingEnabled)
+		fmt.Fprintf(s.inv.stdout, "%-30s %-25s %v\n", p.ProjectId, path.Base(p.BillingAccountName), p.BillingEnabled)
 	}
 	return nil
+}
+
+// billingCmds holds the commands and flag values of one invocation's "billing"
+// command group, so invocations don't share state (#2070).
+type billingCmds struct {
+	inv *invocation
+
+	billingCmd                     *cobra.Command
+	billingAccountsCmd             *cobra.Command
+	billingAcctDescribeCmd         *cobra.Command
+	billingAcctListCmd             *cobra.Command
+	billingAcctGetIamPolicyCmd     *cobra.Command
+	billingAcctSetIamPolicyCmd     *cobra.Command
+	billingAcctAddIamBindingCmd    *cobra.Command
+	billingAcctRemoveIamBindingCmd *cobra.Command
+	billingBudgetsCmd              *cobra.Command
+	billingBudgetCreateCmd         *cobra.Command
+	billingBudgetDeleteCmd         *cobra.Command
+	billingBudgetDescribeCmd       *cobra.Command
+	billingBudgetListCmd           *cobra.Command
+	billingBudgetUpdateCmd         *cobra.Command
+	billingProjectsCmd             *cobra.Command
+	billingProjectDescribeCmd      *cobra.Command
+	billingProjectLinkCmd          *cobra.Command
+	billingProjectListCmd          *cobra.Command
+	billingProjectUnlinkCmd        *cobra.Command
+	flagBillingAcctListLimit       int64
+	flagBillingAcctListFormat      string
+	flagBillingAcctListURI         bool
+	flagBillingAcctIamMember       string
+	flagBillingAcctIamRole         string
+	flagBillingAcctIamCondEx       string
+	flagBillingAcctIamCondT        string
+	flagBillingAcctIamCondD        string
+	flagBillingAcctIamAllCond      bool
+	flagBudgetAccount              string
+	flagBudgetDisplayName          string
+	flagBudgetAmount               string
+	flagBudgetLastPeriodAmount     bool
+	flagBudgetThresholdRules       []string
+	flagBudgetOwnershipScope       string
+	flagBudgetFilterProjects       []string
+	flagBudgetFilterServices       []string
+	flagBudgetFilterCreditTypes    []string
+	flagBudgetCreditTreatment      string
+	flagBudgetCalendarPeriod       string
+	flagBudgetPubsubTopic          string
+	flagBudgetNotifChannels        []string
+	flagBudgetDisableDefaultIam    bool
+	flagBudgetListLimit            int64
+	flagBudgetListPageSize         int64
+	flagBudgetListFormat           string
+	flagBillingProjectBillingAcct  string
+	flagBillingProjectListLimit    int64
+	flagBillingProjectListPageSize int64
+	flagBillingProjectListFormat   string
+}
+
+// newBillingCmd returns the "billing" command group for inv.
+func newBillingCmd(inv *invocation) *cobra.Command {
+	return newBillingCmds(inv).billingCmd
+}
+
+// newBillingCmds builds the "billing" command group for inv and returns its state.
+func newBillingCmds(inv *invocation) *billingCmds {
+	s := &billingCmds{inv: inv}
+	s.billingCmd = &cobra.Command{Use: "billing", Short: "Manage Cloud Billing"}
+	s.billingAccountsCmd = &cobra.Command{Use: "accounts", Short: "Manage billing accounts"}
+	s.billingAcctDescribeCmd = &cobra.Command{
+		Use:   "describe ACCOUNT_ID",
+		Short: "Show metadata for a billing account",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingAcctDescribe,
+	}
+	s.billingAcctListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List all active billing accounts",
+		Args:  cobra.NoArgs,
+		RunE:  s.runBillingAcctList,
+	}
+	s.billingAcctGetIamPolicyCmd = &cobra.Command{
+		Use:   "get-iam-policy ACCOUNT_ID",
+		Short: "Get the IAM policy for a billing account",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingAcctGetIamPolicy,
+	}
+	s.billingAcctSetIamPolicyCmd = &cobra.Command{
+		Use:   "set-iam-policy ACCOUNT_ID POLICY_FILE",
+		Short: "Set the IAM policy for a billing account",
+		Args:  cobra.ExactArgs(2),
+		RunE:  s.runBillingAcctSetIamPolicy,
+	}
+	s.billingAcctAddIamBindingCmd = &cobra.Command{
+		Use:   "add-iam-policy-binding ACCOUNT_ID",
+		Short: "Add an IAM policy binding to a billing account",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingAcctAddIamBinding,
+	}
+	s.billingAcctRemoveIamBindingCmd = &cobra.Command{
+		Use:   "remove-iam-policy-binding ACCOUNT_ID",
+		Short: "Remove an IAM policy binding from a billing account",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingAcctRemoveIamBinding,
+	}
+	s.billingBudgetsCmd = &cobra.Command{Use: "budgets", Short: "Manage the budgets of your billing accounts"}
+	s.billingBudgetCreateCmd = &cobra.Command{
+		Use:   "create",
+		Short: "Create a budget",
+		Args:  cobra.NoArgs,
+		RunE:  s.runBillingBudgetCreate,
+	}
+	s.billingBudgetDeleteCmd = &cobra.Command{
+		Use:   "delete BUDGET",
+		Short: "Delete a budget",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingBudgetDelete,
+	}
+	s.billingBudgetDescribeCmd = &cobra.Command{
+		Use:   "describe BUDGET",
+		Short: "Describe a budget",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingBudgetDescribe,
+	}
+	s.billingBudgetListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List budgets under a billing account",
+		Args:  cobra.NoArgs,
+		RunE:  s.runBillingBudgetList,
+	}
+	s.billingBudgetUpdateCmd = &cobra.Command{
+		Use:   "update BUDGET",
+		Short: "Update a budget",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingBudgetUpdate,
+	}
+	s.billingProjectsCmd = &cobra.Command{Use: "projects", Short: "Manage the billing configuration of your projects"}
+	s.billingProjectDescribeCmd = &cobra.Command{
+		Use:   "describe PROJECT_ID",
+		Short: "Show detailed billing information for a project",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingProjectDescribe,
+	}
+	s.billingProjectLinkCmd = &cobra.Command{
+		Use:   "link PROJECT_ID",
+		Short: "Link a project with a billing account",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingProjectLink,
+	}
+	s.billingProjectListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List all active projects associated with the specified billing account",
+		Args:  cobra.NoArgs,
+		RunE:  s.runBillingProjectList,
+	}
+	s.billingProjectUnlinkCmd = &cobra.Command{
+		Use:   "unlink PROJECT_ID",
+		Short: "Unlink the billing account (if any) linked with a project",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runBillingProjectUnlink,
+	}
+	s.initBilling()
+	return s
 }

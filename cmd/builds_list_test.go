@@ -14,7 +14,8 @@ import (
 )
 
 func TestBuildsListRegion(t *testing.T) {
-	defer func() { flagBuildsListRegion = "" }()
+	grp := newBuildsCmds(legacyTestInvocation())
+	defer func() { grp.flagBuildsListRegion = "" }()
 	dir := t.TempDir()
 	t.Setenv("CLOUDSDK_CONFIG", dir)
 	t.Setenv("CLOUDSDK_ACTIVE_CONFIG_NAME", "default")
@@ -22,7 +23,7 @@ func TestBuildsListRegion(t *testing.T) {
 
 	check := func(name, want string) {
 		t.Helper()
-		got, err := buildsListRegion()
+		got, err := grp.buildsListRegion()
 		if err != nil || got != want {
 			t.Errorf("%s: got %q, %v; want %q", name, got, err, want)
 		}
@@ -37,7 +38,7 @@ func TestBuildsListRegion(t *testing.T) {
 	}
 	check("property", "europe-west2")
 
-	flagBuildsListRegion = "us-central1"
+	grp.flagBuildsListRegion = "us-central1"
 	check("flag", "us-central1")
 }
 

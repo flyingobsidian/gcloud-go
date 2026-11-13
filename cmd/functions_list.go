@@ -1,15 +1,12 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"io"
-	"os"
 	"path"
 	"sort"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudfunctionsv1 "google.golang.org/api/cloudfunctions/v1"
 	cloudfunctions "google.golang.org/api/cloudfunctions/v2"
@@ -21,24 +18,18 @@ import (
 // then 1st gen functions from the v1 API, unless --v2 asks for the v2 API
 // alone.
 
-var (
-	flagFuncListRegions []string
-	flagFuncListV2      bool
-	flagFuncListLimit   int64
-)
-
-func init() {
+func (s *functionsCmds) initFunctionsList() {
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List Google Cloud Functions",
 		Args:  cobra.NoArgs,
-		RunE:  runFuncList,
+		RunE:  s.runFuncList,
 	}
-	list.Flags().StringSliceVar(&flagFuncListRegions, "regions", []string{"-"},
+	list.Flags().StringSliceVar(&s.flagFuncListRegions, "regions", []string{"-"},
 		"Regions containing functions to list; default all regions")
-	list.Flags().BoolVar(&flagFuncListV2, "v2", false, "List functions using the Cloud Functions v2 API only")
-	list.Flags().Int64Var(&flagFuncListLimit, "limit", 0, "Maximum number of functions to list (0 = no limit)")
-	functionsCmd.AddCommand(list)
+	list.Flags().BoolVar(&s.flagFuncListV2, "v2", false, "List functions using the Cloud Functions v2 API only")
+	list.Flags().Int64Var(&s.flagFuncListLimit, "limit", 0, "Maximum number of functions to list (0 = no limit)")
+	s.functionsCmd.AddCommand(list)
 }
 
 // funcUnreachableWarning is gcloud's warning for regions a list could not
@@ -68,25 +59,25 @@ func funcV1Regions(regions, v1Supported []string) []string {
 	return kept
 }
 
-func runFuncList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *functionsCmds) runFuncList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	v2, err := gcp.CloudFunctionsV2Service(ctx, flagAccount)
+	ctx := cmd.Context()
+	v2, err := s.inv.clients().CloudFunctionsV2(ctx)
 	if err != nil {
 		return err
 	}
 	listV2 := func(filter string) ([]any, error) {
 		var out []any
-		for _, region := range flagFuncListRegions {
+		for _, region := range s.flagFuncListRegions {
 			call := v2.Projects.Locations.Functions.List(fmt.Sprintf("projects/%s/locations/%s", project, region))
 			if filter != "" {
 				call = call.Filter(filter)
 			}
 			err := call.Pages(ctx, func(r *cloudfunctions.ListFunctionsResponse) error {
-				funcUnreachableWarning(os.Stderr, r.Unreachable)
+				funcUnreachableWarning(s.inv.stderr, r.Unreachable)
 				for _, f := range r.Functions {
 					out = append(out, f)
 				}
@@ -100,7 +91,7 @@ func runFuncList(cmd *cobra.Command, args []string) error {
 	}
 
 	all := []any{}
-	if flagFuncListV2 {
+	if s.flagFuncListV2 {
 		items, err := listV2("")
 		if err != nil {
 			return err
@@ -113,7 +104,7 @@ func runFuncList(cmd *cobra.Command, args []string) error {
 		}
 		all = append(all, items...)
 
-		v1, err := gcp.CloudFunctionsV1Service(ctx, flagAccount)
+		v1, err := s.inv.clients().CloudFunctionsV1(ctx)
 		if err != nil {
 			return err
 		}
@@ -127,10 +118,10 @@ func runFuncList(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("listing Cloud Functions v1 regions: %w", err)
 		}
-		for _, region := range funcV1Regions(flagFuncListRegions, v1Supported) {
+		for _, region := range funcV1Regions(s.flagFuncListRegions, v1Supported) {
 			err := v1.Projects.Locations.Functions.List(fmt.Sprintf("projects/%s/locations/%s", project, region)).Pages(ctx,
 				func(r *cloudfunctionsv1.ListFunctionsResponse) error {
-					funcUnreachableWarning(os.Stderr, r.Unreachable)
+					funcUnreachableWarning(s.inv.stderr, r.Unreachable)
 					for _, f := range r.Functions {
 						all = append(all, f)
 					}
@@ -141,10 +132,10 @@ func runFuncList(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
-	if flagFuncListLimit > 0 && int64(len(all)) > flagFuncListLimit {
-		all = all[:flagFuncListLimit]
+	if s.flagFuncListLimit > 0 && int64(len(all)) > s.flagFuncListLimit {
+		all = all[:s.flagFuncListLimit]
 	}
-	return emitFuncList(os.Stdout, os.Stderr, all, flagFormat)
+	return emitFuncList(s.inv.stdout, s.inv.stderr, all, s.inv.flags.format)
 }
 
 // funcListFormat is gcloud's default `functions list` table, over the rows

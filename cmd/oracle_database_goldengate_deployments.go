@@ -1,91 +1,49 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database goldengate-deployments (#1275) ---
 
-var oracleGgDeploymentsCmd = &cobra.Command{
-	Use:   "goldengate-deployments",
-	Short: "Manage Oracle GoldenGate deployments",
-}
-
-var (
-	flagOdbGgDpLocation   string
-	flagOdbGgDpFormat     string
-	flagOdbGgDpConfigFile string
-	flagOdbGgDpPageSize   int64
-	flagOdbGgDpFilter     string
-)
-
-var (
-	oracleGgDpCreateCmd = &cobra.Command{
-		Use: "create DEPLOYMENT", Short: "Create a GoldenGate deployment",
-		Args: cobra.ExactArgs(1), RunE: runOracleGgDpCreate,
-	}
-	oracleGgDpDeleteCmd = &cobra.Command{
-		Use: "delete DEPLOYMENT", Short: "Delete a GoldenGate deployment",
-		Args: cobra.ExactArgs(1), RunE: runOracleGgDpDelete,
-	}
-	oracleGgDpDescribeCmd = &cobra.Command{
-		Use: "describe DEPLOYMENT", Short: "Describe a GoldenGate deployment",
-		Args: cobra.ExactArgs(1), RunE: runOracleGgDpDescribe,
-	}
-	oracleGgDpListCmd = &cobra.Command{
-		Use: "list", Short: "List GoldenGate deployments in a location",
-		Args: cobra.NoArgs, RunE: runOracleGgDpList,
-	}
-	oracleGgDpStartCmd = &cobra.Command{
-		Use: "start DEPLOYMENT", Short: "Start a GoldenGate deployment",
-		Args: cobra.ExactArgs(1), RunE: runOracleGgDpStart,
-	}
-	oracleGgDpStopCmd = &cobra.Command{
-		Use: "stop DEPLOYMENT", Short: "Stop a GoldenGate deployment",
-		Args: cobra.ExactArgs(1), RunE: runOracleGgDpStop,
-	}
-)
-
-func init() {
+func (s *oracleDatabaseCmds) initOracleDatabaseGoldengateDeployments() {
 	all := []*cobra.Command{
-		oracleGgDpCreateCmd, oracleGgDpDeleteCmd,
-		oracleGgDpDescribeCmd, oracleGgDpListCmd,
-		oracleGgDpStartCmd, oracleGgDpStopCmd,
+		s.oracleGgDpCreateCmd, s.oracleGgDpDeleteCmd,
+		s.oracleGgDpDescribeCmd, s.oracleGgDpListCmd,
+		s.oracleGgDpStartCmd, s.oracleGgDpStopCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbGgDpLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbGgDpLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbGgDpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbGgDpFormat, "format", "", "Output format")
 	}
-	oracleGgDpCreateCmd.Flags().StringVar(&flagOdbGgDpConfigFile, "config-file", "", "YAML/JSON file with GoldengateDeployment body (required)")
-	_ = oracleGgDpCreateCmd.MarkFlagRequired("config-file")
-	oracleGgDpListCmd.Flags().Int64Var(&flagOdbGgDpPageSize, "page-size", 0, "Maximum results per page")
-	oracleGgDpListCmd.Flags().StringVar(&flagOdbGgDpFilter, "filter", "", "Server-side filter expression")
+	s.oracleGgDpCreateCmd.Flags().StringVar(&s.flagOdbGgDpConfigFile, "config-file", "", "YAML/JSON file with GoldengateDeployment body (required)")
+	_ = s.oracleGgDpCreateCmd.MarkFlagRequired("config-file")
+	s.oracleGgDpListCmd.Flags().Int64Var(&s.flagOdbGgDpPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleGgDpListCmd.Flags().StringVar(&s.flagOdbGgDpFilter, "filter", "", "Server-side filter expression")
 
-	oracleGgDeploymentsCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleGgDeploymentsCmd)
+	s.oracleGgDeploymentsCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleGgDeploymentsCmd)
 }
 
-func oracleGgDpName(id string) (string, error) {
-	return odbResource(flagOdbGgDpLocation, "goldengateDeployments", id)
+func (s *oracleDatabaseCmds) oracleGgDpName(id string) (string, error) {
+	return s.odbResource(s.flagOdbGgDpLocation, "goldengateDeployments", id)
 }
 
-func runOracleGgDpCreate(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbGgDpLocation)
+func (s *oracleDatabaseCmds) runOracleGgDpCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbGgDpLocation)
 	if err != nil {
 		return err
 	}
 	body := &oracledatabase.GoldengateDeployment{}
-	if err := loadYAMLOrJSONInto(flagOdbGgDpConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagOdbGgDpConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -93,17 +51,17 @@ func runOracleGgDpCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating goldengate deployment: %w", err)
 	}
-	fmt.Printf("Create goldengate deployment [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbGgDpFormat)
+	fmt.Fprintf(s.inv.stdout, "Create goldengate deployment [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbGgDpFormat)
 }
 
-func runOracleGgDpDelete(cmd *cobra.Command, args []string) error {
-	name, err := oracleGgDpName(args[0])
+func (s *oracleDatabaseCmds) runOracleGgDpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleGgDpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -111,17 +69,17 @@ func runOracleGgDpDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting goldengate deployment: %w", err)
 	}
-	fmt.Printf("Delete goldengate deployment [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbGgDpFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete goldengate deployment [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbGgDpFormat)
 }
 
-func runOracleGgDpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := oracleGgDpName(args[0])
+func (s *oracleDatabaseCmds) runOracleGgDpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleGgDpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,16 +87,16 @@ func runOracleGgDpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing goldengate deployment: %w", err)
 	}
-	return emitFormatted(got, flagOdbGgDpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagOdbGgDpFormat)
 }
 
-func runOracleGgDpList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbGgDpLocation)
+func (s *oracleDatabaseCmds) runOracleGgDpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbGgDpLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -146,11 +104,11 @@ func runOracleGgDpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.GoldengateDeployments.List(parent).Context(ctx)
-		if flagOdbGgDpPageSize > 0 {
-			call = call.PageSize(flagOdbGgDpPageSize)
+		if s.flagOdbGgDpPageSize > 0 {
+			call = call.PageSize(s.flagOdbGgDpPageSize)
 		}
-		if flagOdbGgDpFilter != "" {
-			call = call.Filter(flagOdbGgDpFilter)
+		if s.flagOdbGgDpFilter != "" {
+			call = call.Filter(s.flagOdbGgDpFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -165,16 +123,16 @@ func runOracleGgDpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbGgDpFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbGgDpFormat)
 }
 
-func runOracleGgDpStart(cmd *cobra.Command, args []string) error {
-	name, err := oracleGgDpName(args[0])
+func (s *oracleDatabaseCmds) runOracleGgDpStart(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleGgDpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -182,17 +140,17 @@ func runOracleGgDpStart(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("starting goldengate deployment: %w", err)
 	}
-	fmt.Printf("Start goldengate deployment [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbGgDpFormat)
+	fmt.Fprintf(s.inv.stdout, "Start goldengate deployment [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbGgDpFormat)
 }
 
-func runOracleGgDpStop(cmd *cobra.Command, args []string) error {
-	name, err := oracleGgDpName(args[0])
+func (s *oracleDatabaseCmds) runOracleGgDpStop(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleGgDpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -200,6 +158,6 @@ func runOracleGgDpStop(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("stopping goldengate deployment: %w", err)
 	}
-	fmt.Printf("Stop goldengate deployment [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbGgDpFormat)
+	fmt.Fprintf(s.inv.stdout, "Stop goldengate deployment [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbGgDpFormat)
 }

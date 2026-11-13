@@ -1,14 +1,12 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dataflow "google.golang.org/api/dataflow/v1b3"
 	storage "google.golang.org/api/storage/v1"
@@ -18,58 +16,13 @@ import (
 
 var (
 	// flex-template flags
-	flagDFFTJobName          string
-	flagDFFTTemplateGCS      string
-	flagDFFTStagingLocation  string
-	flagDFFTTempLocation     string
-	flagDFFTServiceAccount   string
-	flagDFFTMaxWorkers       int64
-	flagDFFTNumWorkers       int64
-	flagDFFTWorkerMachine    string
-	flagDFFTLauncherMachine  string
-	flagDFFTLauncherTimeout  int64
-	flagDFFTSubnetwork       string
-	flagDFFTNetwork          string
-	flagDFFTKmsKey           string
-	flagDFFTWorkerRegion     string
-	flagDFFTWorkerZone       string
-	flagDFFTEnableStreaming  bool
-	flagDFFTDisablePublicIPs bool
-	flagDFFTExperiments      []string
-	flagDFFTPipelineOptions  []string
-	flagDFFTUserLabels       map[string]string
-	flagDFFTParameters       map[string]string
-	flagDFFTTransformName    map[string]string
-	flagDFFTUpdate           bool
-	flagDFFTFlexRSGoal       string
-	flagDFFTTurnkeyAlerts    bool
+	flagDFFTJobName string
 
 	// flex-template build flags
 	flagDFFTBuildTemplateFileGCS string
-	flagDFFTBuildImage           string
-	flagDFFTBuildImageGCRPath    string
-	flagDFFTBuildSDK             string
-	flagDFFTBuildMetadataFile    string
-	flagDFFTBuildEnv             map[string]string
-	flagDFFTBuildFlexOptions     map[string]string
-
-	// snapshots flags
-	flagDFSnapRegion      string
-	flagDFSnapJobID       string
-	flagDFSnapTTL         string
-	flagDFSnapDescription string
-	flagDFSnapSources     bool
-
-	// yaml run flags
-	flagDFYamlPipelineFile string
-	flagDFYamlPipeline     string
-	flagDFYamlOptions      map[string]string
-	flagDFYamlJinjaVars    map[string]string
-	flagDFYamlRegion       string
-	flagDFYamlGCSLocation  string
 )
 
-func registerDataflowExtras(parent *cobra.Command) {
+func (s *dataflowCmds) registerDataflowExtras(parent *cobra.Command) {
 	// --- flex-template subgroup ---
 	ftCmd := &cobra.Command{Use: "flex-template", Short: "Manage Dataflow Flex Templates"}
 
@@ -77,47 +30,47 @@ func registerDataflowExtras(parent *cobra.Command) {
 		Use:   "run JOB_NAME",
 		Short: "Run a Dataflow Flex Template",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runDFFTLaunch,
+		RunE:  s.runDFFTLaunch,
 	}
-	ftRun.Flags().StringVar(&flagDataflowRegion, "region", "", "Region for the job")
-	ftRun.Flags().StringVar(&flagDFFTTemplateGCS, "template-file-gcs-location", "", "GCS path to the flex template spec (required)")
+	ftRun.Flags().StringVar(&s.flagDataflowRegion, "region", "", "Region for the job")
+	ftRun.Flags().StringVar(&s.flagDFFTTemplateGCS, "template-file-gcs-location", "", "GCS path to the flex template spec (required)")
 	ftRun.MarkFlagRequired("template-file-gcs-location")
-	ftRun.Flags().StringVar(&flagDFFTStagingLocation, "staging-location", "", "GCS staging location")
-	ftRun.Flags().StringVar(&flagDFFTTempLocation, "temp-location", "", "GCS temp location")
-	ftRun.Flags().StringVar(&flagDFFTServiceAccount, "service-account-email", "", "Worker service account email")
-	ftRun.Flags().Int64Var(&flagDFFTMaxWorkers, "max-workers", 0, "Maximum number of workers")
-	ftRun.Flags().Int64Var(&flagDFFTNumWorkers, "num-workers", 0, "Initial number of workers")
-	ftRun.Flags().StringVar(&flagDFFTWorkerMachine, "worker-machine-type", "", "Worker machine type")
-	ftRun.Flags().StringVar(&flagDFFTLauncherMachine, "launcher-machine-type", "", "Launcher VM machine type")
-	ftRun.Flags().Int64Var(&flagDFFTLauncherTimeout, "launcher-vm-timeout-secs", 0, "Launcher VM timeout in seconds")
-	ftRun.Flags().StringVar(&flagDFFTSubnetwork, "subnetwork", "", "Compute Engine subnetwork")
-	ftRun.Flags().StringVar(&flagDFFTNetwork, "network", "", "Compute Engine network")
-	ftRun.Flags().StringVar(&flagDFFTKmsKey, "dataflow-kms-key", "", "Cloud KMS key")
-	ftRun.Flags().StringVar(&flagDFFTWorkerRegion, "worker-region", "", "Region to run workers in")
-	ftRun.Flags().StringVar(&flagDFFTWorkerZone, "worker-zone", "", "Zone to run workers in")
-	ftRun.Flags().BoolVar(&flagDFFTEnableStreaming, "enable-streaming-engine", false, "Enable Streaming Engine")
-	ftRun.Flags().BoolVar(&flagDFFTDisablePublicIPs, "disable-public-ips", false, "Disable public IPs on workers")
-	ftRun.Flags().StringSliceVar(&flagDFFTExperiments, "additional-experiments", nil, "Additional Dataflow experiments")
-	ftRun.Flags().StringSliceVar(&flagDFFTPipelineOptions, "additional-pipeline-options", nil, "Additional pipeline options")
-	ftRun.Flags().StringToStringVar(&flagDFFTUserLabels, "additional-user-labels", nil, "Additional user labels (key=value)")
-	ftRun.Flags().StringToStringVar(&flagDFFTParameters, "parameters", nil, "Template parameters (key=value)")
-	ftRun.Flags().StringToStringVar(&flagDFFTTransformName, "transform-name-mappings", nil, "Streaming update transform name mappings")
-	ftRun.Flags().BoolVar(&flagDFFTUpdate, "update", false, "Update an existing streaming job")
-	ftRun.Flags().StringVar(&flagDFFTFlexRSGoal, "flexrs-goal", "", "FlexRS goal (COST_OPTIMIZED, SPEED_OPTIMIZED)")
-	ftRun.Flags().BoolVar(&flagDFFTTurnkeyAlerts, "enable-turnkey-alerts", false, "Enable turnkey alerts for the launched job")
+	ftRun.Flags().StringVar(&s.flagDFFTStagingLocation, "staging-location", "", "GCS staging location")
+	ftRun.Flags().StringVar(&s.flagDFFTTempLocation, "temp-location", "", "GCS temp location")
+	ftRun.Flags().StringVar(&s.flagDFFTServiceAccount, "service-account-email", "", "Worker service account email")
+	ftRun.Flags().Int64Var(&s.flagDFFTMaxWorkers, "max-workers", 0, "Maximum number of workers")
+	ftRun.Flags().Int64Var(&s.flagDFFTNumWorkers, "num-workers", 0, "Initial number of workers")
+	ftRun.Flags().StringVar(&s.flagDFFTWorkerMachine, "worker-machine-type", "", "Worker machine type")
+	ftRun.Flags().StringVar(&s.flagDFFTLauncherMachine, "launcher-machine-type", "", "Launcher VM machine type")
+	ftRun.Flags().Int64Var(&s.flagDFFTLauncherTimeout, "launcher-vm-timeout-secs", 0, "Launcher VM timeout in seconds")
+	ftRun.Flags().StringVar(&s.flagDFFTSubnetwork, "subnetwork", "", "Compute Engine subnetwork")
+	ftRun.Flags().StringVar(&s.flagDFFTNetwork, "network", "", "Compute Engine network")
+	ftRun.Flags().StringVar(&s.flagDFFTKmsKey, "dataflow-kms-key", "", "Cloud KMS key")
+	ftRun.Flags().StringVar(&s.flagDFFTWorkerRegion, "worker-region", "", "Region to run workers in")
+	ftRun.Flags().StringVar(&s.flagDFFTWorkerZone, "worker-zone", "", "Zone to run workers in")
+	ftRun.Flags().BoolVar(&s.flagDFFTEnableStreaming, "enable-streaming-engine", false, "Enable Streaming Engine")
+	ftRun.Flags().BoolVar(&s.flagDFFTDisablePublicIPs, "disable-public-ips", false, "Disable public IPs on workers")
+	ftRun.Flags().StringSliceVar(&s.flagDFFTExperiments, "additional-experiments", nil, "Additional Dataflow experiments")
+	ftRun.Flags().StringSliceVar(&s.flagDFFTPipelineOptions, "additional-pipeline-options", nil, "Additional pipeline options")
+	ftRun.Flags().StringToStringVar(&s.flagDFFTUserLabels, "additional-user-labels", nil, "Additional user labels (key=value)")
+	ftRun.Flags().StringToStringVar(&s.flagDFFTParameters, "parameters", nil, "Template parameters (key=value)")
+	ftRun.Flags().StringToStringVar(&s.flagDFFTTransformName, "transform-name-mappings", nil, "Streaming update transform name mappings")
+	ftRun.Flags().BoolVar(&s.flagDFFTUpdate, "update", false, "Update an existing streaming job")
+	ftRun.Flags().StringVar(&s.flagDFFTFlexRSGoal, "flexrs-goal", "", "FlexRS goal (COST_OPTIMIZED, SPEED_OPTIMIZED)")
+	ftRun.Flags().BoolVar(&s.flagDFFTTurnkeyAlerts, "enable-turnkey-alerts", false, "Enable turnkey alerts for the launched job")
 
 	ftBuild := &cobra.Command{
 		Use:   "build TEMPLATE_FILE_GCS_PATH",
 		Short: "Build a Dataflow flex template spec and upload it to Cloud Storage",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runDFFTBuild,
+		RunE:  s.runDFFTBuild,
 	}
-	ftBuild.Flags().StringVar(&flagDFFTBuildImage, "image", "", "Container image URI for the flex template")
-	ftBuild.Flags().StringVar(&flagDFFTBuildImageGCRPath, "image-gcr-path", "", "Alternate image GCR path (metadata only)")
-	ftBuild.Flags().StringVar(&flagDFFTBuildSDK, "sdk-language", "", "SDK language (JAVA, PYTHON, GO)")
-	ftBuild.Flags().StringVar(&flagDFFTBuildMetadataFile, "metadata-file", "", "JSON file with template metadata")
-	ftBuild.Flags().StringToStringVar(&flagDFFTBuildEnv, "env", nil, "Container spec env vars (key=value)")
-	ftBuild.Flags().StringToStringVar(&flagDFFTBuildFlexOptions, "flex-template-base-image", nil, "Extra container spec options (key=value)")
+	ftBuild.Flags().StringVar(&s.flagDFFTBuildImage, "image", "", "Container image URI for the flex template")
+	ftBuild.Flags().StringVar(&s.flagDFFTBuildImageGCRPath, "image-gcr-path", "", "Alternate image GCR path (metadata only)")
+	ftBuild.Flags().StringVar(&s.flagDFFTBuildSDK, "sdk-language", "", "SDK language (JAVA, PYTHON, GO)")
+	ftBuild.Flags().StringVar(&s.flagDFFTBuildMetadataFile, "metadata-file", "", "JSON file with template metadata")
+	ftBuild.Flags().StringToStringVar(&s.flagDFFTBuildEnv, "env", nil, "Container spec env vars (key=value)")
+	ftBuild.Flags().StringToStringVar(&s.flagDFFTBuildFlexOptions, "flex-template-base-image", nil, "Extra container spec options (key=value)")
 
 	ftCmd.AddCommand(ftRun, ftBuild)
 
@@ -128,39 +81,39 @@ func registerDataflowExtras(parent *cobra.Command) {
 		Use:   "create",
 		Short: "Create a snapshot of a Dataflow job",
 		Args:  cobra.NoArgs,
-		RunE:  runDFSnapCreate,
+		RunE:  s.runDFSnapCreate,
 	}
-	snapCreate.Flags().StringVar(&flagDFSnapRegion, "region", "", "Region containing the job")
-	snapCreate.Flags().StringVar(&flagDFSnapJobID, "job-id", "", "Job ID to snapshot (required)")
-	snapCreate.Flags().StringVar(&flagDFSnapTTL, "snapshot-ttl", "", "Snapshot TTL (e.g. 604800s)")
-	snapCreate.Flags().StringVar(&flagDFSnapDescription, "description", "", "Snapshot description")
-	snapCreate.Flags().BoolVar(&flagDFSnapSources, "snapshot-sources", false, "Also snapshot sources that support it")
+	snapCreate.Flags().StringVar(&s.flagDFSnapRegion, "region", "", "Region containing the job")
+	snapCreate.Flags().StringVar(&s.flagDFSnapJobID, "job-id", "", "Job ID to snapshot (required)")
+	snapCreate.Flags().StringVar(&s.flagDFSnapTTL, "snapshot-ttl", "", "Snapshot TTL (e.g. 604800s)")
+	snapCreate.Flags().StringVar(&s.flagDFSnapDescription, "description", "", "Snapshot description")
+	snapCreate.Flags().BoolVar(&s.flagDFSnapSources, "snapshot-sources", false, "Also snapshot sources that support it")
 	snapCreate.MarkFlagRequired("job-id")
 
 	snapDelete := &cobra.Command{
 		Use:   "delete SNAPSHOT_ID",
 		Short: "Delete a Dataflow snapshot",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runDFSnapDelete,
+		RunE:  s.runDFSnapDelete,
 	}
-	snapDelete.Flags().StringVar(&flagDFSnapRegion, "region", "", "Region containing the snapshot")
+	snapDelete.Flags().StringVar(&s.flagDFSnapRegion, "region", "", "Region containing the snapshot")
 
 	snapDescribe := &cobra.Command{
 		Use:   "describe SNAPSHOT_ID",
 		Short: "Describe a Dataflow snapshot",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runDFSnapDescribe,
+		RunE:  s.runDFSnapDescribe,
 	}
-	snapDescribe.Flags().StringVar(&flagDFSnapRegion, "region", "", "Region containing the snapshot")
+	snapDescribe.Flags().StringVar(&s.flagDFSnapRegion, "region", "", "Region containing the snapshot")
 
 	snapList := &cobra.Command{
 		Use:   "list",
 		Short: "List Dataflow snapshots",
 		Args:  cobra.NoArgs,
-		RunE:  runDFSnapList,
+		RunE:  s.runDFSnapList,
 	}
-	snapList.Flags().StringVar(&flagDFSnapRegion, "region", "", "Region to list snapshots in")
-	snapList.Flags().StringVar(&flagDFSnapJobID, "job-id", "", "Only list snapshots belonging to this job")
+	snapList.Flags().StringVar(&s.flagDFSnapRegion, "region", "", "Region to list snapshots in")
+	snapList.Flags().StringVar(&s.flagDFSnapJobID, "job-id", "", "Only list snapshots belonging to this job")
 
 	snapCmd.AddCommand(snapCreate, snapDelete, snapDescribe, snapList)
 
@@ -170,14 +123,14 @@ func registerDataflowExtras(parent *cobra.Command) {
 		Use:   "run JOB_NAME",
 		Short: "Run a Dataflow job from a YAML pipeline description",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runDFYamlRun,
+		RunE:  s.runDFYamlRun,
 	}
-	yamlRun.Flags().StringVar(&flagDFYamlRegion, "region", "", "Region for the job (defaults to us-central1)")
-	yamlRun.Flags().StringVar(&flagDFYamlPipelineFile, "yaml-pipeline-file", "", "Path to a local YAML pipeline file or gs:// URL")
-	yamlRun.Flags().StringVar(&flagDFYamlPipeline, "yaml-pipeline", "", "Inline YAML pipeline definition")
-	yamlRun.Flags().StringToStringVar(&flagDFYamlOptions, "pipeline-options", nil, "Additional pipeline options (key=value)")
-	yamlRun.Flags().StringToStringVar(&flagDFYamlJinjaVars, "jinja-variables", nil, "Jinja variables for template substitution (key=value)")
-	yamlRun.Flags().StringVar(&flagDFYamlGCSLocation, "template-file-gcs-location", "", "Override GCS location of the Beam YAML flex template")
+	yamlRun.Flags().StringVar(&s.flagDFYamlRegion, "region", "", "Region for the job (defaults to us-central1)")
+	yamlRun.Flags().StringVar(&s.flagDFYamlPipelineFile, "yaml-pipeline-file", "", "Path to a local YAML pipeline file or gs:// URL")
+	yamlRun.Flags().StringVar(&s.flagDFYamlPipeline, "yaml-pipeline", "", "Inline YAML pipeline definition")
+	yamlRun.Flags().StringToStringVar(&s.flagDFYamlOptions, "pipeline-options", nil, "Additional pipeline options (key=value)")
+	yamlRun.Flags().StringToStringVar(&s.flagDFYamlJinjaVars, "jinja-variables", nil, "Jinja variables for template substitution (key=value)")
+	yamlRun.Flags().StringVar(&s.flagDFYamlGCSLocation, "template-file-gcs-location", "", "Override GCS location of the Beam YAML flex template")
 
 	yamlCmd.AddCommand(yamlRun)
 
@@ -186,92 +139,92 @@ func registerDataflowExtras(parent *cobra.Command) {
 
 // --- flex-template run ---
 
-func runDFFTLaunch(cmd *cobra.Command, args []string) error {
-	project, region, err := resolveDataflowRegion()
+func (s *dataflowCmds) runDFFTLaunch(cmd *cobra.Command, args []string) error {
+	project, region, err := s.resolveDataflowRegion()
 	if err != nil {
 		return err
 	}
 	env := &dataflow.FlexTemplateRuntimeEnvironment{}
-	if flagDFFTMaxWorkers > 0 {
-		env.MaxWorkers = flagDFFTMaxWorkers
+	if s.flagDFFTMaxWorkers > 0 {
+		env.MaxWorkers = s.flagDFFTMaxWorkers
 	}
-	if flagDFFTNumWorkers > 0 {
-		env.NumWorkers = flagDFFTNumWorkers
+	if s.flagDFFTNumWorkers > 0 {
+		env.NumWorkers = s.flagDFFTNumWorkers
 	}
-	if flagDFFTNetwork != "" {
-		env.Network = flagDFFTNetwork
+	if s.flagDFFTNetwork != "" {
+		env.Network = s.flagDFFTNetwork
 	}
-	if flagDFFTSubnetwork != "" {
-		env.Subnetwork = flagDFFTSubnetwork
+	if s.flagDFFTSubnetwork != "" {
+		env.Subnetwork = s.flagDFFTSubnetwork
 	}
-	if flagDFFTWorkerMachine != "" {
-		env.MachineType = flagDFFTWorkerMachine
+	if s.flagDFFTWorkerMachine != "" {
+		env.MachineType = s.flagDFFTWorkerMachine
 	}
-	if flagDFFTLauncherMachine != "" {
-		env.LauncherMachineType = flagDFFTLauncherMachine
+	if s.flagDFFTLauncherMachine != "" {
+		env.LauncherMachineType = s.flagDFFTLauncherMachine
 	}
 	// --launcher-vm-timeout-secs is accepted but ignored — the v1b3 Go client
 	// does not expose LauncherVmTimeoutSeconds in FlexTemplateRuntimeEnvironment.
-	_ = flagDFFTLauncherTimeout
-	if flagDFFTServiceAccount != "" {
-		env.ServiceAccountEmail = flagDFFTServiceAccount
+	_ = s.flagDFFTLauncherTimeout
+	if s.flagDFFTServiceAccount != "" {
+		env.ServiceAccountEmail = s.flagDFFTServiceAccount
 	}
-	if flagDFFTStagingLocation != "" {
-		env.StagingLocation = flagDFFTStagingLocation
+	if s.flagDFFTStagingLocation != "" {
+		env.StagingLocation = s.flagDFFTStagingLocation
 	}
-	if flagDFFTTempLocation != "" {
-		env.TempLocation = flagDFFTTempLocation
+	if s.flagDFFTTempLocation != "" {
+		env.TempLocation = s.flagDFFTTempLocation
 	}
-	if flagDFFTKmsKey != "" {
-		env.KmsKeyName = flagDFFTKmsKey
+	if s.flagDFFTKmsKey != "" {
+		env.KmsKeyName = s.flagDFFTKmsKey
 	}
-	if flagDFFTWorkerRegion != "" {
-		env.WorkerRegion = flagDFFTWorkerRegion
+	if s.flagDFFTWorkerRegion != "" {
+		env.WorkerRegion = s.flagDFFTWorkerRegion
 	}
-	if flagDFFTWorkerZone != "" {
-		env.WorkerZone = flagDFFTWorkerZone
+	if s.flagDFFTWorkerZone != "" {
+		env.WorkerZone = s.flagDFFTWorkerZone
 	}
-	if flagDFFTEnableStreaming {
+	if s.flagDFFTEnableStreaming {
 		env.EnableStreamingEngine = true
 	}
-	if flagDFFTDisablePublicIPs {
+	if s.flagDFFTDisablePublicIPs {
 		env.IpConfiguration = "WORKER_IP_PRIVATE"
 	}
-	if len(flagDFFTExperiments) > 0 {
-		env.AdditionalExperiments = flagDFFTExperiments
+	if len(s.flagDFFTExperiments) > 0 {
+		env.AdditionalExperiments = s.flagDFFTExperiments
 	}
-	if flagDFFTTurnkeyAlerts {
+	if s.flagDFFTTurnkeyAlerts {
 		env.AdditionalExperiments = appendExperiment(env.AdditionalExperiments, turnkeyAlertsExperiment)
 	}
-	if len(flagDFFTPipelineOptions) > 0 {
-		env.AdditionalPipelineOptions = flagDFFTPipelineOptions
+	if len(s.flagDFFTPipelineOptions) > 0 {
+		env.AdditionalPipelineOptions = s.flagDFFTPipelineOptions
 	}
-	if len(flagDFFTUserLabels) > 0 {
-		env.AdditionalUserLabels = flagDFFTUserLabels
+	if len(s.flagDFFTUserLabels) > 0 {
+		env.AdditionalUserLabels = s.flagDFFTUserLabels
 	}
-	if flagDFFTFlexRSGoal != "" {
-		env.FlexrsGoal = flagDFFTFlexRSGoal
+	if s.flagDFFTFlexRSGoal != "" {
+		env.FlexrsGoal = s.flagDFFTFlexRSGoal
 	}
 
 	param := &dataflow.LaunchFlexTemplateParameter{
 		JobName:              args[0],
-		ContainerSpecGcsPath: flagDFFTTemplateGCS,
+		ContainerSpecGcsPath: s.flagDFFTTemplateGCS,
 		Environment:          env,
 	}
-	if len(flagDFFTParameters) > 0 {
-		param.Parameters = flagDFFTParameters
+	if len(s.flagDFFTParameters) > 0 {
+		param.Parameters = s.flagDFFTParameters
 	}
-	if len(flagDFFTTransformName) > 0 {
-		param.TransformNameMappings = flagDFFTTransformName
+	if len(s.flagDFFTTransformName) > 0 {
+		param.TransformNameMappings = s.flagDFFTTransformName
 	}
-	if flagDFFTUpdate {
+	if s.flagDFFTUpdate {
 		param.Update = true
 	}
 
 	req := &dataflow.LaunchFlexTemplateRequest{LaunchParameter: param}
 
-	ctx := context.Background()
-	svc, err := gcp.DataflowService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataflow(ctx)
 	if err != nil {
 		return err
 	}
@@ -280,9 +233,9 @@ func runDFFTLaunch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("launching flex template: %w", err)
 	}
 	if resp.Job != nil {
-		fmt.Printf("Launched flex template job [%s] (ID: %s).\n", resp.Job.Name, resp.Job.Id)
+		fmt.Fprintf(s.inv.stdout, "Launched flex template job [%s] (ID: %s).\n", resp.Job.Name, resp.Job.Id)
 	}
-	return emitFormatted(resp, "")
+	return emitFormattedTo(s.inv.stdout, resp, "")
 }
 
 // --- flex-template build ---
@@ -292,23 +245,23 @@ func runDFFTLaunch(cmd *cobra.Command, args []string) error {
 // that requires Docker or Cloud Build; we surface the option via --image and
 // embed it in the spec, but do not shell out to docker here.
 
-func runDFFTBuild(cmd *cobra.Command, args []string) error {
-	if flagDFFTBuildImage == "" {
+func (s *dataflowCmds) runDFFTBuild(cmd *cobra.Command, args []string) error {
+	if s.flagDFFTBuildImage == "" {
 		return fmt.Errorf("--image is required (container URI to embed in the flex template spec)")
 	}
 	spec := map[string]any{
-		"image": flagDFFTBuildImage,
+		"image": s.flagDFFTBuildImage,
 	}
-	if flagDFFTBuildSDK != "" {
-		spec["sdkInfo"] = map[string]string{"language": flagDFFTBuildSDK}
+	if s.flagDFFTBuildSDK != "" {
+		spec["sdkInfo"] = map[string]string{"language": s.flagDFFTBuildSDK}
 	}
-	if len(flagDFFTBuildEnv) > 0 {
-		spec["defaultEnvironment"] = flagDFFTBuildEnv
+	if len(s.flagDFFTBuildEnv) > 0 {
+		spec["defaultEnvironment"] = s.flagDFFTBuildEnv
 	}
-	if flagDFFTBuildMetadataFile != "" {
-		meta, err := os.ReadFile(flagDFFTBuildMetadataFile)
+	if s.flagDFFTBuildMetadataFile != "" {
+		meta, err := os.ReadFile(s.flagDFFTBuildMetadataFile)
 		if err != nil {
-			return fmt.Errorf("reading %s: %w", flagDFFTBuildMetadataFile, err)
+			return fmt.Errorf("reading %s: %w", s.flagDFFTBuildMetadataFile, err)
 		}
 		var m any
 		if err := json.Unmarshal(meta, &m); err != nil {
@@ -316,8 +269,8 @@ func runDFFTBuild(cmd *cobra.Command, args []string) error {
 		}
 		spec["metadata"] = m
 	}
-	if flagDFFTBuildImageGCRPath != "" {
-		spec["imageGcrPath"] = flagDFFTBuildImageGCRPath
+	if s.flagDFFTBuildImageGCRPath != "" {
+		spec["imageGcrPath"] = s.flagDFFTBuildImageGCRPath
 	}
 	body, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
@@ -334,8 +287,8 @@ func runDFFTBuild(cmd *cobra.Command, args []string) error {
 	}
 	bucket := trimmed[:slash]
 	object := trimmed[slash+1:]
-	ctx := context.Background()
-	stg, err := gcp.StorageService(ctx, flagAccount)
+	ctx := cmd.Context()
+	stg, err := s.inv.clients().Storage(ctx)
 	if err != nil {
 		return err
 	}
@@ -343,60 +296,60 @@ func runDFFTBuild(cmd *cobra.Command, args []string) error {
 	if _, err := stg.Objects.Insert(bucket, obj).Media(strings.NewReader(string(body))).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("writing spec to %s: %w", dest, err)
 	}
-	fmt.Printf("Wrote flex template spec to %s\n", dest)
+	fmt.Fprintf(s.inv.stdout, "Wrote flex template spec to %s\n", dest)
 	return nil
 }
 
 // --- snapshots ---
 
-func runDFSnapCreate(cmd *cobra.Command, args []string) error {
-	project, region, err := dfSnapRegion()
+func (s *dataflowCmds) runDFSnapCreate(cmd *cobra.Command, args []string) error {
+	project, region, err := s.dfSnapRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataflowService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataflow(ctx)
 	if err != nil {
 		return err
 	}
 	req := &dataflow.SnapshotJobRequest{
 		Location:        region,
-		Description:     flagDFSnapDescription,
-		Ttl:             flagDFSnapTTL,
-		SnapshotSources: flagDFSnapSources,
+		Description:     s.flagDFSnapDescription,
+		Ttl:             s.flagDFSnapTTL,
+		SnapshotSources: s.flagDFSnapSources,
 	}
-	snap, err := svc.Projects.Locations.Jobs.Snapshot(project, region, flagDFSnapJobID, req).Context(ctx).Do()
+	snap, err := svc.Projects.Locations.Jobs.Snapshot(project, region, s.flagDFSnapJobID, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("snapshotting job: %w", err)
 	}
-	fmt.Printf("Created snapshot [%s] for job [%s].\n", snap.Id, flagDFSnapJobID)
-	return emitFormatted(snap, "")
+	fmt.Fprintf(s.inv.stdout, "Created snapshot [%s] for job [%s].\n", snap.Id, s.flagDFSnapJobID)
+	return emitFormattedTo(s.inv.stdout, snap, "")
 }
 
-func runDFSnapDelete(cmd *cobra.Command, args []string) error {
-	project, region, err := dfSnapRegion()
+func (s *dataflowCmds) runDFSnapDelete(cmd *cobra.Command, args []string) error {
+	project, region, err := s.dfSnapRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataflowService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataflow(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Snapshots.Delete(project, region, args[0]).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting snapshot: %w", err)
 	}
-	fmt.Printf("Deleted snapshot [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted snapshot [%s].\n", args[0])
 	return nil
 }
 
-func runDFSnapDescribe(cmd *cobra.Command, args []string) error {
-	project, region, err := dfSnapRegion()
+func (s *dataflowCmds) runDFSnapDescribe(cmd *cobra.Command, args []string) error {
+	project, region, err := s.dfSnapRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataflowService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataflow(ctx)
 	if err != nil {
 		return err
 	}
@@ -404,42 +357,42 @@ func runDFSnapDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing snapshot: %w", err)
 	}
-	return emitFormatted(snap, "")
+	return emitFormattedTo(s.inv.stdout, snap, "")
 }
 
-func runDFSnapList(cmd *cobra.Command, args []string) error {
-	project, region, err := dfSnapRegion()
+func (s *dataflowCmds) runDFSnapList(cmd *cobra.Command, args []string) error {
+	project, region, err := s.dfSnapRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataflowService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataflow(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Projects.Locations.Snapshots.List(project, region).Context(ctx)
-	if flagDFSnapJobID != "" {
-		call = call.JobId(flagDFSnapJobID)
+	if s.flagDFSnapJobID != "" {
+		call = call.JobId(s.flagDFSnapJobID)
 	}
 	resp, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("listing snapshots: %w", err)
 	}
-	return emitFormatted(resp.Snapshots, "")
+	return emitFormattedTo(s.inv.stdout, resp.Snapshots, "")
 }
 
-func dfSnapRegion() (string, string, error) {
-	project, err := resolveProject()
+func (s *dataflowCmds) dfSnapRegion() (string, string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", "", err
 	}
-	if flagDFSnapRegion == "" {
-		if _, r, err := resolveRegion(); err == nil && r != "" {
+	if s.flagDFSnapRegion == "" {
+		if _, r, err := s.inv.region(); err == nil && r != "" {
 			return project, r, nil
 		}
 		return "", "", fmt.Errorf("--region is required")
 	}
-	return project, flagDFSnapRegion, nil
+	return project, s.flagDFSnapRegion, nil
 }
 
 // --- yaml run ---
@@ -448,14 +401,14 @@ func dfSnapRegion() (string, string, error) {
 // gs://dataflow-templates-<region>/latest/flex/Yaml_Template, passing the
 // user's YAML pipeline (inline or by-reference) as template parameters.
 
-func runDFYamlRun(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataflowCmds) runDFYamlRun(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	region := flagDFYamlRegion
+	region := s.flagDFYamlRegion
 	if region == "" {
-		if _, r, err := resolveRegion(); err == nil && r != "" {
+		if _, r, err := s.inv.region(); err == nil && r != "" {
 			region = r
 		}
 	}
@@ -463,23 +416,23 @@ func runDFYamlRun(cmd *cobra.Command, args []string) error {
 		region = "us-central1"
 	}
 
-	if flagDFYamlPipelineFile == "" && flagDFYamlPipeline == "" {
+	if s.flagDFYamlPipelineFile == "" && s.flagDFYamlPipeline == "" {
 		return fmt.Errorf("one of --yaml-pipeline-file or --yaml-pipeline is required")
 	}
 
 	params := map[string]string{}
-	for k, v := range flagDFYamlOptions {
+	for k, v := range s.flagDFYamlOptions {
 		params[k] = v
 	}
 
-	if flagDFYamlPipeline != "" {
-		params["yaml_pipeline"] = flagDFYamlPipeline
-	} else if strings.HasPrefix(flagDFYamlPipelineFile, "gs://") {
-		params["yaml_pipeline_file"] = flagDFYamlPipelineFile
+	if s.flagDFYamlPipeline != "" {
+		params["yaml_pipeline"] = s.flagDFYamlPipeline
+	} else if strings.HasPrefix(s.flagDFYamlPipelineFile, "gs://") {
+		params["yaml_pipeline_file"] = s.flagDFYamlPipelineFile
 	} else {
-		f, err := os.Open(flagDFYamlPipelineFile)
+		f, err := os.Open(s.flagDFYamlPipelineFile)
 		if err != nil {
-			return fmt.Errorf("opening %s: %w", flagDFYamlPipelineFile, err)
+			return fmt.Errorf("opening %s: %w", s.flagDFYamlPipelineFile, err)
 		}
 		defer f.Close()
 		b, err := io.ReadAll(f)
@@ -489,15 +442,15 @@ func runDFYamlRun(cmd *cobra.Command, args []string) error {
 		params["yaml_pipeline"] = string(b)
 	}
 
-	if len(flagDFYamlJinjaVars) > 0 {
-		jv, err := json.Marshal(flagDFYamlJinjaVars)
+	if len(s.flagDFYamlJinjaVars) > 0 {
+		jv, err := json.Marshal(s.flagDFYamlJinjaVars)
 		if err != nil {
 			return err
 		}
 		params["jinja_variables"] = string(jv)
 	}
 
-	gcsLocation := flagDFYamlGCSLocation
+	gcsLocation := s.flagDFYamlGCSLocation
 	if gcsLocation == "" {
 		gcsLocation = fmt.Sprintf("gs://dataflow-templates-%s/latest/flex/Yaml_Template", region)
 	}
@@ -510,8 +463,8 @@ func runDFYamlRun(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataflowService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataflow(ctx)
 	if err != nil {
 		return err
 	}
@@ -520,7 +473,7 @@ func runDFYamlRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("launching yaml pipeline: %w", err)
 	}
 	if resp.Job != nil {
-		fmt.Printf("Launched yaml pipeline job [%s] (ID: %s).\n", resp.Job.Name, resp.Job.Id)
+		fmt.Fprintf(s.inv.stdout, "Launched yaml pipeline job [%s] (ID: %s).\n", resp.Job.Name, resp.Job.Id)
 	}
-	return emitFormatted(resp, "")
+	return emitFormattedTo(s.inv.stdout, resp, "")
 }

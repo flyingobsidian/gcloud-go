@@ -1,43 +1,29 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	notebooksv1 "google.golang.org/api/notebooks/v1"
 )
 
 // --- gcloud notebooks locations (#1063) ---
 
-var notebooksLocCmd = &cobra.Command{Use: "locations", Short: "View notebook locations"}
-
-var (
-	flagNotebooksLocFormat   string
-	flagNotebooksLocPageSize int64
-)
-
-var notebooksLocListCmd = &cobra.Command{
-	Use: "list", Short: "List notebook locations for the current project",
-	Args: cobra.NoArgs, RunE: runNotebooksLocList,
+func (s *notebooksCmds) initNotebooksLocations() {
+	s.notebooksLocListCmd.Flags().StringVar(&s.flagNotebooksLocFormat, "format", "", "Output format")
+	s.notebooksLocListCmd.Flags().Int64Var(&s.flagNotebooksLocPageSize, "page-size", 0, "Maximum results per page")
+	s.notebooksLocCmd.AddCommand(s.notebooksLocListCmd)
+	s.notebooksCmd.AddCommand(s.notebooksLocCmd)
 }
 
-func init() {
-	notebooksLocListCmd.Flags().StringVar(&flagNotebooksLocFormat, "format", "", "Output format")
-	notebooksLocListCmd.Flags().Int64Var(&flagNotebooksLocPageSize, "page-size", 0, "Maximum results per page")
-	notebooksLocCmd.AddCommand(notebooksLocListCmd)
-	notebooksCmd.AddCommand(notebooksLocCmd)
-}
-
-func runNotebooksLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *notebooksCmds) runNotebooksLocList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	parent := fmt.Sprintf("projects/%s", project)
-	ctx := context.Background()
-	svc, err := gcp.NotebooksV1Service(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NotebooksV1(ctx)
 	if err != nil {
 		return err
 	}
@@ -45,8 +31,8 @@ func runNotebooksLocList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.List(parent).Context(ctx)
-		if flagNotebooksLocPageSize > 0 {
-			call = call.PageSize(flagNotebooksLocPageSize)
+		if s.flagNotebooksLocPageSize > 0 {
+			call = call.PageSize(s.flagNotebooksLocPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -61,5 +47,5 @@ func runNotebooksLocList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNotebooksLocFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNotebooksLocFormat)
 }

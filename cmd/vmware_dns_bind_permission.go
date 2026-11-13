@@ -1,70 +1,45 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 )
 
 // --- gcloud vmware dns-bind-permission (#1116) ---
 
-var vmwareDnsBindPermissionCmd = &cobra.Command{Use: "dns-bind-permission", Short: "Manage the DNS bind permission for the project"}
-
-var (
-	flagVmwareDbpLocation   string
-	flagVmwareDbpFormat     string
-	flagVmwareDbpConfigFile string
-)
-
-var (
-	vmwareDbpDescribeCmd = &cobra.Command{
-		Use: "describe", Short: "Describe the DNS bind permission for the project",
-		Args: cobra.NoArgs, RunE: runVmwareDbpDescribe,
-	}
-	vmwareDbpGrantCmd = &cobra.Command{
-		Use: "grant", Short: "Grant DNS bind permission to a principal",
-		Args: cobra.NoArgs, RunE: runVmwareDbpGrant,
-	}
-	vmwareDbpRevokeCmd = &cobra.Command{
-		Use: "revoke", Short: "Revoke DNS bind permission from a principal",
-		Args: cobra.NoArgs, RunE: runVmwareDbpRevoke,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{vmwareDbpDescribeCmd, vmwareDbpGrantCmd, vmwareDbpRevokeCmd}
+func (s *vmwareCmds) initVmwareDnsBindPermission() {
+	all := []*cobra.Command{s.vmwareDbpDescribeCmd, s.vmwareDbpGrantCmd, s.vmwareDbpRevokeCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagVmwareDbpLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagVmwareDbpLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagVmwareDbpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagVmwareDbpFormat, "format", "", "Output format")
 	}
-	vmwareDbpGrantCmd.Flags().StringVar(&flagVmwareDbpConfigFile, "config-file", "", "YAML/JSON file with GrantDnsBindPermissionRequest body (required)")
-	_ = vmwareDbpGrantCmd.MarkFlagRequired("config-file")
-	vmwareDbpRevokeCmd.Flags().StringVar(&flagVmwareDbpConfigFile, "config-file", "", "YAML/JSON file with RevokeDnsBindPermissionRequest body (required)")
-	_ = vmwareDbpRevokeCmd.MarkFlagRequired("config-file")
+	s.vmwareDbpGrantCmd.Flags().StringVar(&s.flagVmwareDbpConfigFile, "config-file", "", "YAML/JSON file with GrantDnsBindPermissionRequest body (required)")
+	_ = s.vmwareDbpGrantCmd.MarkFlagRequired("config-file")
+	s.vmwareDbpRevokeCmd.Flags().StringVar(&s.flagVmwareDbpConfigFile, "config-file", "", "YAML/JSON file with RevokeDnsBindPermissionRequest body (required)")
+	_ = s.vmwareDbpRevokeCmd.MarkFlagRequired("config-file")
 
-	vmwareDnsBindPermissionCmd.AddCommand(all...)
-	vmwareCmd.AddCommand(vmwareDnsBindPermissionCmd)
+	s.vmwareDnsBindPermissionCmd.AddCommand(all...)
+	s.vmwareCmd.AddCommand(s.vmwareDnsBindPermissionCmd)
 }
 
-func vmwareDbpName() (string, error) {
-	parent, err := vmwareLocationParent(flagVmwareDbpLocation)
+func (s *vmwareCmds) vmwareDbpName() (string, error) {
+	parent, err := s.vmwareLocationParent(s.flagVmwareDbpLocation)
 	if err != nil {
 		return "", err
 	}
 	return parent + "/dnsBindPermission", nil
 }
 
-func runVmwareDbpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := vmwareDbpName()
+func (s *vmwareCmds) runVmwareDbpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareDbpName()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -72,20 +47,20 @@ func runVmwareDbpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing dns bind permission: %w", err)
 	}
-	return emitFormatted(got, flagVmwareDbpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagVmwareDbpFormat)
 }
 
-func runVmwareDbpGrant(cmd *cobra.Command, args []string) error {
-	name, err := vmwareDbpName()
+func (s *vmwareCmds) runVmwareDbpGrant(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareDbpName()
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.GrantDnsBindPermissionRequest{}
-	if err := loadYAMLOrJSONInto(flagVmwareDbpConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwareDbpConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -93,21 +68,21 @@ func runVmwareDbpGrant(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("granting dns bind permission: %w", err)
 	}
-	fmt.Printf("Grant dns bind permission initiated (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagVmwareDbpFormat)
+	fmt.Fprintf(s.inv.stdout, "Grant dns bind permission initiated (operation: %s).\n", op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareDbpFormat)
 }
 
-func runVmwareDbpRevoke(cmd *cobra.Command, args []string) error {
-	name, err := vmwareDbpName()
+func (s *vmwareCmds) runVmwareDbpRevoke(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareDbpName()
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.RevokeDnsBindPermissionRequest{}
-	if err := loadYAMLOrJSONInto(flagVmwareDbpConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwareDbpConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,6 +90,6 @@ func runVmwareDbpRevoke(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("revoking dns bind permission: %w", err)
 	}
-	fmt.Printf("Revoke dns bind permission initiated (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagVmwareDbpFormat)
+	fmt.Fprintf(s.inv.stdout, "Revoke dns bind permission initiated (operation: %s).\n", op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareDbpFormat)
 }

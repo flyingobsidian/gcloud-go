@@ -1,75 +1,43 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	baremetalsolution "google.golang.org/api/baremetalsolution/v2"
 )
 
 // --- gcloud bms networks (#1227) ---
 
-var bmsNetworksCmd = &cobra.Command{Use: "networks", Short: "Manage bare metal networks"}
-
-var (
-	flagBmsNetLocation   string
-	flagBmsNetFormat     string
-	flagBmsNetConfigFile string
-	flagBmsNetUpdateMask string
-	flagBmsNetNewName    string
-	flagBmsNetPageSize   int64
-)
-
-var (
-	bmsNetDescribeCmd = &cobra.Command{
-		Use: "describe NETWORK", Short: "Describe a bare metal network",
-		Args: cobra.ExactArgs(1), RunE: runBmsNetDescribe,
-	}
-	bmsNetListCmd = &cobra.Command{
-		Use: "list", Short: "List bare metal networks in a location",
-		Args: cobra.NoArgs, RunE: runBmsNetList,
-	}
-	bmsNetUpdateCmd = &cobra.Command{
-		Use: "update NETWORK", Short: "Update a bare metal network",
-		Args: cobra.ExactArgs(1), RunE: runBmsNetUpdate,
-	}
-	bmsNetRenameCmd = &cobra.Command{
-		Use: "rename NETWORK", Short: "Rename a bare metal network",
-		Args: cobra.ExactArgs(1), RunE: runBmsNetRename,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{bmsNetDescribeCmd, bmsNetListCmd, bmsNetUpdateCmd, bmsNetRenameCmd}
+func (s *bmsCmds) initBmsNetworks() {
+	all := []*cobra.Command{s.bmsNetDescribeCmd, s.bmsNetListCmd, s.bmsNetUpdateCmd, s.bmsNetRenameCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagBmsNetLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagBmsNetLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagBmsNetFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBmsNetFormat, "format", "", "Output format")
 	}
-	bmsNetListCmd.Flags().Int64Var(&flagBmsNetPageSize, "page-size", 0, "Maximum results per page")
-	bmsNetUpdateCmd.Flags().StringVar(&flagBmsNetConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
-	_ = bmsNetUpdateCmd.MarkFlagRequired("config-file")
-	bmsNetUpdateCmd.Flags().StringVar(&flagBmsNetUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
-	bmsNetRenameCmd.Flags().StringVar(&flagBmsNetNewName, "new-name", "", "New network id (required)")
-	_ = bmsNetRenameCmd.MarkFlagRequired("new-name")
+	s.bmsNetListCmd.Flags().Int64Var(&s.flagBmsNetPageSize, "page-size", 0, "Maximum results per page")
+	s.bmsNetUpdateCmd.Flags().StringVar(&s.flagBmsNetConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
+	_ = s.bmsNetUpdateCmd.MarkFlagRequired("config-file")
+	s.bmsNetUpdateCmd.Flags().StringVar(&s.flagBmsNetUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.bmsNetRenameCmd.Flags().StringVar(&s.flagBmsNetNewName, "new-name", "", "New network id (required)")
+	_ = s.bmsNetRenameCmd.MarkFlagRequired("new-name")
 
-	bmsNetworksCmd.AddCommand(all...)
-	bmsCmd.AddCommand(bmsNetworksCmd)
+	s.bmsNetworksCmd.AddCommand(all...)
+	s.bmsCmd.AddCommand(s.bmsNetworksCmd)
 }
 
-func bmsNetName(id string) (string, error) {
-	return bmsResource(flagBmsNetLocation, "networks", id)
+func (s *bmsCmds) bmsNetName(id string) (string, error) {
+	return s.bmsResource(s.flagBmsNetLocation, "networks", id)
 }
 
-func runBmsNetDescribe(cmd *cobra.Command, args []string) error {
-	name, err := bmsNetName(args[0])
+func (s *bmsCmds) runBmsNetDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.bmsNetName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
@@ -77,16 +45,16 @@ func runBmsNetDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing network: %w", err)
 	}
-	return emitFormatted(got, flagBmsNetFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBmsNetFormat)
 }
 
-func runBmsNetList(cmd *cobra.Command, args []string) error {
-	parent, err := bmsLocationParent(flagBmsNetLocation)
+func (s *bmsCmds) runBmsNetList(cmd *cobra.Command, args []string) error {
+	parent, err := s.bmsLocationParent(s.flagBmsNetLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
@@ -94,8 +62,8 @@ func runBmsNetList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Networks.List(parent).Context(ctx)
-		if flagBmsNetPageSize > 0 {
-			call = call.PageSize(flagBmsNetPageSize)
+		if s.flagBmsNetPageSize > 0 {
+			call = call.PageSize(s.flagBmsNetPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -110,25 +78,25 @@ func runBmsNetList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBmsNetFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBmsNetFormat)
 }
 
-func runBmsNetUpdate(cmd *cobra.Command, args []string) error {
-	name, err := bmsNetName(args[0])
+func (s *bmsCmds) runBmsNetUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.bmsNetName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &baremetalsolution.Network{}
-	if err := loadYAMLOrJSONInto(flagBmsNetConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBmsNetConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagBmsNetUpdateMask
+	mask := s.flagBmsNetUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,24 +108,24 @@ func runBmsNetUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating network: %w", err)
 	}
-	fmt.Printf("Update network [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBmsNetFormat)
+	fmt.Fprintf(s.inv.stdout, "Update network [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBmsNetFormat)
 }
 
-func runBmsNetRename(cmd *cobra.Command, args []string) error {
-	name, err := bmsNetName(args[0])
+func (s *bmsCmds) runBmsNetRename(cmd *cobra.Command, args []string) error {
+	name, err := s.bmsNetName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Networks.Rename(name, &baremetalsolution.RenameNetworkRequest{NewNetworkId: flagBmsNetNewName}).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Networks.Rename(name, &baremetalsolution.RenameNetworkRequest{NewNetworkId: s.flagBmsNetNewName}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("renaming network: %w", err)
 	}
-	fmt.Printf("Renamed network [%s] to [%s].\n", args[0], flagBmsNetNewName)
-	return emitFormatted(got, flagBmsNetFormat)
+	fmt.Fprintf(s.inv.stdout, "Renamed network [%s] to [%s].\n", args[0], s.flagBmsNetNewName)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBmsNetFormat)
 }

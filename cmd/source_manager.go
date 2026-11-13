@@ -5,313 +5,124 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	securesourcemanager "google.golang.org/api/securesourcemanager/v1"
 )
 
 // --- gcloud source-manager (#925-#928) ---
 
-var sourceManagerCmd = &cobra.Command{
-	Use:   "source-manager",
-	Short: "Manage Secure Source Manager",
-}
-
-// Common flags for the source-manager surface.
-var (
-	flagSMRegion        string
-	flagSMInstance      string
-	flagSMKmsKey        string
-	flagSMDescription   string
-	flagSMDefaultBranch string
-	flagSMFile          string
-	flagSMIamRole       string
-	flagSMIamMember     string
-	flagSMPageSize      int64
-	flagSMLimit         int64
-	flagSMFilter        string
-	flagSMOrderBy       string
-)
-
 // --- Instances ---
-
-var sourceManagerInstancesCmd = &cobra.Command{
-	Use:   "instances",
-	Short: "Manage Secure Source Manager instances",
-}
-
-var sourceManagerInstancesCreateCmd = &cobra.Command{
-	Use:   "create INSTANCE",
-	Short: "Create a Secure Source Manager instance",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMInstancesCreate,
-}
-
-var sourceManagerInstancesDeleteCmd = &cobra.Command{
-	Use:   "delete INSTANCE",
-	Short: "Delete a Secure Source Manager instance",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMInstancesDelete,
-}
-
-var sourceManagerInstancesDescribeCmd = &cobra.Command{
-	Use:   "describe INSTANCE",
-	Short: "Describe a Secure Source Manager instance",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMInstancesDescribe,
-}
-
-var sourceManagerInstancesListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Secure Source Manager instances",
-	Args:  cobra.NoArgs,
-	RunE:  runSMInstancesList,
-}
-
-var sourceManagerInstancesUpdateCmd = &cobra.Command{
-	Use:   "update INSTANCE",
-	Short: "Update a Secure Source Manager instance",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMInstancesUpdate,
-}
 
 // --- Locations ---
 
-var sourceManagerLocationsCmd = &cobra.Command{
-	Use:   "locations",
-	Short: "Manage Secure Source Manager locations",
-}
-
-var sourceManagerLocationsDescribeCmd = &cobra.Command{
-	Use:   "describe LOCATION",
-	Short: "Describe a Secure Source Manager location",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMLocationsDescribe,
-}
-
-var sourceManagerLocationsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Secure Source Manager locations",
-	Args:  cobra.NoArgs,
-	RunE:  runSMLocationsList,
-}
-
 // --- Operations ---
-
-var sourceManagerOperationsCmd = &cobra.Command{
-	Use:   "operations",
-	Short: "Manage Secure Source Manager operations",
-}
-
-var sourceManagerOperationsCancelCmd = &cobra.Command{
-	Use:   "cancel OPERATION",
-	Short: "Cancel a Secure Source Manager operation",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMOperationsCancel,
-}
-
-var sourceManagerOperationsDeleteCmd = &cobra.Command{
-	Use:   "delete OPERATION",
-	Short: "Delete a Secure Source Manager operation",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMOperationsDelete,
-}
-
-var sourceManagerOperationsDescribeCmd = &cobra.Command{
-	Use:   "describe OPERATION",
-	Short: "Describe a Secure Source Manager operation",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMOperationsDescribe,
-}
-
-var sourceManagerOperationsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Secure Source Manager operations",
-	Args:  cobra.NoArgs,
-	RunE:  runSMOperationsList,
-}
-
-var sourceManagerOperationsWaitCmd = &cobra.Command{
-	Use:   "wait OPERATION",
-	Short: "Poll a Secure Source Manager operation until it completes",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMOperationsWait,
-}
 
 // --- Repos ---
 
-var sourceManagerReposCmd = &cobra.Command{
-	Use:   "repos",
-	Short: "Manage Secure Source Manager repositories",
-}
-
-var sourceManagerReposCreateCmd = &cobra.Command{
-	Use:   "create REPO",
-	Short: "Create a Secure Source Manager repository",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMReposCreate,
-}
-
-var sourceManagerReposDeleteCmd = &cobra.Command{
-	Use:   "delete REPO",
-	Short: "Delete a Secure Source Manager repository",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMReposDelete,
-}
-
-var sourceManagerReposDescribeCmd = &cobra.Command{
-	Use:   "describe REPO",
-	Short: "Describe a Secure Source Manager repository",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMReposDescribe,
-}
-
-var sourceManagerReposListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Secure Source Manager repositories",
-	Args:  cobra.NoArgs,
-	RunE:  runSMReposList,
-}
-
-var sourceManagerReposUpdateCmd = &cobra.Command{
-	Use:   "update REPO",
-	Short: "Update a Secure Source Manager repository",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMReposUpdate,
-}
-
-var sourceManagerReposGetIamCmd = &cobra.Command{
-	Use:   "get-iam-policy REPO",
-	Short: "Print the IAM policy for a repository",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMReposGetIam,
-}
-
-var sourceManagerReposSetIamCmd = &cobra.Command{
-	Use:   "set-iam-policy REPO POLICY_FILE",
-	Short: "Set the IAM policy for a repository",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runSMReposSetIam,
-}
-
-var sourceManagerReposAddIamCmd = &cobra.Command{
-	Use:   "add-iam-policy-binding REPO",
-	Short: "Add an IAM policy binding to a repository",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMReposAddIam,
-}
-
-var sourceManagerReposRemoveIamCmd = &cobra.Command{
-	Use:   "remove-iam-policy-binding REPO",
-	Short: "Remove an IAM policy binding from a repository",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSMReposRemoveIam,
-}
-
-func init() {
+func (s *sourceManagerCmds) initSourceManager() {
 	// Instances flags.
 	for _, c := range []*cobra.Command{
-		sourceManagerInstancesCreateCmd, sourceManagerInstancesDeleteCmd,
-		sourceManagerInstancesDescribeCmd, sourceManagerInstancesUpdateCmd,
+		s.sourceManagerInstancesCreateCmd, s.sourceManagerInstancesDeleteCmd,
+		s.sourceManagerInstancesDescribeCmd, s.sourceManagerInstancesUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagSMRegion, "region", "", "Region containing the instance")
+		c.Flags().StringVar(&s.flagSMRegion, "region", "", "Region containing the instance")
 	}
-	sourceManagerInstancesCreateCmd.Flags().StringVar(&flagSMKmsKey, "kms-key", "", "Customer-managed encryption key")
-	sourceManagerInstancesCreateCmd.Flags().StringVar(&flagSMFile, "config-from-file", "", "YAML/JSON file with the full instance spec")
+	s.sourceManagerInstancesCreateCmd.Flags().StringVar(&s.flagSMKmsKey, "kms-key", "", "Customer-managed encryption key")
+	s.sourceManagerInstancesCreateCmd.Flags().StringVar(&s.flagSMFile, "config-from-file", "", "YAML/JSON file with the full instance spec")
 
-	sourceManagerInstancesListCmd.Flags().StringVar(&flagSMRegion, "region", "", "Region to list instances in")
-	sourceManagerInstancesListCmd.Flags().Int64Var(&flagSMPageSize, "page-size", 0, "Number of results per page")
-	sourceManagerInstancesListCmd.Flags().Int64Var(&flagSMLimit, "limit", 0, "Maximum number of results to return")
-	sourceManagerInstancesListCmd.Flags().StringVar(&flagSMFilter, "filter", "", "Server-side filter expression")
-	sourceManagerInstancesListCmd.Flags().StringVar(&flagSMOrderBy, "order-by", "", "Server-side ordering expression")
+	s.sourceManagerInstancesListCmd.Flags().StringVar(&s.flagSMRegion, "region", "", "Region to list instances in")
+	s.sourceManagerInstancesListCmd.Flags().Int64Var(&s.flagSMPageSize, "page-size", 0, "Number of results per page")
+	s.sourceManagerInstancesListCmd.Flags().Int64Var(&s.flagSMLimit, "limit", 0, "Maximum number of results to return")
+	s.sourceManagerInstancesListCmd.Flags().StringVar(&s.flagSMFilter, "filter", "", "Server-side filter expression")
+	s.sourceManagerInstancesListCmd.Flags().StringVar(&s.flagSMOrderBy, "order-by", "", "Server-side ordering expression")
 
-	sourceManagerInstancesUpdateCmd.Flags().StringVar(&flagSMFile, "config-from-file", "", "YAML/JSON file with the instance patch")
+	s.sourceManagerInstancesUpdateCmd.Flags().StringVar(&s.flagSMFile, "config-from-file", "", "YAML/JSON file with the instance patch")
 
 	// Locations flags.
-	sourceManagerLocationsListCmd.Flags().Int64Var(&flagSMPageSize, "page-size", 0, "Number of results per page")
-	sourceManagerLocationsListCmd.Flags().Int64Var(&flagSMLimit, "limit", 0, "Maximum number of results to return")
-	sourceManagerLocationsListCmd.Flags().StringVar(&flagSMFilter, "filter", "", "Server-side filter expression")
+	s.sourceManagerLocationsListCmd.Flags().Int64Var(&s.flagSMPageSize, "page-size", 0, "Number of results per page")
+	s.sourceManagerLocationsListCmd.Flags().Int64Var(&s.flagSMLimit, "limit", 0, "Maximum number of results to return")
+	s.sourceManagerLocationsListCmd.Flags().StringVar(&s.flagSMFilter, "filter", "", "Server-side filter expression")
 
 	// Operations flags. Operations may be identified by short id + --region or fully-qualified name.
 	for _, c := range []*cobra.Command{
-		sourceManagerOperationsCancelCmd, sourceManagerOperationsDeleteCmd,
-		sourceManagerOperationsDescribeCmd, sourceManagerOperationsWaitCmd,
+		s.sourceManagerOperationsCancelCmd, s.sourceManagerOperationsDeleteCmd,
+		s.sourceManagerOperationsDescribeCmd, s.sourceManagerOperationsWaitCmd,
 	} {
-		c.Flags().StringVar(&flagSMRegion, "region", "", "Region containing the operation")
+		c.Flags().StringVar(&s.flagSMRegion, "region", "", "Region containing the operation")
 	}
-	sourceManagerOperationsListCmd.Flags().StringVar(&flagSMRegion, "region", "", "Region to list operations in")
-	sourceManagerOperationsListCmd.Flags().Int64Var(&flagSMPageSize, "page-size", 0, "Number of results per page")
-	sourceManagerOperationsListCmd.Flags().Int64Var(&flagSMLimit, "limit", 0, "Maximum number of results to return")
-	sourceManagerOperationsListCmd.Flags().StringVar(&flagSMFilter, "filter", "", "Server-side filter expression")
+	s.sourceManagerOperationsListCmd.Flags().StringVar(&s.flagSMRegion, "region", "", "Region to list operations in")
+	s.sourceManagerOperationsListCmd.Flags().Int64Var(&s.flagSMPageSize, "page-size", 0, "Number of results per page")
+	s.sourceManagerOperationsListCmd.Flags().Int64Var(&s.flagSMLimit, "limit", 0, "Maximum number of results to return")
+	s.sourceManagerOperationsListCmd.Flags().StringVar(&s.flagSMFilter, "filter", "", "Server-side filter expression")
 
 	// Repos flags.
 	for _, c := range []*cobra.Command{
-		sourceManagerReposCreateCmd, sourceManagerReposDeleteCmd,
-		sourceManagerReposDescribeCmd, sourceManagerReposUpdateCmd,
-		sourceManagerReposGetIamCmd, sourceManagerReposSetIamCmd,
-		sourceManagerReposAddIamCmd, sourceManagerReposRemoveIamCmd,
+		s.sourceManagerReposCreateCmd, s.sourceManagerReposDeleteCmd,
+		s.sourceManagerReposDescribeCmd, s.sourceManagerReposUpdateCmd,
+		s.sourceManagerReposGetIamCmd, s.sourceManagerReposSetIamCmd,
+		s.sourceManagerReposAddIamCmd, s.sourceManagerReposRemoveIamCmd,
 	} {
-		c.Flags().StringVar(&flagSMRegion, "region", "", "Region containing the repository")
+		c.Flags().StringVar(&s.flagSMRegion, "region", "", "Region containing the repository")
 	}
-	sourceManagerReposCreateCmd.Flags().StringVar(&flagSMInstance, "instance", "", "Instance short name that hosts the repository (required)")
-	sourceManagerReposCreateCmd.Flags().StringVar(&flagSMDescription, "description", "", "Repository description")
-	sourceManagerReposCreateCmd.Flags().StringVar(&flagSMDefaultBranch, "default-branch", "", "Default branch for the initial repository configuration")
-	sourceManagerReposCreateCmd.MarkFlagRequired("instance")
+	s.sourceManagerReposCreateCmd.Flags().StringVar(&s.flagSMInstance, "instance", "", "Instance short name that hosts the repository (required)")
+	s.sourceManagerReposCreateCmd.Flags().StringVar(&s.flagSMDescription, "description", "", "Repository description")
+	s.sourceManagerReposCreateCmd.Flags().StringVar(&s.flagSMDefaultBranch, "default-branch", "", "Default branch for the initial repository configuration")
+	s.sourceManagerReposCreateCmd.MarkFlagRequired("instance")
 
-	sourceManagerReposUpdateCmd.Flags().StringVar(&flagSMDescription, "description", "", "New description for the repository")
+	s.sourceManagerReposUpdateCmd.Flags().StringVar(&s.flagSMDescription, "description", "", "New description for the repository")
 
-	sourceManagerReposListCmd.Flags().StringVar(&flagSMRegion, "region", "", "Region to list repositories in")
-	sourceManagerReposListCmd.Flags().StringVar(&flagSMInstance, "instance", "", "Only list repositories on this instance")
-	sourceManagerReposListCmd.Flags().Int64Var(&flagSMPageSize, "page-size", 0, "Number of results per page")
-	sourceManagerReposListCmd.Flags().Int64Var(&flagSMLimit, "limit", 0, "Maximum number of results to return")
-	sourceManagerReposListCmd.Flags().StringVar(&flagSMFilter, "filter", "", "Server-side filter expression")
-	sourceManagerReposListCmd.Flags().StringVar(&flagSMOrderBy, "order-by", "", "Server-side ordering expression")
+	s.sourceManagerReposListCmd.Flags().StringVar(&s.flagSMRegion, "region", "", "Region to list repositories in")
+	s.sourceManagerReposListCmd.Flags().StringVar(&s.flagSMInstance, "instance", "", "Only list repositories on this instance")
+	s.sourceManagerReposListCmd.Flags().Int64Var(&s.flagSMPageSize, "page-size", 0, "Number of results per page")
+	s.sourceManagerReposListCmd.Flags().Int64Var(&s.flagSMLimit, "limit", 0, "Maximum number of results to return")
+	s.sourceManagerReposListCmd.Flags().StringVar(&s.flagSMFilter, "filter", "", "Server-side filter expression")
+	s.sourceManagerReposListCmd.Flags().StringVar(&s.flagSMOrderBy, "order-by", "", "Server-side ordering expression")
 
-	sourceManagerReposAddIamCmd.Flags().StringVar(&flagSMIamRole, "role", "", "IAM role to grant (required)")
-	sourceManagerReposAddIamCmd.Flags().StringVar(&flagSMIamMember, "member", "", "IAM member to add (required)")
-	sourceManagerReposAddIamCmd.MarkFlagRequired("role")
-	sourceManagerReposAddIamCmd.MarkFlagRequired("member")
-	sourceManagerReposRemoveIamCmd.Flags().StringVar(&flagSMIamRole, "role", "", "IAM role to revoke (required)")
-	sourceManagerReposRemoveIamCmd.Flags().StringVar(&flagSMIamMember, "member", "", "IAM member to remove (required)")
-	sourceManagerReposRemoveIamCmd.MarkFlagRequired("role")
-	sourceManagerReposRemoveIamCmd.MarkFlagRequired("member")
+	s.sourceManagerReposAddIamCmd.Flags().StringVar(&s.flagSMIamRole, "role", "", "IAM role to grant (required)")
+	s.sourceManagerReposAddIamCmd.Flags().StringVar(&s.flagSMIamMember, "member", "", "IAM member to add (required)")
+	s.sourceManagerReposAddIamCmd.MarkFlagRequired("role")
+	s.sourceManagerReposAddIamCmd.MarkFlagRequired("member")
+	s.sourceManagerReposRemoveIamCmd.Flags().StringVar(&s.flagSMIamRole, "role", "", "IAM role to revoke (required)")
+	s.sourceManagerReposRemoveIamCmd.Flags().StringVar(&s.flagSMIamMember, "member", "", "IAM member to remove (required)")
+	s.sourceManagerReposRemoveIamCmd.MarkFlagRequired("role")
+	s.sourceManagerReposRemoveIamCmd.MarkFlagRequired("member")
 
-	sourceManagerInstancesCmd.AddCommand(
-		sourceManagerInstancesCreateCmd, sourceManagerInstancesDeleteCmd,
-		sourceManagerInstancesDescribeCmd, sourceManagerInstancesListCmd,
-		sourceManagerInstancesUpdateCmd,
+	s.sourceManagerInstancesCmd.AddCommand(
+		s.sourceManagerInstancesCreateCmd, s.sourceManagerInstancesDeleteCmd,
+		s.sourceManagerInstancesDescribeCmd, s.sourceManagerInstancesListCmd,
+		s.sourceManagerInstancesUpdateCmd,
 	)
-	sourceManagerLocationsCmd.AddCommand(sourceManagerLocationsDescribeCmd, sourceManagerLocationsListCmd)
-	sourceManagerOperationsCmd.AddCommand(
-		sourceManagerOperationsCancelCmd, sourceManagerOperationsDeleteCmd,
-		sourceManagerOperationsDescribeCmd, sourceManagerOperationsListCmd,
-		sourceManagerOperationsWaitCmd,
+	s.sourceManagerLocationsCmd.AddCommand(s.sourceManagerLocationsDescribeCmd, s.sourceManagerLocationsListCmd)
+	s.sourceManagerOperationsCmd.AddCommand(
+		s.sourceManagerOperationsCancelCmd, s.sourceManagerOperationsDeleteCmd,
+		s.sourceManagerOperationsDescribeCmd, s.sourceManagerOperationsListCmd,
+		s.sourceManagerOperationsWaitCmd,
 	)
-	sourceManagerReposCmd.AddCommand(
-		sourceManagerReposCreateCmd, sourceManagerReposDeleteCmd,
-		sourceManagerReposDescribeCmd, sourceManagerReposListCmd,
-		sourceManagerReposUpdateCmd, sourceManagerReposGetIamCmd,
-		sourceManagerReposSetIamCmd, sourceManagerReposAddIamCmd,
-		sourceManagerReposRemoveIamCmd,
+	s.sourceManagerReposCmd.AddCommand(
+		s.sourceManagerReposCreateCmd, s.sourceManagerReposDeleteCmd,
+		s.sourceManagerReposDescribeCmd, s.sourceManagerReposListCmd,
+		s.sourceManagerReposUpdateCmd, s.sourceManagerReposGetIamCmd,
+		s.sourceManagerReposSetIamCmd, s.sourceManagerReposAddIamCmd,
+		s.sourceManagerReposRemoveIamCmd,
 	)
-	sourceManagerCmd.AddCommand(
-		sourceManagerInstancesCmd, sourceManagerLocationsCmd,
-		sourceManagerOperationsCmd, sourceManagerReposCmd,
+	s.sourceManagerCmd.AddCommand(
+		s.sourceManagerInstancesCmd, s.sourceManagerLocationsCmd,
+		s.sourceManagerOperationsCmd, s.sourceManagerReposCmd,
 	)
-	rootCmd.AddCommand(sourceManagerCmd)
+
 }
 
 // --- Helpers ---
 
-func smRequireRegion() (string, string, error) {
-	project, err := resolveProject()
+func (s *sourceManagerCmds) smRequireRegion() (string, string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", "", err
 	}
-	if flagSMRegion == "" {
+	if s.flagSMRegion == "" {
 		return "", "", fmt.Errorf("--region is required")
 	}
-	return project, flagSMRegion, nil
+	return project, s.flagSMRegion, nil
 }
 
 func smParent(project, region string) string {
@@ -339,22 +150,22 @@ func smOperationName(id, project, region string) string {
 
 // --- Instances impl ---
 
-func runSMInstancesCreate(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMInstancesCreate(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
 	inst := &securesourcemanager.Instance{}
-	if flagSMFile != "" {
-		if err := loadYAMLOrJSONInto(flagSMFile, inst); err != nil {
+	if s.flagSMFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagSMFile, inst); err != nil {
 			return err
 		}
 	}
-	if flagSMKmsKey != "" {
-		inst.KmsKey = flagSMKmsKey
+	if s.flagSMKmsKey != "" {
+		inst.KmsKey = s.flagSMKmsKey
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -362,17 +173,17 @@ func runSMInstancesCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating instance: %w", err)
 	}
-	fmt.Printf("Create request issued for instance [%s] (operation: %s)\n", args[0], op.Name)
-	return emitFormatted(op, "")
+	fmt.Fprintf(s.inv.stdout, "Create request issued for instance [%s] (operation: %s)\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, "")
 }
 
-func runSMInstancesDelete(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMInstancesDelete(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -380,17 +191,17 @@ func runSMInstancesDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting instance: %w", err)
 	}
-	fmt.Printf("Delete request issued for instance [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for instance [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
-func runSMInstancesDescribe(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMInstancesDescribe(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -398,16 +209,16 @@ func runSMInstancesDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing instance: %w", err)
 	}
-	return emitFormatted(inst, "")
+	return emitFormattedTo(s.inv.stdout, inst, "")
 }
 
-func runSMInstancesList(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMInstancesList(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -415,14 +226,14 @@ func runSMInstancesList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Instances.List(smParent(project, region)).Context(ctx)
-		if flagSMPageSize > 0 {
-			call = call.PageSize(flagSMPageSize)
+		if s.flagSMPageSize > 0 {
+			call = call.PageSize(s.flagSMPageSize)
 		}
-		if flagSMFilter != "" {
-			call = call.Filter(flagSMFilter)
+		if s.flagSMFilter != "" {
+			call = call.Filter(s.flagSMFilter)
 		}
-		if flagSMOrderBy != "" {
-			call = call.OrderBy(flagSMOrderBy)
+		if s.flagSMOrderBy != "" {
+			call = call.OrderBy(s.flagSMOrderBy)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -432,8 +243,8 @@ func runSMInstancesList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing instances: %w", err)
 		}
 		all = append(all, resp.Instances...)
-		if flagSMLimit > 0 && int64(len(all)) >= flagSMLimit {
-			all = all[:flagSMLimit]
+		if s.flagSMLimit > 0 && int64(len(all)) >= s.flagSMLimit {
+			all = all[:s.flagSMLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -441,7 +252,7 @@ func runSMInstancesList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, "")
+	return emitFormattedTo(s.inv.stdout, all, "")
 }
 
 func runSMInstancesUpdate(cmd *cobra.Command, args []string) error {
@@ -454,13 +265,13 @@ func runSMInstancesUpdate(cmd *cobra.Command, args []string) error {
 
 // --- Locations impl ---
 
-func runSMLocationsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *sourceManagerCmds) runSMLocationsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -468,16 +279,16 @@ func runSMLocationsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(loc, "")
+	return emitFormattedTo(s.inv.stdout, loc, "")
 }
 
-func runSMLocationsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *sourceManagerCmds) runSMLocationsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -485,11 +296,11 @@ func runSMLocationsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.List(fmt.Sprintf("projects/%s", project)).Context(ctx)
-		if flagSMPageSize > 0 {
-			call = call.PageSize(int64(flagSMPageSize))
+		if s.flagSMPageSize > 0 {
+			call = call.PageSize(int64(s.flagSMPageSize))
 		}
-		if flagSMFilter != "" {
-			call = call.Filter(flagSMFilter)
+		if s.flagSMFilter != "" {
+			call = call.Filter(s.flagSMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -499,8 +310,8 @@ func runSMLocationsList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing locations: %w", err)
 		}
 		all = append(all, resp.Locations...)
-		if flagSMLimit > 0 && int64(len(all)) >= flagSMLimit {
-			all = all[:flagSMLimit]
+		if s.flagSMLimit > 0 && int64(len(all)) >= s.flagSMLimit {
+			all = all[:s.flagSMLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -508,52 +319,52 @@ func runSMLocationsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, "")
+	return emitFormattedTo(s.inv.stdout, all, "")
 }
 
 // --- Operations impl ---
 
-func runSMOperationsCancel(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMOperationsCancel(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Cancel(smOperationName(args[0], project, region), &securesourcemanager.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runSMOperationsDelete(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMOperationsDelete(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Delete(smOperationName(args[0], project, region)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runSMOperationsDescribe(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMOperationsDescribe(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -561,16 +372,16 @@ func runSMOperationsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, "")
+	return emitFormattedTo(s.inv.stdout, op, "")
 }
 
-func runSMOperationsList(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMOperationsList(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -578,11 +389,11 @@ func runSMOperationsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Operations.List(smParent(project, region)).Context(ctx)
-		if flagSMPageSize > 0 {
-			call = call.PageSize(int64(flagSMPageSize))
+		if s.flagSMPageSize > 0 {
+			call = call.PageSize(int64(s.flagSMPageSize))
 		}
-		if flagSMFilter != "" {
-			call = call.Filter(flagSMFilter)
+		if s.flagSMFilter != "" {
+			call = call.Filter(s.flagSMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -592,8 +403,8 @@ func runSMOperationsList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing operations: %w", err)
 		}
 		all = append(all, resp.Operations...)
-		if flagSMLimit > 0 && int64(len(all)) >= flagSMLimit {
-			all = all[:flagSMLimit]
+		if s.flagSMLimit > 0 && int64(len(all)) >= s.flagSMLimit {
+			all = all[:s.flagSMLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -601,16 +412,16 @@ func runSMOperationsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, "")
+	return emitFormattedTo(s.inv.stdout, all, "")
 }
 
-func runSMOperationsWait(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMOperationsWait(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -619,25 +430,25 @@ func runSMOperationsWait(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(op, "")
+	return emitFormattedTo(s.inv.stdout, op, "")
 }
 
 // --- Repos impl ---
 
-func runSMReposCreate(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMReposCreate(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
 	repo := &securesourcemanager.Repository{
-		Description: flagSMDescription,
-		Instance:    smInstanceName(flagSMInstance, project, region),
+		Description: s.flagSMDescription,
+		Instance:    smInstanceName(s.flagSMInstance, project, region),
 	}
-	if flagSMDefaultBranch != "" {
-		repo.InitialConfig = &securesourcemanager.InitialConfig{DefaultBranch: flagSMDefaultBranch}
+	if s.flagSMDefaultBranch != "" {
+		repo.InitialConfig = &securesourcemanager.InitialConfig{DefaultBranch: s.flagSMDefaultBranch}
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -645,17 +456,17 @@ func runSMReposCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating repository: %w", err)
 	}
-	fmt.Printf("Create request issued for repository [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for repository [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
-func runSMReposDelete(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMReposDelete(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -663,17 +474,17 @@ func runSMReposDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting repository: %w", err)
 	}
-	fmt.Printf("Delete request issued for repository [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for repository [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
-func runSMReposDescribe(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMReposDescribe(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -681,16 +492,16 @@ func runSMReposDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing repository: %w", err)
 	}
-	return emitFormatted(repo, "")
+	return emitFormattedTo(s.inv.stdout, repo, "")
 }
 
-func runSMReposList(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMReposList(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -698,14 +509,14 @@ func runSMReposList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Repositories.List(smParent(project, region)).Context(ctx)
-		if flagSMInstance != "" {
-			call = call.Instance(smInstanceName(flagSMInstance, project, region))
+		if s.flagSMInstance != "" {
+			call = call.Instance(smInstanceName(s.flagSMInstance, project, region))
 		}
-		if flagSMPageSize > 0 {
-			call = call.PageSize(flagSMPageSize)
+		if s.flagSMPageSize > 0 {
+			call = call.PageSize(s.flagSMPageSize)
 		}
-		if flagSMFilter != "" {
-			call = call.Filter(flagSMFilter)
+		if s.flagSMFilter != "" {
+			call = call.Filter(s.flagSMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -715,8 +526,8 @@ func runSMReposList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing repositories: %w", err)
 		}
 		all = append(all, resp.Repositories...)
-		if flagSMLimit > 0 && int64(len(all)) >= flagSMLimit {
-			all = all[:flagSMLimit]
+		if s.flagSMLimit > 0 && int64(len(all)) >= s.flagSMLimit {
+			all = all[:s.flagSMLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -724,25 +535,25 @@ func runSMReposList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, "")
+	return emitFormattedTo(s.inv.stdout, all, "")
 }
 
-func runSMReposUpdate(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMReposUpdate(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
 	repo := &securesourcemanager.Repository{}
 	mask := ""
-	if flagSMDescription != "" {
-		repo.Description = flagSMDescription
+	if s.flagSMDescription != "" {
+		repo.Description = s.flagSMDescription
 		mask = "description"
 	}
 	if mask == "" {
 		return fmt.Errorf("nothing to update: pass --description")
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -750,17 +561,17 @@ func runSMReposUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating repository: %w", err)
 	}
-	fmt.Printf("Update request issued for repository [%s] (operation: %s)\n", args[0], op.Name)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for repository [%s] (operation: %s)\n", args[0], op.Name)
 	return nil
 }
 
-func runSMReposGetIam(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMReposGetIam(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -768,11 +579,11 @@ func runSMReposGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, "")
+	return emitFormattedTo(s.inv.stdout, policy, "")
 }
 
-func runSMReposSetIam(cmd *cobra.Command, args []string) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) runSMReposSetIam(cmd *cobra.Command, args []string) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
@@ -780,8 +591,8 @@ func runSMReposSetIam(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -789,35 +600,35 @@ func runSMReposSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
-func runSMReposAddIam(cmd *cobra.Command, args []string) error {
-	return smReposModifyIam(args[0], func(p *securesourcemanager.Policy) {
+func (s *sourceManagerCmds) runSMReposAddIam(cmd *cobra.Command, args []string) error {
+	return s.smReposModifyIam(args[0], func(p *securesourcemanager.Policy) {
 		for _, b := range p.Bindings {
-			if b.Role == flagSMIamRole {
+			if b.Role == s.flagSMIamRole {
 				for _, m := range b.Members {
-					if m == flagSMIamMember {
+					if m == s.flagSMIamMember {
 						return
 					}
 				}
-				b.Members = append(b.Members, flagSMIamMember)
+				b.Members = append(b.Members, s.flagSMIamMember)
 				return
 			}
 		}
-		p.Bindings = append(p.Bindings, &securesourcemanager.Binding{Role: flagSMIamRole, Members: []string{flagSMIamMember}})
+		p.Bindings = append(p.Bindings, &securesourcemanager.Binding{Role: s.flagSMIamRole, Members: []string{s.flagSMIamMember}})
 	})
 }
 
-func runSMReposRemoveIam(cmd *cobra.Command, args []string) error {
-	return smReposModifyIam(args[0], func(p *securesourcemanager.Policy) {
+func (s *sourceManagerCmds) runSMReposRemoveIam(cmd *cobra.Command, args []string) error {
+	return s.smReposModifyIam(args[0], func(p *securesourcemanager.Policy) {
 		for _, b := range p.Bindings {
-			if b.Role != flagSMIamRole {
+			if b.Role != s.flagSMIamRole {
 				continue
 			}
 			out := b.Members[:0]
 			for _, m := range b.Members {
-				if m != flagSMIamMember {
+				if m != s.flagSMIamMember {
 					out = append(out, m)
 				}
 			}
@@ -826,13 +637,13 @@ func runSMReposRemoveIam(cmd *cobra.Command, args []string) error {
 	})
 }
 
-func smReposModifyIam(id string, mutate func(*securesourcemanager.Policy)) error {
-	project, region, err := smRequireRegion()
+func (s *sourceManagerCmds) smReposModifyIam(id string, mutate func(*securesourcemanager.Policy)) error {
+	project, region, err := s.smRequireRegion()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SecureSourceManagerService(ctx, flagAccount)
+	ctx := s.inv.context()
+	svc, err := s.inv.clients().SecureSourceManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -846,7 +657,7 @@ func smReposModifyIam(id string, mutate func(*securesourcemanager.Policy)) error
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(s.inv.stdout, got, "")
 }
 
 // pollSMOperation blocks until the given operation is Done or the context is
@@ -869,4 +680,207 @@ func pollSMOperation(ctx context.Context, svc *securesourcemanager.Service, name
 		case <-time.After(2 * time.Second):
 		}
 	}
+}
+
+// sourceManagerCmds holds the commands and flag values of one invocation's "sourceManager"
+// command group, so invocations don't share state (#2070).
+type sourceManagerCmds struct {
+	inv *invocation
+
+	sourceManagerCmd                   *cobra.Command
+	flagSMRegion                       string
+	flagSMInstance                     string
+	flagSMKmsKey                       string
+	flagSMDescription                  string
+	flagSMDefaultBranch                string
+	flagSMFile                         string
+	flagSMIamRole                      string
+	flagSMIamMember                    string
+	flagSMPageSize                     int64
+	flagSMLimit                        int64
+	flagSMFilter                       string
+	flagSMOrderBy                      string
+	sourceManagerInstancesCmd          *cobra.Command
+	sourceManagerInstancesCreateCmd    *cobra.Command
+	sourceManagerInstancesDeleteCmd    *cobra.Command
+	sourceManagerInstancesDescribeCmd  *cobra.Command
+	sourceManagerInstancesListCmd      *cobra.Command
+	sourceManagerInstancesUpdateCmd    *cobra.Command
+	sourceManagerLocationsCmd          *cobra.Command
+	sourceManagerLocationsDescribeCmd  *cobra.Command
+	sourceManagerLocationsListCmd      *cobra.Command
+	sourceManagerOperationsCmd         *cobra.Command
+	sourceManagerOperationsCancelCmd   *cobra.Command
+	sourceManagerOperationsDeleteCmd   *cobra.Command
+	sourceManagerOperationsDescribeCmd *cobra.Command
+	sourceManagerOperationsListCmd     *cobra.Command
+	sourceManagerOperationsWaitCmd     *cobra.Command
+	sourceManagerReposCmd              *cobra.Command
+	sourceManagerReposCreateCmd        *cobra.Command
+	sourceManagerReposDeleteCmd        *cobra.Command
+	sourceManagerReposDescribeCmd      *cobra.Command
+	sourceManagerReposListCmd          *cobra.Command
+	sourceManagerReposUpdateCmd        *cobra.Command
+	sourceManagerReposGetIamCmd        *cobra.Command
+	sourceManagerReposSetIamCmd        *cobra.Command
+	sourceManagerReposAddIamCmd        *cobra.Command
+	sourceManagerReposRemoveIamCmd     *cobra.Command
+}
+
+// newSourceManagerCmd returns the "sourceManager" command group for inv.
+func newSourceManagerCmd(inv *invocation) *cobra.Command {
+	return newSourceManagerCmds(inv).sourceManagerCmd
+}
+
+// newSourceManagerCmds builds the "sourceManager" command group for inv and returns its state.
+func newSourceManagerCmds(inv *invocation) *sourceManagerCmds {
+	s := &sourceManagerCmds{inv: inv}
+	s.sourceManagerCmd = &cobra.Command{
+		Use:   "source-manager",
+		Short: "Manage Secure Source Manager",
+	}
+	s.sourceManagerInstancesCmd = &cobra.Command{
+		Use:   "instances",
+		Short: "Manage Secure Source Manager instances",
+	}
+	s.sourceManagerInstancesCreateCmd = &cobra.Command{
+		Use:   "create INSTANCE",
+		Short: "Create a Secure Source Manager instance",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMInstancesCreate,
+	}
+	s.sourceManagerInstancesDeleteCmd = &cobra.Command{
+		Use:   "delete INSTANCE",
+		Short: "Delete a Secure Source Manager instance",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMInstancesDelete,
+	}
+	s.sourceManagerInstancesDescribeCmd = &cobra.Command{
+		Use:   "describe INSTANCE",
+		Short: "Describe a Secure Source Manager instance",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMInstancesDescribe,
+	}
+	s.sourceManagerInstancesListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List Secure Source Manager instances",
+		Args:  cobra.NoArgs,
+		RunE:  s.runSMInstancesList,
+	}
+	s.sourceManagerInstancesUpdateCmd = &cobra.Command{
+		Use:   "update INSTANCE",
+		Short: "Update a Secure Source Manager instance",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runSMInstancesUpdate,
+	}
+	s.sourceManagerLocationsCmd = &cobra.Command{
+		Use:   "locations",
+		Short: "Manage Secure Source Manager locations",
+	}
+	s.sourceManagerLocationsDescribeCmd = &cobra.Command{
+		Use:   "describe LOCATION",
+		Short: "Describe a Secure Source Manager location",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMLocationsDescribe,
+	}
+	s.sourceManagerLocationsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List Secure Source Manager locations",
+		Args:  cobra.NoArgs,
+		RunE:  s.runSMLocationsList,
+	}
+	s.sourceManagerOperationsCmd = &cobra.Command{
+		Use:   "operations",
+		Short: "Manage Secure Source Manager operations",
+	}
+	s.sourceManagerOperationsCancelCmd = &cobra.Command{
+		Use:   "cancel OPERATION",
+		Short: "Cancel a Secure Source Manager operation",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMOperationsCancel,
+	}
+	s.sourceManagerOperationsDeleteCmd = &cobra.Command{
+		Use:   "delete OPERATION",
+		Short: "Delete a Secure Source Manager operation",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMOperationsDelete,
+	}
+	s.sourceManagerOperationsDescribeCmd = &cobra.Command{
+		Use:   "describe OPERATION",
+		Short: "Describe a Secure Source Manager operation",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMOperationsDescribe,
+	}
+	s.sourceManagerOperationsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List Secure Source Manager operations",
+		Args:  cobra.NoArgs,
+		RunE:  s.runSMOperationsList,
+	}
+	s.sourceManagerOperationsWaitCmd = &cobra.Command{
+		Use:   "wait OPERATION",
+		Short: "Poll a Secure Source Manager operation until it completes",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMOperationsWait,
+	}
+	s.sourceManagerReposCmd = &cobra.Command{
+		Use:   "repos",
+		Short: "Manage Secure Source Manager repositories",
+	}
+	s.sourceManagerReposCreateCmd = &cobra.Command{
+		Use:   "create REPO",
+		Short: "Create a Secure Source Manager repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMReposCreate,
+	}
+	s.sourceManagerReposDeleteCmd = &cobra.Command{
+		Use:   "delete REPO",
+		Short: "Delete a Secure Source Manager repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMReposDelete,
+	}
+	s.sourceManagerReposDescribeCmd = &cobra.Command{
+		Use:   "describe REPO",
+		Short: "Describe a Secure Source Manager repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMReposDescribe,
+	}
+	s.sourceManagerReposListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List Secure Source Manager repositories",
+		Args:  cobra.NoArgs,
+		RunE:  s.runSMReposList,
+	}
+	s.sourceManagerReposUpdateCmd = &cobra.Command{
+		Use:   "update REPO",
+		Short: "Update a Secure Source Manager repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMReposUpdate,
+	}
+	s.sourceManagerReposGetIamCmd = &cobra.Command{
+		Use:   "get-iam-policy REPO",
+		Short: "Print the IAM policy for a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMReposGetIam,
+	}
+	s.sourceManagerReposSetIamCmd = &cobra.Command{
+		Use:   "set-iam-policy REPO POLICY_FILE",
+		Short: "Set the IAM policy for a repository",
+		Args:  cobra.ExactArgs(2),
+		RunE:  s.runSMReposSetIam,
+	}
+	s.sourceManagerReposAddIamCmd = &cobra.Command{
+		Use:   "add-iam-policy-binding REPO",
+		Short: "Add an IAM policy binding to a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMReposAddIam,
+	}
+	s.sourceManagerReposRemoveIamCmd = &cobra.Command{
+		Use:   "remove-iam-policy-binding REPO",
+		Short: "Remove an IAM policy binding from a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runSMReposRemoveIam,
+	}
+	s.initSourceManager()
+	return s
 }

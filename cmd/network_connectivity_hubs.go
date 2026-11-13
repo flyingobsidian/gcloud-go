@@ -4,17 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkconnectivity "google.golang.org/api/networkconnectivity/v1"
 )
 
 // --- hubs (#901) ---
 
-func registerNCHubs(root *cobra.Command) {
+func (grp *networkConnectivityCmds) registerNCHubs(root *cobra.Command) {
 	crud := &ncCRUD[networkconnectivity.Hub]{
+		s:     grp,
 		group: "hubs", singular: "hub", collection: "global/hubs",
-		parentFn: func() (string, error) { return ncGlobalParent() },
+		parentFn: func() (string, error) { return grp.ncGlobalParent() },
 		createFn: func(ctx context.Context, svc *networkconnectivity.Service, parent, id string, body *networkconnectivity.Hub, requestID string) (*networkconnectivity.GoogleLongrunningOperation, error) {
 			c := svc.Projects.Locations.Global.Hubs.Create(parent, body).HubId(id).Context(ctx)
 			if requestID != "" {
@@ -65,83 +65,83 @@ func registerNCHubs(root *cobra.Command) {
 	// accept-spoke / reject-spoke / list-spokes
 	accept := &cobra.Command{
 		Use: "accept-spoke HUB", Short: "Accept a spoke into a hub",
-		Args: cobra.ExactArgs(1), RunE: runNCHubAcceptSpoke,
+		Args: cobra.ExactArgs(1), RunE: grp.runNCHubAcceptSpoke,
 	}
 	reject := &cobra.Command{
 		Use: "reject-spoke HUB", Short: "Reject a spoke from a hub",
-		Args: cobra.ExactArgs(1), RunE: runNCHubRejectSpoke,
+		Args: cobra.ExactArgs(1), RunE: grp.runNCHubRejectSpoke,
 	}
 	listSpokes := &cobra.Command{
 		Use: "list-spokes HUB", Short: "List spokes in a hub",
-		Args: cobra.ExactArgs(1), RunE: runNCHubListSpokes,
+		Args: cobra.ExactArgs(1), RunE: grp.runNCHubListSpokes,
 	}
-	accept.Flags().StringVar(&flagNCSpokeURI, "spoke", "", "URI of the spoke (required)")
+	accept.Flags().StringVar(&grp.flagNCSpokeURI, "spoke", "", "URI of the spoke (required)")
 	_ = accept.MarkFlagRequired("spoke")
-	reject.Flags().StringVar(&flagNCSpokeURI, "spoke", "", "URI of the spoke (required)")
+	reject.Flags().StringVar(&grp.flagNCSpokeURI, "spoke", "", "URI of the spoke (required)")
 	_ = reject.MarkFlagRequired("spoke")
-	reject.Flags().StringVar(&flagNCDetails, "details", "", "Optional information from the hub administrator")
-	addNCAsyncFlag(accept, reject)
-	addNCRequestIDFlag(accept, reject)
-	addNCFilterFlag(listSpokes)
-	addNCFormatFlag(listSpokes)
+	reject.Flags().StringVar(&grp.flagNCDetails, "details", "", "Optional information from the hub administrator")
+	grp.addNCAsyncFlag(accept, reject)
+	grp.addNCRequestIDFlag(accept, reject)
+	grp.addNCFilterFlag(listSpokes)
+	grp.addNCFormatFlag(listSpokes)
 
 	group.AddCommand(accept, reject, listSpokes)
 }
 
-func ncResolveHub(id string) (string, error) {
+func (grp *networkConnectivityCmds) ncResolveHub(id string) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("hub is required")
 	}
-	parent, err := ncGlobalParent()
+	parent, err := grp.ncGlobalParent()
 	if err != nil {
 		return "", err
 	}
 	return ncChild(parent, "hubs", id), nil
 }
 
-func runNCHubAcceptSpoke(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCHubAcceptSpoke(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := ncResolveHub(args[0])
+	name, err := grp.ncResolveHub(args[0])
 	if err != nil {
 		return err
 	}
-	req := &networkconnectivity.AcceptHubSpokeRequest{SpokeUri: flagNCSpokeURI, RequestId: flagNCRequestID}
+	req := &networkconnectivity.AcceptHubSpokeRequest{SpokeUri: grp.flagNCSpokeURI, RequestId: grp.flagNCRequestID}
 	op, err := svc.Projects.Locations.Global.Hubs.AcceptSpoke(name, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("accepting spoke: %w", err)
 	}
-	return ncFinishOp(ctx, svc, op, "Accept spoke", args[0])
+	return grp.ncFinishOp(ctx, svc, op, "Accept spoke", args[0])
 }
 
-func runNCHubRejectSpoke(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCHubRejectSpoke(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := ncResolveHub(args[0])
+	name, err := grp.ncResolveHub(args[0])
 	if err != nil {
 		return err
 	}
-	req := &networkconnectivity.RejectHubSpokeRequest{SpokeUri: flagNCSpokeURI, Details: flagNCDetails, RequestId: flagNCRequestID}
+	req := &networkconnectivity.RejectHubSpokeRequest{SpokeUri: grp.flagNCSpokeURI, Details: grp.flagNCDetails, RequestId: grp.flagNCRequestID}
 	op, err := svc.Projects.Locations.Global.Hubs.RejectSpoke(name, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("rejecting spoke: %w", err)
 	}
-	return ncFinishOp(ctx, svc, op, "Reject spoke", args[0])
+	return grp.ncFinishOp(ctx, svc, op, "Reject spoke", args[0])
 }
 
-func runNCHubListSpokes(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCHubListSpokes(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := ncResolveHub(args[0])
+	name, err := grp.ncResolveHub(args[0])
 	if err != nil {
 		return err
 	}
@@ -149,8 +149,8 @@ func runNCHubListSpokes(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Global.Hubs.ListSpokes(name).Context(ctx)
-		if flagNCFilter != "" {
-			call = call.Filter(flagNCFilter)
+		if grp.flagNCFilter != "" {
+			call = call.Filter(grp.flagNCFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -165,22 +165,23 @@ func runNCHubListSpokes(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagNCFormat != "" {
-		return emitFormatted(all, flagNCFormat)
+	if grp.flagNCFormat != "" {
+		return emitFormattedTo(grp.inv.stdout, all, grp.flagNCFormat)
 	}
-	printTableHeading(len(all), "%-50s %s\n", "NAME", "STATE")
+	printTableHeadingTo(grp.inv.stdout, len(all), "%-50s %s\n", "NAME", "STATE")
 	for _, s := range all {
-		fmt.Printf("%-50s %s\n", ncBasename(s.Name), s.State)
+		fmt.Fprintf(grp.inv.stdout, "%-50s %s\n", ncBasename(s.Name), s.State)
 	}
 	return nil
 }
 
 // --- spokes (#910) ---
 
-func registerNCSpokes(root *cobra.Command) {
+func (grp *networkConnectivityCmds) registerNCSpokes(root *cobra.Command) {
 	crud := &ncCRUD[networkconnectivity.Spoke]{
+		s:     grp,
 		group: "spokes", singular: "spoke", collection: "spokes",
-		parentFn: ncProjectParent,
+		parentFn: grp.ncProjectParent,
 		createFn: func(ctx context.Context, svc *networkconnectivity.Service, parent, id string, body *networkconnectivity.Spoke, requestID string) (*networkconnectivity.GoogleLongrunningOperation, error) {
 			c := svc.Projects.Locations.Spokes.Create(parent, body).SpokeId(id).Context(ctx)
 			if requestID != "" {
@@ -223,77 +224,77 @@ func registerNCSpokes(root *cobra.Command) {
 		secondaryCol:    func(s *networkconnectivity.Spoke) string { return s.State },
 		secondaryHeader: "STATE",
 	}
-	group := crud.build(root, "spokes", "Manage spokes", addNCLocationFlag, true)
+	group := crud.build(root, "spokes", "Manage spokes", grp.addNCLocationFlag, true)
 
 	// accept / reject: these hit the hub's AcceptSpoke/RejectSpoke endpoint
 	// with the resolved spoke URI as the payload.
 	accept := &cobra.Command{
 		Use: "accept SPOKE", Short: "Accept a spoke proposal on its hub",
-		Args: cobra.ExactArgs(1), RunE: runNCSpokeAccept,
+		Args: cobra.ExactArgs(1), RunE: grp.runNCSpokeAccept,
 	}
 	reject := &cobra.Command{
 		Use: "reject SPOKE", Short: "Reject a spoke proposal on its hub",
-		Args: cobra.ExactArgs(1), RunE: runNCSpokeReject,
+		Args: cobra.ExactArgs(1), RunE: grp.runNCSpokeReject,
 	}
-	accept.Flags().StringVar(&flagNCHub, "hub", "", "Hub URI or short name (required)")
+	accept.Flags().StringVar(&grp.flagNCHub, "hub", "", "Hub URI or short name (required)")
 	_ = accept.MarkFlagRequired("hub")
-	reject.Flags().StringVar(&flagNCHub, "hub", "", "Hub URI or short name (required)")
+	reject.Flags().StringVar(&grp.flagNCHub, "hub", "", "Hub URI or short name (required)")
 	_ = reject.MarkFlagRequired("hub")
-	reject.Flags().StringVar(&flagNCDetails, "details", "", "Optional information from the hub administrator")
-	addNCLocationFlag(accept, reject)
-	addNCAsyncFlag(accept, reject)
-	addNCRequestIDFlag(accept, reject)
+	reject.Flags().StringVar(&grp.flagNCDetails, "details", "", "Optional information from the hub administrator")
+	grp.addNCLocationFlag(accept, reject)
+	grp.addNCAsyncFlag(accept, reject)
+	grp.addNCRequestIDFlag(accept, reject)
 	group.AddCommand(accept, reject)
 }
 
-func ncResolveSpoke(id string) (string, error) {
-	parent, err := ncProjectParent()
+func (grp *networkConnectivityCmds) ncResolveSpoke(id string) (string, error) {
+	parent, err := grp.ncProjectParent()
 	if err != nil {
 		return "", err
 	}
 	return ncChild(parent, "spokes", id), nil
 }
 
-func runNCSpokeAccept(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCSpokeAccept(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	spokeURI, err := ncResolveSpoke(args[0])
+	spokeURI, err := grp.ncResolveSpoke(args[0])
 	if err != nil {
 		return err
 	}
-	hubName, err := ncResolveHub(flagNCHub)
+	hubName, err := grp.ncResolveHub(grp.flagNCHub)
 	if err != nil {
 		return err
 	}
-	req := &networkconnectivity.AcceptHubSpokeRequest{SpokeUri: spokeURI, RequestId: flagNCRequestID}
+	req := &networkconnectivity.AcceptHubSpokeRequest{SpokeUri: spokeURI, RequestId: grp.flagNCRequestID}
 	op, err := svc.Projects.Locations.Global.Hubs.AcceptSpoke(hubName, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("accepting spoke: %w", err)
 	}
-	return ncFinishOp(ctx, svc, op, "Accept spoke", args[0])
+	return grp.ncFinishOp(ctx, svc, op, "Accept spoke", args[0])
 }
 
-func runNCSpokeReject(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.NetworkConnectivityService(ctx, flagAccount)
+func (grp *networkConnectivityCmds) runNCSpokeReject(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := grp.inv.clients().NetworkConnectivity(ctx)
 	if err != nil {
 		return err
 	}
-	spokeURI, err := ncResolveSpoke(args[0])
+	spokeURI, err := grp.ncResolveSpoke(args[0])
 	if err != nil {
 		return err
 	}
-	hubName, err := ncResolveHub(flagNCHub)
+	hubName, err := grp.ncResolveHub(grp.flagNCHub)
 	if err != nil {
 		return err
 	}
-	req := &networkconnectivity.RejectHubSpokeRequest{SpokeUri: spokeURI, Details: flagNCDetails, RequestId: flagNCRequestID}
+	req := &networkconnectivity.RejectHubSpokeRequest{SpokeUri: spokeURI, Details: grp.flagNCDetails, RequestId: grp.flagNCRequestID}
 	op, err := svc.Projects.Locations.Global.Hubs.RejectSpoke(hubName, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("rejecting spoke: %w", err)
 	}
-	return ncFinishOp(ctx, svc, op, "Reject spoke", args[0])
+	return grp.ncFinishOp(ctx, svc, op, "Reject spoke", args[0])
 }

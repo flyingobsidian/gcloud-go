@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,226 +13,183 @@ import (
 
 // --- gcloud edge-cache keysets (#1057) ---
 
-var edgeCacheKeysetsCmd = &cobra.Command{Use: "keysets", Short: "Manage EdgeCacheKeyset resources"}
-
-var (
-	flagEdgeCacheKeysetsLocation    string
-	flagEdgeCacheKeysetsFormat      string
-	flagEdgeCacheKeysetsConfigFile  string
-	flagEdgeCacheKeysetsUpdateMask  string
-	flagEdgeCacheKeysetsDestination string
-	flagEdgeCacheKeysetsSource      string
-	flagEdgeCacheKeysetsPageSize    int64
-)
-
-var (
-	edgeCacheKeysetsCreateCmd = &cobra.Command{
-		Use: "create KEYSET", Short: "Create an EdgeCacheKeyset",
-		Args: cobra.ExactArgs(1), RunE: runEdgeCacheKeysetsCreate,
-	}
-	edgeCacheKeysetsDeleteCmd = &cobra.Command{
-		Use: "delete KEYSET", Short: "Delete an EdgeCacheKeyset",
-		Args: cobra.ExactArgs(1), RunE: runEdgeCacheKeysetsDelete,
-	}
-	edgeCacheKeysetsDescribeCmd = &cobra.Command{
-		Use: "describe KEYSET", Short: "Describe an EdgeCacheKeyset",
-		Args: cobra.ExactArgs(1), RunE: runEdgeCacheKeysetsDescribe,
-	}
-	edgeCacheKeysetsExportCmd = &cobra.Command{
-		Use: "export KEYSET", Short: "Export an EdgeCacheKeyset (as YAML or JSON) to a file or stdout",
-		Args: cobra.ExactArgs(1), RunE: runEdgeCacheKeysetsExport,
-	}
-	edgeCacheKeysetsImportCmd = &cobra.Command{
-		Use: "import KEYSET", Short: "Import (create or update) an EdgeCacheKeyset from a file",
-		Args: cobra.ExactArgs(1), RunE: runEdgeCacheKeysetsImport,
-	}
-	edgeCacheKeysetsListCmd = &cobra.Command{
-		Use: "list", Short: "List EdgeCacheKeyset resources",
-		Args: cobra.NoArgs, RunE: runEdgeCacheKeysetsList,
-	}
-	edgeCacheKeysetsUpdateCmd = &cobra.Command{
-		Use: "update KEYSET", Short: "Update an EdgeCacheKeyset",
-		Args: cobra.ExactArgs(1), RunE: runEdgeCacheKeysetsUpdate,
-	}
-)
-
-func init() {
+func (s *edgeCacheCmds) initEdgeCacheKeysets() {
 	all := []*cobra.Command{
-		edgeCacheKeysetsCreateCmd, edgeCacheKeysetsDeleteCmd, edgeCacheKeysetsDescribeCmd,
-		edgeCacheKeysetsExportCmd, edgeCacheKeysetsImportCmd, edgeCacheKeysetsListCmd,
-		edgeCacheKeysetsUpdateCmd,
+		s.edgeCacheKeysetsCreateCmd, s.edgeCacheKeysetsDeleteCmd, s.edgeCacheKeysetsDescribeCmd,
+		s.edgeCacheKeysetsExportCmd, s.edgeCacheKeysetsImportCmd, s.edgeCacheKeysetsListCmd,
+		s.edgeCacheKeysetsUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagEdgeCacheKeysetsLocation, "location", "", "Edge Cache location (required)")
+		c.Flags().StringVar(&s.flagEdgeCacheKeysetsLocation, "location", "", "Edge Cache location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagEdgeCacheKeysetsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagEdgeCacheKeysetsFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{edgeCacheKeysetsCreateCmd, edgeCacheKeysetsUpdateCmd} {
-		c.Flags().StringVar(&flagEdgeCacheKeysetsConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.edgeCacheKeysetsCreateCmd, s.edgeCacheKeysetsUpdateCmd} {
+		c.Flags().StringVar(&s.flagEdgeCacheKeysetsConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the EdgeCacheKeyset body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	edgeCacheKeysetsUpdateCmd.Flags().StringVar(&flagEdgeCacheKeysetsUpdateMask, "update-mask", "",
+	s.edgeCacheKeysetsUpdateCmd.Flags().StringVar(&s.flagEdgeCacheKeysetsUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated top-level key)")
-	edgeCacheKeysetsExportCmd.Flags().StringVar(&flagEdgeCacheKeysetsDestination, "destination", "",
+	s.edgeCacheKeysetsExportCmd.Flags().StringVar(&s.flagEdgeCacheKeysetsDestination, "destination", "",
 		"File to write the exported resource to (defaults to stdout)")
-	edgeCacheKeysetsImportCmd.Flags().StringVar(&flagEdgeCacheKeysetsSource, "source", "",
+	s.edgeCacheKeysetsImportCmd.Flags().StringVar(&s.flagEdgeCacheKeysetsSource, "source", "",
 		"Path to a YAML/JSON file with the EdgeCacheKeyset body (required)")
-	_ = edgeCacheKeysetsImportCmd.MarkFlagRequired("source")
-	edgeCacheKeysetsListCmd.Flags().Int64Var(&flagEdgeCacheKeysetsPageSize, "page-size", 0, "Maximum results per page")
+	_ = s.edgeCacheKeysetsImportCmd.MarkFlagRequired("source")
+	s.edgeCacheKeysetsListCmd.Flags().Int64Var(&s.flagEdgeCacheKeysetsPageSize, "page-size", 0, "Maximum results per page")
 
-	edgeCacheKeysetsCmd.AddCommand(all...)
-	edgeCacheCmd.AddCommand(edgeCacheKeysetsCmd)
+	s.edgeCacheKeysetsCmd.AddCommand(all...)
+	s.edgeCacheCmd.AddCommand(s.edgeCacheKeysetsCmd)
 }
 
-func edgeCacheKeysetsParent() (string, error) {
-	project, err := resolveProject()
+func (s *edgeCacheCmds) edgeCacheKeysetsParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagEdgeCacheKeysetsLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagEdgeCacheKeysetsLocation), nil
 }
 
-func edgeCacheKeysetsName(id string) (string, error) {
+func (s *edgeCacheCmds) edgeCacheKeysetsName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := edgeCacheKeysetsParent()
+	parent, err := s.edgeCacheKeysetsParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/edgeCacheKeysets/%s", parent, id), nil
 }
 
-func runEdgeCacheKeysetsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := edgeCacheKeysetsParent()
+func (s *edgeCacheCmds) runEdgeCacheKeysetsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.edgeCacheKeysetsParent()
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagEdgeCacheKeysetsConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagEdgeCacheKeysetsConfigFile, &body); err != nil {
 		return err
 	}
 	q := url.Values{}
 	q.Set("edgeCacheKeysetId", args[0])
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := edgeCacheRest.do(ctx, http.MethodPost, "/"+parent+"/edgeCacheKeysets", q, body, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodPost, "/"+parent+"/edgeCacheKeysets", q, body, &op); err != nil {
 		return fmt.Errorf("creating edge-cache keyset: %w", err)
 	}
-	fmt.Printf("Create request issued for edge-cache keyset [%s].\n", args[0])
-	return emitFormatted(op, flagEdgeCacheKeysetsFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for edge-cache keyset [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagEdgeCacheKeysetsFormat)
 }
 
-func runEdgeCacheKeysetsDelete(cmd *cobra.Command, args []string) error {
-	name, err := edgeCacheKeysetsName(args[0])
+func (s *edgeCacheCmds) runEdgeCacheKeysetsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.edgeCacheKeysetsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := edgeCacheRest.do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting edge-cache keyset: %w", err)
 	}
-	fmt.Printf("Delete request issued for edge-cache keyset [%s].\n", args[0])
-	return emitFormatted(op, flagEdgeCacheKeysetsFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for edge-cache keyset [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagEdgeCacheKeysetsFormat)
 }
 
-func runEdgeCacheKeysetsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := edgeCacheKeysetsName(args[0])
+func (s *edgeCacheCmds) runEdgeCacheKeysetsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.edgeCacheKeysetsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := edgeCacheRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing edge-cache keyset: %w", err)
 	}
-	return emitFormatted(got, flagEdgeCacheKeysetsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagEdgeCacheKeysetsFormat)
 }
 
-func runEdgeCacheKeysetsExport(cmd *cobra.Command, args []string) error {
-	name, err := edgeCacheKeysetsName(args[0])
+func (s *edgeCacheCmds) runEdgeCacheKeysetsExport(cmd *cobra.Command, args []string) error {
+	name, err := s.edgeCacheKeysetsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := edgeCacheRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("exporting edge-cache keyset: %w", err)
 	}
-	if flagEdgeCacheKeysetsDestination == "" {
-		return emitFormatted(got, flagEdgeCacheKeysetsFormat)
+	if s.flagEdgeCacheKeysetsDestination == "" {
+		return emitFormattedTo(s.inv.stdout, got, s.flagEdgeCacheKeysetsFormat)
 	}
-	f, err := os.Create(flagEdgeCacheKeysetsDestination)
+	f, err := os.Create(s.flagEdgeCacheKeysetsDestination)
 	if err != nil {
 		return fmt.Errorf("creating destination: %w", err)
 	}
 	defer f.Close()
-	return emitFormattedTo(f, got, flagEdgeCacheKeysetsFormat)
+	return emitFormattedTo(f, got, s.flagEdgeCacheKeysetsFormat)
 }
 
-func runEdgeCacheKeysetsImport(cmd *cobra.Command, args []string) error {
-	name, err := edgeCacheKeysetsName(args[0])
+func (s *edgeCacheCmds) runEdgeCacheKeysetsImport(cmd *cobra.Command, args []string) error {
+	name, err := s.edgeCacheKeysetsName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagEdgeCacheKeysetsSource, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagEdgeCacheKeysetsSource, &body); err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	// Attempt update first; if the resource does not exist, fall through to create.
 	var op map[string]any
 	q := url.Values{}
 	if mask := joinMask(dcTopLevelKeys(body)); mask != "" {
 		q.Set("updateMask", mask)
 	}
-	err = edgeCacheRest.do(ctx, http.MethodPatch, "/"+name, q, body, &op)
+	err = s.inv.rest(edgeCacheRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op)
 	if err == nil {
-		fmt.Printf("Import (update) request issued for edge-cache keyset [%s].\n", args[0])
-		return emitFormatted(op, flagEdgeCacheKeysetsFormat)
+		fmt.Fprintf(s.inv.stdout, "Import (update) request issued for edge-cache keyset [%s].\n", args[0])
+		return emitFormattedTo(s.inv.stdout, op, s.flagEdgeCacheKeysetsFormat)
 	}
 	var httpErr *restError
 	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("importing edge-cache keyset: %w", err)
 	}
-	parent, perr := edgeCacheKeysetsParent()
+	parent, perr := s.edgeCacheKeysetsParent()
 	if perr != nil {
 		return perr
 	}
 	createQ := url.Values{}
 	createQ.Set("edgeCacheKeysetId", args[0])
-	if err := edgeCacheRest.do(ctx, http.MethodPost, "/"+parent+"/edgeCacheKeysets", createQ, body, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodPost, "/"+parent+"/edgeCacheKeysets", createQ, body, &op); err != nil {
 		return fmt.Errorf("importing edge-cache keyset: %w", err)
 	}
-	fmt.Printf("Import (create) request issued for edge-cache keyset [%s].\n", args[0])
-	return emitFormatted(op, flagEdgeCacheKeysetsFormat)
+	fmt.Fprintf(s.inv.stdout, "Import (create) request issued for edge-cache keyset [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagEdgeCacheKeysetsFormat)
 }
 
-func runEdgeCacheKeysetsList(cmd *cobra.Command, args []string) error {
-	parent, err := edgeCacheKeysetsParent()
+func (s *edgeCacheCmds) runEdgeCacheKeysetsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.edgeCacheKeysetsParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	items, err := edgeCacheRest.paginate(ctx, "/"+parent+"/edgeCacheKeysets", nil, "edgeCacheKeysets", flagEdgeCacheKeysetsPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(edgeCacheRest).paginate(ctx, "/"+parent+"/edgeCacheKeysets", nil, "edgeCacheKeysets", s.flagEdgeCacheKeysetsPageSize)
 	if err != nil {
 		return fmt.Errorf("listing edge-cache keysets: %w", err)
 	}
-	return emitFormatted(items, flagEdgeCacheKeysetsFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagEdgeCacheKeysetsFormat)
 }
 
-func runEdgeCacheKeysetsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := edgeCacheKeysetsName(args[0])
+func (s *edgeCacheCmds) runEdgeCacheKeysetsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.edgeCacheKeysetsName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagEdgeCacheKeysetsConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagEdgeCacheKeysetsConfigFile, &body); err != nil {
 		return err
 	}
-	mask := flagEdgeCacheKeysetsUpdateMask
+	mask := s.flagEdgeCacheKeysetsUpdateMask
 	if mask == "" {
 		mask = joinMask(dcTopLevelKeys(body))
 	}
@@ -241,11 +197,11 @@ func runEdgeCacheKeysetsUpdate(cmd *cobra.Command, args []string) error {
 	if mask != "" {
 		q.Set("updateMask", mask)
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := edgeCacheRest.do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := s.inv.rest(edgeCacheRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating edge-cache keyset: %w", err)
 	}
-	fmt.Printf("Update request issued for edge-cache keyset [%s].\n", args[0])
-	return emitFormatted(op, flagEdgeCacheKeysetsFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for edge-cache keyset [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagEdgeCacheKeysetsFormat)
 }

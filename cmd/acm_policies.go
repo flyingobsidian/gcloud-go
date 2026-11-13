@@ -1,109 +1,52 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	accesscontextmanager "google.golang.org/api/accesscontextmanager/v1"
 )
 
 // --- gcloud access-context-manager policies (#1445) ---
 
-var acmPOCmd = &cobra.Command{Use: "policies", Short: "Manage access policies"}
-
-var (
-	flagACMPOFormat       string
-	flagACMPOOrganization string
-	flagACMPOConfigFile   string
-	flagACMPOPageSize     int64
-
-	flagACMPOIamMember   string
-	flagACMPOIamRole     string
-	flagACMPOIamCondExpr string
-	flagACMPOIamCondT    string
-	flagACMPOIamCondD    string
-	flagACMPOIamAllCond  bool
-)
-
-var (
-	acmPOCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create an access policy",
-		Args: cobra.NoArgs, RunE: runACMPOCreate,
-	}
-	acmPODeleteCmd = &cobra.Command{
-		Use: "delete POLICY", Short: "Delete an access policy",
-		Args: cobra.ExactArgs(1), RunE: runACMPODelete,
-	}
-	acmPODescribeCmd = &cobra.Command{
-		Use: "describe POLICY", Short: "Describe an access policy",
-		Args: cobra.ExactArgs(1), RunE: runACMPODescribe,
-	}
-	acmPOListCmd = &cobra.Command{
-		Use: "list", Short: "List access policies for an organization",
-		Args: cobra.NoArgs, RunE: runACMPOList,
-	}
-	acmPOUpdateCmd = &cobra.Command{
-		Use: "update POLICY", Short: "Update an access policy",
-		Args: cobra.ExactArgs(1), RunE: runACMPOUpdate,
-	}
-	acmPOGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy POLICY", Short: "Get the IAM policy for an access policy",
-		Args: cobra.ExactArgs(1), RunE: runACMPOGetIam,
-	}
-	acmPOSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy POLICY POLICY_FILE", Short: "Set the IAM policy for an access policy",
-		Args: cobra.ExactArgs(2), RunE: runACMPOSetIam,
-	}
-	acmPOAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding POLICY", Short: "Add an IAM policy binding to an access policy",
-		Args: cobra.ExactArgs(1), RunE: runACMPOAddIam,
-	}
-	acmPORemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding POLICY", Short: "Remove an IAM policy binding from an access policy",
-		Args: cobra.ExactArgs(1), RunE: runACMPORemoveIam,
-	}
-)
-
-func init() {
+func (s *accessContextManagerCmds) initAcmPolicies() {
 	all := []*cobra.Command{
-		acmPOCreateCmd, acmPODeleteCmd, acmPODescribeCmd, acmPOListCmd, acmPOUpdateCmd,
-		acmPOGetIamCmd, acmPOSetIamCmd, acmPOAddIamCmd, acmPORemoveIamCmd,
+		s.acmPOCreateCmd, s.acmPODeleteCmd, s.acmPODescribeCmd, s.acmPOListCmd, s.acmPOUpdateCmd,
+		s.acmPOGetIamCmd, s.acmPOSetIamCmd, s.acmPOAddIamCmd, s.acmPORemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagACMPOFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagACMPOFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{acmPOCreateCmd, acmPOListCmd} {
-		c.Flags().StringVar(&flagACMPOOrganization, "organization", "", "Organization ID (required)")
+	for _, c := range []*cobra.Command{s.acmPOCreateCmd, s.acmPOListCmd} {
+		c.Flags().StringVar(&s.flagACMPOOrganization, "organization", "", "Organization ID (required)")
 		_ = c.MarkFlagRequired("organization")
 	}
-	for _, c := range []*cobra.Command{acmPOCreateCmd, acmPOUpdateCmd} {
-		c.Flags().StringVar(&flagACMPOConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.acmPOCreateCmd, s.acmPOUpdateCmd} {
+		c.Flags().StringVar(&s.flagACMPOConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the AccessPolicy body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	acmPOListCmd.Flags().Int64Var(&flagACMPOPageSize, "page-size", 0, "Maximum results per page")
+	s.acmPOListCmd.Flags().Int64Var(&s.flagACMPOPageSize, "page-size", 0, "Maximum results per page")
 
-	for _, c := range []*cobra.Command{acmPOAddIamCmd, acmPORemoveIamCmd} {
-		acmIamFlags(c, &flagACMPOIamMember, &flagACMPOIamRole,
-			&flagACMPOIamCondExpr, &flagACMPOIamCondT, &flagACMPOIamCondD)
+	for _, c := range []*cobra.Command{s.acmPOAddIamCmd, s.acmPORemoveIamCmd} {
+		acmIamFlags(c, &s.flagACMPOIamMember, &s.flagACMPOIamRole,
+			&s.flagACMPOIamCondExpr, &s.flagACMPOIamCondT, &s.flagACMPOIamCondD)
 	}
-	acmPORemoveIamCmd.Flags().BoolVar(&flagACMPOIamAllCond, "all", false,
+	s.acmPORemoveIamCmd.Flags().BoolVar(&s.flagACMPOIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	acmPOCmd.AddCommand(all...)
-	accessContextManagerCmd.AddCommand(acmPOCmd)
+	s.acmPOCmd.AddCommand(all...)
+	s.accessContextManagerCmd.AddCommand(s.acmPOCmd)
 }
 
-func runACMPOCreate(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMPOCreate(cmd *cobra.Command, args []string) error {
 	body := &accesscontextmanager.AccessPolicy{}
-	if err := loadYAMLOrJSONInto(flagACMPOConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMPOConfigFile, body); err != nil {
 		return err
 	}
-	body.Parent = "organizations/" + flagACMPOOrganization
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	body.Parent = "organizations/" + s.flagACMPOOrganization
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -111,13 +54,13 @@ func runACMPOCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating access policy: %w", err)
 	}
-	fmt.Println("Create request issued for access policy.")
-	return emitFormatted(op, flagACMPOFormat)
+	fmt.Fprintln(s.inv.stdout, "Create request issued for access policy.")
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPOFormat)
 }
 
-func runACMPODelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPODelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -125,13 +68,13 @@ func runACMPODelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting access policy: %w", err)
 	}
-	fmt.Printf("Delete request issued for access policy [%s].\n", args[0])
-	return emitFormatted(op, flagACMPOFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for access policy [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPOFormat)
 }
 
-func runACMPODescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPODescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -139,21 +82,21 @@ func runACMPODescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing access policy: %w", err)
 	}
-	return emitFormatted(got, flagACMPOFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagACMPOFormat)
 }
 
-func runACMPOList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPOList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*accesscontextmanager.AccessPolicy
 	pageToken := ""
 	for {
-		call := svc.AccessPolicies.List().Parent("organizations/" + flagACMPOOrganization).Context(ctx)
-		if flagACMPOPageSize > 0 {
-			call = call.PageSize(flagACMPOPageSize)
+		call := svc.AccessPolicies.List().Parent("organizations/" + s.flagACMPOOrganization).Context(ctx)
+		if s.flagACMPOPageSize > 0 {
+			call = call.PageSize(s.flagACMPOPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -168,16 +111,16 @@ func runACMPOList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagACMPOFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagACMPOFormat)
 }
 
-func runACMPOUpdate(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMPOUpdate(cmd *cobra.Command, args []string) error {
 	body := &accesscontextmanager.AccessPolicy{}
-	if err := loadYAMLOrJSONInto(flagACMPOConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagACMPOConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -189,13 +132,13 @@ func runACMPOUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating access policy: %w", err)
 	}
-	fmt.Printf("Update request issued for access policy [%s].\n", args[0])
-	return emitFormatted(op, flagACMPOFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for access policy [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagACMPOFormat)
 }
 
-func runACMPOGetIam(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPOGetIam(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -206,17 +149,17 @@ func runACMPOGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagACMPOFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagACMPOFormat)
 }
 
-func runACMPOSetIam(cmd *cobra.Command, args []string) error {
+func (s *accessContextManagerCmds) runACMPOSetIam(cmd *cobra.Command, args []string) error {
 	policy := &accesscontextmanager.Policy{}
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -225,13 +168,13 @@ func runACMPOSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	acmUpdatedIam(fmt.Sprintf("access policy [%s]", args[0]))
-	return emitFormatted(updated, flagACMPOFormat)
+	s.acmUpdatedIam(fmt.Sprintf("access policy [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagACMPOFormat)
 }
 
-func runACMPOAddIam(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPOAddIam(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -242,21 +185,21 @@ func runACMPOAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	acmAddBinding(policy, flagACMPOIamRole, flagACMPOIamMember,
-		acmBuildCondition(flagACMPOIamCondExpr, flagACMPOIamCondT, flagACMPOIamCondD))
+	acmAddBinding(policy, s.flagACMPOIamRole, s.flagACMPOIamMember,
+		acmBuildCondition(s.flagACMPOIamCondExpr, s.flagACMPOIamCondT, s.flagACMPOIamCondD))
 	policy.Version = 3
 	updated, err := svc.AccessPolicies.SetIamPolicy(resource,
 		&accesscontextmanager.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	acmUpdatedIam(fmt.Sprintf("access policy [%s]", args[0]))
-	return emitFormatted(updated, flagACMPOFormat)
+	s.acmUpdatedIam(fmt.Sprintf("access policy [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagACMPOFormat)
 }
 
-func runACMPORemoveIam(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.AccessContextManagerService(ctx, flagAccount)
+func (s *accessContextManagerCmds) runACMPORemoveIam(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AccessContextManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -267,15 +210,15 @@ func runACMPORemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !acmRemoveBinding(policy, flagACMPOIamRole, flagACMPOIamMember,
-		acmBuildCondition(flagACMPOIamCondExpr, flagACMPOIamCondT, flagACMPOIamCondD), flagACMPOIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagACMPOIamRole, flagACMPOIamMember)
+	if !acmRemoveBinding(policy, s.flagACMPOIamRole, s.flagACMPOIamMember,
+		acmBuildCondition(s.flagACMPOIamCondExpr, s.flagACMPOIamCondT, s.flagACMPOIamCondD), s.flagACMPOIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagACMPOIamRole, s.flagACMPOIamMember)
 	}
 	updated, err := svc.AccessPolicies.SetIamPolicy(resource,
 		&accesscontextmanager.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	acmUpdatedIam(fmt.Sprintf("access policy [%s]", args[0]))
-	return emitFormatted(updated, flagACMPOFormat)
+	s.acmUpdatedIam(fmt.Sprintf("access policy [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagACMPOFormat)
 }

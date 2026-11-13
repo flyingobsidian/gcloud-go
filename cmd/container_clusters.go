@@ -1,13 +1,10 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	container "google.golang.org/api/container/v1"
 )
@@ -19,102 +16,66 @@ import (
 // upgrade, set-*-config, ...) are intentionally left for follow-up
 // changes.
 
-var containerClustersCmd = &cobra.Command{Use: "clusters", Short: "Manage GKE clusters"}
-
-var (
-	flagCtnClLocation   string
-	flagCtnClRegion     string
-	flagCtnClFormat     string
-	flagCtnClConfigFile string
-)
-
-var (
-	containerClCreateCmd = &cobra.Command{
-		Use: "create CLUSTER", Short: "Create a GKE cluster (loads CreateClusterRequest.cluster from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runCtnClCreate,
-	}
-	containerClDeleteCmd = &cobra.Command{
-		Use: "delete CLUSTER", Short: "Delete a GKE cluster",
-		Args: cobra.ExactArgs(1), RunE: runCtnClDelete,
-	}
-	containerClDescribeCmd = &cobra.Command{
-		Use: "describe CLUSTER", Short: "Describe a GKE cluster",
-		Args: cobra.ExactArgs(1), RunE: runCtnClDescribe,
-	}
-	containerClListCmd = &cobra.Command{
-		Use: "list", Short: "List GKE clusters in a location, or in all locations",
-		Args: cobra.NoArgs, RunE: runCtnClList,
-	}
-	containerClUpdateCmd = &cobra.Command{
-		Use: "update CLUSTER", Short: "Update a GKE cluster (loads UpdateClusterRequest.update from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runCtnClUpdate,
-	}
-	containerClCompleteCpUpgradeCmd = &cobra.Command{
-		Use: "complete-control-plane-upgrade CLUSTER", Short: "Complete a rollbackable (two-step) control plane upgrade",
-		Args: cobra.ExactArgs(1), RunE: runCtnClCompleteCpUpgrade,
-	}
-)
-
-func init() {
+func (s *containerCmds) initContainerClusters() {
 	all := []*cobra.Command{
-		containerClCreateCmd, containerClDeleteCmd, containerClDescribeCmd,
-		containerClListCmd, containerClUpdateCmd, containerClCompleteCpUpgradeCmd,
+		s.containerClCreateCmd, s.containerClDeleteCmd, s.containerClDescribeCmd,
+		s.containerClListCmd, s.containerClUpdateCmd, s.containerClCompleteCpUpgradeCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagCtnClFormat, "format", "", "Output format")
-		if c == containerClListCmd {
+		c.Flags().StringVar(&s.flagCtnClFormat, "format", "", "Output format")
+		if c == s.containerClListCmd {
 			continue
 		}
-		c.Flags().StringVar(&flagCtnClLocation, "location", "", "Cluster location (region or zone) (required)")
+		c.Flags().StringVar(&s.flagCtnClLocation, "location", "", "Cluster location (region or zone) (required)")
 		_ = c.MarkFlagRequired("location")
 	}
 	// Like gcloud, list queries every location unless one is given.
-	containerClListCmd.Flags().StringVar(&flagCtnClLocation, "location", "", "Cluster location (region or zone); default all locations")
-	containerClListCmd.Flags().StringVar(&flagCtnClRegion, "region", "", "Cluster region; default all locations")
-	containerClListCmd.MarkFlagsMutuallyExclusive("location", "region")
-	containerClCreateCmd.Flags().StringVar(&flagCtnClConfigFile, "config-file", "", "YAML/JSON file with a container.Cluster body (required)")
-	_ = containerClCreateCmd.MarkFlagRequired("config-file")
-	containerClUpdateCmd.Flags().StringVar(&flagCtnClConfigFile, "config-file", "", "YAML/JSON file with a container.ClusterUpdate body (required)")
-	_ = containerClUpdateCmd.MarkFlagRequired("config-file")
+	s.containerClListCmd.Flags().StringVar(&s.flagCtnClLocation, "location", "", "Cluster location (region or zone); default all locations")
+	s.containerClListCmd.Flags().StringVar(&s.flagCtnClRegion, "region", "", "Cluster region; default all locations")
+	s.containerClListCmd.MarkFlagsMutuallyExclusive("location", "region")
+	s.containerClCreateCmd.Flags().StringVar(&s.flagCtnClConfigFile, "config-file", "", "YAML/JSON file with a container.Cluster body (required)")
+	_ = s.containerClCreateCmd.MarkFlagRequired("config-file")
+	s.containerClUpdateCmd.Flags().StringVar(&s.flagCtnClConfigFile, "config-file", "", "YAML/JSON file with a container.ClusterUpdate body (required)")
+	_ = s.containerClUpdateCmd.MarkFlagRequired("config-file")
 
-	containerClustersCmd.AddCommand(all...)
-	containerCmd.AddCommand(containerClustersCmd)
+	s.containerClustersCmd.AddCommand(all...)
+	s.containerCmd.AddCommand(s.containerClustersCmd)
 }
 
-func ctnParent() (string, error) {
-	project, err := resolveProject()
+func (s *containerCmds) ctnParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	if flagCtnClLocation == "" {
+	if s.flagCtnClLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagCtnClLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagCtnClLocation), nil
 }
 
-func ctnClusterName(id string) (string, error) {
+func (s *containerCmds) ctnClusterName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := ctnParent()
+	parent, err := s.ctnParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/clusters/%s", parent, id), nil
 }
 
-func runCtnClCreate(cmd *cobra.Command, args []string) error {
-	parent, err := ctnParent()
+func (s *containerCmds) runCtnClCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.ctnParent()
 	if err != nil {
 		return err
 	}
 	cluster := &container.Cluster{}
-	if err := loadYAMLOrJSONInto(flagCtnClConfigFile, cluster); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCtnClConfigFile, cluster); err != nil {
 		return err
 	}
 	cluster.Name = args[0]
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -122,17 +83,17 @@ func runCtnClCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating cluster: %w", err)
 	}
-	fmt.Printf("Create cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCtnClFormat)
+	fmt.Fprintf(s.inv.stdout, "Create cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCtnClFormat)
 }
 
-func runCtnClDelete(cmd *cobra.Command, args []string) error {
-	name, err := ctnClusterName(args[0])
+func (s *containerCmds) runCtnClDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnClusterName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,17 +101,17 @@ func runCtnClDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting cluster: %w", err)
 	}
-	fmt.Printf("Delete cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCtnClFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCtnClFormat)
 }
 
-func runCtnClDescribe(cmd *cobra.Command, args []string) error {
-	name, err := ctnClusterName(args[0])
+func (s *containerCmds) runCtnClDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnClusterName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -158,14 +119,14 @@ func runCtnClDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing cluster: %w", err)
 	}
-	return emitFormatted(got, flagCtnClFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagCtnClFormat)
 }
 
 // ctnClListLocation returns the location `clusters list` queries: --location,
 // --region or an explicit --zone, else "-" for all locations. As in gcloud,
 // the compute/zone and compute/region properties are ignored.
-func ctnClListLocation() string {
-	for _, loc := range []string{flagCtnClLocation, flagCtnClRegion, flagZone} {
+func (s *containerCmds) ctnClListLocation() string {
+	for _, loc := range []string{s.flagCtnClLocation, s.flagCtnClRegion, s.inv.flags.zone} {
 		if loc != "" {
 			return loc
 		}
@@ -173,14 +134,14 @@ func ctnClListLocation() string {
 	return "-"
 }
 
-func runCtnClList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *containerCmds) runCtnClList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	parent := fmt.Sprintf("projects/%s/locations/%s", project, ctnClListLocation())
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	parent := fmt.Sprintf("projects/%s/locations/%s", project, s.ctnClListLocation())
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -189,18 +150,18 @@ func runCtnClList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listing clusters: %w", err)
 	}
 	if len(resp.MissingZones) > 0 {
-		fmt.Fprintf(os.Stderr, "WARNING: The following zones did not respond: %s. List results may be incomplete.\n",
+		fmt.Fprintf(s.inv.stderr, "WARNING: The following zones did not respond: %s. List results may be incomplete.\n",
 			strings.Join(resp.MissingZones, ", "))
 	}
 	clusters := ctnSortClusters(resp.Clusters)
-	if flagCtnClFormat != "" {
-		return emitFormatted(clusters, flagCtnClFormat)
+	if s.flagCtnClFormat != "" {
+		return emitFormattedTo(s.inv.stdout, clusters, s.flagCtnClFormat)
 	}
 	if len(clusters) == 0 {
-		fmt.Fprintln(os.Stderr, "Listed 0 items.")
+		fmt.Fprintln(s.inv.stderr, "Listed 0 items.")
 		return nil
 	}
-	return emitFormatted(ctnClTableRows(clusters), ctnClListFormat)
+	return emitFormattedTo(s.inv.stdout, ctnClTableRows(clusters), ctnClListFormat)
 }
 
 // ctnSortClusters sorts clusters by (zone, name) like gcloud, returning a
@@ -256,17 +217,17 @@ func ctnClTableRows(clusters []*container.Cluster) []map[string]any {
 	return rows
 }
 
-func runCtnClUpdate(cmd *cobra.Command, args []string) error {
-	name, err := ctnClusterName(args[0])
+func (s *containerCmds) runCtnClUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnClusterName(args[0])
 	if err != nil {
 		return err
 	}
 	update := &container.ClusterUpdate{}
-	if err := loadYAMLOrJSONInto(flagCtnClConfigFile, update); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCtnClConfigFile, update); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -274,17 +235,17 @@ func runCtnClUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating cluster: %w", err)
 	}
-	fmt.Printf("Update cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCtnClFormat)
+	fmt.Fprintf(s.inv.stdout, "Update cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCtnClFormat)
 }
 
-func runCtnClCompleteCpUpgrade(cmd *cobra.Command, args []string) error {
-	name, err := ctnClusterName(args[0])
+func (s *containerCmds) runCtnClCompleteCpUpgrade(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnClusterName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -292,6 +253,6 @@ func runCtnClCompleteCpUpgrade(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("completing control plane upgrade: %w", err)
 	}
-	fmt.Printf("Complete control plane upgrade for cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCtnClFormat)
+	fmt.Fprintf(s.inv.stdout, "Complete control plane upgrade for cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCtnClFormat)
 }

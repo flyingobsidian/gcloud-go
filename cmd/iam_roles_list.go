@@ -5,32 +5,18 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	iam "google.golang.org/api/iam/v1"
 )
 
 // --- iam roles list (#2008) ---
 
-var (
-	flagRolesListOrganization string
-	flagRolesListShowDeleted  bool
-	flagRolesListLimit        int64
-)
-
-var roleListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List predefined roles, or the custom roles for an organization or project",
-	Args:  cobra.NoArgs,
-	RunE:  runRolesList,
-}
-
-func init() {
-	roleListCmd.Flags().StringVar(&flagRolesListOrganization, "organization", "",
+func (s *iamCmds) initIamRolesList() {
+	s.roleListCmd.Flags().StringVar(&s.flagRolesListOrganization, "organization", "",
 		"Organization whose custom roles to list")
-	roleListCmd.Flags().BoolVar(&flagRolesListShowDeleted, "show-deleted", false, "Show deleted roles")
-	roleListCmd.Flags().Int64Var(&flagRolesListLimit, "limit", 0, "Maximum number of roles to list (0 = no limit)")
-	rolesCmd.AddCommand(roleListCmd)
+	s.roleListCmd.Flags().BoolVar(&s.flagRolesListShowDeleted, "show-deleted", false, "Show deleted roles")
+	s.roleListCmd.Flags().Int64Var(&s.flagRolesListLimit, "limit", 0, "Maximum number of roles to list (0 = no limit)")
+	s.rolesCmd.AddCommand(s.roleListCmd)
 }
 
 // rolesListParent returns the parent whose custom roles `iam roles list`
@@ -72,45 +58,45 @@ func listRoles(ctx context.Context, page rolesPager, limit int64) ([]*iam.Role, 
 	}
 }
 
-func runRolesList(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runRolesList(cmd *cobra.Command, args []string) error {
 	projectSet := cmd.Flags().Changed("project")
-	parent, err := rolesListParent(flagRolesListOrganization, flagProject, projectSet)
+	parent, err := rolesListParent(s.flagRolesListOrganization, s.inv.flags.project, projectSet)
 	if err != nil {
 		return err
 	}
-	if parent != "" && cmd.Flags().Changed("limit") && flagRolesListLimit < 1 {
+	if parent != "" && cmd.Flags().Changed("limit") && s.flagRolesListLimit < 1 {
 		return errors.New("Limit size must be >=1")
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
 	page := func(ctx context.Context, pageToken string) (*iam.ListRolesResponse, error) {
 		switch {
 		case parent == "":
-			call := svc.Roles.List().ShowDeleted(flagRolesListShowDeleted).Context(ctx)
+			call := svc.Roles.List().ShowDeleted(s.flagRolesListShowDeleted).Context(ctx)
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
 			return call.Do()
-		case flagRolesListOrganization != "":
-			call := svc.Organizations.Roles.List(parent).ShowDeleted(flagRolesListShowDeleted).Context(ctx)
+		case s.flagRolesListOrganization != "":
+			call := svc.Organizations.Roles.List(parent).ShowDeleted(s.flagRolesListShowDeleted).Context(ctx)
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
 			return call.Do()
 		default:
-			call := svc.Projects.Roles.List(parent).ShowDeleted(flagRolesListShowDeleted).Context(ctx)
+			call := svc.Projects.Roles.List(parent).ShowDeleted(s.flagRolesListShowDeleted).Context(ctx)
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
 			return call.Do()
 		}
 	}
-	roles, err := listRoles(ctx, page, flagRolesListLimit)
+	roles, err := listRoles(ctx, page, s.flagRolesListLimit)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(roles, flagFormat)
+	return emitFormattedTo(s.inv.stdout, roles, s.inv.flags.format)
 }

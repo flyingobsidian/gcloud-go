@@ -54,6 +54,7 @@ func withSccLocation(t *testing.T, cmd *cobra.Command, location string) {
 // checks that runSccFindingsList sends the right request and renders the
 // response through the standard table branch.
 func TestSccFindingsListV2(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotPath, gotQuery, gotAuth, gotUserProject string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -84,9 +85,9 @@ func TestSccFindingsListV2(t *testing.T) {
 	defer server.Close()
 
 	// Swap the V2 endpoint for our test server and restore afterwards.
-	orig := sccV2Rest
-	defer func() { sccV2Rest = orig }()
-	sccV2RestClientForTest(server.URL)
+	orig := grp.sccV2Rest
+	defer func() { grp.sccV2Rest = orig }()
+	grp.sccV2RestClientForTest(server.URL)
 
 	// Avoid the real auth path -- CI has no credentials. A synthetic static
 	// token is enough because the test server ignores the value beyond
@@ -100,19 +101,19 @@ func TestSccFindingsListV2(t *testing.T) {
 	defer restoreQP()
 
 	// Save + reset flags between subtests.
-	saveOrg, saveSrc, saveLoc, saveFmt, saveFilter := flagSccOrg, flagSccFindingSource, flagSccFindingLocation, flagSccFormat, flagSccFilter
+	saveOrg, saveSrc, saveLoc, saveFmt, saveFilter := grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccFindingLocation, grp.flagSccFormat, grp.flagSccFilter
 	defer func() {
-		flagSccOrg, flagSccFindingSource, flagSccFindingLocation, flagSccFormat, flagSccFilter =
+		grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccFindingLocation, grp.flagSccFormat, grp.flagSccFilter =
 			saveOrg, saveSrc, saveLoc, saveFmt, saveFilter
 	}()
-	flagSccOrg = "1"
-	flagSccFindingSource = "-"
-	withSccLocation(t, sccFindingsListCmd, "eu")
-	flagSccFilter = "state=\"ACTIVE\""
-	flagSccFormat = ""
+	grp.flagSccOrg = "1"
+	grp.flagSccFindingSource = "-"
+	withSccLocation(t, grp.sccFindingsListCmd, "eu")
+	grp.flagSccFilter = "state=\"ACTIVE\""
+	grp.flagSccFormat = ""
 
 	out := captureStdout(t, func() {
-		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+		if err := grp.runSccFindingsList(grp.sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})
@@ -143,6 +144,7 @@ func TestSccFindingsListV2(t *testing.T) {
 // with DRZ_LOCATION_MISMATCH, so global is the only location such an
 // organization can use.
 func TestSccFindingsListRoutesGlobalToV2(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -151,24 +153,24 @@ func TestSccFindingsListRoutesGlobalToV2(t *testing.T) {
 	}))
 	defer server.Close()
 
-	orig := sccV2Rest
-	defer func() { sccV2Rest = orig }()
-	sccV2RestClientForTest(server.URL)
+	orig := grp.sccV2Rest
+	defer func() { grp.sccV2Rest = orig }()
+	grp.sccV2RestClientForTest(server.URL)
 
 	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
 	defer restore()
 	restoreQP := SetRestUserProjectForTest("qp-123")
 	defer restoreQP()
 
-	saveOrg, saveSrc, saveFmt := flagSccOrg, flagSccFindingSource, flagSccFormat
-	defer func() { flagSccOrg, flagSccFindingSource, flagSccFormat = saveOrg, saveSrc, saveFmt }()
-	flagSccOrg = "1057127509270"
-	flagSccFindingSource = "-"
-	flagSccFormat = ""
-	withSccLocation(t, sccFindingsListCmd, "global")
+	saveOrg, saveSrc, saveFmt := grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccFormat
+	defer func() { grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccFormat = saveOrg, saveSrc, saveFmt }()
+	grp.flagSccOrg = "1057127509270"
+	grp.flagSccFindingSource = "-"
+	grp.flagSccFormat = ""
+	withSccLocation(t, grp.sccFindingsListCmd, "global")
 
 	_ = captureStdout(t, func() {
-		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+		if err := grp.runSccFindingsList(grp.sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})
@@ -184,6 +186,7 @@ func TestSccFindingsListRoutesGlobalToV2(t *testing.T) {
 // page (max 1000), so a listing of any size makes far more calls than it
 // needs to.
 func TestSccFindingsListPageSize(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotPageSize []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPageSize = append(gotPageSize, r.URL.Query().Get("pageSize"))
@@ -192,29 +195,29 @@ func TestSccFindingsListPageSize(t *testing.T) {
 	}))
 	defer server.Close()
 
-	orig := sccV2Rest
-	defer func() { sccV2Rest = orig }()
-	sccV2RestClientForTest(server.URL)
+	orig := grp.sccV2Rest
+	defer func() { grp.sccV2Rest = orig }()
+	grp.sccV2RestClientForTest(server.URL)
 
 	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
 	defer restore()
 	restoreQP := SetRestUserProjectForTest("qp-123")
 	defer restoreQP()
 
-	saveOrg, saveSrc, saveSize, saveFmt := flagSccOrg, flagSccFindingSource, flagSccPageSize, flagSccFormat
+	saveOrg, saveSrc, saveSize, saveFmt := grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccPageSize, grp.flagSccFormat
 	defer func() {
-		flagSccOrg, flagSccFindingSource, flagSccPageSize, flagSccFormat =
+		grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccPageSize, grp.flagSccFormat =
 			saveOrg, saveSrc, saveSize, saveFmt
 	}()
-	flagSccOrg = "1"
-	flagSccFindingSource = "-"
-	flagSccFormat = ""
-	withSccLocation(t, sccFindingsListCmd, "global")
+	grp.flagSccOrg = "1"
+	grp.flagSccFindingSource = "-"
+	grp.flagSccFormat = ""
+	withSccLocation(t, grp.sccFindingsListCmd, "global")
 
 	// With the flag set, the value is forwarded verbatim.
-	flagSccPageSize = 1000
+	grp.flagSccPageSize = 1000
 	_ = captureStdout(t, func() {
-		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+		if err := grp.runSccFindingsList(grp.sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})
@@ -224,9 +227,9 @@ func TestSccFindingsListPageSize(t *testing.T) {
 
 	// Left unset, no pageSize is sent and the server default applies.
 	gotPageSize = nil
-	flagSccPageSize = 0
+	grp.flagSccPageSize = 0
 	_ = captureStdout(t, func() {
-		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+		if err := grp.runSccFindingsList(grp.sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})
@@ -238,12 +241,13 @@ func TestSccFindingsListPageSize(t *testing.T) {
 // TestSccLocationSpecified pins the routing rule itself: an explicit
 // --location selects V2 whatever its value, and omitting it stays on V1.
 func TestSccLocationSpecified(t *testing.T) {
-	if sccLocationSpecified(sccFindingsListCmd) {
+	grp := newSccCmds(legacyTestInvocation())
+	if sccLocationSpecified(grp.sccFindingsListCmd) {
 		t.Error("expected --location to start unspecified")
 	}
 	for _, location := range []string{"global", "eu", "us"} {
-		withSccLocation(t, sccFindingsListCmd, location)
-		if !sccLocationSpecified(sccFindingsListCmd) {
+		withSccLocation(t, grp.sccFindingsListCmd, location)
+		if !sccLocationSpecified(grp.sccFindingsListCmd) {
 			t.Errorf("--location=%s should route to V2", location)
 		}
 	}
@@ -253,6 +257,7 @@ func TestSccLocationSpecified(t *testing.T) {
 // findings:bulkMute under the regionalized scope, carrying the filter and the
 // mute state, with the LRO echoed back through --format.
 func TestSccBulkMuteV2(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotPath, gotMethod string
 	var gotBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -266,28 +271,28 @@ func TestSccBulkMuteV2(t *testing.T) {
 	}))
 	defer server.Close()
 
-	orig := sccV2Rest
-	defer func() { sccV2Rest = orig }()
-	sccV2RestClientForTest(server.URL)
+	orig := grp.sccV2Rest
+	defer func() { grp.sccV2Rest = orig }()
+	grp.sccV2RestClientForTest(server.URL)
 
 	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
 	defer restore()
 	restoreQP := SetRestUserProjectForTest("qp-123")
 	defer restoreQP()
 
-	saveOrg, saveFilter, saveState, saveFmt := flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat
+	saveOrg, saveFilter, saveState, saveFmt := grp.flagSccOrg, grp.flagSccFindingBulkMuteFilter, grp.flagSccFindingBulkMuteState, grp.flagSccFormat
 	defer func() {
-		flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat =
+		grp.flagSccOrg, grp.flagSccFindingBulkMuteFilter, grp.flagSccFindingBulkMuteState, grp.flagSccFormat =
 			saveOrg, saveFilter, saveState, saveFmt
 	}()
-	flagSccOrg = "1057127509270"
-	flagSccFindingBulkMuteFilter = `category="XSS_SCRIPTING"`
-	flagSccFindingBulkMuteState = "muted"
-	flagSccFormat = "json"
-	withSccLocation(t, sccFindingsBulkMuteCmd, "global")
+	grp.flagSccOrg = "1057127509270"
+	grp.flagSccFindingBulkMuteFilter = `category="XSS_SCRIPTING"`
+	grp.flagSccFindingBulkMuteState = "muted"
+	grp.flagSccFormat = "json"
+	withSccLocation(t, grp.sccFindingsBulkMuteCmd, "global")
 
 	out := captureStdout(t, func() {
-		if err := runSccFindingsBulkMute(sccFindingsBulkMuteCmd, nil); err != nil {
+		if err := grp.runSccFindingsBulkMute(grp.sccFindingsBulkMuteCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsBulkMute: %v", err)
 		}
 	})
@@ -312,6 +317,7 @@ func TestSccBulkMuteV2(t *testing.T) {
 
 // TestSccBulkMuteV2Undefined checks --mute-state=undefined, which unmutes.
 func TestSccBulkMuteV2Undefined(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
@@ -320,28 +326,28 @@ func TestSccBulkMuteV2Undefined(t *testing.T) {
 	}))
 	defer server.Close()
 
-	orig := sccV2Rest
-	defer func() { sccV2Rest = orig }()
-	sccV2RestClientForTest(server.URL)
+	orig := grp.sccV2Rest
+	defer func() { grp.sccV2Rest = orig }()
+	grp.sccV2RestClientForTest(server.URL)
 
 	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
 	defer restore()
 	restoreQP := SetRestUserProjectForTest("qp-123")
 	defer restoreQP()
 
-	saveOrg, saveFilter, saveState, saveFmt := flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat
+	saveOrg, saveFilter, saveState, saveFmt := grp.flagSccOrg, grp.flagSccFindingBulkMuteFilter, grp.flagSccFindingBulkMuteState, grp.flagSccFormat
 	defer func() {
-		flagSccOrg, flagSccFindingBulkMuteFilter, flagSccFindingBulkMuteState, flagSccFormat =
+		grp.flagSccOrg, grp.flagSccFindingBulkMuteFilter, grp.flagSccFindingBulkMuteState, grp.flagSccFormat =
 			saveOrg, saveFilter, saveState, saveFmt
 	}()
-	flagSccOrg = "1"
-	flagSccFindingBulkMuteFilter = "state=\"ACTIVE\""
-	flagSccFindingBulkMuteState = "undefined"
-	flagSccFormat = "json"
-	withSccLocation(t, sccFindingsBulkMuteCmd, "eu")
+	grp.flagSccOrg = "1"
+	grp.flagSccFindingBulkMuteFilter = "state=\"ACTIVE\""
+	grp.flagSccFindingBulkMuteState = "undefined"
+	grp.flagSccFormat = "json"
+	withSccLocation(t, grp.sccFindingsBulkMuteCmd, "eu")
 
 	_ = captureStdout(t, func() {
-		if err := runSccFindingsBulkMute(sccFindingsBulkMuteCmd, nil); err != nil {
+		if err := grp.runSccFindingsBulkMute(grp.sccFindingsBulkMuteCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsBulkMute: %v", err)
 		}
 	})
@@ -354,6 +360,7 @@ func TestSccBulkMuteV2Undefined(t *testing.T) {
 // TestSccExportToBigQueryV2 checks the export request shape. gcloud-python
 // pins this command to V2, so it must reach the REST path without --location.
 func TestSccExportToBigQueryV2(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotPath, gotMethod string
 	var gotBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -364,27 +371,27 @@ func TestSccExportToBigQueryV2(t *testing.T) {
 	}))
 	defer server.Close()
 
-	orig := sccV2Rest
-	defer func() { sccV2Rest = orig }()
-	sccV2RestClientForTest(server.URL)
+	orig := grp.sccV2Rest
+	defer func() { grp.sccV2Rest = orig }()
+	grp.sccV2RestClientForTest(server.URL)
 
 	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
 	defer restore()
 	restoreQP := SetRestUserProjectForTest("qp-123")
 	defer restoreQP()
 
-	saveOrg, saveSrc, saveDataset, saveFmt := flagSccOrg, flagSccFindingSource, flagSccFindingDataset, flagSccFormat
+	saveOrg, saveSrc, saveDataset, saveFmt := grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccFindingDataset, grp.flagSccFormat
 	defer func() {
-		flagSccOrg, flagSccFindingSource, flagSccFindingDataset, flagSccFormat =
+		grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccFindingDataset, grp.flagSccFormat =
 			saveOrg, saveSrc, saveDataset, saveFmt
 	}()
-	flagSccOrg = "123"
-	flagSccFindingSource = "456"
-	flagSccFindingDataset = "projects/my-project/datasets/findings_export"
-	flagSccFormat = "json"
+	grp.flagSccOrg = "123"
+	grp.flagSccFindingSource = "456"
+	grp.flagSccFindingDataset = "projects/my-project/datasets/findings_export"
+	grp.flagSccFormat = "json"
 
 	_ = captureStdout(t, func() {
-		if err := runSccFindingsExportBQ(sccFindingsExportBQCmd, nil); err != nil {
+		if err := grp.runSccFindingsExportBQ(grp.sccFindingsExportBQCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsExportBQ: %v", err)
 		}
 	})
@@ -404,16 +411,17 @@ func TestSccExportToBigQueryV2(t *testing.T) {
 
 // TestSccExportToBigQueryRejectsBadDataset mirrors ValidateDataset upstream.
 func TestSccExportToBigQueryRejectsBadDataset(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	restoreQP := SetRestUserProjectForTest("qp-123")
 	defer restoreQP()
 
-	saveOrg, saveDataset := flagSccOrg, flagSccFindingDataset
-	defer func() { flagSccOrg, flagSccFindingDataset = saveOrg, saveDataset }()
-	flagSccOrg = "123"
+	saveOrg, saveDataset := grp.flagSccOrg, grp.flagSccFindingDataset
+	defer func() { grp.flagSccOrg, grp.flagSccFindingDataset = saveOrg, saveDataset }()
+	grp.flagSccOrg = "123"
 
 	for _, dataset := range []string{"", "dataset_id", "projects/p/datasets/bad-name", "projects//datasets/d"} {
-		flagSccFindingDataset = dataset
-		err := runSccFindingsExportBQ(sccFindingsExportBQCmd, nil)
+		grp.flagSccFindingDataset = dataset
+		err := grp.runSccFindingsExportBQ(grp.sccFindingsExportBQCmd, nil)
 		if err == nil || !strings.Contains(err.Error(), "--dataset must match") {
 			t.Errorf("--dataset=%q: expected a validation error, got %v", dataset, err)
 		}
@@ -465,27 +473,28 @@ func TestSccV2ScopePath(t *testing.T) {
 }
 
 func TestSccV2RejectsUnsupportedFlags(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	// --compare-duration and --read-time are V1-only.
-	saveLoc, saveDur, saveTime, saveOrg := flagSccFindingLocation, flagSccFindingCompareDur, flagSccFindingReadTime, flagSccOrg
+	saveLoc, saveDur, saveTime, saveOrg := grp.flagSccFindingLocation, grp.flagSccFindingCompareDur, grp.flagSccFindingReadTime, grp.flagSccOrg
 	defer func() {
-		flagSccFindingLocation, flagSccFindingCompareDur, flagSccFindingReadTime, flagSccOrg =
+		grp.flagSccFindingLocation, grp.flagSccFindingCompareDur, grp.flagSccFindingReadTime, grp.flagSccOrg =
 			saveLoc, saveDur, saveTime, saveOrg
 	}()
-	flagSccFindingLocation = "eu"
-	flagSccOrg = "1"
+	grp.flagSccFindingLocation = "eu"
+	grp.flagSccOrg = "1"
 	restoreQP := SetRestUserProjectForTest("qp-123")
 	defer restoreQP()
 
-	flagSccFindingCompareDur = "1h"
-	flagSccFindingReadTime = ""
-	if err := sccV2ListFindings("organizations/1"); err == nil ||
+	grp.flagSccFindingCompareDur = "1h"
+	grp.flagSccFindingReadTime = ""
+	if err := grp.sccV2ListFindings("organizations/1"); err == nil ||
 		!strings.Contains(err.Error(), "--compare-duration") {
 		t.Errorf("expected --compare-duration rejection, got %v", err)
 	}
 
-	flagSccFindingCompareDur = ""
-	flagSccFindingReadTime = "2026-01-01T00:00:00Z"
-	if err := sccV2ListFindings("organizations/1"); err == nil ||
+	grp.flagSccFindingCompareDur = ""
+	grp.flagSccFindingReadTime = "2026-01-01T00:00:00Z"
+	if err := grp.sccV2ListFindings("organizations/1"); err == nil ||
 		!strings.Contains(err.Error(), "--read-time") {
 		t.Errorf("expected --read-time rejection, got %v", err)
 	}
@@ -495,15 +504,16 @@ func TestSccV2RejectsUnsupportedFlags(t *testing.T) {
 // early with a clear message when no billing / quota project can be
 // resolved.
 func TestSccV2RequiresBillingProject(t *testing.T) {
-	saveLoc, saveOrg := flagSccFindingLocation, flagSccOrg
-	defer func() { flagSccFindingLocation, flagSccOrg = saveLoc, saveOrg }()
-	flagSccFindingLocation = "eu"
-	flagSccOrg = "1"
+	grp := newSccCmds(legacyTestInvocation())
+	saveLoc, saveOrg := grp.flagSccFindingLocation, grp.flagSccOrg
+	defer func() { grp.flagSccFindingLocation, grp.flagSccOrg = saveLoc, saveOrg }()
+	grp.flagSccFindingLocation = "eu"
+	grp.flagSccOrg = "1"
 
 	restoreQP := SetRestUserProjectForTest("")
 	defer restoreQP()
 
-	err := sccV2ListFindings("organizations/1")
+	err := grp.sccV2ListFindings("organizations/1")
 	if err == nil {
 		t.Fatal("expected error when no billing project is resolvable")
 	}

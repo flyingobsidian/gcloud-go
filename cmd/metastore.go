@@ -3,18 +3,14 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	metastore "google.golang.org/api/metastore/v1"
 )
 
 // --- gcloud metastore (#356) ---
-
-var metastoreCmd = &cobra.Command{Use: "metastore", Short: "Manage Dataproc Metastore"}
 
 func msLocationParent(project, location string) string {
 	return fmt.Sprintf("projects/%s/locations/%s", project, location)
@@ -41,366 +37,165 @@ func msWaitOp(ctx context.Context, svc *metastore.APIService, op *metastore.Oper
 	return op, nil
 }
 
-func msFinishOp(ctx context.Context, svc *metastore.APIService, op *metastore.Operation, verb, name string, async bool) error {
+func (g *metastoreCmds) msFinishOp(ctx context.Context, svc *metastore.APIService, op *metastore.Operation, verb, name string, async bool) error {
 	if async {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, "")
+		fmt.Fprintf(g.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(g.inv.stdout, op, "")
 	}
 	final, err := msWaitOp(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
+	fmt.Fprintf(g.inv.stderr, "%s [%s] completed.\n", verb, name)
 	if final.Response != nil {
-		return emitFormatted(final.Response, "")
+		return emitFormattedTo(g.inv.stdout, final.Response, "")
 	}
 	return nil
 }
 
 var (
-	flagMSLocation   string
-	flagMSConfigFile string
-	flagMSUpdateMask string
-	flagMSFormat     string
-	flagMSAsync      bool
-	flagMSService    string
-	flagMSIamMember  string
-	flagMSIamRole    string
-	flagMSBackup     string
+	flagMSBackup string
 
-	// alter-location
-	flagMSResourceName string
-	flagMSLocationURI  string
-	// alter-table-properties
-	flagMSTable      string
-	flagMSProperties map[string]string
-	// move-table
-	flagMSDBSource string
-	flagMSDBDest   string
-	flagMSTblName  string
-	// query-metadata
-	flagMSQuery string
-	// export
-	flagMSDestGCS  string
-	flagMSExportDB string
-	flagMSDBType   string
-	// import
-	flagMSImportGCS    string
-	flagMSImportDesc   string
-	flagMSImportDBType string
-	// restore
-	flagMSBackupName  string
-	flagMSRestoreType string
-	flagMSRestoreServ string
+	flagMSDBType string
 )
 
 // --- federations ---
 
-var metastoreFederationsCmd = &cobra.Command{Use: "federations", Short: "Manage Metastore federations"}
-
-var (
-	msFedCreateCmd = &cobra.Command{
-		Use: "create FEDERATION", Short: "Create a federation from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runMSFedCreate,
-	}
-	msFedDeleteCmd = &cobra.Command{
-		Use: "delete FEDERATION", Short: "Delete a federation",
-		Args: cobra.ExactArgs(1), RunE: runMSFedDelete,
-	}
-	msFedDescribeCmd = &cobra.Command{
-		Use: "describe FEDERATION", Short: "Describe a federation",
-		Args: cobra.ExactArgs(1), RunE: runMSFedDescribe,
-	}
-	msFedListCmd = &cobra.Command{
-		Use: "list", Short: "List federations in a location",
-		Args: cobra.NoArgs, RunE: runMSFedList,
-	}
-	msFedUpdateCmd = &cobra.Command{
-		Use: "update FEDERATION", Short: "Update a federation from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runMSFedUpdate,
-	}
-	msFedGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy FEDERATION", Short: "Get the IAM policy for a federation",
-		Args: cobra.ExactArgs(1), RunE: runMSFedGetIam,
-	}
-	msFedSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy FEDERATION POLICY_FILE", Short: "Replace the IAM policy",
-		Args: cobra.ExactArgs(2), RunE: runMSFedSetIam,
-	}
-	msFedAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding FEDERATION", Short: "Add an IAM binding",
-		Args: cobra.ExactArgs(1), RunE: runMSFedAddIam,
-	}
-	msFedRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding FEDERATION", Short: "Remove an IAM binding",
-		Args: cobra.ExactArgs(1), RunE: runMSFedRemoveIam,
-	}
-)
-
 // --- locations ---
-
-var metastoreLocationsCmd = &cobra.Command{Use: "locations", Short: "Manage Metastore locations"}
-
-var (
-	msLocDescribeCmd = &cobra.Command{
-		Use: "describe LOCATION", Short: "Describe a Metastore location",
-		Args: cobra.ExactArgs(1), RunE: runMSLocDescribe,
-	}
-	msLocListCmd = &cobra.Command{
-		Use: "list", Short: "List Metastore locations",
-		Args: cobra.NoArgs, RunE: runMSLocList,
-	}
-)
 
 // --- operations ---
 
-var metastoreOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Metastore operations"}
-
-var (
-	msOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel an operation",
-		Args: cobra.ExactArgs(1), RunE: runMSOpCancel,
-	}
-	msOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete an operation",
-		Args: cobra.ExactArgs(1), RunE: runMSOpDelete,
-	}
-	msOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an operation",
-		Args: cobra.ExactArgs(1), RunE: runMSOpDescribe,
-	}
-	msOpListCmd = &cobra.Command{
-		Use: "list", Short: "List operations in a location",
-		Args: cobra.NoArgs, RunE: runMSOpList,
-	}
-	msOpWaitCmd = &cobra.Command{
-		Use: "wait OPERATION", Short: "Wait for an operation to complete",
-		Args: cobra.ExactArgs(1), RunE: runMSOpWait,
-	}
-)
-
 // --- services ---
-
-var metastoreServicesCmd = &cobra.Command{Use: "services", Short: "Manage Metastore services"}
-
-var (
-	msSvcCreateCmd = &cobra.Command{
-		Use: "create SERVICE", Short: "Create a service from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcCreate,
-	}
-	msSvcDeleteCmd = &cobra.Command{
-		Use: "delete SERVICE", Short: "Delete a service",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcDelete,
-	}
-	msSvcDescribeCmd = &cobra.Command{
-		Use: "describe SERVICE", Short: "Describe a service",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcDescribe,
-	}
-	msSvcListCmd = &cobra.Command{
-		Use: "list", Short: "List services in a location",
-		Args: cobra.NoArgs, RunE: runMSSvcList,
-	}
-	msSvcUpdateCmd = &cobra.Command{
-		Use: "update SERVICE", Short: "Update a service from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcUpdate,
-	}
-	msSvcGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy SERVICE", Short: "Get the IAM policy for a service",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcGetIam,
-	}
-	msSvcSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy SERVICE POLICY_FILE", Short: "Replace the IAM policy",
-		Args: cobra.ExactArgs(2), RunE: runMSSvcSetIam,
-	}
-	msSvcAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding SERVICE", Short: "Add an IAM binding",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcAddIam,
-	}
-	msSvcRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding SERVICE", Short: "Remove an IAM binding",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcRemoveIam,
-	}
-	msSvcAlterLocCmd = &cobra.Command{
-		Use: "alter-metadata-resource-location SERVICE", Short: "Alter a metadata resource location",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcAlterLoc,
-	}
-	msSvcAlterTblCmd = &cobra.Command{
-		Use: "alter-table-properties SERVICE", Short: "Alter table properties",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcAlterTbl,
-	}
-	msSvcMoveTblCmd = &cobra.Command{
-		Use: "move-table-to-database SERVICE", Short: "Move a table between databases",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcMoveTbl,
-	}
-	msSvcQueryCmd = &cobra.Command{
-		Use: "query-metadata SERVICE", Short: "Run a metadata query",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcQuery,
-	}
-	msSvcExportCmd = &cobra.Command{
-		Use: "export SERVICE", Short: "Export metadata to Cloud Storage",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcExport,
-	}
-	msSvcImportCmd = &cobra.Command{
-		Use: "import SERVICE IMPORT_ID", Short: "Import metadata from Cloud Storage",
-		Args: cobra.ExactArgs(2), RunE: runMSSvcImport,
-	}
-	msSvcRestoreCmd = &cobra.Command{
-		Use: "restore SERVICE", Short: "Restore a service from a backup",
-		Args: cobra.ExactArgs(1), RunE: runMSSvcRestore,
-	}
-)
 
 // backups (nested)
 
-var metastoreServicesBackupsCmd = &cobra.Command{Use: "backups", Short: "Manage Metastore service backups"}
-
-var (
-	msBackupCreateCmd = &cobra.Command{
-		Use: "create BACKUP", Short: "Create a backup of a service",
-		Args: cobra.ExactArgs(1), RunE: runMSBackupCreate,
-	}
-	msBackupDeleteCmd = &cobra.Command{
-		Use: "delete BACKUP", Short: "Delete a service backup",
-		Args: cobra.ExactArgs(1), RunE: runMSBackupDelete,
-	}
-	msBackupDescribeCmd = &cobra.Command{
-		Use: "describe BACKUP", Short: "Describe a service backup",
-		Args: cobra.ExactArgs(1), RunE: runMSBackupDescribe,
-	}
-	msBackupListCmd = &cobra.Command{
-		Use: "list", Short: "List service backups",
-		Args: cobra.NoArgs, RunE: runMSBackupList,
-	}
-)
-
-func init() {
+func (g *metastoreCmds) initMetastore() {
 	// federations
-	fedAll := []*cobra.Command{msFedCreateCmd, msFedDeleteCmd, msFedDescribeCmd, msFedListCmd, msFedUpdateCmd,
-		msFedGetIamCmd, msFedSetIamCmd, msFedAddIamCmd, msFedRemoveIamCmd}
+	fedAll := []*cobra.Command{g.msFedCreateCmd, g.msFedDeleteCmd, g.msFedDescribeCmd, g.msFedListCmd, g.msFedUpdateCmd,
+		g.msFedGetIamCmd, g.msFedSetIamCmd, g.msFedAddIamCmd, g.msFedRemoveIamCmd}
 	for _, c := range fedAll {
-		c.Flags().StringVar(&flagMSLocation, "location", "", "Location containing the federation (required)")
+		c.Flags().StringVar(&g.flagMSLocation, "location", "", "Location containing the federation (required)")
 		_ = c.MarkFlagRequired("location")
 	}
-	for _, c := range []*cobra.Command{msFedCreateCmd, msFedUpdateCmd} {
-		c.Flags().StringVar(&flagMSConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{g.msFedCreateCmd, g.msFedUpdateCmd} {
+		c.Flags().StringVar(&g.flagMSConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Federation body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	msFedUpdateCmd.Flags().StringVar(&flagMSUpdateMask, "update-mask", "",
+	g.msFedUpdateCmd.Flags().StringVar(&g.flagMSUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{msFedCreateCmd, msFedDeleteCmd, msFedUpdateCmd} {
-		c.Flags().BoolVar(&flagMSAsync, "async", false, "Return the LRO without waiting")
+	for _, c := range []*cobra.Command{g.msFedCreateCmd, g.msFedDeleteCmd, g.msFedUpdateCmd} {
+		c.Flags().BoolVar(&g.flagMSAsync, "async", false, "Return the LRO without waiting")
 	}
-	for _, c := range []*cobra.Command{msFedDescribeCmd, msFedListCmd, msFedGetIamCmd} {
-		c.Flags().StringVar(&flagMSFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{g.msFedDescribeCmd, g.msFedListCmd, g.msFedGetIamCmd} {
+		c.Flags().StringVar(&g.flagMSFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{msFedAddIamCmd, msFedRemoveIamCmd} {
-		c.Flags().StringVar(&flagMSIamMember, "member", "", "IAM member (required)")
-		c.Flags().StringVar(&flagMSIamRole, "role", "", "IAM role (required)")
+	for _, c := range []*cobra.Command{g.msFedAddIamCmd, g.msFedRemoveIamCmd} {
+		c.Flags().StringVar(&g.flagMSIamMember, "member", "", "IAM member (required)")
+		c.Flags().StringVar(&g.flagMSIamRole, "role", "", "IAM role (required)")
 		_ = c.MarkFlagRequired("member")
 		_ = c.MarkFlagRequired("role")
 	}
-	metastoreFederationsCmd.AddCommand(fedAll...)
-	metastoreCmd.AddCommand(metastoreFederationsCmd)
+	g.metastoreFederationsCmd.AddCommand(fedAll...)
+	g.metastoreCmd.AddCommand(g.metastoreFederationsCmd)
 
 	// locations
-	msLocDescribeCmd.Flags().StringVar(&flagMSFormat, "format", "", "Output format")
-	msLocListCmd.Flags().StringVar(&flagMSFormat, "format", "", "Output format")
-	metastoreLocationsCmd.AddCommand(msLocDescribeCmd, msLocListCmd)
-	metastoreCmd.AddCommand(metastoreLocationsCmd)
+	g.msLocDescribeCmd.Flags().StringVar(&g.flagMSFormat, "format", "", "Output format")
+	g.msLocListCmd.Flags().StringVar(&g.flagMSFormat, "format", "", "Output format")
+	g.metastoreLocationsCmd.AddCommand(g.msLocDescribeCmd, g.msLocListCmd)
+	g.metastoreCmd.AddCommand(g.metastoreLocationsCmd)
 
 	// operations
-	opAll := []*cobra.Command{msOpCancelCmd, msOpDeleteCmd, msOpDescribeCmd, msOpListCmd, msOpWaitCmd}
+	opAll := []*cobra.Command{g.msOpCancelCmd, g.msOpDeleteCmd, g.msOpDescribeCmd, g.msOpListCmd, g.msOpWaitCmd}
 	for _, c := range opAll {
-		c.Flags().StringVar(&flagMSLocation, "location", "", "Location containing the operation (required)")
+		c.Flags().StringVar(&g.flagMSLocation, "location", "", "Location containing the operation (required)")
 		_ = c.MarkFlagRequired("location")
 	}
-	for _, c := range []*cobra.Command{msOpDescribeCmd, msOpListCmd, msOpWaitCmd} {
-		c.Flags().StringVar(&flagMSFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{g.msOpDescribeCmd, g.msOpListCmd, g.msOpWaitCmd} {
+		c.Flags().StringVar(&g.flagMSFormat, "format", "", "Output format")
 	}
-	metastoreOperationsCmd.AddCommand(opAll...)
-	metastoreCmd.AddCommand(metastoreOperationsCmd)
+	g.metastoreOperationsCmd.AddCommand(opAll...)
+	g.metastoreCmd.AddCommand(g.metastoreOperationsCmd)
 
 	// services
-	svcAll := []*cobra.Command{msSvcCreateCmd, msSvcDeleteCmd, msSvcDescribeCmd, msSvcListCmd, msSvcUpdateCmd,
-		msSvcGetIamCmd, msSvcSetIamCmd, msSvcAddIamCmd, msSvcRemoveIamCmd,
-		msSvcAlterLocCmd, msSvcAlterTblCmd, msSvcMoveTblCmd, msSvcQueryCmd,
-		msSvcExportCmd, msSvcImportCmd, msSvcRestoreCmd}
+	svcAll := []*cobra.Command{g.msSvcCreateCmd, g.msSvcDeleteCmd, g.msSvcDescribeCmd, g.msSvcListCmd, g.msSvcUpdateCmd,
+		g.msSvcGetIamCmd, g.msSvcSetIamCmd, g.msSvcAddIamCmd, g.msSvcRemoveIamCmd,
+		g.msSvcAlterLocCmd, g.msSvcAlterTblCmd, g.msSvcMoveTblCmd, g.msSvcQueryCmd,
+		g.msSvcExportCmd, g.msSvcImportCmd, g.msSvcRestoreCmd}
 	for _, c := range svcAll {
-		c.Flags().StringVar(&flagMSLocation, "location", "", "Location containing the service (required)")
+		c.Flags().StringVar(&g.flagMSLocation, "location", "", "Location containing the service (required)")
 		_ = c.MarkFlagRequired("location")
 	}
-	for _, c := range []*cobra.Command{msSvcCreateCmd, msSvcUpdateCmd} {
-		c.Flags().StringVar(&flagMSConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{g.msSvcCreateCmd, g.msSvcUpdateCmd} {
+		c.Flags().StringVar(&g.flagMSConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the Service body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	msSvcUpdateCmd.Flags().StringVar(&flagMSUpdateMask, "update-mask", "",
+	g.msSvcUpdateCmd.Flags().StringVar(&g.flagMSUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{msSvcCreateCmd, msSvcDeleteCmd, msSvcUpdateCmd,
-		msSvcAlterLocCmd, msSvcAlterTblCmd, msSvcMoveTblCmd,
-		msSvcExportCmd, msSvcImportCmd, msSvcRestoreCmd} {
-		c.Flags().BoolVar(&flagMSAsync, "async", false, "Return the LRO without waiting")
+	for _, c := range []*cobra.Command{g.msSvcCreateCmd, g.msSvcDeleteCmd, g.msSvcUpdateCmd,
+		g.msSvcAlterLocCmd, g.msSvcAlterTblCmd, g.msSvcMoveTblCmd,
+		g.msSvcExportCmd, g.msSvcImportCmd, g.msSvcRestoreCmd} {
+		c.Flags().BoolVar(&g.flagMSAsync, "async", false, "Return the LRO without waiting")
 	}
-	for _, c := range []*cobra.Command{msSvcDescribeCmd, msSvcListCmd, msSvcGetIamCmd, msSvcQueryCmd} {
-		c.Flags().StringVar(&flagMSFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{g.msSvcDescribeCmd, g.msSvcListCmd, g.msSvcGetIamCmd, g.msSvcQueryCmd} {
+		c.Flags().StringVar(&g.flagMSFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{msSvcAddIamCmd, msSvcRemoveIamCmd} {
-		c.Flags().StringVar(&flagMSIamMember, "member", "", "IAM member (required)")
-		c.Flags().StringVar(&flagMSIamRole, "role", "", "IAM role (required)")
+	for _, c := range []*cobra.Command{g.msSvcAddIamCmd, g.msSvcRemoveIamCmd} {
+		c.Flags().StringVar(&g.flagMSIamMember, "member", "", "IAM member (required)")
+		c.Flags().StringVar(&g.flagMSIamRole, "role", "", "IAM role (required)")
 		_ = c.MarkFlagRequired("member")
 		_ = c.MarkFlagRequired("role")
 	}
-	msSvcAlterLocCmd.Flags().StringVar(&flagMSResourceName, "resource-name", "", "Metadata resource name (required)")
-	msSvcAlterLocCmd.Flags().StringVar(&flagMSLocationURI, "location-uri", "", "New location URI (required)")
-	_ = msSvcAlterLocCmd.MarkFlagRequired("resource-name")
-	_ = msSvcAlterLocCmd.MarkFlagRequired("location-uri")
-	msSvcAlterTblCmd.Flags().StringVar(&flagMSTable, "table", "", "Fully qualified table name (required)")
-	msSvcAlterTblCmd.Flags().StringToStringVar(&flagMSProperties, "properties", nil, "Table properties (key=value); may repeat")
-	_ = msSvcAlterTblCmd.MarkFlagRequired("table")
-	msSvcMoveTblCmd.Flags().StringVar(&flagMSDBSource, "source-database", "", "Source database (required)")
-	msSvcMoveTblCmd.Flags().StringVar(&flagMSDBDest, "destination-database", "", "Destination database (required)")
-	msSvcMoveTblCmd.Flags().StringVar(&flagMSTblName, "table-name", "", "Table name (required)")
-	_ = msSvcMoveTblCmd.MarkFlagRequired("source-database")
-	_ = msSvcMoveTblCmd.MarkFlagRequired("destination-database")
-	_ = msSvcMoveTblCmd.MarkFlagRequired("table-name")
-	msSvcQueryCmd.Flags().StringVar(&flagMSQuery, "query", "", "HQL query to run (required)")
-	_ = msSvcQueryCmd.MarkFlagRequired("query")
-	msSvcExportCmd.Flags().StringVar(&flagMSDestGCS, "destination-gcs-folder", "", "gs:// destination folder (required)")
-	msSvcExportCmd.Flags().StringVar(&flagMSExportDB, "database-dump-type", "MYSQL", "Database dump type")
-	_ = msSvcExportCmd.MarkFlagRequired("destination-gcs-folder")
-	msSvcImportCmd.Flags().StringVar(&flagMSImportGCS, "database-dump", "", "gs:// URI of the dump (required)")
-	msSvcImportCmd.Flags().StringVar(&flagMSImportDesc, "description", "", "Description for the import")
-	msSvcImportCmd.Flags().StringVar(&flagMSImportDBType, "database-type", "MYSQL", "Database type of the dump")
-	_ = msSvcImportCmd.MarkFlagRequired("database-dump")
-	msSvcRestoreCmd.Flags().StringVar(&flagMSBackupName, "backup", "", "Backup name to restore from (required)")
-	msSvcRestoreCmd.Flags().StringVar(&flagMSRestoreType, "restore-type", "FULL", "Restore type (FULL or METADATA_ONLY)")
-	msSvcRestoreCmd.Flags().StringVar(&flagMSRestoreServ, "source-service", "", "Source service (required if backup path is not fully-qualified)")
-	_ = msSvcRestoreCmd.MarkFlagRequired("backup")
-	metastoreServicesCmd.AddCommand(svcAll...)
+	g.msSvcAlterLocCmd.Flags().StringVar(&g.flagMSResourceName, "resource-name", "", "Metadata resource name (required)")
+	g.msSvcAlterLocCmd.Flags().StringVar(&g.flagMSLocationURI, "location-uri", "", "New location URI (required)")
+	_ = g.msSvcAlterLocCmd.MarkFlagRequired("resource-name")
+	_ = g.msSvcAlterLocCmd.MarkFlagRequired("location-uri")
+	g.msSvcAlterTblCmd.Flags().StringVar(&g.flagMSTable, "table", "", "Fully qualified table name (required)")
+	g.msSvcAlterTblCmd.Flags().StringToStringVar(&g.flagMSProperties, "properties", nil, "Table properties (key=value); may repeat")
+	_ = g.msSvcAlterTblCmd.MarkFlagRequired("table")
+	g.msSvcMoveTblCmd.Flags().StringVar(&g.flagMSDBSource, "source-database", "", "Source database (required)")
+	g.msSvcMoveTblCmd.Flags().StringVar(&g.flagMSDBDest, "destination-database", "", "Destination database (required)")
+	g.msSvcMoveTblCmd.Flags().StringVar(&g.flagMSTblName, "table-name", "", "Table name (required)")
+	_ = g.msSvcMoveTblCmd.MarkFlagRequired("source-database")
+	_ = g.msSvcMoveTblCmd.MarkFlagRequired("destination-database")
+	_ = g.msSvcMoveTblCmd.MarkFlagRequired("table-name")
+	g.msSvcQueryCmd.Flags().StringVar(&g.flagMSQuery, "query", "", "HQL query to run (required)")
+	_ = g.msSvcQueryCmd.MarkFlagRequired("query")
+	g.msSvcExportCmd.Flags().StringVar(&g.flagMSDestGCS, "destination-gcs-folder", "", "gs:// destination folder (required)")
+	g.msSvcExportCmd.Flags().StringVar(&g.flagMSExportDB, "database-dump-type", "MYSQL", "Database dump type")
+	_ = g.msSvcExportCmd.MarkFlagRequired("destination-gcs-folder")
+	g.msSvcImportCmd.Flags().StringVar(&g.flagMSImportGCS, "database-dump", "", "gs:// URI of the dump (required)")
+	g.msSvcImportCmd.Flags().StringVar(&g.flagMSImportDesc, "description", "", "Description for the import")
+	g.msSvcImportCmd.Flags().StringVar(&g.flagMSImportDBType, "database-type", "MYSQL", "Database type of the dump")
+	_ = g.msSvcImportCmd.MarkFlagRequired("database-dump")
+	g.msSvcRestoreCmd.Flags().StringVar(&g.flagMSBackupName, "backup", "", "Backup name to restore from (required)")
+	g.msSvcRestoreCmd.Flags().StringVar(&g.flagMSRestoreType, "restore-type", "FULL", "Restore type (FULL or METADATA_ONLY)")
+	g.msSvcRestoreCmd.Flags().StringVar(&g.flagMSRestoreServ, "source-service", "", "Source service (required if backup path is not fully-qualified)")
+	_ = g.msSvcRestoreCmd.MarkFlagRequired("backup")
+	g.metastoreServicesCmd.AddCommand(svcAll...)
 
 	// backups (nested)
-	bkAll := []*cobra.Command{msBackupCreateCmd, msBackupDeleteCmd, msBackupDescribeCmd, msBackupListCmd}
+	bkAll := []*cobra.Command{g.msBackupCreateCmd, g.msBackupDeleteCmd, g.msBackupDescribeCmd, g.msBackupListCmd}
 	for _, c := range bkAll {
-		c.Flags().StringVar(&flagMSLocation, "location", "", "Location of the parent service (required)")
+		c.Flags().StringVar(&g.flagMSLocation, "location", "", "Location of the parent service (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagMSService, "service", "", "Parent service (required)")
+		c.Flags().StringVar(&g.flagMSService, "service", "", "Parent service (required)")
 		_ = c.MarkFlagRequired("service")
 	}
-	for _, c := range []*cobra.Command{msBackupCreateCmd, msBackupDeleteCmd} {
-		c.Flags().BoolVar(&flagMSAsync, "async", false, "Return the LRO without waiting")
+	for _, c := range []*cobra.Command{g.msBackupCreateCmd, g.msBackupDeleteCmd} {
+		c.Flags().BoolVar(&g.flagMSAsync, "async", false, "Return the LRO without waiting")
 	}
-	msBackupCreateCmd.Flags().StringVar(&flagMSConfigFile, "config-file", "",
+	g.msBackupCreateCmd.Flags().StringVar(&g.flagMSConfigFile, "config-file", "",
 		"Path to an optional JSON/YAML file with additional Backup body fields")
-	for _, c := range []*cobra.Command{msBackupDescribeCmd, msBackupListCmd} {
-		c.Flags().StringVar(&flagMSFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{g.msBackupDescribeCmd, g.msBackupListCmd} {
+		c.Flags().StringVar(&g.flagMSFormat, "format", "", "Output format")
 	}
-	metastoreServicesBackupsCmd.AddCommand(bkAll...)
-	metastoreServicesCmd.AddCommand(metastoreServicesBackupsCmd)
+	g.metastoreServicesBackupsCmd.AddCommand(bkAll...)
+	g.metastoreServicesCmd.AddCommand(g.metastoreServicesBackupsCmd)
 
-	metastoreCmd.AddCommand(metastoreServicesCmd)
+	g.metastoreCmd.AddCommand(g.metastoreServicesCmd)
 
-	rootCmd.AddCommand(metastoreCmd)
 }
 
 // --- federations impl ---
@@ -409,131 +204,131 @@ func msFedName(id, project, location string) string {
 	return msChild("federations", id, msLocationParent(project, location))
 }
 
-func runMSFedCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSFedCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	f := &metastore.Federation{}
-	if err := loadYAMLOrJSONInto(flagMSConfigFile, f); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagMSConfigFile, f); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Federations.Create(msLocationParent(project, flagMSLocation), f).
+	op, err := svc.Projects.Locations.Federations.Create(msLocationParent(project, g.flagMSLocation), f).
 		FederationId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating federation: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Create federation", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Create federation", args[0], g.flagMSAsync)
 }
 
-func runMSFedDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSFedDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Federations.Delete(msFedName(args[0], project, flagMSLocation)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Federations.Delete(msFedName(args[0], project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting federation: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Delete federation", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Delete federation", args[0], g.flagMSAsync)
 }
 
-func runMSFedDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSFedDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Federations.Get(msFedName(args[0], project, flagMSLocation)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Federations.Get(msFedName(args[0], project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing federation: %w", err)
 	}
-	return emitFormatted(got, flagMSFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagMSFormat)
 }
 
-func runMSFedList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSFedList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Federations.List(msLocationParent(project, flagMSLocation)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Federations.List(msLocationParent(project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing federations: %w", err)
 	}
-	if flagMSFormat != "" {
-		return emitFormatted(resp.Federations, flagMSFormat)
+	if g.flagMSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Federations, g.flagMSFormat)
 	}
-	printTableHeading(len(resp.Federations), "%-40s %s\n", "NAME", "STATE")
+	printTableHeadingTo(g.inv.stdout, len(resp.Federations), "%-40s %s\n", "NAME", "STATE")
 	for _, f := range resp.Federations {
-		fmt.Printf("%-40s %s\n", path.Base(f.Name), f.State)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(f.Name), f.State)
 	}
 	return nil
 }
 
-func runMSFedUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSFedUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	f := &metastore.Federation{}
-	if err := loadYAMLOrJSONInto(flagMSConfigFile, f); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagMSConfigFile, f); err != nil {
 		return err
 	}
-	mask := flagMSUpdateMask
+	mask := g.flagMSUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(f))
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Federations.Patch(msFedName(args[0], project, flagMSLocation), f).
+	op, err := svc.Projects.Locations.Federations.Patch(msFedName(args[0], project, g.flagMSLocation), f).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating federation: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Update federation", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Update federation", args[0], g.flagMSAsync)
 }
 
-func runMSFedGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSFedGetIam(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	policy, err := svc.Projects.Locations.Federations.GetIamPolicy(msFedName(args[0], project, flagMSLocation)).Context(ctx).Do()
+	policy, err := svc.Projects.Locations.Federations.GetIamPolicy(msFedName(args[0], project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagMSFormat)
+	return emitFormattedTo(g.inv.stdout, policy, g.flagMSFormat)
 }
 
-func runMSFedSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSFedSetIam(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
@@ -541,38 +336,38 @@ func runMSFedSetIam(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Federations.SetIamPolicy(msFedName(args[0], project, flagMSLocation),
+	got, err := svc.Projects.Locations.Federations.SetIamPolicy(msFedName(args[0], project, g.flagMSLocation),
 		&metastore.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runMSFedAddIam(cmd *cobra.Command, args []string) error {
-	return msFedModifyIam(args[0], func(p *metastore.Policy) { msAddBinding(p, flagMSIamRole, flagMSIamMember) })
+func (g *metastoreCmds) runMSFedAddIam(cmd *cobra.Command, args []string) error {
+	return g.msFedModifyIam(args[0], func(p *metastore.Policy) { msAddBinding(p, g.flagMSIamRole, g.flagMSIamMember) })
 }
 
-func runMSFedRemoveIam(cmd *cobra.Command, args []string) error {
-	return msFedModifyIam(args[0], func(p *metastore.Policy) { msRemoveBinding(p, flagMSIamRole, flagMSIamMember) })
+func (g *metastoreCmds) runMSFedRemoveIam(cmd *cobra.Command, args []string) error {
+	return g.msFedModifyIam(args[0], func(p *metastore.Policy) { msRemoveBinding(p, g.flagMSIamRole, g.flagMSIamMember) })
 }
 
-func msFedModifyIam(fedID string, mutate func(*metastore.Policy)) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) msFedModifyIam(fedID string, mutate func(*metastore.Policy)) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := g.inv.context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	resource := msFedName(fedID, project, flagMSLocation)
+	resource := msFedName(fedID, project, g.flagMSLocation)
 	policy, err := svc.Projects.Locations.Federations.GetIamPolicy(resource).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
@@ -583,7 +378,7 @@ func msFedModifyIam(fedID string, mutate func(*metastore.Policy)) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
 func msAddBinding(p *metastore.Policy, role, member string) {
@@ -618,13 +413,13 @@ func msRemoveBinding(p *metastore.Policy, role, member string) {
 
 // --- locations impl ---
 
-func runMSLocDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSLocDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
@@ -632,16 +427,16 @@ func runMSLocDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(got, flagMSFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagMSFormat)
 }
 
-func runMSLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSLocList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
@@ -649,12 +444,12 @@ func runMSLocList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing locations: %w", err)
 	}
-	if flagMSFormat != "" {
-		return emitFormatted(resp.Locations, flagMSFormat)
+	if g.flagMSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Locations, g.flagMSFormat)
 	}
-	printTableHeading(len(resp.Locations), "%-30s %s\n", "LOCATION_ID", "NAME")
+	printTableHeadingTo(g.inv.stdout, len(resp.Locations), "%-30s %s\n", "LOCATION_ID", "NAME")
 	for _, l := range resp.Locations {
-		fmt.Printf("%-30s %s\n", l.LocationId, l.Name)
+		fmt.Fprintf(g.inv.stdout, "%-30s %s\n", l.LocationId, l.Name)
 	}
 	return nil
 }
@@ -665,93 +460,93 @@ func msOpName(id, project, location string) string {
 	return msChild("operations", id, msLocationParent(project, location))
 }
 
-func runMSOpCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSOpCancel(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Operations.Cancel(msOpName(args[0], project, flagMSLocation),
+	if _, err := svc.Projects.Locations.Operations.Cancel(msOpName(args[0], project, g.flagMSLocation),
 		&metastore.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runMSOpDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSOpDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Operations.Delete(msOpName(args[0], project, flagMSLocation)).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Operations.Delete(msOpName(args[0], project, g.flagMSLocation)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runMSOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSOpDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Operations.Get(msOpName(args[0], project, flagMSLocation)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Operations.Get(msOpName(args[0], project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagMSFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagMSFormat)
 }
 
-func runMSOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSOpList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Operations.List(msLocationParent(project, flagMSLocation)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Operations.List(msLocationParent(project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	if flagMSFormat != "" {
-		return emitFormatted(resp.Operations, flagMSFormat)
+	if g.flagMSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Operations, g.flagMSFormat)
 	}
-	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(g.inv.stdout, len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
-		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(g.inv.stdout, "%-40s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }
 
-func runMSOpWait(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSOpWait(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	name := msOpName(args[0], project, flagMSLocation)
+	name := msOpName(args[0], project, g.flagMSLocation)
 	op, err := svc.Projects.Locations.Operations.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting operation: %w", err)
@@ -760,7 +555,7 @@ func runMSOpWait(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(final, flagMSFormat)
+	return emitFormattedTo(g.inv.stdout, final, g.flagMSFormat)
 }
 
 // --- services impl ---
@@ -769,131 +564,131 @@ func msSvcName(id, project, location string) string {
 	return msChild("services", id, msLocationParent(project, location))
 }
 
-func runMSSvcCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	s := &metastore.Service{}
-	if err := loadYAMLOrJSONInto(flagMSConfigFile, s); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagMSConfigFile, s); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.Create(msLocationParent(project, flagMSLocation), s).
+	op, err := svc.Projects.Locations.Services.Create(msLocationParent(project, g.flagMSLocation), s).
 		ServiceId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating service: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Create service", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Create service", args[0], g.flagMSAsync)
 }
 
-func runMSSvcDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.Delete(msSvcName(args[0], project, flagMSLocation)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Services.Delete(msSvcName(args[0], project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting service: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Delete service", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Delete service", args[0], g.flagMSAsync)
 }
 
-func runMSSvcDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Services.Get(msSvcName(args[0], project, flagMSLocation)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Services.Get(msSvcName(args[0], project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing service: %w", err)
 	}
-	return emitFormatted(got, flagMSFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagMSFormat)
 }
 
-func runMSSvcList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Services.List(msLocationParent(project, flagMSLocation)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Services.List(msLocationParent(project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing services: %w", err)
 	}
-	if flagMSFormat != "" {
-		return emitFormatted(resp.Services, flagMSFormat)
+	if g.flagMSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Services, g.flagMSFormat)
 	}
-	printTableHeading(len(resp.Services), "%-40s %s\n", "NAME", "STATE")
+	printTableHeadingTo(g.inv.stdout, len(resp.Services), "%-40s %s\n", "NAME", "STATE")
 	for _, s := range resp.Services {
-		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.State)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(s.Name), s.State)
 	}
 	return nil
 }
 
-func runMSSvcUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	s := &metastore.Service{}
-	if err := loadYAMLOrJSONInto(flagMSConfigFile, s); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagMSConfigFile, s); err != nil {
 		return err
 	}
-	mask := flagMSUpdateMask
+	mask := g.flagMSUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(s))
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.Patch(msSvcName(args[0], project, flagMSLocation), s).
+	op, err := svc.Projects.Locations.Services.Patch(msSvcName(args[0], project, g.flagMSLocation), s).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating service: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Update service", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Update service", args[0], g.flagMSAsync)
 }
 
-func runMSSvcGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcGetIam(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	policy, err := svc.Projects.Locations.Services.GetIamPolicy(msSvcName(args[0], project, flagMSLocation)).Context(ctx).Do()
+	policy, err := svc.Projects.Locations.Services.GetIamPolicy(msSvcName(args[0], project, g.flagMSLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagMSFormat)
+	return emitFormattedTo(g.inv.stdout, policy, g.flagMSFormat)
 }
 
-func runMSSvcSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcSetIam(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
@@ -901,38 +696,38 @@ func runMSSvcSetIam(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Services.SetIamPolicy(msSvcName(args[0], project, flagMSLocation),
+	got, err := svc.Projects.Locations.Services.SetIamPolicy(msSvcName(args[0], project, g.flagMSLocation),
 		&metastore.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runMSSvcAddIam(cmd *cobra.Command, args []string) error {
-	return msSvcModifyIam(args[0], func(p *metastore.Policy) { msAddBinding(p, flagMSIamRole, flagMSIamMember) })
+func (g *metastoreCmds) runMSSvcAddIam(cmd *cobra.Command, args []string) error {
+	return g.msSvcModifyIam(args[0], func(p *metastore.Policy) { msAddBinding(p, g.flagMSIamRole, g.flagMSIamMember) })
 }
 
-func runMSSvcRemoveIam(cmd *cobra.Command, args []string) error {
-	return msSvcModifyIam(args[0], func(p *metastore.Policy) { msRemoveBinding(p, flagMSIamRole, flagMSIamMember) })
+func (g *metastoreCmds) runMSSvcRemoveIam(cmd *cobra.Command, args []string) error {
+	return g.msSvcModifyIam(args[0], func(p *metastore.Policy) { msRemoveBinding(p, g.flagMSIamRole, g.flagMSIamMember) })
 }
 
-func msSvcModifyIam(svcID string, mutate func(*metastore.Policy)) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) msSvcModifyIam(svcID string, mutate func(*metastore.Policy)) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := g.inv.context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	resource := msSvcName(svcID, project, flagMSLocation)
+	resource := msSvcName(svcID, project, g.flagMSLocation)
 	policy, err := svc.Projects.Locations.Services.GetIamPolicy(resource).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
@@ -943,85 +738,85 @@ func msSvcModifyIam(svcID string, mutate func(*metastore.Policy)) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runMSSvcAlterLoc(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcAlterLoc(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.AlterLocation(msSvcName(args[0], project, flagMSLocation),
+	op, err := svc.Projects.Locations.Services.AlterLocation(msSvcName(args[0], project, g.flagMSLocation),
 		&metastore.AlterMetadataResourceLocationRequest{
-			ResourceName: flagMSResourceName,
-			LocationUri:  flagMSLocationURI,
+			ResourceName: g.flagMSResourceName,
+			LocationUri:  g.flagMSLocationURI,
 		}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("altering metadata resource location: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Alter metadata resource location", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Alter metadata resource location", args[0], g.flagMSAsync)
 }
 
-func runMSSvcAlterTbl(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcAlterTbl(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.AlterTableProperties(msSvcName(args[0], project, flagMSLocation),
+	op, err := svc.Projects.Locations.Services.AlterTableProperties(msSvcName(args[0], project, g.flagMSLocation),
 		&metastore.AlterTablePropertiesRequest{
-			TableName:  flagMSTable,
-			Properties: flagMSProperties,
+			TableName:  g.flagMSTable,
+			Properties: g.flagMSProperties,
 		}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("altering table properties: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Alter table properties", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Alter table properties", args[0], g.flagMSAsync)
 }
 
-func runMSSvcMoveTbl(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcMoveTbl(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.MoveTableToDatabase(msSvcName(args[0], project, flagMSLocation),
+	op, err := svc.Projects.Locations.Services.MoveTableToDatabase(msSvcName(args[0], project, g.flagMSLocation),
 		&metastore.MoveTableToDatabaseRequest{
-			DbName:            flagMSDBSource,
-			DestinationDbName: flagMSDBDest,
-			TableName:         flagMSTblName,
+			DbName:            g.flagMSDBSource,
+			DestinationDbName: g.flagMSDBDest,
+			TableName:         g.flagMSTblName,
 		}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("moving table: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Move table", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Move table", args[0], g.flagMSAsync)
 }
 
-func runMSSvcQuery(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcQuery(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.QueryMetadata(msSvcName(args[0], project, flagMSLocation),
-		&metastore.QueryMetadataRequest{Query: flagMSQuery}).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Services.QueryMetadata(msSvcName(args[0], project, g.flagMSLocation),
+		&metastore.QueryMetadataRequest{Query: g.flagMSQuery}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("querying metadata: %w", err)
 	}
@@ -1029,80 +824,80 @@ func runMSSvcQuery(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(final, flagMSFormat)
+	return emitFormattedTo(g.inv.stdout, final, g.flagMSFormat)
 }
 
-func runMSSvcExport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcExport(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.ExportMetadata(msSvcName(args[0], project, flagMSLocation),
+	op, err := svc.Projects.Locations.Services.ExportMetadata(msSvcName(args[0], project, g.flagMSLocation),
 		&metastore.ExportMetadataRequest{
-			DestinationGcsFolder: flagMSDestGCS,
-			DatabaseDumpType:     flagMSExportDB,
+			DestinationGcsFolder: g.flagMSDestGCS,
+			DatabaseDumpType:     g.flagMSExportDB,
 		}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("exporting metadata: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Export metadata", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Export metadata", args[0], g.flagMSAsync)
 }
 
-func runMSSvcImport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcImport(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &metastore.MetadataImport{
-		Description: flagMSImportDesc,
+		Description: g.flagMSImportDesc,
 		DatabaseDump: &metastore.DatabaseDump{
-			GcsUri: flagMSImportGCS,
-			Type:   flagMSImportDBType,
+			GcsUri: g.flagMSImportGCS,
+			Type:   g.flagMSImportDBType,
 		},
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.MetadataImports.Create(msSvcName(args[0], project, flagMSLocation), body).
+	op, err := svc.Projects.Locations.Services.MetadataImports.Create(msSvcName(args[0], project, g.flagMSLocation), body).
 		MetadataImportId(args[1]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("importing metadata: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Import metadata", args[1], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Import metadata", args[1], g.flagMSAsync)
 }
 
-func runMSSvcRestore(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSSvcRestore(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	// Fully-qualify backup path if only ID given.
-	backup := flagMSBackupName
+	backup := g.flagMSBackupName
 	if !strings.HasPrefix(backup, "projects/") {
-		source := flagMSRestoreServ
+		source := g.flagMSRestoreServ
 		if source == "" {
 			source = args[0]
 		}
-		backup = fmt.Sprintf("%s/backups/%s", msSvcName(source, project, flagMSLocation), backup)
+		backup = fmt.Sprintf("%s/backups/%s", msSvcName(source, project, g.flagMSLocation), backup)
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Services.Restore(msSvcName(args[0], project, flagMSLocation),
-		&metastore.RestoreServiceRequest{Backup: backup, RestoreType: flagMSRestoreType}).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Services.Restore(msSvcName(args[0], project, g.flagMSLocation),
+		&metastore.RestoreServiceRequest{Backup: backup, RestoreType: g.flagMSRestoreType}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("restoring service: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Restore service", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Restore service", args[0], g.flagMSAsync)
 }
 
 // --- backups impl ---
@@ -1115,88 +910,330 @@ func msBackupName(id, project, location, service string) string {
 	return msChild("backups", id, msBackupParent(project, location, service))
 }
 
-func runMSBackupCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSBackupCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
 	b := &metastore.Backup{}
-	if flagMSConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagMSConfigFile, b); err != nil {
+	if g.flagMSConfigFile != "" {
+		if err := loadYAMLOrJSONInto(g.flagMSConfigFile, b); err != nil {
 			return err
 		}
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Services.Backups.Create(
-		msBackupParent(project, flagMSLocation, flagMSService), b).
+		msBackupParent(project, g.flagMSLocation, g.flagMSService), b).
 		BackupId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating backup: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Create backup", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Create backup", args[0], g.flagMSAsync)
 }
 
-func runMSBackupDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSBackupDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Services.Backups.Delete(
-		msBackupName(args[0], project, flagMSLocation, flagMSService)).Context(ctx).Do()
+		msBackupName(args[0], project, g.flagMSLocation, g.flagMSService)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting backup: %w", err)
 	}
-	return msFinishOp(ctx, svc, op, "Delete backup", args[0], flagMSAsync)
+	return g.msFinishOp(ctx, svc, op, "Delete backup", args[0], g.flagMSAsync)
 }
 
-func runMSBackupDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSBackupDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
 	got, err := svc.Projects.Locations.Services.Backups.Get(
-		msBackupName(args[0], project, flagMSLocation, flagMSService)).Context(ctx).Do()
+		msBackupName(args[0], project, g.flagMSLocation, g.flagMSService)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing backup: %w", err)
 	}
-	return emitFormatted(got, flagMSFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagMSFormat)
 }
 
-func runMSBackupList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *metastoreCmds) runMSBackupList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MetastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Metastore(ctx)
 	if err != nil {
 		return err
 	}
 	resp, err := svc.Projects.Locations.Services.Backups.List(
-		msBackupParent(project, flagMSLocation, flagMSService)).Context(ctx).Do()
+		msBackupParent(project, g.flagMSLocation, g.flagMSService)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing backups: %w", err)
 	}
-	if flagMSFormat != "" {
-		return emitFormatted(resp.Backups, flagMSFormat)
+	if g.flagMSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Backups, g.flagMSFormat)
 	}
-	printTableHeading(len(resp.Backups), "%-40s %s\n", "NAME", "STATE")
+	printTableHeadingTo(g.inv.stdout, len(resp.Backups), "%-40s %s\n", "NAME", "STATE")
 	for _, b := range resp.Backups {
-		fmt.Printf("%-40s %s\n", path.Base(b.Name), b.State)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(b.Name), b.State)
 	}
 	return nil
+}
+
+// metastoreCmds holds the commands and flag values of one invocation's "metastore"
+// command group, so invocations don't share state (#2070).
+type metastoreCmds struct {
+	inv *invocation
+
+	metastoreCmd     *cobra.Command
+	flagMSLocation   string
+	flagMSConfigFile string
+	flagMSUpdateMask string
+	flagMSFormat     string
+	flagMSAsync      bool
+	flagMSService    string
+	flagMSIamMember  string
+	flagMSIamRole    string
+	// alter-location
+	flagMSResourceName string
+	flagMSLocationURI  string
+	// alter-table-properties
+	flagMSTable      string
+	flagMSProperties map[string]string
+	// move-table
+	flagMSDBSource string
+	flagMSDBDest   string
+	flagMSTblName  string
+	// query-metadata
+	flagMSQuery string
+	// export
+	flagMSDestGCS  string
+	flagMSExportDB string
+	// import
+	flagMSImportGCS    string
+	flagMSImportDesc   string
+	flagMSImportDBType string
+	// restore
+	flagMSBackupName            string
+	flagMSRestoreType           string
+	flagMSRestoreServ           string
+	metastoreFederationsCmd     *cobra.Command
+	msFedCreateCmd              *cobra.Command
+	msFedDeleteCmd              *cobra.Command
+	msFedDescribeCmd            *cobra.Command
+	msFedListCmd                *cobra.Command
+	msFedUpdateCmd              *cobra.Command
+	msFedGetIamCmd              *cobra.Command
+	msFedSetIamCmd              *cobra.Command
+	msFedAddIamCmd              *cobra.Command
+	msFedRemoveIamCmd           *cobra.Command
+	metastoreLocationsCmd       *cobra.Command
+	msLocDescribeCmd            *cobra.Command
+	msLocListCmd                *cobra.Command
+	metastoreOperationsCmd      *cobra.Command
+	msOpCancelCmd               *cobra.Command
+	msOpDeleteCmd               *cobra.Command
+	msOpDescribeCmd             *cobra.Command
+	msOpListCmd                 *cobra.Command
+	msOpWaitCmd                 *cobra.Command
+	metastoreServicesCmd        *cobra.Command
+	msSvcCreateCmd              *cobra.Command
+	msSvcDeleteCmd              *cobra.Command
+	msSvcDescribeCmd            *cobra.Command
+	msSvcListCmd                *cobra.Command
+	msSvcUpdateCmd              *cobra.Command
+	msSvcGetIamCmd              *cobra.Command
+	msSvcSetIamCmd              *cobra.Command
+	msSvcAddIamCmd              *cobra.Command
+	msSvcRemoveIamCmd           *cobra.Command
+	msSvcAlterLocCmd            *cobra.Command
+	msSvcAlterTblCmd            *cobra.Command
+	msSvcMoveTblCmd             *cobra.Command
+	msSvcQueryCmd               *cobra.Command
+	msSvcExportCmd              *cobra.Command
+	msSvcImportCmd              *cobra.Command
+	msSvcRestoreCmd             *cobra.Command
+	metastoreServicesBackupsCmd *cobra.Command
+	msBackupCreateCmd           *cobra.Command
+	msBackupDeleteCmd           *cobra.Command
+	msBackupDescribeCmd         *cobra.Command
+	msBackupListCmd             *cobra.Command
+}
+
+// newMetastoreCmd returns the "metastore" command group for inv.
+func newMetastoreCmd(inv *invocation) *cobra.Command {
+	return newMetastoreCmds(inv).metastoreCmd
+}
+
+// newMetastoreCmds builds the "metastore" command group for inv and returns its state.
+func newMetastoreCmds(inv *invocation) *metastoreCmds {
+	g := &metastoreCmds{inv: inv}
+	g.metastoreCmd = &cobra.Command{Use: "metastore", Short: "Manage Dataproc Metastore"}
+	g.metastoreFederationsCmd = &cobra.Command{Use: "federations", Short: "Manage Metastore federations"}
+	g.msFedCreateCmd = &cobra.Command{
+		Use: "create FEDERATION", Short: "Create a federation from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runMSFedCreate,
+	}
+	g.msFedDeleteCmd = &cobra.Command{
+		Use: "delete FEDERATION", Short: "Delete a federation",
+		Args: cobra.ExactArgs(1), RunE: g.runMSFedDelete,
+	}
+	g.msFedDescribeCmd = &cobra.Command{
+		Use: "describe FEDERATION", Short: "Describe a federation",
+		Args: cobra.ExactArgs(1), RunE: g.runMSFedDescribe,
+	}
+	g.msFedListCmd = &cobra.Command{
+		Use: "list", Short: "List federations in a location",
+		Args: cobra.NoArgs, RunE: g.runMSFedList,
+	}
+	g.msFedUpdateCmd = &cobra.Command{
+		Use: "update FEDERATION", Short: "Update a federation from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runMSFedUpdate,
+	}
+	g.msFedGetIamCmd = &cobra.Command{
+		Use: "get-iam-policy FEDERATION", Short: "Get the IAM policy for a federation",
+		Args: cobra.ExactArgs(1), RunE: g.runMSFedGetIam,
+	}
+	g.msFedSetIamCmd = &cobra.Command{
+		Use: "set-iam-policy FEDERATION POLICY_FILE", Short: "Replace the IAM policy",
+		Args: cobra.ExactArgs(2), RunE: g.runMSFedSetIam,
+	}
+	g.msFedAddIamCmd = &cobra.Command{
+		Use: "add-iam-policy-binding FEDERATION", Short: "Add an IAM binding",
+		Args: cobra.ExactArgs(1), RunE: g.runMSFedAddIam,
+	}
+	g.msFedRemoveIamCmd = &cobra.Command{
+		Use: "remove-iam-policy-binding FEDERATION", Short: "Remove an IAM binding",
+		Args: cobra.ExactArgs(1), RunE: g.runMSFedRemoveIam,
+	}
+	g.metastoreLocationsCmd = &cobra.Command{Use: "locations", Short: "Manage Metastore locations"}
+	g.msLocDescribeCmd = &cobra.Command{
+		Use: "describe LOCATION", Short: "Describe a Metastore location",
+		Args: cobra.ExactArgs(1), RunE: g.runMSLocDescribe,
+	}
+	g.msLocListCmd = &cobra.Command{
+		Use: "list", Short: "List Metastore locations",
+		Args: cobra.NoArgs, RunE: g.runMSLocList,
+	}
+	g.metastoreOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Metastore operations"}
+	g.msOpCancelCmd = &cobra.Command{
+		Use: "cancel OPERATION", Short: "Cancel an operation",
+		Args: cobra.ExactArgs(1), RunE: g.runMSOpCancel,
+	}
+	g.msOpDeleteCmd = &cobra.Command{
+		Use: "delete OPERATION", Short: "Delete an operation",
+		Args: cobra.ExactArgs(1), RunE: g.runMSOpDelete,
+	}
+	g.msOpDescribeCmd = &cobra.Command{
+		Use: "describe OPERATION", Short: "Describe an operation",
+		Args: cobra.ExactArgs(1), RunE: g.runMSOpDescribe,
+	}
+	g.msOpListCmd = &cobra.Command{
+		Use: "list", Short: "List operations in a location",
+		Args: cobra.NoArgs, RunE: g.runMSOpList,
+	}
+	g.msOpWaitCmd = &cobra.Command{
+		Use: "wait OPERATION", Short: "Wait for an operation to complete",
+		Args: cobra.ExactArgs(1), RunE: g.runMSOpWait,
+	}
+	g.metastoreServicesCmd = &cobra.Command{Use: "services", Short: "Manage Metastore services"}
+	g.msSvcCreateCmd = &cobra.Command{
+		Use: "create SERVICE", Short: "Create a service from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcCreate,
+	}
+	g.msSvcDeleteCmd = &cobra.Command{
+		Use: "delete SERVICE", Short: "Delete a service",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcDelete,
+	}
+	g.msSvcDescribeCmd = &cobra.Command{
+		Use: "describe SERVICE", Short: "Describe a service",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcDescribe,
+	}
+	g.msSvcListCmd = &cobra.Command{
+		Use: "list", Short: "List services in a location",
+		Args: cobra.NoArgs, RunE: g.runMSSvcList,
+	}
+	g.msSvcUpdateCmd = &cobra.Command{
+		Use: "update SERVICE", Short: "Update a service from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcUpdate,
+	}
+	g.msSvcGetIamCmd = &cobra.Command{
+		Use: "get-iam-policy SERVICE", Short: "Get the IAM policy for a service",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcGetIam,
+	}
+	g.msSvcSetIamCmd = &cobra.Command{
+		Use: "set-iam-policy SERVICE POLICY_FILE", Short: "Replace the IAM policy",
+		Args: cobra.ExactArgs(2), RunE: g.runMSSvcSetIam,
+	}
+	g.msSvcAddIamCmd = &cobra.Command{
+		Use: "add-iam-policy-binding SERVICE", Short: "Add an IAM binding",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcAddIam,
+	}
+	g.msSvcRemoveIamCmd = &cobra.Command{
+		Use: "remove-iam-policy-binding SERVICE", Short: "Remove an IAM binding",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcRemoveIam,
+	}
+	g.msSvcAlterLocCmd = &cobra.Command{
+		Use: "alter-metadata-resource-location SERVICE", Short: "Alter a metadata resource location",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcAlterLoc,
+	}
+	g.msSvcAlterTblCmd = &cobra.Command{
+		Use: "alter-table-properties SERVICE", Short: "Alter table properties",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcAlterTbl,
+	}
+	g.msSvcMoveTblCmd = &cobra.Command{
+		Use: "move-table-to-database SERVICE", Short: "Move a table between databases",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcMoveTbl,
+	}
+	g.msSvcQueryCmd = &cobra.Command{
+		Use: "query-metadata SERVICE", Short: "Run a metadata query",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcQuery,
+	}
+	g.msSvcExportCmd = &cobra.Command{
+		Use: "export SERVICE", Short: "Export metadata to Cloud Storage",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcExport,
+	}
+	g.msSvcImportCmd = &cobra.Command{
+		Use: "import SERVICE IMPORT_ID", Short: "Import metadata from Cloud Storage",
+		Args: cobra.ExactArgs(2), RunE: g.runMSSvcImport,
+	}
+	g.msSvcRestoreCmd = &cobra.Command{
+		Use: "restore SERVICE", Short: "Restore a service from a backup",
+		Args: cobra.ExactArgs(1), RunE: g.runMSSvcRestore,
+	}
+	g.metastoreServicesBackupsCmd = &cobra.Command{Use: "backups", Short: "Manage Metastore service backups"}
+	g.msBackupCreateCmd = &cobra.Command{
+		Use: "create BACKUP", Short: "Create a backup of a service",
+		Args: cobra.ExactArgs(1), RunE: g.runMSBackupCreate,
+	}
+	g.msBackupDeleteCmd = &cobra.Command{
+		Use: "delete BACKUP", Short: "Delete a service backup",
+		Args: cobra.ExactArgs(1), RunE: g.runMSBackupDelete,
+	}
+	g.msBackupDescribeCmd = &cobra.Command{
+		Use: "describe BACKUP", Short: "Describe a service backup",
+		Args: cobra.ExactArgs(1), RunE: g.runMSBackupDescribe,
+	}
+	g.msBackupListCmd = &cobra.Command{
+		Use: "list", Short: "List service backups",
+		Args: cobra.NoArgs, RunE: g.runMSBackupList,
+	}
+	g.initMetastore()
+	return g
 }

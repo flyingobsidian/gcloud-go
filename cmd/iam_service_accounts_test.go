@@ -10,12 +10,13 @@ import (
 )
 
 func TestBuildCreateServiceAccountRequest(t *testing.T) {
+	grp := newIamCmds(legacyTestInvocation())
 	t.Run("display name and description", func(t *testing.T) {
-		flagSADisplayName = "My SA"
-		flagSADescription = "does things"
-		t.Cleanup(func() { flagSADisplayName = ""; flagSADescription = "" })
+		grp.flagSADisplayName = "My SA"
+		grp.flagSADescription = "does things"
+		t.Cleanup(func() { grp.flagSADisplayName = ""; grp.flagSADescription = "" })
 
-		req := buildCreateServiceAccountRequest("my-sa")
+		req := grp.buildCreateServiceAccountRequest("my-sa")
 		if req.AccountId != "my-sa" {
 			t.Errorf("AccountId = %q, want my-sa", req.AccountId)
 		}
@@ -31,11 +32,11 @@ func TestBuildCreateServiceAccountRequest(t *testing.T) {
 	})
 
 	t.Run("display name only", func(t *testing.T) {
-		flagSADisplayName = "Only Name"
-		flagSADescription = ""
-		t.Cleanup(func() { flagSADisplayName = "" })
+		grp.flagSADisplayName = "Only Name"
+		grp.flagSADescription = ""
+		t.Cleanup(func() { grp.flagSADisplayName = "" })
 
-		req := buildCreateServiceAccountRequest("sa2")
+		req := grp.buildCreateServiceAccountRequest("sa2")
 		if req.ServiceAccount == nil {
 			t.Fatal("ServiceAccount is nil, want populated")
 		}
@@ -48,10 +49,10 @@ func TestBuildCreateServiceAccountRequest(t *testing.T) {
 	})
 
 	t.Run("no optional fields omits ServiceAccount body", func(t *testing.T) {
-		flagSADisplayName = ""
-		flagSADescription = ""
+		grp.flagSADisplayName = ""
+		grp.flagSADescription = ""
 
-		req := buildCreateServiceAccountRequest("bare-sa")
+		req := grp.buildCreateServiceAccountRequest("bare-sa")
 		if req.AccountId != "bare-sa" {
 			t.Errorf("AccountId = %q, want bare-sa", req.AccountId)
 		}
@@ -238,8 +239,9 @@ func TestParseIAMPolicyFile(t *testing.T) {
 }
 
 func TestServiceAccountsCommandsRegistered(t *testing.T) {
+	grp := newIamCmds(legacyTestInvocation())
 	got := map[string]bool{}
-	for _, c := range serviceAccountsCmd.Commands() {
+	for _, c := range grp.serviceAccountsCmd.Commands() {
 		got[c.Name()] = true
 	}
 	want := []string{

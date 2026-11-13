@@ -1,108 +1,69 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
 
 // --- gcloud apihub runtime-project-attachments (#1165) ---
 
-var apihubRPACmd = &cobra.Command{
-	Use:   "runtime-project-attachments",
-	Short: "Manage API Hub runtime project attachments",
-}
-
-var (
-	flagAPRPALocation       string
-	flagAPRPAFormat         string
-	flagAPRPAConfigFile     string
-	flagAPRPAFilter         string
-	flagAPRPAPageSize       int64
-	flagAPRPARuntimeProject string
-)
-
-var (
-	apihubRPACreateCmd = &cobra.Command{
-		Use: "create ATTACHMENT", Short: "Create a runtime project attachment",
-		Args: cobra.ExactArgs(1), RunE: runAPRPACreate,
-	}
-	apihubRPADeleteCmd = &cobra.Command{
-		Use: "delete ATTACHMENT", Short: "Delete a runtime project attachment",
-		Args: cobra.ExactArgs(1), RunE: runAPRPADelete,
-	}
-	apihubRPADescribeCmd = &cobra.Command{
-		Use: "describe ATTACHMENT", Short: "Describe a runtime project attachment",
-		Args: cobra.ExactArgs(1), RunE: runAPRPADescribe,
-	}
-	apihubRPAListCmd = &cobra.Command{
-		Use: "list", Short: "List runtime project attachments in a location",
-		Args: cobra.NoArgs, RunE: runAPRPAList,
-	}
-	apihubRPALookupCmd = &cobra.Command{
-		Use: "lookup", Short: "Look up the runtime project attachment for a runtime project",
-		Args: cobra.NoArgs, RunE: runAPRPALookup,
-	}
-)
-
-func init() {
+func (g *apihubCmds) initApihubRuntimeProjectAttachments() {
 	all := []*cobra.Command{
-		apihubRPACreateCmd, apihubRPADeleteCmd, apihubRPADescribeCmd,
-		apihubRPAListCmd, apihubRPALookupCmd,
+		g.apihubRPACreateCmd, g.apihubRPADeleteCmd, g.apihubRPADescribeCmd,
+		g.apihubRPAListCmd, g.apihubRPALookupCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAPRPALocation, "location", "",
+		c.Flags().StringVar(&g.flagAPRPALocation, "location", "",
 			"Location that owns the runtime project attachments (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagAPRPAFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagAPRPAFormat, "format", "", "Output format")
 	}
-	apihubRPACreateCmd.Flags().StringVar(&flagAPRPAConfigFile, "config-file", "",
+	g.apihubRPACreateCmd.Flags().StringVar(&g.flagAPRPAConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the RuntimeProjectAttachment body (required)")
-	_ = apihubRPACreateCmd.MarkFlagRequired("config-file")
-	apihubRPAListCmd.Flags().StringVar(&flagAPRPAFilter, "filter", "", "Server-side filter expression")
-	apihubRPAListCmd.Flags().Int64Var(&flagAPRPAPageSize, "page-size", 0, "Maximum number of results per page")
-	apihubRPALookupCmd.Flags().StringVar(&flagAPRPARuntimeProject, "runtime-project", "",
+	_ = g.apihubRPACreateCmd.MarkFlagRequired("config-file")
+	g.apihubRPAListCmd.Flags().StringVar(&g.flagAPRPAFilter, "filter", "", "Server-side filter expression")
+	g.apihubRPAListCmd.Flags().Int64Var(&g.flagAPRPAPageSize, "page-size", 0, "Maximum number of results per page")
+	g.apihubRPALookupCmd.Flags().StringVar(&g.flagAPRPARuntimeProject, "runtime-project", "",
 		"Runtime project id or number to look up the attachment for (required)")
-	_ = apihubRPALookupCmd.MarkFlagRequired("runtime-project")
+	_ = g.apihubRPALookupCmd.MarkFlagRequired("runtime-project")
 
-	apihubRPACmd.AddCommand(all...)
-	apihubCmd.AddCommand(apihubRPACmd)
+	g.apihubRPACmd.AddCommand(all...)
+	g.apihubCmd.AddCommand(g.apihubRPACmd)
 }
 
-func apihubRPAParent() (string, error) {
-	project, err := resolveProject()
+func (g *apihubCmds) apihubRPAParent() (string, error) {
+	project, err := g.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagAPRPALocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, g.flagAPRPALocation), nil
 }
 
-func apihubRPAName(id string) (string, error) {
+func (g *apihubCmds) apihubRPAName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := apihubRPAParent()
+	parent, err := g.apihubRPAParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/runtimeProjectAttachments/%s", parent, id), nil
 }
 
-func runAPRPACreate(cmd *cobra.Command, args []string) error {
-	parent, err := apihubRPAParent()
+func (g *apihubCmds) runAPRPACreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubRPAParent()
 	if err != nil {
 		return err
 	}
 	body := &apihub.GoogleCloudApihubV1RuntimeProjectAttachment{}
-	if err := loadYAMLOrJSONInto(flagAPRPAConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagAPRPAConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -111,33 +72,33 @@ func runAPRPACreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating runtime project attachment: %w", err)
 	}
-	return emitFormatted(got, flagAPRPAFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAPRPAFormat)
 }
 
-func runAPRPADelete(cmd *cobra.Command, args []string) error {
-	name, err := apihubRPAName(args[0])
+func (g *apihubCmds) runAPRPADelete(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubRPAName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.RuntimeProjectAttachments.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting runtime project attachment: %w", err)
 	}
-	fmt.Printf("Deleted runtime project attachment [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted runtime project attachment [%s].\n", args[0])
 	return nil
 }
 
-func runAPRPADescribe(cmd *cobra.Command, args []string) error {
-	name, err := apihubRPAName(args[0])
+func (g *apihubCmds) runAPRPADescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubRPAName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -145,16 +106,16 @@ func runAPRPADescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing runtime project attachment: %w", err)
 	}
-	return emitFormatted(got, flagAPRPAFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAPRPAFormat)
 }
 
-func runAPRPAList(cmd *cobra.Command, args []string) error {
-	parent, err := apihubRPAParent()
+func (g *apihubCmds) runAPRPAList(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubRPAParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -162,11 +123,11 @@ func runAPRPAList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.RuntimeProjectAttachments.List(parent).Context(ctx)
-		if flagAPRPAFilter != "" {
-			call = call.Filter(flagAPRPAFilter)
+		if g.flagAPRPAFilter != "" {
+			call = call.Filter(g.flagAPRPAFilter)
 		}
-		if flagAPRPAPageSize > 0 {
-			call = call.PageSize(flagAPRPAPageSize)
+		if g.flagAPRPAPageSize > 0 {
+			call = call.PageSize(g.flagAPRPAPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -181,15 +142,15 @@ func runAPRPAList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAPRPAFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagAPRPAFormat)
 }
 
-func runAPRPALookup(cmd *cobra.Command, args []string) error {
+func (g *apihubCmds) runAPRPALookup(cmd *cobra.Command, args []string) error {
 	// The Lookup RPC takes name = projects/{runtime-project}/locations/{location}
 	// and searches across regions to find the attachment for the runtime project.
-	name := fmt.Sprintf("projects/%s/locations/%s", flagAPRPARuntimeProject, flagAPRPALocation)
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	name := fmt.Sprintf("projects/%s/locations/%s", g.flagAPRPARuntimeProject, g.flagAPRPALocation)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -197,5 +158,5 @@ func runAPRPALookup(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("looking up runtime project attachment: %w", err)
 	}
-	return emitFormatted(got, flagAPRPAFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAPRPAFormat)
 }

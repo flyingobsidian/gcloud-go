@@ -1,153 +1,67 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dataplex "google.golang.org/api/dataplex/v1"
 )
 
-var dataplexCmd = &cobra.Command{
-	Use:   "dataplex",
-	Short: "Manage Cloud Dataplex",
-}
-
-var dataplexDatascansCmd = &cobra.Command{
-	Use:   "datascans",
-	Short: "Manage Dataplex data scans",
-}
-
 // --- datascans run ---
-
-var dataplexDatascansRunCmd = &cobra.Command{
-	Use:   "run DATASCAN_ID",
-	Short: "Run an on-demand data scan",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDataplexDatascansRun,
-}
 
 // --- datascans jobs ---
 
-var dataplexDatascansJobsCmd = &cobra.Command{
-	Use:   "jobs",
-	Short: "Manage data scan jobs",
-}
-
-var dataplexDatascansJobsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List data scan jobs",
-	Args:  cobra.NoArgs,
-	RunE:  runDataplexDatascansJobsList,
-}
-
-var dataplexDatascansJobsDescribeCmd = &cobra.Command{
-	Use:   "describe JOB_ID",
-	Short: "Describe a data scan job",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDataplexDatascansJobsDescribe,
-}
-
 // --- datascans describe ---
-
-var dataplexDatascansDescribeCmd = &cobra.Command{
-	Use:   "describe DATASCAN_ID",
-	Short: "Describe a data scan",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDataplexDatascansDescribe,
-}
 
 // --- datascans list ---
 
-var dataplexDatascansListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List data scans",
-	Args:  cobra.NoArgs,
-	RunE:  runDataplexDatascansList,
-}
-
-var (
-	flagDataplexListFormat string
-	flagDataplexListURI    bool
-)
-
 // --- datascans create ---
-
-var dataplexDatascansCreateCmd = &cobra.Command{
-	Use:   "create DATASCAN_ID",
-	Short: "Create a data scan",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDataplexDatascansCreate,
-}
-
-var (
-	flagDataplexDataSource       string
-	flagDataplexScanType         string
-	flagDataplexCatalogPublish   bool
-	flagDataplexProfileMode      string
-)
 
 // --- datascans delete ---
 
-var dataplexDatascansDeleteCmd = &cobra.Command{
-	Use:   "delete DATASCAN_ID",
-	Short: "Delete a data scan",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runDataplexDatascansDelete,
-}
+func (g *dataplexCmds) initDataplex() {
+	g.dataplexDatascansRunCmd.Flags().StringVar(&g.flagDataplexLocation, "location", "", "Location of the data scan")
+	g.dataplexDatascansRunCmd.Flags().StringVar(&g.flagDataplexDatascan, "datascan", "", "Data scan ID (for jobs commands)")
 
-var (
-	flagDataplexLocation  string
-	flagDataplexDatascan  string
-	flagDataplexJobFormat string
-	flagDataplexJobView   string
-	flagDataplexJobURI    bool
-)
+	g.dataplexDatascansJobsListCmd.Flags().StringVar(&g.flagDataplexLocation, "location", "", "Location of the data scan")
+	g.dataplexDatascansJobsListCmd.Flags().StringVar(&g.flagDataplexDatascan, "datascan", "", "Data scan ID")
+	g.dataplexDatascansJobsListCmd.Flags().StringVar(&g.flagDataplexJobFormat, "format", "", "Output format (e.g. json)")
+	g.dataplexDatascansJobsListCmd.Flags().BoolVar(&g.flagDataplexJobURI, "uri", false, "Print resource names")
 
-func init() {
-	dataplexDatascansRunCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
-	dataplexDatascansRunCmd.Flags().StringVar(&flagDataplexDatascan, "datascan", "", "Data scan ID (for jobs commands)")
+	g.dataplexDatascansJobsDescribeCmd.Flags().StringVar(&g.flagDataplexLocation, "location", "", "Location of the data scan")
+	g.dataplexDatascansJobsDescribeCmd.Flags().StringVar(&g.flagDataplexDatascan, "datascan", "", "Data scan ID")
+	g.dataplexDatascansJobsDescribeCmd.Flags().StringVar(&g.flagDataplexJobView, "view", "", "Job view (BASIC or FULL)")
 
-	dataplexDatascansJobsListCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
-	dataplexDatascansJobsListCmd.Flags().StringVar(&flagDataplexDatascan, "datascan", "", "Data scan ID")
-	dataplexDatascansJobsListCmd.Flags().StringVar(&flagDataplexJobFormat, "format", "", "Output format (e.g. json)")
-	dataplexDatascansJobsListCmd.Flags().BoolVar(&flagDataplexJobURI, "uri", false, "Print resource names")
-
-	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
-	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexDatascan, "datascan", "", "Data scan ID")
-	dataplexDatascansJobsDescribeCmd.Flags().StringVar(&flagDataplexJobView, "view", "", "Job view (BASIC or FULL)")
-
-	dataplexDatascansDescribeCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
-	dataplexDatascansListCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scans")
-	dataplexDatascansListCmd.Flags().StringVar(&flagDataplexListFormat, "format", "", "Output format (e.g. json)")
-	dataplexDatascansListCmd.Flags().BoolVar(&flagDataplexListURI, "uri", false, "Print resource names")
-	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
-	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexDataSource, "data-source", "", "Data source entity (required)")
-	dataplexDatascansCreateCmd.MarkFlagRequired("data-source")
-	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexScanType, "type", "data-quality",
+	g.dataplexDatascansDescribeCmd.Flags().StringVar(&g.flagDataplexLocation, "location", "", "Location of the data scan")
+	g.dataplexDatascansListCmd.Flags().StringVar(&g.flagDataplexLocation, "location", "", "Location of the data scans")
+	g.dataplexDatascansListCmd.Flags().StringVar(&g.flagDataplexListFormat, "format", "", "Output format (e.g. json)")
+	g.dataplexDatascansListCmd.Flags().BoolVar(&g.flagDataplexListURI, "uri", false, "Print resource names")
+	g.dataplexDatascansCreateCmd.Flags().StringVar(&g.flagDataplexLocation, "location", "", "Location of the data scan")
+	g.dataplexDatascansCreateCmd.Flags().StringVar(&g.flagDataplexDataSource, "data-source", "", "Data source entity (required)")
+	g.dataplexDatascansCreateCmd.MarkFlagRequired("data-source")
+	g.dataplexDatascansCreateCmd.Flags().StringVar(&g.flagDataplexScanType, "type", "data-quality",
 		"Scan type (data-quality, data-profile, or data-documentation)")
-	dataplexDatascansCreateCmd.Flags().BoolVar(&flagDataplexCatalogPublish, "enable-catalog-publishing", false,
+	g.dataplexDatascansCreateCmd.Flags().BoolVar(&g.flagDataplexCatalogPublish, "enable-catalog-publishing", false,
 		"For data-documentation and data-profile scans, publish the latest scan results to Dataplex Catalog.")
-	dataplexDatascansCreateCmd.Flags().StringVar(&flagDataplexProfileMode, "mode", "",
+	g.dataplexDatascansCreateCmd.Flags().StringVar(&g.flagDataplexProfileMode, "mode", "",
 		"For data-profile scans, the execution mode (STANDARD or LIGHTWEIGHT).")
-	dataplexDatascansDeleteCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the data scan")
+	g.dataplexDatascansDeleteCmd.Flags().StringVar(&g.flagDataplexLocation, "location", "", "Location of the data scan")
 	// --quiet is provided by the global persistent flag
 
-	dataplexDatascansJobsCmd.AddCommand(dataplexDatascansJobsListCmd)
-	dataplexDatascansJobsCmd.AddCommand(dataplexDatascansJobsDescribeCmd)
-	dataplexDatascansCmd.AddCommand(dataplexDatascansRunCmd)
-	dataplexDatascansCmd.AddCommand(dataplexDatascansDescribeCmd)
-	dataplexDatascansCmd.AddCommand(dataplexDatascansListCmd)
-	dataplexDatascansCmd.AddCommand(dataplexDatascansCreateCmd)
-	dataplexDatascansCmd.AddCommand(dataplexDatascansDeleteCmd)
-	dataplexDatascansCmd.AddCommand(dataplexDatascansJobsCmd)
-	dataplexCmd.AddCommand(dataplexDatascansCmd)
+	g.dataplexDatascansJobsCmd.AddCommand(g.dataplexDatascansJobsListCmd)
+	g.dataplexDatascansJobsCmd.AddCommand(g.dataplexDatascansJobsDescribeCmd)
+	g.dataplexDatascansCmd.AddCommand(g.dataplexDatascansRunCmd)
+	g.dataplexDatascansCmd.AddCommand(g.dataplexDatascansDescribeCmd)
+	g.dataplexDatascansCmd.AddCommand(g.dataplexDatascansListCmd)
+	g.dataplexDatascansCmd.AddCommand(g.dataplexDatascansCreateCmd)
+	g.dataplexDatascansCmd.AddCommand(g.dataplexDatascansDeleteCmd)
+	g.dataplexDatascansCmd.AddCommand(g.dataplexDatascansJobsCmd)
+	g.dataplexCmd.AddCommand(g.dataplexDatascansCmd)
 
-	registerDataplexContext(dataplexCmd)
+	g.registerDataplexContext(g.dataplexCmd)
 
 	// gcloud-python dataplex subgroups not yet implemented (#541).
 	for name, short := range map[string]string{
@@ -163,67 +77,59 @@ func init() {
 		"tasks":             "Manage Dataplex tasks",
 		"zones":             "Manage Dataplex zones",
 	} {
-		registerStubGroup(dataplexCmd, name, short, "list", "describe")
+		registerStubGroup(g.dataplexCmd, name, short, "list", "describe")
 	}
 
-	rootCmd.AddCommand(dataplexCmd)
 }
 
 // --- dataplex context lookup ---
 
-var (
-	flagDataplexCtxResources    []string
-	flagDataplexCtxAllSchema    bool
-	flagDataplexCtxFormat       string
-	flagDataplexCtxOptionsJSON  string
-)
-
-func registerDataplexContext(parent *cobra.Command) {
+func (g *dataplexCmds) registerDataplexContext(parent *cobra.Command) {
 	ctxCmd := &cobra.Command{Use: "context", Short: "Manage Dataplex context resources"}
 	lookupCmd := &cobra.Command{
 		Use:   "lookup",
 		Short: "Look up context metadata for the given Dataplex entries",
 		Args:  cobra.NoArgs,
-		RunE:  runDataplexContextLookup,
+		RunE:  g.runDataplexContextLookup,
 	}
-	lookupCmd.Flags().StringVar(&flagDataplexLocation, "location", "", "Location of the Dataplex resources")
-	lookupCmd.Flags().StringSliceVar(&flagDataplexCtxResources, "resources", nil,
+	lookupCmd.Flags().StringVar(&g.flagDataplexLocation, "location", "", "Location of the Dataplex resources")
+	lookupCmd.Flags().StringSliceVar(&g.flagDataplexCtxResources, "resources", nil,
 		"Comma-separated list of entry names to look up context for (required)")
 	_ = lookupCmd.MarkFlagRequired("resources")
-	lookupCmd.Flags().StringVar(&flagDataplexCtxFormat, "context-format", "yaml",
+	lookupCmd.Flags().StringVar(&g.flagDataplexCtxFormat, "context-format", "yaml",
 		"Output format of the returned context (yaml, json, or xml)")
-	lookupCmd.Flags().BoolVar(&flagDataplexCtxAllSchema, "all-schema-fields", false,
+	lookupCmd.Flags().BoolVar(&g.flagDataplexCtxAllSchema, "all-schema-fields", false,
 		"If set, include all schema fields in the returned context regardless of context_budget.")
-	lookupCmd.Flags().StringVar(&flagDataplexCtxOptionsJSON, "options", "",
+	lookupCmd.Flags().StringVar(&g.flagDataplexCtxOptionsJSON, "options", "",
 		"Additional lookup options as a JSON object (merged with well-known option flags).")
 	ctxCmd.AddCommand(lookupCmd)
 	parent.AddCommand(ctxCmd)
 }
 
-func runDataplexContextLookup(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveDataplexLocation()
+func (g *dataplexCmds) runDataplexContextLookup(cmd *cobra.Command, args []string) error {
+	project, location, err := g.resolveDataplexLocation()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataplexService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Dataplex(ctx)
 	if err != nil {
 		return err
 	}
 	options := map[string]string{}
-	if flagDataplexCtxOptionsJSON != "" {
-		if err := json.Unmarshal([]byte(flagDataplexCtxOptionsJSON), &options); err != nil {
+	if g.flagDataplexCtxOptionsJSON != "" {
+		if err := json.Unmarshal([]byte(g.flagDataplexCtxOptionsJSON), &options); err != nil {
 			return fmt.Errorf("--options must be a JSON object of string keys and values: %w", err)
 		}
 	}
-	if flagDataplexCtxFormat != "" {
-		options["format"] = flagDataplexCtxFormat
+	if g.flagDataplexCtxFormat != "" {
+		options["format"] = g.flagDataplexCtxFormat
 	}
-	if flagDataplexCtxAllSchema {
+	if g.flagDataplexCtxAllSchema {
 		options["all_schema_fields"] = "true"
 	}
 	req := &dataplex.GoogleCloudDataplexV1LookupContextRequest{
-		Resources: flagDataplexCtxResources,
+		Resources: g.flagDataplexCtxResources,
 		Options:   options,
 	}
 	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
@@ -231,18 +137,18 @@ func runDataplexContextLookup(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("looking up context: %w", err)
 	}
-	fmt.Println(resp.Context)
+	fmt.Fprintln(g.inv.stdout, resp.Context)
 	return nil
 }
 
-func resolveDataplexLocation() (string, string, error) {
-	project, err := resolveProject()
+func (g *dataplexCmds) resolveDataplexLocation() (string, string, error) {
+	project, err := g.inv.project()
 	if err != nil {
 		return "", "", err
 	}
-	location := flagDataplexLocation
+	location := g.flagDataplexLocation
 	if location == "" {
-		_, region, err := resolveRegion()
+		_, region, err := g.inv.region()
 		if err != nil || region == "" {
 			return "", "", fmt.Errorf("--location is required")
 		}
@@ -255,14 +161,14 @@ func datascanName(project, location, datascanID string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/dataScans/%s", project, location, datascanID)
 }
 
-func runDataplexDatascansRun(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveDataplexLocation()
+func (g *dataplexCmds) runDataplexDatascansRun(cmd *cobra.Command, args []string) error {
+	project, location, err := g.resolveDataplexLocation()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataplexService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Dataplex(ctx)
 	if err != nil {
 		return err
 	}
@@ -273,22 +179,22 @@ func runDataplexDatascansRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("running data scan: %w", err)
 	}
 
-	return formatOutput(resp, "")
+	return g.inv.formatOutput(resp, "")
 }
 
-func runDataplexDatascansJobsList(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveDataplexLocation()
+func (g *dataplexCmds) runDataplexDatascansJobsList(cmd *cobra.Command, args []string) error {
+	project, location, err := g.resolveDataplexLocation()
 	if err != nil {
 		return err
 	}
 
-	datascanID := flagDataplexDatascan
+	datascanID := g.flagDataplexDatascan
 	if datascanID == "" {
 		return fmt.Errorf("--datascan is required")
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataplexService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Dataplex(ctx)
 	if err != nil {
 		return err
 	}
@@ -313,62 +219,62 @@ func runDataplexDatascansJobsList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagDataplexJobURI {
+	if g.flagDataplexJobURI {
 		for _, job := range allJobs {
-			fmt.Println(job.Name)
+			fmt.Fprintln(g.inv.stdout, job.Name)
 		}
 		return nil
 	}
 
-	if flagDataplexJobFormat == "json" {
-		return printJSON(allJobs)
+	if g.flagDataplexJobFormat == "json" {
+		return g.inv.printJSON(allJobs)
 	}
 
-	printTableHeading(len(allJobs), "%-40s %-15s %-25s %-25s\n", "JOB_ID", "STATE", "START_TIME", "END_TIME")
+	printTableHeadingTo(g.inv.stdout, len(allJobs), "%-40s %-15s %-25s %-25s\n", "JOB_ID", "STATE", "START_TIME", "END_TIME")
 	for _, j := range allJobs {
-		fmt.Printf("%-40s %-15s %-25s %-25s\n", path.Base(j.Name), j.State, j.StartTime, j.EndTime)
+		fmt.Fprintf(g.inv.stdout, "%-40s %-15s %-25s %-25s\n", path.Base(j.Name), j.State, j.StartTime, j.EndTime)
 	}
 	return nil
 }
 
-func runDataplexDatascansJobsDescribe(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveDataplexLocation()
+func (g *dataplexCmds) runDataplexDatascansJobsDescribe(cmd *cobra.Command, args []string) error {
+	project, location, err := g.resolveDataplexLocation()
 	if err != nil {
 		return err
 	}
 
-	datascanID := flagDataplexDatascan
+	datascanID := g.flagDataplexDatascan
 	if datascanID == "" {
 		return fmt.Errorf("--datascan is required")
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataplexService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Dataplex(ctx)
 	if err != nil {
 		return err
 	}
 
 	name := fmt.Sprintf("%s/jobs/%s", datascanName(project, location, datascanID), args[0])
 	call := svc.Projects.Locations.DataScans.Jobs.Get(name).Context(ctx)
-	if flagDataplexJobView != "" {
-		call = call.View(strings.ToUpper(flagDataplexJobView))
+	if g.flagDataplexJobView != "" {
+		call = call.View(strings.ToUpper(g.flagDataplexJobView))
 	}
 	job, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("describing data scan job: %w", err)
 	}
 
-	return formatOutput(job, "")
+	return g.inv.formatOutput(job, "")
 }
 
-func runDataplexDatascansDescribe(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveDataplexLocation()
+func (g *dataplexCmds) runDataplexDatascansDescribe(cmd *cobra.Command, args []string) error {
+	project, location, err := g.resolveDataplexLocation()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataplexService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Dataplex(ctx)
 	if err != nil {
 		return err
 	}
@@ -379,17 +285,17 @@ func runDataplexDatascansDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing data scan: %w", err)
 	}
 
-	return printJSON(scan)
+	return g.inv.printJSON(scan)
 }
 
-func runDataplexDatascansList(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveDataplexLocation()
+func (g *dataplexCmds) runDataplexDatascansList(cmd *cobra.Command, args []string) error {
+	project, location, err := g.resolveDataplexLocation()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataplexService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Dataplex(ctx)
 	if err != nil {
 		return err
 	}
@@ -413,18 +319,18 @@ func runDataplexDatascansList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagDataplexListURI {
+	if g.flagDataplexListURI {
 		for _, ds := range allScans {
-			fmt.Println(ds.Name)
+			fmt.Fprintln(g.inv.stdout, ds.Name)
 		}
 		return nil
 	}
 
-	if flagDataplexListFormat == "json" {
-		return printJSON(allScans)
+	if g.flagDataplexListFormat == "json" {
+		return g.inv.printJSON(allScans)
 	}
 
-	printTableHeading(len(allScans), "%-30s %-15s %-25s %-20s\n", "NAME", "STATE", "CREATE_TIME", "TYPE")
+	printTableHeadingTo(g.inv.stdout, len(allScans), "%-30s %-15s %-25s %-20s\n", "NAME", "STATE", "CREATE_TIME", "TYPE")
 	for _, s := range allScans {
 		scanType := ""
 		if s.DataQualitySpec != nil {
@@ -432,19 +338,19 @@ func runDataplexDatascansList(cmd *cobra.Command, args []string) error {
 		} else if s.DataProfileSpec != nil {
 			scanType = "DATA_PROFILE"
 		}
-		fmt.Printf("%-30s %-15s %-25s %-20s\n", path.Base(s.Name), s.State, s.CreateTime, scanType)
+		fmt.Fprintf(g.inv.stdout, "%-30s %-15s %-25s %-20s\n", path.Base(s.Name), s.State, s.CreateTime, scanType)
 	}
 	return nil
 }
 
-func runDataplexDatascansCreate(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveDataplexLocation()
+func (g *dataplexCmds) runDataplexDatascansCreate(cmd *cobra.Command, args []string) error {
+	project, location, err := g.resolveDataplexLocation()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataplexService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Dataplex(ctx)
 	if err != nil {
 		return err
 	}
@@ -452,30 +358,30 @@ func runDataplexDatascansCreate(cmd *cobra.Command, args []string) error {
 	parent := fmt.Sprintf("projects/%s/locations/%s", project, location)
 	scan := &dataplex.GoogleCloudDataplexV1DataScan{
 		Data: &dataplex.GoogleCloudDataplexV1DataSource{
-			Entity: flagDataplexDataSource,
+			Entity: g.flagDataplexDataSource,
 		},
 	}
 
-	switch strings.ToLower(flagDataplexScanType) {
+	switch strings.ToLower(g.flagDataplexScanType) {
 	case "data-quality":
 		scan.DataQualitySpec = &dataplex.GoogleCloudDataplexV1DataQualitySpec{}
 	case "data-profile":
 		spec := &dataplex.GoogleCloudDataplexV1DataProfileSpec{}
-		if flagDataplexCatalogPublish {
+		if g.flagDataplexCatalogPublish {
 			spec.CatalogPublishingEnabled = true
 		}
-		if flagDataplexProfileMode != "" {
-			spec.Mode = strings.ToUpper(flagDataplexProfileMode)
+		if g.flagDataplexProfileMode != "" {
+			spec.Mode = strings.ToUpper(g.flagDataplexProfileMode)
 		}
 		scan.DataProfileSpec = spec
 	case "data-documentation":
 		spec := &dataplex.GoogleCloudDataplexV1DataDocumentationSpec{}
-		if flagDataplexCatalogPublish {
+		if g.flagDataplexCatalogPublish {
 			spec.CatalogPublishingEnabled = true
 		}
 		scan.DataDocumentationSpec = spec
 	default:
-		return fmt.Errorf("unsupported scan type: %s (use data-quality, data-profile, or data-documentation)", flagDataplexScanType)
+		return fmt.Errorf("unsupported scan type: %s (use data-quality, data-profile, or data-documentation)", g.flagDataplexScanType)
 	}
 
 	op, err := svc.Projects.Locations.DataScans.Create(parent, scan).DataScanId(args[0]).Context(ctx).Do()
@@ -483,30 +389,30 @@ func runDataplexDatascansCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating data scan: %w", err)
 	}
 
-	fmt.Printf("Created data scan [%s] (operation: %s).\n", args[0], op.Name)
+	fmt.Fprintf(g.inv.stdout, "Created data scan [%s] (operation: %s).\n", args[0], op.Name)
 	return nil
 }
 
-func runDataplexDatascansDelete(cmd *cobra.Command, args []string) error {
-	project, location, err := resolveDataplexLocation()
+func (g *dataplexCmds) runDataplexDatascansDelete(cmd *cobra.Command, args []string) error {
+	project, location, err := g.resolveDataplexLocation()
 	if err != nil {
 		return err
 	}
 
-	if !flagQuiet {
-		fmt.Printf("You are about to delete data scan [%s]. This action cannot be undone.\n", args[0])
-		fmt.Print("Do you want to continue (Y/n)? ")
+	if !g.inv.flags.quiet {
+		fmt.Fprintf(g.inv.stdout, "You are about to delete data scan [%s]. This action cannot be undone.\n", args[0])
+		fmt.Fprint(g.inv.stdout, "Do you want to continue (Y/n)? ")
 		var answer string
 		fmt.Scanln(&answer)
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "" && answer != "y" && answer != "yes" {
-			fmt.Println("Aborted.")
+			fmt.Fprintln(g.inv.stdout, "Aborted.")
 			return nil
 		}
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.DataplexService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Dataplex(ctx)
 	if err != nil {
 		return err
 	}
@@ -516,6 +422,170 @@ func runDataplexDatascansDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting data scan: %w", err)
 	}
 
-	fmt.Printf("Deleted data scan [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted data scan [%s].\n", args[0])
 	return nil
+}
+
+// dataplexCmds holds the commands and flag values of one invocation's "dataplex"
+// command group, so invocations don't share state (#2070).
+type dataplexCmds struct {
+	inv *invocation
+
+	dataplexCmd                      *cobra.Command
+	dataplexDatascansCmd             *cobra.Command
+	dataplexDatascansRunCmd          *cobra.Command
+	dataplexDatascansJobsCmd         *cobra.Command
+	dataplexDatascansJobsListCmd     *cobra.Command
+	dataplexDatascansJobsDescribeCmd *cobra.Command
+	dataplexDatascansDescribeCmd     *cobra.Command
+	dataplexDatascansListCmd         *cobra.Command
+	flagDataplexListFormat           string
+	flagDataplexListURI              bool
+	dataplexDatascansCreateCmd       *cobra.Command
+	flagDataplexDataSource           string
+	flagDataplexScanType             string
+	flagDataplexCatalogPublish       bool
+	flagDataplexProfileMode          string
+	dataplexDatascansDeleteCmd       *cobra.Command
+	flagDataplexLocation             string
+	flagDataplexDatascan             string
+	flagDataplexJobFormat            string
+	flagDataplexJobView              string
+	flagDataplexJobURI               bool
+	flagDataplexCtxResources         []string
+	flagDataplexCtxAllSchema         bool
+	flagDataplexCtxFormat            string
+	flagDataplexCtxOptionsJSON       string
+	dataplexDataProductsCmd          *cobra.Command
+	dataplexDataAssetsCmd            *cobra.Command
+	dpCreateCmd                      *cobra.Command
+	dpUpdateCmd                      *cobra.Command
+	dpDeleteCmd                      *cobra.Command
+	dpDescribeCmd                    *cobra.Command
+	dpListCmd                        *cobra.Command
+	dpGetIamCmd                      *cobra.Command
+	dpSetIamCmd                      *cobra.Command
+	dpAddIamCmd                      *cobra.Command
+	dpRemoveIamCmd                   *cobra.Command
+	daCreateCmd                      *cobra.Command
+	daUpdateCmd                      *cobra.Command
+	daDeleteCmd                      *cobra.Command
+	daDescribeCmd                    *cobra.Command
+	daListCmd                        *cobra.Command
+	flagDPLocation                   string
+	flagDPDataProduct                string
+	flagDPFormat                     string
+	flagDPAsync                      bool
+	flagDPDisplayName                string
+	flagDPDescription                string
+	flagDPOwnerEmails                []string
+	flagDPAccessGroups               []string
+	flagDPLabels                     map[string]string
+	flagDPUpdateLabels               map[string]string
+	flagDPRemoveLabels               []string
+	flagDPClearLabels                bool
+	flagDPEtag                       string
+	flagDPResource                   string
+	flagDPMember                     string
+	flagDPRole                       string
+	flagDPLimit                      int
+	flagDPPageSize                   int64
+	flagDPURI                        bool
+}
+
+// newDataplexCmd returns the "dataplex" command group for inv.
+func newDataplexCmd(inv *invocation) *cobra.Command {
+	return newDataplexCmds(inv).dataplexCmd
+}
+
+// newDataplexCmds builds the "dataplex" command group for inv and returns its state.
+func newDataplexCmds(inv *invocation) *dataplexCmds {
+	g := &dataplexCmds{inv: inv}
+	g.dataplexCmd = &cobra.Command{
+		Use:   "dataplex",
+		Short: "Manage Cloud Dataplex",
+	}
+	g.dataplexDatascansCmd = &cobra.Command{
+		Use:   "datascans",
+		Short: "Manage Dataplex data scans",
+	}
+	g.dataplexDatascansRunCmd = &cobra.Command{
+		Use:   "run DATASCAN_ID",
+		Short: "Run an on-demand data scan",
+		Args:  cobra.ExactArgs(1),
+		RunE:  g.runDataplexDatascansRun,
+	}
+	g.dataplexDatascansJobsCmd = &cobra.Command{
+		Use:   "jobs",
+		Short: "Manage data scan jobs",
+	}
+	g.dataplexDatascansJobsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List data scan jobs",
+		Args:  cobra.NoArgs,
+		RunE:  g.runDataplexDatascansJobsList,
+	}
+	g.dataplexDatascansJobsDescribeCmd = &cobra.Command{
+		Use:   "describe JOB_ID",
+		Short: "Describe a data scan job",
+		Args:  cobra.ExactArgs(1),
+		RunE:  g.runDataplexDatascansJobsDescribe,
+	}
+	g.dataplexDatascansDescribeCmd = &cobra.Command{
+		Use:   "describe DATASCAN_ID",
+		Short: "Describe a data scan",
+		Args:  cobra.ExactArgs(1),
+		RunE:  g.runDataplexDatascansDescribe,
+	}
+	g.dataplexDatascansListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List data scans",
+		Args:  cobra.NoArgs,
+		RunE:  g.runDataplexDatascansList,
+	}
+	g.dataplexDatascansCreateCmd = &cobra.Command{
+		Use:   "create DATASCAN_ID",
+		Short: "Create a data scan",
+		Args:  cobra.ExactArgs(1),
+		RunE:  g.runDataplexDatascansCreate,
+	}
+	g.dataplexDatascansDeleteCmd = &cobra.Command{
+		Use:   "delete DATASCAN_ID",
+		Short: "Delete a data scan",
+		Args:  cobra.ExactArgs(1),
+		RunE:  g.runDataplexDatascansDelete,
+	}
+	g.dataplexDataProductsCmd = &cobra.Command{Use: "data-products", Short: "Manage Dataplex data products"}
+	g.dataplexDataAssetsCmd = &cobra.Command{Use: "data-assets", Short: "Manage Dataplex data assets"}
+	g.dpCreateCmd = &cobra.Command{Use: "create DATA_PRODUCT", Short: "Create a Dataplex data product",
+		Args: cobra.ExactArgs(1), RunE: g.runDPCreate}
+	g.dpUpdateCmd = &cobra.Command{Use: "update DATA_PRODUCT", Short: "Update a Dataplex data product",
+		Args: cobra.ExactArgs(1), RunE: g.runDPUpdate}
+	g.dpDeleteCmd = &cobra.Command{Use: "delete DATA_PRODUCT", Short: "Delete a Dataplex data product",
+		Args: cobra.ExactArgs(1), RunE: g.runDPDelete}
+	g.dpDescribeCmd = &cobra.Command{Use: "describe DATA_PRODUCT", Short: "Describe a Dataplex data product",
+		Args: cobra.ExactArgs(1), RunE: g.runDPDescribe}
+	g.dpListCmd = &cobra.Command{Use: "list", Short: "List Dataplex data products",
+		Args: cobra.NoArgs, RunE: g.runDPList}
+	g.dpGetIamCmd = &cobra.Command{Use: "get-iam-policy DATA_PRODUCT", Short: "Get the IAM policy of a Dataplex data product",
+		Args: cobra.ExactArgs(1), RunE: g.runDPGetIam}
+	g.dpSetIamCmd = &cobra.Command{Use: "set-iam-policy DATA_PRODUCT POLICY_FILE", Short: "Set the IAM policy of a Dataplex data product",
+		Args: cobra.ExactArgs(2), RunE: g.runDPSetIam}
+	g.dpAddIamCmd = &cobra.Command{Use: "add-iam-policy-binding DATA_PRODUCT", Short: "Add an IAM policy binding to a Dataplex data product",
+		Args: cobra.ExactArgs(1), RunE: g.runDPAddIam}
+	g.dpRemoveIamCmd = &cobra.Command{Use: "remove-iam-policy-binding DATA_PRODUCT", Short: "Remove an IAM policy binding from a Dataplex data product",
+		Args: cobra.ExactArgs(1), RunE: g.runDPRemoveIam}
+	g.daCreateCmd = &cobra.Command{Use: "create DATA_ASSET", Short: "Create a Dataplex data asset",
+		Args: cobra.ExactArgs(1), RunE: g.runDACreate}
+	g.daUpdateCmd = &cobra.Command{Use: "update DATA_ASSET", Short: "Update a Dataplex data asset",
+		Args: cobra.ExactArgs(1), RunE: g.runDAUpdate}
+	g.daDeleteCmd = &cobra.Command{Use: "delete DATA_ASSET", Short: "Delete a Dataplex data asset",
+		Args: cobra.ExactArgs(1), RunE: g.runDADelete}
+	g.daDescribeCmd = &cobra.Command{Use: "describe DATA_ASSET", Short: "Describe a Dataplex data asset",
+		Args: cobra.ExactArgs(1), RunE: g.runDADescribe}
+	g.daListCmd = &cobra.Command{Use: "list", Short: "List Dataplex data assets in a data product",
+		Args: cobra.NoArgs, RunE: g.runDAList}
+	g.initDataplex()
+	g.initDataplexDataProducts()
+	return g
 }

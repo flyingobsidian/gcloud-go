@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -29,12 +28,10 @@ import (
 //
 // Location is hardcoded to "global" upstream and here for parity.
 
-var sccManageRest = newRESTClient("https://securitycentermanagement.googleapis.com/v1")
-
 // sccManageRestClientForTest lets tests point the manage-services client at
 // an httptest.Server. Callers restore the previous value themselves.
-func sccManageRestClientForTest(endpoint string) {
-	sccManageRest = newRESTClient(endpoint)
+func (g *sccCmds) sccManageRestClientForTest(endpoint string) {
+	g.sccManageRest = g.inv.restClient(endpoint)
 }
 
 // sccService pairs the canonical service short-name with its optional
@@ -109,46 +106,22 @@ func sccSupportedServicesForHelp() string {
 
 // --- flags / scope ---
 
-var (
-	// flagSccManageParent is the shared --parent flag for scc manage services
-	// commands. It is registered separately from --organization/--folder/
-	// --project (which come from sccAddScopeFlags) so `--parent=folders/1`
-	// works as an alternative one-flag form.
-	flagSccManageParent string
-
-	// flagSccManageFilterModules restricts describe output to a comma-separated
-	// list of module names (SCREAMING_SNAKE_CASE). Empty means no filter.
-	flagSccManageFilterModules string
-
-	// flagSccManageEnablementState is --enablement-state on update, one of
-	// ENABLED / DISABLED / INHERITED (case-insensitive). Empty means unset.
-	flagSccManageEnablementState string
-
-	// flagSccManageModuleConfigFile is --module-config-file on update, a
-	// path to a JSON or YAML file describing per-module intended state.
-	flagSccManageModuleConfigFile string
-
-	// flagSccManageValidateOnly is --validate-only on update: perform IAM
-	// checks and validation without mutating the service.
-	flagSccManageValidateOnly bool
-)
-
 // sccManageServicesParent resolves the parent for the manage services
 // commands and appends /locations/global, matching gcloud-python which
 // hardcodes the location. It accepts one of --parent, --organization,
 // --folder, or --project (mutually exclusive; falls back to the active
 // project when none are supplied).
-func sccManageServicesParent() (string, error) {
+func (g *sccCmds) sccManageServicesParent() (string, error) {
 	// --parent takes precedence and must be a fully-qualified resource
 	// name. Mixing --parent with any of --organization/--folder/--project
 	// is rejected so the caller gets a clear error instead of one flag
 	// silently winning.
-	if flagSccManageParent != "" {
-		if flagSccOrg != "" || flagSccFolder != "" || flagSccProject != "" {
+	if g.flagSccManageParent != "" {
+		if g.flagSccOrg != "" || g.flagSccFolder != "" || g.flagSccProject != "" {
 			return "", fmt.Errorf(
 				"--parent is mutually exclusive with --organization, --folder, and --project")
 		}
-		trimmed := strings.TrimSuffix(flagSccManageParent, "/")
+		trimmed := strings.TrimSuffix(g.flagSccManageParent, "/")
 		kind := strings.SplitN(trimmed, "/", 2)[0]
 		switch kind {
 		case "organizations", "folders", "projects":
@@ -157,11 +130,11 @@ func sccManageServicesParent() (string, error) {
 		default:
 			return "", fmt.Errorf(
 				"--parent must be one of organizations|folders|projects/{id}, got %q",
-				flagSccManageParent)
+				g.flagSccManageParent)
 		}
 		return trimmed + "/locations/global", nil
 	}
-	parent, err := sccResolveParent()
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return "", err
 	}
@@ -171,14 +144,14 @@ func sccManageServicesParent() (string, error) {
 // sccManageServiceResourceName returns the fully-qualified resource name
 // for a Security Center Service under the resolved parent, using the
 // user-supplied short-name or abbreviation.
-func sccManageServiceResourceName(userInput string) (string, error) {
+func (g *sccCmds) sccManageServiceResourceName(userInput string) (string, error) {
 	canonical := sccResolveServiceName(userInput)
 	if canonical == "" {
 		return "", fmt.Errorf(
 			"invalid service name %q. Supported: %s",
 			userInput, sccSupportedServicesForHelp())
 	}
-	parent, err := sccManageServicesParent()
+	parent, err := g.sccManageServicesParent()
 	if err != nil {
 		return "", err
 	}
@@ -304,39 +277,13 @@ func sccManageBuildUpdateMask(hasState, hasModuleConfig bool) (string, error) {
 
 // --- commands ---
 
-var sccManageServicesCmd = &cobra.Command{
-	Use:   "services",
-	Short: "Manage Security Command Center services",
-}
-
-var (
-	sccManageServicesDescribeCmd = &cobra.Command{
-		Use:   "describe SERVICE_NAME",
-		Short: "Describe a Security Command Center service",
-		Args:  cobra.ExactArgs(1),
-		RunE:  runSccManageServicesDescribe,
-	}
-	sccManageServicesListCmd = &cobra.Command{
-		Use:   "list",
-		Short: "List Security Command Center services",
-		Args:  cobra.NoArgs,
-		RunE:  runSccManageServicesList,
-	}
-	sccManageServicesUpdateCmd = &cobra.Command{
-		Use:   "update SERVICE_NAME",
-		Short: "Update a Security Command Center service",
-		Args:  cobra.ExactArgs(1),
-		RunE:  runSccManageServicesUpdate,
-	}
-)
-
 // sccAddManageServicesScopeFlags registers --parent and the shared
 // --organization/--folder/--project scope flags on the given commands, so
 // callers can supply exactly one.
-func sccAddManageServicesScopeFlags(cmds ...*cobra.Command) {
-	sccAddScopeFlags(cmds...)
+func (g *sccCmds) sccAddManageServicesScopeFlags(cmds ...*cobra.Command) {
+	g.sccAddScopeFlags(cmds...)
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagSccManageParent, "parent", "",
+		c.Flags().StringVar(&g.flagSccManageParent, "parent", "",
 			"Fully-qualified parent (organizations/{id}, folders/{id}, or projects/{id}). "+
 				"Mutually exclusive with --organization/--folder/--project.")
 	}
@@ -354,74 +301,74 @@ func serviceNameHelp() string {
 // (defined in scc.go) is guaranteed to exist. The other file's init() also
 // mutates sccManageCmd (to add `settings`); both mutations are order-
 // independent because cobra just appends to a slice.
-func init() {
-	sccAddManageServicesScopeFlags(
-		sccManageServicesDescribeCmd,
-		sccManageServicesListCmd,
-		sccManageServicesUpdateCmd,
+func (g *sccCmds) initSccManageServices() {
+	g.sccAddManageServicesScopeFlags(
+		g.sccManageServicesDescribeCmd,
+		g.sccManageServicesListCmd,
+		g.sccManageServicesUpdateCmd,
 	)
-	sccAddFormatFlag(
-		sccManageServicesDescribeCmd,
-		sccManageServicesListCmd,
-		sccManageServicesUpdateCmd,
+	g.sccAddFormatFlag(
+		g.sccManageServicesDescribeCmd,
+		g.sccManageServicesListCmd,
+		g.sccManageServicesUpdateCmd,
 	)
-	sccAddPageSizeFlag(sccManageServicesListCmd)
+	g.sccAddPageSizeFlag(g.sccManageServicesListCmd)
 
-	sccManageServicesDescribeCmd.Flags().StringVar(&flagSccManageFilterModules,
+	g.sccManageServicesDescribeCmd.Flags().StringVar(&g.flagSccManageFilterModules,
 		"filter-modules", "",
 		"If provided, only print module information for the listed modules. "+
 			"Comma-separated (or [MOD_A,MOD_B]) list of SCREAMING_SNAKE_CASE "+
 			"module names (e.g. WEB_UI_ENABLED,API_KEY_NOT_ROTATED).")
 
-	sccManageServicesUpdateCmd.Flags().StringVar(&flagSccManageEnablementState,
+	g.sccManageServicesUpdateCmd.Flags().StringVar(&g.flagSccManageEnablementState,
 		"enablement-state", "",
 		"Sets the enablement state of the Security Center service. "+
 			"One of ENABLED, DISABLED, or INHERITED. INHERITED is only valid "+
 			"at project or folder scope. At least one of --enablement-state or "+
 			"--module-config-file is required.")
-	sccManageServicesUpdateCmd.Flags().StringVar(&flagSccManageModuleConfigFile,
+	g.sccManageServicesUpdateCmd.Flags().StringVar(&g.flagSccManageModuleConfigFile,
 		"module-config-file", "",
 		"Path to a JSON or YAML file mapping module name to its intended "+
 			"enablement state. Keys are module names (e.g. DISK_CMEK_DISABLED), "+
 			"values are objects with an `intended_enablement_state` (or "+
 			"`intendedEnablementState`) field of ENABLED, DISABLED, or INHERITED.")
-	sccManageServicesUpdateCmd.Flags().BoolVar(&flagSccManageValidateOnly,
+	g.sccManageServicesUpdateCmd.Flags().BoolVar(&g.flagSccManageValidateOnly,
 		"validate-only", false,
 		"If set, the request is validated (including IAM checks) but no "+
 			"action is taken.")
 
-	sccManageServicesDescribeCmd.Long = "Describe a Security Command Center service. " +
+	g.sccManageServicesDescribeCmd.Long = "Describe a Security Command Center service. " +
 		"Resolves INHERITED enablement states to ENABLED or DISABLED for " +
 		"services at ancestor levels.\n\n" +
 		"Positional: SERVICE_NAME. " + serviceNameHelp()
-	sccManageServicesUpdateCmd.Long = "Update the enablement state of a Security Command " +
+	g.sccManageServicesUpdateCmd.Long = "Update the enablement state of a Security Command " +
 		"Center service and its modules for the specified organization, " +
 		"folder, or project.\n\n" +
 		"Positional: SERVICE_NAME. " + serviceNameHelp()
 
-	sccManageServicesCmd.AddCommand(
-		sccManageServicesDescribeCmd,
-		sccManageServicesListCmd,
-		sccManageServicesUpdateCmd,
+	g.sccManageServicesCmd.AddCommand(
+		g.sccManageServicesDescribeCmd,
+		g.sccManageServicesListCmd,
+		g.sccManageServicesUpdateCmd,
 	)
-	sccManageCmd.AddCommand(sccManageServicesCmd)
+	g.sccManageCmd.AddCommand(g.sccManageServicesCmd)
 }
 
 // --- run functions ---
 
-func runSccManageServicesDescribe(cmd *cobra.Command, args []string) error {
-	name, err := sccManageServiceResourceName(args[0])
+func (g *sccCmds) runSccManageServicesDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.sccManageServiceResourceName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var raw map[string]any
-	if err := sccManageRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &raw); err != nil {
+	if err := g.sccManageRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &raw); err != nil {
 		return fmt.Errorf("describing security center service: %w", err)
 	}
-	filter := sccManageParseFilterModules(flagSccManageFilterModules)
+	filter := sccManageParseFilterModules(g.flagSccManageFilterModules)
 	if len(filter) == 0 {
-		return emitFormatted(raw, flagSccFormat)
+		return emitFormattedTo(g.inv.stdout, raw, g.flagSccFormat)
 	}
 	// Filter down to the requested modules, preserving the map shape the
 	// full response uses so downstream tools that key off "modules" keep
@@ -433,46 +380,46 @@ func runSccManageServicesDescribe(cmd *cobra.Command, args []string) error {
 			filtered[key] = value
 		}
 	}
-	return emitFormatted(map[string]any{"modules": filtered}, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, map[string]any{"modules": filtered}, g.flagSccFormat)
 }
 
-func runSccManageServicesList(cmd *cobra.Command, args []string) error {
-	parent, err := sccManageServicesParent()
+func (g *sccCmds) runSccManageServicesList(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccManageServicesParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	services, err := sccManageRest.paginate(
+	ctx := cmd.Context()
+	services, err := g.sccManageRest.paginate(
 		ctx, "/"+parent+"/securityCenterServices",
-		url.Values{}, "securityCenterServices", flagSccPageSize)
+		url.Values{}, "securityCenterServices", g.flagSccPageSize)
 	if err != nil {
 		return fmt.Errorf("listing security center services: %w", err)
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(services, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, services, g.flagSccFormat)
 	}
 	// Default table matches the shape the other scc list commands use:
 	// short name + intended state + effective state.
-	printTableHeading(len(services), "%-40s %-24s %s\n", "NAME", "INTENDED_STATE", "EFFECTIVE_STATE")
+	printTableHeadingTo(g.inv.stdout, len(services), "%-40s %-24s %s\n", "NAME", "INTENDED_STATE", "EFFECTIVE_STATE")
 	for _, s := range services {
 		name, _ := s["name"].(string)
 		intended, _ := s["intendedEnablementState"].(string)
 		effective, _ := s["effectiveEnablementState"].(string)
-		fmt.Printf("%-40s %-24s %s\n", path.Base(name), intended, effective)
+		fmt.Fprintf(g.inv.stdout, "%-40s %-24s %s\n", path.Base(name), intended, effective)
 	}
 	return nil
 }
 
-func runSccManageServicesUpdate(cmd *cobra.Command, args []string) error {
-	name, err := sccManageServiceResourceName(args[0])
+func (g *sccCmds) runSccManageServicesUpdate(cmd *cobra.Command, args []string) error {
+	name, err := g.sccManageServiceResourceName(args[0])
 	if err != nil {
 		return err
 	}
-	state, err := sccManageParseEnablementState(flagSccManageEnablementState)
+	state, err := sccManageParseEnablementState(g.flagSccManageEnablementState)
 	if err != nil {
 		return err
 	}
-	modules, err := sccManageLoadModuleConfig(flagSccManageModuleConfigFile)
+	modules, err := sccManageLoadModuleConfig(g.flagSccManageModuleConfigFile)
 	if err != nil {
 		return err
 	}
@@ -484,11 +431,11 @@ func runSccManageServicesUpdate(cmd *cobra.Command, args []string) error {
 	// Match gcloud-python: prompt before mutating unless --validate-only
 	// makes the call a dry-run. Non-interactive/--quiet callers accept the
 	// default (proceed), matching PromptContinue's behavior upstream.
-	if !flagSccManageValidateOnly {
+	if !g.flagSccManageValidateOnly {
 		msg := fmt.Sprintf(
 			"Are you sure you want to update the Security Center Service %s?",
 			args[0])
-		if !promptYesNo(msg, true) {
+		if !g.inv.confirm(msg, true) {
 			return fmt.Errorf("aborted by user")
 		}
 	}
@@ -503,19 +450,19 @@ func runSccManageServicesUpdate(cmd *cobra.Command, args []string) error {
 
 	query := url.Values{}
 	query.Set("updateMask", mask)
-	if flagSccManageValidateOnly {
+	if g.flagSccManageValidateOnly {
 		query.Set("validateOnly", "true")
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var resp map[string]any
-	if err := sccManageRest.do(ctx, http.MethodPatch, "/"+name, query, body, &resp); err != nil {
+	if err := g.sccManageRest.do(ctx, http.MethodPatch, "/"+name, query, body, &resp); err != nil {
 		return fmt.Errorf("updating security center service: %w", err)
 	}
-	if flagSccManageValidateOnly {
-		fmt.Fprintln(os.Stderr, "Request is valid.")
+	if g.flagSccManageValidateOnly {
+		fmt.Fprintln(g.inv.stderr, "Request is valid.")
 	} else {
-		fmt.Fprintf(os.Stderr, "Updated security center service [%s].\n", name)
+		fmt.Fprintf(g.inv.stderr, "Updated security center service [%s].\n", name)
 	}
-	return emitFormatted(resp, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, resp, g.flagSccFormat)
 }

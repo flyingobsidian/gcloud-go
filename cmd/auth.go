@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,116 +13,56 @@ import (
 	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
-	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
-var authCmd = &cobra.Command{
-	Use:   "auth",
-	Short: "Manage authentication",
-}
+func (s *authCmds) initAuth() {
+	s.authLoginCmd.Flags().StringVar(&s.flagCredFile, "cred-file", "", "Path to service account JSON key file (if omitted, opens browser)")
+	s.authLoginCmd.Flags().BoolVar(&s.flagBrief, "brief", false, "Minimal output")
+	s.authLoginCmd.Flags().BoolVar(&s.flagUpdateADC, "update-adc", false, "Also update Application Default Credentials")
 
-var authLoginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "Authorize access for gcloud CLI",
-	Long: `Authorize gcloud to access Google Cloud. Without --cred-file, opens a browser
-for interactive OAuth2 login. With --cred-file, activates a service account.`,
-	RunE: runAuthLogin,
-}
+	s.authListCmd.Flags().StringVar(&s.flagAuthListFilterAccount, "filter-account", "", "Filter listed accounts by substring match")
+	s.authListCmd.Flags().StringVar(&s.flagAuthListFormat, "format", "", "Output format: json")
 
-var authListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List credentialed accounts",
-	RunE:  runAuthList,
-}
+	s.authRevokeCmd.Flags().BoolVar(&s.flagAuthRevokeAll, "all", false, "Revoke credentials for all accounts")
 
-var authRevokeCmd = &cobra.Command{
-	Use:   "revoke [ACCOUNT ...]",
-	Short: "Revoke credentials for one or more accounts",
-	Long: `Revoke access credentials for one or more accounts. If no account is specified, revokes the active account.
-Use --all to revoke all accounts.`,
-	RunE: runAuthRevoke,
-}
+	s.authActivateServiceAccountCmd.Flags().StringVar(&s.flagActivateSAKeyFile, "key-file", "", "Path to service account JSON key file")
+	s.authActivateServiceAccountCmd.MarkFlagRequired("key-file")
 
-var flagAuthRevokeAll bool
-var flagAuthListFilterAccount string
-var flagAuthListFormat string
-
-var authActivateServiceAccountCmd = &cobra.Command{
-	Use:   "activate-service-account [ACCOUNT]",
-	Short: "Authorize access using a service account key file",
-	Long: `Activate credentials for a service account using a JSON key file.
-
-Example:
-  gcloud auth activate-service-account --key-file=sa-key.json
-  gcloud auth activate-service-account user@project.iam.gserviceaccount.com --key-file=sa-key.json`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runAuthActivateServiceAccount,
-}
-
-var flagActivateSAKeyFile string
-
-var authPrintAccessTokenCmd = &cobra.Command{
-	Use:   "print-access-token [ACCOUNT]",
-	Short: "Print an access token for the specified account",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runAuthPrintAccessToken,
-}
-
-var (
-	flagCredFile  string
-	flagBrief     bool
-	flagUpdateADC bool
-)
-
-func init() {
-	authLoginCmd.Flags().StringVar(&flagCredFile, "cred-file", "", "Path to service account JSON key file (if omitted, opens browser)")
-	authLoginCmd.Flags().BoolVar(&flagBrief, "brief", false, "Minimal output")
-	authLoginCmd.Flags().BoolVar(&flagUpdateADC, "update-adc", false, "Also update Application Default Credentials")
-
-	authListCmd.Flags().StringVar(&flagAuthListFilterAccount, "filter-account", "", "Filter listed accounts by substring match")
-	authListCmd.Flags().StringVar(&flagAuthListFormat, "format", "", "Output format: json")
-
-	authRevokeCmd.Flags().BoolVar(&flagAuthRevokeAll, "all", false, "Revoke credentials for all accounts")
-
-	authActivateServiceAccountCmd.Flags().StringVar(&flagActivateSAKeyFile, "key-file", "", "Path to service account JSON key file")
-	authActivateServiceAccountCmd.MarkFlagRequired("key-file")
-
-	authCmd.AddCommand(authLoginCmd)
-	authCmd.AddCommand(authListCmd)
-	authCmd.AddCommand(authRevokeCmd)
-	authCmd.AddCommand(authPrintAccessTokenCmd)
-	authCmd.AddCommand(authActivateServiceAccountCmd)
+	s.authCmd.AddCommand(s.authLoginCmd)
+	s.authCmd.AddCommand(s.authListCmd)
+	s.authCmd.AddCommand(s.authRevokeCmd)
+	s.authCmd.AddCommand(s.authPrintAccessTokenCmd)
+	s.authCmd.AddCommand(s.authActivateServiceAccountCmd)
 
 	// Stubs for gcloud-python auth subcommands not yet implemented (#538).
-	registerStubGroup(authCmd, "enterprise-certificate-config",
+	registerStubGroup(s.authCmd, "enterprise-certificate-config",
 		"Manage enterprise certificate configuration for certificate-based auth",
 		"create", "delete", "describe", "list", "update")
 
-	rootCmd.AddCommand(authCmd)
 }
 
-func runAuthLogin(cmd *cobra.Command, args []string) error {
-	if flagCredFile != "" {
-		return runAuthLoginCredFile()
+func (s *authCmds) runAuthLogin(cmd *cobra.Command, args []string) error {
+	if s.flagCredFile != "" {
+		return s.runAuthLoginCredFile()
 	}
-	return runAuthLoginBrowser()
+	return s.runAuthLoginBrowser()
 }
 
-func runAuthLoginCredFile() error {
-	store, err := auth.NewStore()
+func (s *authCmds) runAuthLoginCredFile() error {
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
 
-	account, err := store.Store(flagCredFile)
+	account, err := store.Store(s.flagCredFile)
 	if err != nil {
 		return fmt.Errorf("storing credential: %w", err)
 	}
 
-	props, err := config.Load()
+	props, err := s.inv.properties()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -132,14 +71,14 @@ func runAuthLoginCredFile() error {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
-	if flagUpdateADC {
-		if err := copyToADC(flagCredFile); err != nil {
+	if s.flagUpdateADC {
+		if err := s.copyToADC(s.flagCredFile); err != nil {
 			return fmt.Errorf("updating ADC: %w", err)
 		}
 	}
 
-	if !flagBrief {
-		fmt.Printf("Activated service account credentials for: [%s]\n", account)
+	if !s.flagBrief {
+		fmt.Fprintf(s.inv.stdout, "Activated service account credentials for: [%s]\n", account)
 	}
 	return nil
 }
@@ -150,7 +89,7 @@ const (
 	gcloudClientSecret = "d-FL95Q19q7MQmFpd7hHD0Ty"
 )
 
-func runAuthLoginBrowser() error {
+func (s *authCmds) runAuthLoginBrowser() error {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return fmt.Errorf("starting local server: %w", err)
@@ -174,10 +113,10 @@ func runAuthLoginBrowser() error {
 	state := "gcloud-go-login"
 	authURL := oauthCfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.SetAuthURLParam("prompt", "consent"))
 
-	fmt.Println("Your browser has been opened to visit:")
-	fmt.Println()
-	fmt.Println("    " + authURL)
-	fmt.Println()
+	fmt.Fprintln(s.inv.stdout, "Your browser has been opened to visit:")
+	fmt.Fprintln(s.inv.stdout)
+	fmt.Fprintln(s.inv.stdout, "    "+authURL)
+	fmt.Fprintln(s.inv.stdout)
 	openBrowser(authURL)
 
 	codeCh := make(chan string, 1)
@@ -210,7 +149,7 @@ func runAuthLoginBrowser() error {
 	}
 	server.Close()
 
-	ctx := context.Background()
+	ctx := s.inv.context()
 	token, err := oauthCfg.Exchange(ctx, code)
 	if err != nil {
 		return fmt.Errorf("exchanging auth code: %w", err)
@@ -242,7 +181,7 @@ func runAuthLoginBrowser() error {
 
 	data, _ := json.Marshal(credJSON)
 
-	store, err := auth.NewStore()
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -252,7 +191,7 @@ func runAuthLoginBrowser() error {
 		return fmt.Errorf("storing credentials: %w", err)
 	}
 
-	props, err := config.Load()
+	props, err := s.inv.properties()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -261,8 +200,8 @@ func runAuthLoginBrowser() error {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
-	if !flagBrief {
-		fmt.Printf("\nYou are now logged in as [%s].\n", account)
+	if !s.flagBrief {
+		fmt.Fprintf(s.inv.stdout, "\nYou are now logged in as [%s].\n", account)
 	}
 	return nil
 }
@@ -282,8 +221,8 @@ func openBrowser(url string) {
 	cmd.Start()
 }
 
-func runAuthList(cmd *cobra.Command, args []string) error {
-	store, err := auth.NewStore()
+func (s *authCmds) runAuthList(cmd *cobra.Command, args []string) error {
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -294,24 +233,24 @@ func runAuthList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determine active account from config.
-	props, _ := config.Load()
+	props, _ := s.inv.properties()
 	active := ""
 	if props != nil {
 		active = props.Core.Account
 	}
 
 	// Apply filter if specified.
-	if flagAuthListFilterAccount != "" {
+	if s.flagAuthListFilterAccount != "" {
 		var filtered []string
 		for _, acct := range accounts {
-			if strings.Contains(acct, flagAuthListFilterAccount) {
+			if strings.Contains(acct, s.flagAuthListFilterAccount) {
 				filtered = append(filtered, acct)
 			}
 		}
 		accounts = filtered
 	}
 
-	if flagAuthListFormat == "json" {
+	if s.flagAuthListFormat == "json" {
 		type accountEntry struct {
 			Account string `json:"account"`
 			Status  string `json:"status"`
@@ -328,60 +267,60 @@ func runAuthList(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("encoding JSON: %w", err)
 		}
-		fmt.Println(string(data))
+		fmt.Fprintln(s.inv.stdout, string(data))
 		return nil
 	}
 
 	if len(accounts) == 0 {
-		fmt.Println("")
-		fmt.Println("No credentialed accounts found")
-		fmt.Println("")
-		fmt.Println("To login, run:")
-		fmt.Println("    $ gcloud auth login `ACCOUNT`")
-		fmt.Println("")
+		fmt.Fprintln(s.inv.stdout, "")
+		fmt.Fprintln(s.inv.stdout, "No credentialed accounts found")
+		fmt.Fprintln(s.inv.stdout, "")
+		fmt.Fprintln(s.inv.stdout, "To login, run:")
+		fmt.Fprintln(s.inv.stdout, "    $ gcloud auth login `ACCOUNT`")
+		fmt.Fprintln(s.inv.stdout, "")
 		return nil
 	}
 
-	fmt.Println("      Credentialed Accounts")
-	printTableHeading(len(accounts), "ACTIVE  ACCOUNT\n")
+	fmt.Fprintln(s.inv.stdout, "      Credentialed Accounts")
+	printTableHeadingTo(s.inv.stdout, len(accounts), "ACTIVE  ACCOUNT\n")
 	for _, acct := range accounts {
 		marker := " "
 		if acct == active {
 			marker = "*"
 		}
-		fmt.Printf("%s       %s\n", marker, acct)
+		fmt.Fprintf(s.inv.stdout, "%s       %s\n", marker, acct)
 	}
 
-	fmt.Println()
-	fmt.Println("To set the active account, run:")
-	fmt.Println("    $ gcloud config set account `ACCOUNT`")
-	fmt.Println("")
+	fmt.Fprintln(s.inv.stdout)
+	fmt.Fprintln(s.inv.stdout, "To set the active account, run:")
+	fmt.Fprintln(s.inv.stdout, "    $ gcloud config set account `ACCOUNT`")
+	fmt.Fprintln(s.inv.stdout, "")
 	return nil
 }
 
-func runAuthRevoke(cmd *cobra.Command, args []string) error {
-	store, err := auth.NewStore()
+func (s *authCmds) runAuthRevoke(cmd *cobra.Command, args []string) error {
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
 
-	if flagAuthRevokeAll {
+	if s.flagAuthRevokeAll {
 		accounts, err := store.List()
 		if err != nil {
 			return fmt.Errorf("listing accounts: %w", err)
 		}
 		if len(accounts) == 0 {
-			fmt.Println("No credentialed accounts to revoke.")
+			fmt.Fprintln(s.inv.stdout, "No credentialed accounts to revoke.")
 			return nil
 		}
 		for _, acct := range accounts {
 			if err := store.Revoke(acct); err != nil {
 				return err
 			}
-			fmt.Printf("Revoked credentials for: [%s]\n", acct)
+			fmt.Fprintf(s.inv.stdout, "Revoked credentials for: [%s]\n", acct)
 		}
 		// Clear active account from config.
-		props, err := config.Load()
+		props, err := s.inv.properties()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
 		}
@@ -395,7 +334,7 @@ func runAuthRevoke(cmd *cobra.Command, args []string) error {
 	// Determine which accounts to revoke.
 	accounts := args
 	if len(accounts) == 0 {
-		props, err := config.Load()
+		props, err := s.inv.properties()
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
 		}
@@ -411,11 +350,11 @@ func runAuthRevoke(cmd *cobra.Command, args []string) error {
 		if err := store.Revoke(account); err != nil {
 			return err
 		}
-		fmt.Printf("Revoked credentials for: [%s]\n", account)
+		fmt.Fprintf(s.inv.stdout, "Revoked credentials for: [%s]\n", account)
 	}
 
 	// If we revoked the active account, clear it from config.
-	props, err := config.Load()
+	props, err := s.inv.properties()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -432,18 +371,18 @@ func runAuthRevoke(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runAuthActivateServiceAccount(cmd *cobra.Command, args []string) error {
-	store, err := auth.NewStore()
+func (s *authCmds) runAuthActivateServiceAccount(cmd *cobra.Command, args []string) error {
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
 
-	account, err := store.Store(flagActivateSAKeyFile)
+	account, err := store.Store(s.flagActivateSAKeyFile)
 	if err != nil {
 		return fmt.Errorf("storing credential: %w", err)
 	}
 
-	props, err := config.Load()
+	props, err := s.inv.properties()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -452,18 +391,18 @@ func runAuthActivateServiceAccount(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
-	fmt.Printf("Activated service account credentials for: [%s]\n", account)
+	fmt.Fprintf(s.inv.stdout, "Activated service account credentials for: [%s]\n", account)
 	return nil
 }
 
-func runAuthPrintAccessToken(cmd *cobra.Command, args []string) error {
-	account := flagAccount
+func (s *authCmds) runAuthPrintAccessToken(cmd *cobra.Command, args []string) error {
+	account := s.inv.flags.account
 	if len(args) > 0 {
 		account = args[0]
 	}
 
-	ctx := context.Background()
-	ts, err := auth.TokenSource(ctx, account, "https://www.googleapis.com/auth/cloud-platform")
+	ctx := cmd.Context()
+	ts, err := s.inv.tokens.TokenSource(ctx, account, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return fmt.Errorf("obtaining credentials: %w", err)
 	}
@@ -473,18 +412,18 @@ func runAuthPrintAccessToken(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("generating access token: %w", err)
 	}
 
-	fmt.Println(token.AccessToken)
+	fmt.Fprintln(s.inv.stdout, token.AccessToken)
 	return nil
 }
 
-func copyToADC(credFile string) error {
+func (s *authCmds) copyToADC(credFile string) error {
 	src, err := os.Open(credFile)
 	if err != nil {
 		return err
 	}
 	defer src.Close()
 
-	adcPath := adcFilePath()
+	adcPath := s.inv.adcFilePath()
 	if err := os.MkdirAll(filepath.Dir(adcPath), 0700); err != nil {
 		return err
 	}
@@ -497,4 +436,145 @@ func copyToADC(credFile string) error {
 
 	_, err = io.Copy(dst, src)
 	return err
+}
+
+// authCmds holds the commands and flag values of one invocation's "auth"
+// command group, so invocations don't share state (#2070).
+type authCmds struct {
+	inv *invocation
+
+	authCmd                       *cobra.Command
+	authLoginCmd                  *cobra.Command
+	authListCmd                   *cobra.Command
+	authRevokeCmd                 *cobra.Command
+	flagAuthRevokeAll             bool
+	flagAuthListFilterAccount     string
+	flagAuthListFormat            string
+	authActivateServiceAccountCmd *cobra.Command
+	flagActivateSAKeyFile         string
+	authPrintAccessTokenCmd       *cobra.Command
+	flagCredFile                  string
+	flagBrief                     bool
+	flagUpdateADC                 bool
+	authApplicationDefaultCmd     *cobra.Command
+	authADCLoginCmd               *cobra.Command
+	authADCSetQuotaProjectCmd     *cobra.Command
+	authADCRevokeCmd              *cobra.Command
+	authADCPrintAccessTokenCmd    *cobra.Command
+	flagADCCredFile               string
+	authConfigureDockerCmd        *cobra.Command
+	flagIncludeArtifactRegistry   bool
+	flagAuthPitAudiences          []string
+	flagAuthPitIncludeEmail       bool
+	flagAuthPitTokenFormat        string
+	flagAuthPitImpersonation      string
+	authPrintIdentityTokenCmd     *cobra.Command
+}
+
+// newAuthCmd returns the "auth" command group for inv.
+func newAuthCmd(inv *invocation) *cobra.Command {
+	return newAuthCmds(inv).authCmd
+}
+
+// newAuthCmds builds the "auth" command group for inv and returns its state.
+func newAuthCmds(inv *invocation) *authCmds {
+	s := &authCmds{inv: inv}
+	s.authCmd = &cobra.Command{
+		Use:   "auth",
+		Short: "Manage authentication",
+	}
+	s.authLoginCmd = &cobra.Command{
+		Use:   "login",
+		Short: "Authorize access for gcloud CLI",
+		Long: `Authorize gcloud to access Google Cloud. Without --cred-file, opens a browser
+for interactive OAuth2 login. With --cred-file, activates a service account.`,
+		RunE: s.runAuthLogin,
+	}
+	s.authListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List credentialed accounts",
+		RunE:  s.runAuthList,
+	}
+	s.authRevokeCmd = &cobra.Command{
+		Use:   "revoke [ACCOUNT ...]",
+		Short: "Revoke credentials for one or more accounts",
+		Long: `Revoke access credentials for one or more accounts. If no account is specified, revokes the active account.
+Use --all to revoke all accounts.`,
+		RunE: s.runAuthRevoke,
+	}
+	s.authActivateServiceAccountCmd = &cobra.Command{
+		Use:   "activate-service-account [ACCOUNT]",
+		Short: "Authorize access using a service account key file",
+		Long: `Activate credentials for a service account using a JSON key file.
+
+Example:
+  gcloud auth activate-service-account --key-file=sa-key.json
+  gcloud auth activate-service-account user@project.iam.gserviceaccount.com --key-file=sa-key.json`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: s.runAuthActivateServiceAccount,
+	}
+	s.authPrintAccessTokenCmd = &cobra.Command{
+		Use:   "print-access-token [ACCOUNT]",
+		Short: "Print an access token for the specified account",
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  s.runAuthPrintAccessToken,
+	}
+	s.authApplicationDefaultCmd = &cobra.Command{
+		Use:   "application-default",
+		Short: "Manage Application Default Credentials",
+	}
+	s.authADCLoginCmd = &cobra.Command{
+		Use:   "login",
+		Short: "Set up Application Default Credentials from a credential file",
+		Long: `Copies a credential file to the Application Default Credentials (ADC)
+well-known location so that client libraries can automatically find it.
+
+This is the non-interactive equivalent of the browser-based OAuth flow
+provided by the Python gcloud CLI.
+
+Example:
+  gcloud auth application-default login --cred-file=sa-key.json`,
+		RunE: s.runAuthADCLogin,
+	}
+	s.authADCSetQuotaProjectCmd = &cobra.Command{
+		Use:   "set-quota-project QUOTA_PROJECT_ID",
+		Short: "Update the quota project in Application Default Credentials",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runAuthADCSetQuotaProject,
+	}
+	s.authADCRevokeCmd = &cobra.Command{
+		Use:   "revoke",
+		Short: "Revoke Application Default Credentials",
+		Long:  "Delete the Application Default Credentials file.",
+		Args:  cobra.NoArgs,
+		RunE:  s.runAuthADCRevoke,
+	}
+	s.authADCPrintAccessTokenCmd = &cobra.Command{
+		Use:   "print-access-token",
+		Short: "Print an access token for Application Default Credentials",
+		Args:  cobra.NoArgs,
+		RunE:  s.runAuthADCPrintAccessToken,
+	}
+	s.authConfigureDockerCmd = &cobra.Command{
+		Use:   "configure-docker [REGISTRIES]",
+		Short: "Configure Docker to use gcloud as a credential helper",
+		Long: `Configure Docker to authenticate with Artifact Registry or Container Registry.
+Examples:
+  gcloud auth configure-docker
+  gcloud auth configure-docker europe-west1-docker.pkg.dev
+  gcloud auth configure-docker us-docker.pkg.dev,europe-west1-docker.pkg.dev`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: s.runAuthConfigureDocker,
+	}
+	s.authPrintIdentityTokenCmd = &cobra.Command{
+		Use:   "print-identity-token",
+		Short: "Print an OpenID Connect identity token by impersonating a service account",
+		Args:  cobra.NoArgs,
+		RunE:  s.runAuthPrintIdentityToken,
+	}
+	s.initAuth()
+	s.initAuthAdc()
+	s.initAuthDocker()
+	s.initAuthPrintIdentityToken()
+	return s
 }

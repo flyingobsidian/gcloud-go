@@ -6,7 +6,7 @@ import (
 )
 
 func TestCheatSheetCommandRegistered(t *testing.T) {
-	for _, c := range rootCmd.Commands() {
+	for _, c := range newRootCmd(legacyTestInvocation(), true).Commands() {
 		if c.Name() == "cheat-sheet" {
 			return
 		}

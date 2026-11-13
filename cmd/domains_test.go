@@ -7,7 +7,8 @@ import (
 )
 
 func domainsSubgroup(name string) *cobra.Command {
-	for _, c := range domainsCmd.Commands() {
+	grp := newDomainsCmds(legacyTestInvocation())
+	for _, c := range grp.domainsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

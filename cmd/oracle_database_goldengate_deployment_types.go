@@ -1,56 +1,35 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database goldengate-deployment-types (#1273) ---
 
-var oracleGgDeployTypesCmd = &cobra.Command{
-	Use:   "goldengate-deployment-types",
-	Short: "List Oracle GoldenGate deployment types",
-}
-
-var (
-	flagOdbGgDtLocation string
-	flagOdbGgDtFormat   string
-	flagOdbGgDtPageSize int64
-	flagOdbGgDtFilter   string
-)
-
-var (
-	oracleGgDtListCmd = &cobra.Command{
-		Use: "list", Short: "List GoldenGate deployment types in a location",
-		Args: cobra.NoArgs, RunE: runOracleGgDtList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{oracleGgDtListCmd}
+func (s *oracleDatabaseCmds) initOracleDatabaseGoldengateDeploymentTypes() {
+	all := []*cobra.Command{s.oracleGgDtListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbGgDtLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbGgDtLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbGgDtFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbGgDtFormat, "format", "", "Output format")
 	}
-	oracleGgDtListCmd.Flags().Int64Var(&flagOdbGgDtPageSize, "page-size", 0, "Maximum results per page")
-	oracleGgDtListCmd.Flags().StringVar(&flagOdbGgDtFilter, "filter", "", "Server-side filter expression")
+	s.oracleGgDtListCmd.Flags().Int64Var(&s.flagOdbGgDtPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleGgDtListCmd.Flags().StringVar(&s.flagOdbGgDtFilter, "filter", "", "Server-side filter expression")
 
-	oracleGgDeployTypesCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleGgDeployTypesCmd)
+	s.oracleGgDeployTypesCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleGgDeployTypesCmd)
 }
 
-func runOracleGgDtList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbGgDtLocation)
+func (s *oracleDatabaseCmds) runOracleGgDtList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbGgDtLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -58,11 +37,11 @@ func runOracleGgDtList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.GoldengateDeploymentTypes.List(parent).Context(ctx)
-		if flagOdbGgDtPageSize > 0 {
-			call = call.PageSize(flagOdbGgDtPageSize)
+		if s.flagOdbGgDtPageSize > 0 {
+			call = call.PageSize(s.flagOdbGgDtPageSize)
 		}
-		if flagOdbGgDtFilter != "" {
-			call = call.Filter(flagOdbGgDtFilter)
+		if s.flagOdbGgDtFilter != "" {
+			call = call.Filter(s.flagOdbGgDtFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -77,5 +56,5 @@ func runOracleGgDtList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbGgDtFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbGgDtFormat)
 }

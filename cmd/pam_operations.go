@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,120 +11,92 @@ import (
 
 // --- gcloud pam operations (#964) ---
 
-var pamOpCmd = &cobra.Command{Use: "operations", Short: "Manage Privileged Access Manager operations"}
-
-var (
-	flagPAMOpLocation string
-	flagPAMOpFormat   string
-	flagPAMOpPageSize int64
-	flagPAMOpTimeout  time.Duration
-)
-
-var (
-	pamOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete a Privileged Access Manager operation record",
-		Args: cobra.ExactArgs(1), RunE: runPAMOpDelete,
-	}
-	pamOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Privileged Access Manager operation",
-		Args: cobra.ExactArgs(1), RunE: runPAMOpDescribe,
-	}
-	pamOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Privileged Access Manager operations",
-		Args: cobra.NoArgs, RunE: runPAMOpList,
-	}
-	pamOpWaitCmd = &cobra.Command{
-		Use: "wait OPERATION", Short: "Wait for a Privileged Access Manager operation to finish",
-		Args: cobra.ExactArgs(1), RunE: runPAMOpWait,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{pamOpDeleteCmd, pamOpDescribeCmd, pamOpListCmd, pamOpWaitCmd}
+func (s *pamCmds) initPamOperations() {
+	all := []*cobra.Command{s.pamOpDeleteCmd, s.pamOpDescribeCmd, s.pamOpListCmd, s.pamOpWaitCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagPAMOpLocation, "location", "",
+		c.Flags().StringVar(&s.flagPAMOpLocation, "location", "",
 			"Location containing the operation (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagPAMOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagPAMOpFormat, "format", "", "Output format")
 	}
-	pamOpListCmd.Flags().Int64Var(&flagPAMOpPageSize, "page-size", 0, "Maximum results per page")
-	pamOpWaitCmd.Flags().DurationVar(&flagPAMOpTimeout, "timeout", 30*time.Minute,
+	s.pamOpListCmd.Flags().Int64Var(&s.flagPAMOpPageSize, "page-size", 0, "Maximum results per page")
+	s.pamOpWaitCmd.Flags().DurationVar(&s.flagPAMOpTimeout, "timeout", 30*time.Minute,
 		"Maximum time to wait for the operation to finish")
 
-	pamOpCmd.AddCommand(all...)
-	pamCmd.AddCommand(pamOpCmd)
+	s.pamOpCmd.AddCommand(all...)
+	s.pamCmd.AddCommand(s.pamOpCmd)
 }
 
-func pamOpParent() (string, error) {
-	project, err := resolveProject()
+func (s *pamCmds) pamOpParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagPAMOpLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagPAMOpLocation), nil
 }
 
-func pamOpName(id string) (string, error) {
+func (s *pamCmds) pamOpName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") ||
 		strings.HasPrefix(id, "folders/") ||
 		strings.HasPrefix(id, "organizations/") {
 		return id, nil
 	}
-	parent, err := pamOpParent()
+	parent, err := s.pamOpParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/operations/%s", parent, id), nil
 }
 
-func runPAMOpDelete(cmd *cobra.Command, args []string) error {
-	name, err := pamOpName(args[0])
+func (s *pamCmds) runPAMOpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.pamOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if err := pamRest.do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	ctx := cmd.Context()
+	if err := s.inv.rest(pamRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runPAMOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := pamOpName(args[0])
+func (s *pamCmds) runPAMOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.pamOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := pamRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(pamRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagPAMOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagPAMOpFormat)
 }
 
-func runPAMOpList(cmd *cobra.Command, args []string) error {
-	parent, err := pamOpParent()
+func (s *pamCmds) runPAMOpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.pamOpParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	items, err := pamRest.paginate(ctx, "/"+parent+"/operations", nil, "operations", flagPAMOpPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(pamRest).paginate(ctx, "/"+parent+"/operations", nil, "operations", s.flagPAMOpPageSize)
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	return emitFormatted(items, flagPAMOpFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagPAMOpFormat)
 }
 
-func runPAMOpWait(cmd *cobra.Command, args []string) error {
-	name, err := pamOpName(args[0])
+func (s *pamCmds) runPAMOpWait(cmd *cobra.Command, args []string) error {
+	name, err := s.pamOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	op, err := pamRest.waitOperation(ctx, name, flagPAMOpTimeout)
+	ctx := cmd.Context()
+	op, err := s.inv.rest(pamRest).waitOperation(ctx, name, s.flagPAMOpTimeout)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Operation %s completed.\n", args[0])
-	return emitFormatted(op, flagPAMOpFormat)
+	fmt.Fprintf(s.inv.stdout, "Operation %s completed.\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagPAMOpFormat)
 }

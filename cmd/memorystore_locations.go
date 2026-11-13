@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,68 +10,50 @@ import (
 
 // --- gcloud memorystore locations (#979) ---
 
-var memstoreLocCmd = &cobra.Command{Use: "locations", Short: "Manage Memorystore locations"}
-
-var (
-	flagMemstoreLocFormat   string
-	flagMemstoreLocPageSize int64
-)
-
-var (
-	memstoreLocDescribeCmd = &cobra.Command{
-		Use: "describe LOCATION", Short: "Describe a Memorystore location",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreLocDescribe,
-	}
-	memstoreLocListCmd = &cobra.Command{
-		Use: "list", Short: "List Memorystore locations",
-		Args: cobra.NoArgs, RunE: runMemstoreLocList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{memstoreLocDescribeCmd, memstoreLocListCmd}
+func (s *memorystoreCmds) initMemorystoreLocations() {
+	all := []*cobra.Command{s.memstoreLocDescribeCmd, s.memstoreLocListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagMemstoreLocFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagMemstoreLocFormat, "format", "", "Output format")
 	}
-	memstoreLocListCmd.Flags().Int64Var(&flagMemstoreLocPageSize, "page-size", 0, "Maximum results per page")
+	s.memstoreLocListCmd.Flags().Int64Var(&s.flagMemstoreLocPageSize, "page-size", 0, "Maximum results per page")
 
-	memstoreLocCmd.AddCommand(all...)
-	memorystoreCmd.AddCommand(memstoreLocCmd)
+	s.memstoreLocCmd.AddCommand(all...)
+	s.memorystoreCmd.AddCommand(s.memstoreLocCmd)
 }
 
-func memstoreLocationName(id string) (string, error) {
+func (s *memorystoreCmds) memstoreLocationName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("projects/%s/locations/%s", project, id), nil
 }
 
-func runMemstoreLocDescribe(cmd *cobra.Command, args []string) error {
-	name, err := memstoreLocationName(args[0])
+func (s *memorystoreCmds) runMemstoreLocDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreLocationName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(got, flagMemstoreLocFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreLocFormat)
 }
 
-func runMemstoreLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *memorystoreCmds) runMemstoreLocList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	items, err := memorystoreRest.paginate(ctx, fmt.Sprintf("/projects/%s/locations", project), nil, "locations", flagMemstoreLocPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(memorystoreRest).paginate(ctx, fmt.Sprintf("/projects/%s/locations", project), nil, "locations", s.flagMemstoreLocPageSize)
 	if err != nil {
 		return fmt.Errorf("listing locations: %w", err)
 	}
-	return emitFormatted(items, flagMemstoreLocFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagMemstoreLocFormat)
 }

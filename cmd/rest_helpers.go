@@ -21,6 +21,9 @@ import (
 // aren't exposed by google.golang.org/api.
 type restClient struct {
 	endpoint string
+	// inv supplies credentials, the billing project and HTTP logging. nil
+	// means the process-wide ones, for groups not yet migrated (#2070).
+	inv *invocation
 }
 
 // restError is returned by restClient.do when the HTTP response is non-2xx.
@@ -39,6 +42,33 @@ func (e *restError) Error() string {
 
 func newRESTClient(endpoint string) *restClient {
 	return &restClient{endpoint: strings.TrimRight(endpoint, "/")}
+}
+
+// tokenSource returns the token source for c's calls.
+func (c *restClient) tokenSource(ctx context.Context, scopes ...string) (oauth2.TokenSource, error) {
+	if c.inv == nil {
+		return restTokenSource(ctx, scopes...)
+	}
+	if c.inv.restTokenSource != nil {
+		return c.inv.restTokenSource(ctx, scopes...)
+	}
+	return c.inv.tokens.TokenSource(ctx, c.inv.flags.account, scopes...)
+}
+
+// userProject returns the billing / quota project for c's calls.
+func (c *restClient) userProject() string {
+	if c.inv == nil {
+		return restUserProject()
+	}
+	return c.inv.quotaProject()
+}
+
+// debugWriter returns where c logs its calls, or nil.
+func (c *restClient) debugWriter() io.Writer {
+	if c.inv == nil {
+		return httpDebugWriter()
+	}
+	return c.inv.httpDebugWriter()
 }
 
 // restTokenSource is the function used to obtain an OAuth2 token source for
@@ -79,18 +109,18 @@ func (c *restClient) do(ctx context.Context, method, path string, query url.Valu
 	// project and reject ADC user credentials when it is missing (#1740);
 	// failing here names the setting to change, where the server-side
 	// PERMISSION_DENIED does not.
-	qp := restUserProject()
+	qp := c.userProject()
 	if qp == "" {
 		return errNoBillingProject(endpointHost(c.endpoint))
 	}
-	ts, err := restTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
+	ts, err := c.tokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return fmt.Errorf("obtaining credentials: %w", err)
 	}
 	client := oauth2.NewClient(ctx, ts)
 	// Log below the oauth2 transport rather than above it, so the printed
 	// request shows the Authorization header as actually sent.
-	if out := httpDebugWriter(); out != nil {
+	if out := c.debugWriter(); out != nil {
 		if t, ok := client.Transport.(*oauth2.Transport); ok {
 			t.Base = httplog.NewTransport(t.Base, out)
 		}
@@ -144,15 +174,14 @@ func (c *restClient) do(ctx context.Context, method, path string, query url.Valu
 }
 
 // logPageProgress reports how far a paginated listing has got, once per page,
-// when debug logging is on.
+// to out when debug logging is on (out is non-nil).
 //
 // Google's JSON APIs put the result count in the response body, not in a
 // response header: there is no X-Total-Count or equivalent to read. Listings
 // that report a grand total do it with the AIP-158 `totalSize` field, which is
 // itself optional -- SCC findings.list returns it, many other collections do
 // not -- so the total is only printed when the server actually sent one.
-func logPageProgress(sliceField string, page, pageCount, running int, totalSize any, more bool) {
-	out := httpDebugWriter()
+func logPageProgress(out io.Writer, sliceField string, page, pageCount, running int, totalSize any, more bool) {
 	if out == nil {
 		return
 	}
@@ -200,7 +229,7 @@ func (c *restClient) paginate(ctx context.Context, path string, base url.Values,
 			pageCount = len(arr)
 		}
 		tok, _ := raw["nextPageToken"].(string)
-		logPageProgress(sliceField, page, pageCount, len(all), raw["totalSize"], tok != "")
+		logPageProgress(c.debugWriter(), sliceField, page, pageCount, len(all), raw["totalSize"], tok != "")
 		if tok == "" {
 			break
 		}

@@ -6,6 +6,10 @@ A command group is *migrated* when it keeps all its state in an `invocation`
 concurrently through the public `gcloud` package. Unmigrated groups still run
 in the CLI, but `gcloud.Runner.Run` returns `ErrNotInProcess` for them.
 
+Every command group is now migrated; `TestNoLegacyGroupsLeft` keeps it that
+way. New command groups must be written in the migrated form from the start.
+This document describes how the groups were migrated.
+
 `cmd/projects.go` is the reference example.
 
 ## Large groups: `tools/migrateglobals`
@@ -27,12 +31,29 @@ It keeps the group's code where it is, but:
   state into a method, and applies the table below (`context.Background()`
   becomes the command's `cmd.Context()`, or `inv.context()` where there is no
   command);
-- prints references from outside the group (usually tests) to fix by hand.
+- binds package-level REST clients (`*restClient`) to the invocation with
+  `inv.rest(c)`, and turns `newRESTClient(endpoint)` into
+  `inv.restClient(endpoint)`;
+- with `-fixtests`, rewrites test functions that use the group's variables or
+  converted functions to build their own group state for a
+  `legacyTestInvocation()` (which keeps `captureStdout` and the REST test
+  hooks working), and prints references outside functions to fix by hand;
+- adds the group to `migratedGroups`;
+- prints references from outside the group to fix by hand.
+
+Things it does not handle, which `go vet ./cmd` or the tests show:
+
+- methods on other types, such as generic CRUD helpers (`ncCRUD[T]`): give
+  the type a field holding the group state and route its globals through it;
+- test helpers that set up group state for a test: `-fixtests` gives them
+  their own state, so pass the test's state in instead;
+- tests that call a run function directly: `cmd.Context()` is nil until the
+  command runs, so call `setContexts` on the group first.
 
 Run it with `-audit` to list helpers outside the group that the group calls
 and that still use process state; give those an `io.Writer` or `*invocation`
-form first. Then do steps 4 to 7 below. storage, logging and compute were
-migrated this way.
+form first. Then do steps 4 to 7 below. Every group from storage, logging
+and compute on was migrated this way.
 
 ## Steps
 

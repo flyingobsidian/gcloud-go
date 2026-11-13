@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 	"google.golang.org/api/googleapi"
@@ -18,41 +17,25 @@ import (
 
 // --- gcloud artifacts files upload (#1909, gcloud-python 584.0.0) ---
 
-var (
-	flagArtFilesUpFile         string
-	flagArtFilesUpFileType     string
-	flagArtFilesUpSource       string
-	flagArtFilesUpSourceDir    string
-	flagArtFilesUpSkipExisting bool
-	flagArtFilesUpAsync        bool
-)
-
-var artifactsFilesUploadCmd = &cobra.Command{
-	Use:   "upload",
-	Short: "Upload files to Artifact Registry",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsFilesUpload,
-}
-
-func init() {
-	c := artifactsFilesUploadCmd
-	c.Flags().StringVar(&flagArtFilesLocation, "location", "", "Repository location (required)")
-	c.Flags().StringVar(&flagArtFilesRepository, "repository", "", "Repository name (required)")
-	c.Flags().StringVar(&flagArtFilesFormat, "format", "", "Output format")
+func (s *artifactsCmds) initArtifactsFilesUpload() {
+	c := s.artifactsFilesUploadCmd
+	c.Flags().StringVar(&s.flagArtFilesLocation, "location", "", "Repository location (required)")
+	c.Flags().StringVar(&s.flagArtFilesRepository, "repository", "", "Repository name (required)")
+	c.Flags().StringVar(&s.flagArtFilesFormat, "format", "", "Output format")
 	_ = c.MarkFlagRequired("location")
 	_ = c.MarkFlagRequired("repository")
-	c.Flags().StringVar(&flagArtFilesUpFile, "file", "",
+	c.Flags().StringVar(&s.flagArtFilesUpFile, "file", "",
 		"The name under which the file will be uploaded. If not specified, the name of the local file is used.")
-	c.Flags().StringVar(&flagArtFilesUpFileType, "file-type", "attachment",
+	c.Flags().StringVar(&s.flagArtFilesUpFileType, "file-type", "attachment",
 		"The type of the file to upload: attachment or artifact")
-	c.Flags().StringVar(&flagArtFilesUpSource, "source", "", "The path to the file you are uploading")
-	c.Flags().StringVar(&flagArtFilesUpSourceDir, "source-directory", "", "The directory you are uploading")
+	c.Flags().StringVar(&s.flagArtFilesUpSource, "source", "", "The path to the file you are uploading")
+	c.Flags().StringVar(&s.flagArtFilesUpSourceDir, "source-directory", "", "The directory you are uploading")
 	c.MarkFlagsMutuallyExclusive("source", "source-directory")
 	c.MarkFlagsOneRequired("source", "source-directory")
-	c.Flags().BoolVar(&flagArtFilesUpSkipExisting, "skip-existing", false,
+	c.Flags().BoolVar(&s.flagArtFilesUpSkipExisting, "skip-existing", false,
 		"If specified, skip uploading files that already exist in the repository, and continue to upload the remaining files.")
-	c.Flags().BoolVar(&flagArtFilesUpAsync, "async", false, "Return immediately, without waiting for the operation in progress to complete.")
-	artifactsFilesCmd.AddCommand(c)
+	c.Flags().BoolVar(&s.flagArtFilesUpAsync, "async", false, "Return immediately, without waiting for the operation in progress to complete.")
+	s.artifactsFilesCmd.AddCommand(c)
 }
 
 // artFilesUploadType maps --file-type onto UploadFileRequest.fileType, as
@@ -74,64 +57,64 @@ func artMimeType(path string) string {
 	return "application/octet-stream"
 }
 
-func runArtifactsFilesUpload(cmd *cobra.Command, args []string) error {
-	fileType, err := artFilesUploadType(flagArtFilesUpFileType)
+func (s *artifactsCmds) runArtifactsFilesUpload(cmd *cobra.Command, args []string) error {
+	fileType, err := artFilesUploadType(s.flagArtFilesUpFileType)
 	if err != nil {
 		return err
 	}
-	if flagArtFilesUpSource != "" && flagArtFilesUpSkipExisting {
+	if s.flagArtFilesUpSource != "" && s.flagArtFilesUpSkipExisting {
 		return errors.New("Skip existing is not supported for single file uploads.")
 	}
-	if flagArtFilesUpSourceDir != "" && flagArtFilesUpAsync {
+	if s.flagArtFilesUpSourceDir != "" && s.flagArtFilesUpAsync {
 		return errors.New("Asynchronous uploads not supported for directories.")
 	}
-	if flagArtFilesUpSourceDir != "" && flagArtFilesUpFile != "" {
+	if s.flagArtFilesUpSourceDir != "" && s.flagArtFilesUpFile != "" {
 		return errors.New("File name is not supported for directory uploads.")
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	parent := artRepoParent(project, flagArtFilesLocation, flagArtFilesRepository)
+	parent := artRepoParent(project, s.flagArtFilesLocation, s.flagArtFilesRepository)
 
-	if flagArtFilesUpSource != "" {
-		op, err := artUploadFile(ctx, svc, parent, flagArtFilesUpSource, flagArtFilesUpFile, fileType)
+	if s.flagArtFilesUpSource != "" {
+		op, err := s.artUploadFile(ctx, svc, parent, s.flagArtFilesUpSource, s.flagArtFilesUpFile, fileType)
 		if err != nil {
 			return err
 		}
-		if flagArtFilesUpAsync {
-			return emitFormatted(op, flagArtFilesFormat)
+		if s.flagArtFilesUpAsync {
+			return emitFormattedTo(s.inv.stdout, op, s.flagArtFilesFormat)
 		}
 		final, err := waitForArtifactRegistryOperation(ctx, svc, op)
 		if err != nil {
 			return err
 		}
 		if final.Response != nil {
-			return emitFormatted(final.Response, flagArtFilesFormat)
+			return emitFormattedTo(s.inv.stdout, final.Response, s.flagArtFilesFormat)
 		}
 		return nil
 	}
 
-	dir := filepath.Clean(expandHome(flagArtFilesUpSourceDir))
+	dir := filepath.Clean(expandHome(s.flagArtFilesUpSourceDir))
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 		return errors.New("Specified path is not an existing directory.")
 	}
-	fmt.Fprintf(os.Stderr, "Uploading directory: %s\n", flagArtFilesUpSourceDir)
+	fmt.Fprintf(s.inv.stderr, "Uploading directory: %s\n", s.flagArtFilesUpSourceDir)
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		op, err := artUploadFile(ctx, svc, parent, path, "", fileType)
+		op, err := s.artUploadFile(ctx, svc, parent, path, "", fileType)
 		if err == nil {
 			_, err = waitForArtifactRegistryOperation(ctx, svc, op)
 		}
-		if err != nil && flagArtFilesUpSkipExisting && artAlreadyExists(err) {
-			fmt.Fprintln(os.Stderr, "WARNING: File with the same ID already exists.")
+		if err != nil && s.flagArtFilesUpSkipExisting && artAlreadyExists(err) {
+			fmt.Fprintln(s.inv.stderr, "WARNING: File with the same ID already exists.")
 			return nil
 		}
 		return err
@@ -163,7 +146,7 @@ func artAlreadyExists(err error) bool {
 
 // artUploadFile starts a media upload of path into the repository parent,
 // named fileID (or the local file's base name) and returns its operation.
-func artUploadFile(ctx context.Context, svc *artifactregistry.Service, parent, path, fileID, fileType string) (*artifactregistry.Operation, error) {
+func (s *artifactsCmds) artUploadFile(ctx context.Context, svc *artifactregistry.Service, parent, path, fileID, fileType string) (*artifactregistry.Operation, error) {
 	if fileID == "" {
 		fileID = filepath.Base(path)
 	}
@@ -172,7 +155,7 @@ func artUploadFile(ctx context.Context, svc *artifactregistry.Service, parent, p
 		return nil, fmt.Errorf("opening source: %w", err)
 	}
 	defer f.Close()
-	fmt.Fprintf(os.Stderr, "Uploading file: %s\n", fileID)
+	fmt.Fprintf(s.inv.stderr, "Uploading file: %s\n", fileID)
 	resp, err := svc.Projects.Locations.Repositories.Files.
 		Upload(parent, &artifactregistry.UploadFileRequest{FileId: fileID, FileType: fileType}).
 		Media(f, googleapi.ContentType(artMimeType(path))).

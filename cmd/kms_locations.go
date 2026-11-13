@@ -1,49 +1,29 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 )
 
 // --- gcloud kms locations (#1108) ---
 
-var kmsLocationsCmd = &cobra.Command{
-	Use:   "locations",
-	Short: "View Cloud KMS locations",
+func (s *kmsCmds) initKmsLocations() {
+	s.kmsLocListCmd.Flags().StringVar(&s.flagKmsLocFormat, "format", "", "Output format")
+	s.kmsLocListCmd.Flags().StringVar(&s.flagKmsLocFilter, "filter", "", "Filter expression")
+	s.kmsLocListCmd.Flags().Int64Var(&s.flagKmsLocPageSize, "page-size", 0, "Page size")
+	s.kmsLocationsCmd.AddCommand(s.kmsLocListCmd)
+	s.kmsCmd.AddCommand(s.kmsLocationsCmd)
 }
 
-var (
-	flagKmsLocFormat   string
-	flagKmsLocFilter   string
-	flagKmsLocPageSize int64
-)
-
-var kmsLocListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List available Cloud KMS locations",
-	Args:  cobra.NoArgs,
-	RunE:  runKmsLocList,
-}
-
-func init() {
-	kmsLocListCmd.Flags().StringVar(&flagKmsLocFormat, "format", "", "Output format")
-	kmsLocListCmd.Flags().StringVar(&flagKmsLocFilter, "filter", "", "Filter expression")
-	kmsLocListCmd.Flags().Int64Var(&flagKmsLocPageSize, "page-size", 0, "Page size")
-	kmsLocationsCmd.AddCommand(kmsLocListCmd)
-	kmsCmd.AddCommand(kmsLocationsCmd)
-}
-
-func runKmsLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsLocList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMS(ctx)
 	if err != nil {
 		return err
 	}
@@ -52,11 +32,11 @@ func runKmsLocList(cmd *cobra.Command, args []string) error {
 	token := ""
 	for {
 		call := svc.Projects.Locations.List(name).Context(ctx)
-		if flagKmsLocFilter != "" {
-			call = call.Filter(flagKmsLocFilter)
+		if s.flagKmsLocFilter != "" {
+			call = call.Filter(s.flagKmsLocFilter)
 		}
-		if flagKmsLocPageSize > 0 {
-			call = call.PageSize(flagKmsLocPageSize)
+		if s.flagKmsLocPageSize > 0 {
+			call = call.PageSize(s.flagKmsLocPageSize)
 		}
 		if token != "" {
 			call = call.PageToken(token)
@@ -71,5 +51,5 @@ func runKmsLocList(cmd *cobra.Command, args []string) error {
 		}
 		token = resp.NextPageToken
 	}
-	return emitFormatted(all, flagKmsLocFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagKmsLocFormat)
 }

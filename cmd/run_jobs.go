@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	googleapi "google.golang.org/api/googleapi"
 	logging "google.golang.org/api/logging/v2"
@@ -18,282 +16,171 @@ import (
 //
 // Backed by run/v2 Projects.Locations.Jobs and .Jobs.Executions.
 
-var runJobsCmd = &cobra.Command{Use: "jobs", Short: "Manage Cloud Run jobs"}
-var runJobsExecutionsCmd = &cobra.Command{Use: "executions", Short: "Manage Cloud Run job executions"}
-
-var (
-	flagRunJobsRegion     string
-	flagRunJobsFormat     string
-	flagRunJobsConfigFile string
-	flagRunJobsUpdateMask string
-	flagRunJobsPageSize   int64
-	flagRunJobsShowDel    bool
-	flagRunJobsLimit      int64
-	flagRunJobsWait       bool
-
-	flagRunJobsImage        string
-	flagRunJobsCommand      []string
-	flagRunJobsArgs         []string
-	flagRunJobsEnvVars      map[string]string
-	flagRunJobsServiceAcct  string
-	flagRunJobsMemory       string
-	flagRunJobsCPU          string
-	flagRunJobsTaskCount    int64
-	flagRunJobsMaxRetries   int64
-	flagRunJobsParallelism  int64
-	flagRunJobsTaskTimeout  string
-	flagRunJobsVpcConnector string
-
-	flagRunJobsIamMember   string
-	flagRunJobsIamRole     string
-	flagRunJobsIamCondExpr string
-	flagRunJobsIamCondT    string
-	flagRunJobsIamCondD    string
-	flagRunJobsIamAllCond  bool
-
-	// executions subgroup
-	flagRunJobsExecJob      string
-	flagRunJobsExecPageSize int64
-	flagRunJobsExecLimit    int64
-)
-
-var (
-	runJobsCreateCmd = &cobra.Command{
-		Use: "create JOB", Short: "Create a Cloud Run job",
-		Args: cobra.ExactArgs(1), RunE: runJobsCreate,
-	}
-	runJobsDeleteCmd = &cobra.Command{
-		Use: "delete JOB", Short: "Delete a Cloud Run job",
-		Args: cobra.ExactArgs(1), RunE: runJobsDelete,
-	}
-	runJobsDeployCmd = &cobra.Command{
-		Use: "deploy JOB", Short: "Deploy a Cloud Run job (create-or-update)",
-		Args: cobra.ExactArgs(1), RunE: runJobsDeploy,
-	}
-	runJobsDescribeCmd = &cobra.Command{
-		Use: "describe JOB", Short: "Describe a Cloud Run job",
-		Args: cobra.ExactArgs(1), RunE: runJobsDescribe,
-	}
-	runJobsExecuteCmd = &cobra.Command{
-		Use: "execute JOB", Short: "Execute a Cloud Run job",
-		Args: cobra.ExactArgs(1), RunE: runJobsExecute,
-	}
-	runJobsListCmd = &cobra.Command{
-		Use: "list", Short: "List Cloud Run jobs",
-		Args: cobra.NoArgs, RunE: runJobsList,
-	}
-	runJobsLogsCmd = &cobra.Command{
-		Use: "logs JOB", Short: "Read Cloud Logging entries for a Cloud Run job",
-		Args: cobra.ExactArgs(1), RunE: runJobsLogs,
-	}
-	runJobsReplaceCmd = &cobra.Command{
-		Use: "replace JOB", Short: "Replace a Cloud Run job from a config file",
-		Args: cobra.ExactArgs(1), RunE: runJobsReplace,
-	}
-	runJobsUpdateCmd = &cobra.Command{
-		Use: "update JOB", Short: "Update a Cloud Run job from a config file",
-		Args: cobra.ExactArgs(1), RunE: runJobsUpdate,
-	}
-	runJobsGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy JOB", Short: "Get the IAM policy for a Cloud Run job",
-		Args: cobra.ExactArgs(1), RunE: runJobsGetIam,
-	}
-	runJobsSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy JOB POLICY_FILE", Short: "Set the IAM policy for a Cloud Run job",
-		Args: cobra.ExactArgs(2), RunE: runJobsSetIam,
-	}
-	runJobsAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding JOB", Short: "Add an IAM policy binding to a Cloud Run job",
-		Args: cobra.ExactArgs(1), RunE: runJobsAddIam,
-	}
-	runJobsRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding JOB", Short: "Remove an IAM policy binding from a Cloud Run job",
-		Args: cobra.ExactArgs(1), RunE: runJobsRemoveIam,
-	}
-
-	runJobsExecDescribeCmd = &cobra.Command{
-		Use: "describe EXECUTION", Short: "Describe a Cloud Run job execution",
-		Args: cobra.ExactArgs(1), RunE: runJobsExecDescribe,
-	}
-	runJobsExecListCmd = &cobra.Command{
-		Use: "list", Short: "List Cloud Run job executions",
-		Args: cobra.NoArgs, RunE: runJobsExecList,
-	}
-	runJobsExecDeleteCmd = &cobra.Command{
-		Use: "delete EXECUTION", Short: "Delete a Cloud Run job execution",
-		Args: cobra.ExactArgs(1), RunE: runJobsExecDelete,
-	}
-	runJobsExecCancelCmd = &cobra.Command{
-		Use: "cancel EXECUTION", Short: "Cancel a running Cloud Run job execution",
-		Args: cobra.ExactArgs(1), RunE: runJobsExecCancel,
-	}
-)
-
-func init() {
+func (s *runCmds) initRunJobs() {
 	jobsAll := []*cobra.Command{
-		runJobsCreateCmd, runJobsDeleteCmd, runJobsDeployCmd, runJobsDescribeCmd,
-		runJobsExecuteCmd, runJobsListCmd, runJobsLogsCmd, runJobsReplaceCmd,
-		runJobsUpdateCmd, runJobsGetIamCmd, runJobsSetIamCmd, runJobsAddIamCmd,
-		runJobsRemoveIamCmd,
+		s.runJobsCreateCmd, s.runJobsDeleteCmd, s.runJobsDeployCmd, s.runJobsDescribeCmd,
+		s.runJobsExecuteCmd, s.runJobsListCmd, s.runJobsLogsCmd, s.runJobsReplaceCmd,
+		s.runJobsUpdateCmd, s.runJobsGetIamCmd, s.runJobsSetIamCmd, s.runJobsAddIamCmd,
+		s.runJobsRemoveIamCmd,
 	}
 	for _, c := range jobsAll {
-		c.Flags().StringVar(&flagRunJobsFormat, "format", "", "Output format")
-		if c == runJobsListCmd {
+		c.Flags().StringVar(&s.flagRunJobsFormat, "format", "", "Output format")
+		if c == s.runJobsListCmd {
 			// As in gcloud, list spans every region unless --region is given.
-			c.Flags().StringVar(&flagRunJobsRegion, "region", "", "Cloud Run region; default all regions")
+			c.Flags().StringVar(&s.flagRunJobsRegion, "region", "", "Cloud Run region; default all regions")
 			continue
 		}
-		c.Flags().StringVar(&flagRunJobsRegion, "region", "", "Cloud Run region (required)")
+		c.Flags().StringVar(&s.flagRunJobsRegion, "region", "", "Cloud Run region (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	for _, c := range []*cobra.Command{runJobsCreateCmd, runJobsReplaceCmd, runJobsUpdateCmd} {
-		c.Flags().StringVar(&flagRunJobsConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.runJobsCreateCmd, s.runJobsReplaceCmd, s.runJobsUpdateCmd} {
+		c.Flags().StringVar(&s.flagRunJobsConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Job body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	runJobsUpdateCmd.Flags().StringVar(&flagRunJobsUpdateMask, "update-mask", "",
+	s.runJobsUpdateCmd.Flags().StringVar(&s.flagRunJobsUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update; ignored (Cloud Run v2 merges patches automatically)")
 
-	runJobsListCmd.Flags().Int64Var(&flagRunJobsPageSize, "page-size", 0, "Maximum results per page")
-	runJobsListCmd.Flags().BoolVar(&flagRunJobsShowDel, "show-deleted", false, "Include deleted jobs")
-	runJobsLogsCmd.Flags().Int64Var(&flagRunJobsLimit, "limit", 100, "Maximum number of log entries to return")
-	runJobsExecuteCmd.Flags().BoolVar(&flagRunJobsWait, "wait", false,
+	s.runJobsListCmd.Flags().Int64Var(&s.flagRunJobsPageSize, "page-size", 0, "Maximum results per page")
+	s.runJobsListCmd.Flags().BoolVar(&s.flagRunJobsShowDel, "show-deleted", false, "Include deleted jobs")
+	s.runJobsLogsCmd.Flags().Int64Var(&s.flagRunJobsLimit, "limit", 100, "Maximum number of log entries to return")
+	s.runJobsExecuteCmd.Flags().BoolVar(&s.flagRunJobsWait, "wait", false,
 		"Wait until the execution has completed running before exiting")
 
 	// Deploy flags
-	runJobsDeployCmd.Flags().StringVar(&flagRunJobsImage, "image", "", "Container image (required)")
-	_ = runJobsDeployCmd.MarkFlagRequired("image")
-	runJobsDeployCmd.Flags().StringSliceVar(&flagRunJobsCommand, "command", nil, "Container entrypoint override")
-	runJobsDeployCmd.Flags().StringSliceVar(&flagRunJobsArgs, "args", nil, "Container arguments override")
-	runJobsDeployCmd.Flags().StringToStringVar(&flagRunJobsEnvVars, "env-vars", nil, "Container environment variables (KEY=VALUE)")
-	runJobsDeployCmd.Flags().StringVar(&flagRunJobsServiceAcct, "service-account", "", "Service account for the job")
-	runJobsDeployCmd.Flags().StringVar(&flagRunJobsMemory, "memory", "", "Memory limit (e.g. 512Mi)")
-	runJobsDeployCmd.Flags().StringVar(&flagRunJobsCPU, "cpu", "", "CPU limit (e.g. 1, 2, 4)")
-	runJobsDeployCmd.Flags().Int64Var(&flagRunJobsTaskCount, "task-count", 0, "Number of tasks per execution")
-	runJobsDeployCmd.Flags().Int64Var(&flagRunJobsMaxRetries, "max-retries", 0, "Maximum task retries")
-	runJobsDeployCmd.Flags().Int64Var(&flagRunJobsParallelism, "parallelism", 0, "Maximum parallel tasks")
-	runJobsDeployCmd.Flags().StringVar(&flagRunJobsTaskTimeout, "task-timeout", "", "Per-task timeout (e.g. 600s)")
-	runJobsDeployCmd.Flags().StringVar(&flagRunJobsVpcConnector, "vpc-connector", "", "VPC connector to use")
+	s.runJobsDeployCmd.Flags().StringVar(&s.flagRunJobsImage, "image", "", "Container image (required)")
+	_ = s.runJobsDeployCmd.MarkFlagRequired("image")
+	s.runJobsDeployCmd.Flags().StringSliceVar(&s.flagRunJobsCommand, "command", nil, "Container entrypoint override")
+	s.runJobsDeployCmd.Flags().StringSliceVar(&s.flagRunJobsArgs, "args", nil, "Container arguments override")
+	s.runJobsDeployCmd.Flags().StringToStringVar(&s.flagRunJobsEnvVars, "env-vars", nil, "Container environment variables (KEY=VALUE)")
+	s.runJobsDeployCmd.Flags().StringVar(&s.flagRunJobsServiceAcct, "service-account", "", "Service account for the job")
+	s.runJobsDeployCmd.Flags().StringVar(&s.flagRunJobsMemory, "memory", "", "Memory limit (e.g. 512Mi)")
+	s.runJobsDeployCmd.Flags().StringVar(&s.flagRunJobsCPU, "cpu", "", "CPU limit (e.g. 1, 2, 4)")
+	s.runJobsDeployCmd.Flags().Int64Var(&s.flagRunJobsTaskCount, "task-count", 0, "Number of tasks per execution")
+	s.runJobsDeployCmd.Flags().Int64Var(&s.flagRunJobsMaxRetries, "max-retries", 0, "Maximum task retries")
+	s.runJobsDeployCmd.Flags().Int64Var(&s.flagRunJobsParallelism, "parallelism", 0, "Maximum parallel tasks")
+	s.runJobsDeployCmd.Flags().StringVar(&s.flagRunJobsTaskTimeout, "task-timeout", "", "Per-task timeout (e.g. 600s)")
+	s.runJobsDeployCmd.Flags().StringVar(&s.flagRunJobsVpcConnector, "vpc-connector", "", "VPC connector to use")
 
-	for _, c := range []*cobra.Command{runJobsAddIamCmd, runJobsRemoveIamCmd} {
-		runIamFlags(c, &flagRunJobsIamMember, &flagRunJobsIamRole,
-			&flagRunJobsIamCondExpr, &flagRunJobsIamCondT, &flagRunJobsIamCondD)
+	for _, c := range []*cobra.Command{s.runJobsAddIamCmd, s.runJobsRemoveIamCmd} {
+		runIamFlags(c, &s.flagRunJobsIamMember, &s.flagRunJobsIamRole,
+			&s.flagRunJobsIamCondExpr, &s.flagRunJobsIamCondT, &s.flagRunJobsIamCondD)
 	}
-	runJobsRemoveIamCmd.Flags().BoolVar(&flagRunJobsIamAllCond, "all", false,
+	s.runJobsRemoveIamCmd.Flags().BoolVar(&s.flagRunJobsIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
 	// executions subgroup
 	execAll := []*cobra.Command{
-		runJobsExecDescribeCmd, runJobsExecListCmd, runJobsExecDeleteCmd, runJobsExecCancelCmd,
+		s.runJobsExecDescribeCmd, s.runJobsExecListCmd, s.runJobsExecDeleteCmd, s.runJobsExecCancelCmd,
 	}
 	for _, c := range execAll {
-		c.Flags().StringVar(&flagRunJobsRegion, "region", "", "Cloud Run region (required)")
-		c.Flags().StringVar(&flagRunJobsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagRunJobsRegion, "region", "", "Cloud Run region (required)")
+		c.Flags().StringVar(&s.flagRunJobsFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("region")
-		if c == runJobsExecListCmd {
+		if c == s.runJobsExecListCmd {
 			// As in gcloud, list spans every job unless --job is given.
-			c.Flags().StringVar(&flagRunJobsExecJob, "job", "", "Limit matched executions to the given job")
+			c.Flags().StringVar(&s.flagRunJobsExecJob, "job", "", "Limit matched executions to the given job")
 			continue
 		}
-		c.Flags().StringVar(&flagRunJobsExecJob, "job", "", "Parent Cloud Run job (required)")
+		c.Flags().StringVar(&s.flagRunJobsExecJob, "job", "", "Parent Cloud Run job (required)")
 		_ = c.MarkFlagRequired("job")
 	}
-	runJobsExecListCmd.Flags().Int64Var(&flagRunJobsExecPageSize, "page-size", 0, "Maximum results per page (default 100)")
-	runJobsExecListCmd.Flags().Int64Var(&flagRunJobsExecLimit, "limit", 0, "Maximum number of executions to return, newest first (0 = no limit)")
+	s.runJobsExecListCmd.Flags().Int64Var(&s.flagRunJobsExecPageSize, "page-size", 0, "Maximum results per page (default 100)")
+	s.runJobsExecListCmd.Flags().Int64Var(&s.flagRunJobsExecLimit, "limit", 0, "Maximum number of executions to return, newest first (0 = no limit)")
 
-	runJobsExecutionsCmd.AddCommand(execAll...)
-	runJobsCmd.AddCommand(jobsAll...)
-	runJobsCmd.AddCommand(runJobsExecutionsCmd)
-	runCmd.AddCommand(runJobsCmd)
+	s.runJobsExecutionsCmd.AddCommand(execAll...)
+	s.runJobsCmd.AddCommand(jobsAll...)
+	s.runJobsCmd.AddCommand(s.runJobsExecutionsCmd)
+	s.runCmd.AddCommand(s.runJobsCmd)
 }
 
-func runJobsName(project, job string) string {
-	return runResourceName(project, flagRunJobsRegion, "jobs", job)
+func (s *runCmds) runJobsName(project, job string) string {
+	return runResourceName(project, s.flagRunJobsRegion, "jobs", job)
 }
 
-func runJobsExecName(project, job, exec string) string {
+func (s *runCmds) runJobsExecName(project, job, exec string) string {
 	if hasProjectsPrefix(exec) {
 		return exec
 	}
-	return fmt.Sprintf("%s/executions/%s", runJobsName(project, job), exec)
+	return fmt.Sprintf("%s/executions/%s", s.runJobsName(project, job), exec)
 }
 
-func runJobsCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &runv2.GoogleCloudRunV2Job{}
-	if err := loadYAMLOrJSONInto(flagRunJobsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagRunJobsConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Jobs.Create(runParent(project, flagRunJobsRegion), body).
+	op, err := svc.Projects.Locations.Jobs.Create(runParent(project, s.flagRunJobsRegion), body).
 		JobId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating job: %w", err)
 	}
-	fmt.Printf("Create request issued for job [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagRunJobsFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for job [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunJobsFormat)
 }
 
-func runJobsDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Jobs.Delete(runJobsName(project, args[0])).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Jobs.Delete(s.runJobsName(project, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting job: %w", err)
 	}
-	fmt.Printf("Delete request issued for job [%s].\n", args[0])
-	return emitFormatted(op, flagRunJobsFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for job [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunJobsFormat)
 }
 
-func runJobsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Jobs.Get(runJobsName(project, args[0])).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Jobs.Get(s.runJobsName(project, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing job: %w", err)
 	}
-	return emitFormatted(got, flagRunJobsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRunJobsFormat)
 }
 
-func runJobsExecute(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsExecute(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Jobs.Run(runJobsName(project, args[0]),
+	op, err := svc.Projects.Locations.Jobs.Run(s.runJobsName(project, args[0]),
 		&runv2.GoogleCloudRunV2RunJobRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("executing job: %w", err)
 	}
-	if !flagRunJobsWait {
-		fmt.Printf("Execute request issued for job [%s] (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagRunJobsFormat)
+	if !s.flagRunJobsWait {
+		fmt.Fprintf(s.inv.stdout, "Execute request issued for job [%s] (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagRunJobsFormat)
 	}
 	created, err := runJobsOpExecution(op)
 	if err != nil {
@@ -302,50 +189,50 @@ func runJobsExecute(cmd *cobra.Command, args []string) error {
 	get := func(ctx context.Context) (*runv2.GoogleCloudRunV2Execution, error) {
 		return svc.Projects.Locations.Jobs.Executions.Get(created.Name).Context(ctx).Do()
 	}
-	exec, err := runJobsWaitForExecution(ctx, os.Stderr, get, runJobsWaitInterval)
+	exec, err := runJobsWaitForExecution(ctx, s.inv.stderr, get, runJobsWaitInterval)
 	if errors.Is(err, errRunExecutionFailed) {
-		return fmt.Errorf("%w.%s", err, runJobsExecDetailsMessage(project, flagRunJobsRegion, exec))
+		return fmt.Errorf("%w.%s", err, runJobsExecDetailsMessage(project, s.flagRunJobsRegion, exec))
 	}
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "Execution [%s] has successfully completed.\n", path.Base(exec.Name))
-	fmt.Fprint(os.Stderr, runJobsExecDetailsMessage(project, flagRunJobsRegion, exec))
-	if flagRunJobsFormat == "" {
+	fmt.Fprintf(s.inv.stderr, "Execution [%s] has successfully completed.\n", path.Base(exec.Name))
+	fmt.Fprint(s.inv.stderr, runJobsExecDetailsMessage(project, s.flagRunJobsRegion, exec))
+	if s.flagRunJobsFormat == "" {
 		return nil
 	}
-	return emitFormatted(exec, flagRunJobsFormat)
+	return emitFormattedTo(s.inv.stdout, exec, s.flagRunJobsFormat)
 }
 
-func runJobsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if flagRunJobsRegion == "" {
-		v1, err := gcp.RunV1Service(ctx, flagAccount, "")
+	ctx := cmd.Context()
+	if s.flagRunJobsRegion == "" {
+		v1, err := s.inv.clients().RunV1(ctx, "")
 		if err != nil {
 			return err
 		}
-		all, err := runListAllJobs(ctx, os.Stderr, v1, project)
+		all, err := runListAllJobs(ctx, s.inv.stderr, v1, project)
 		if err != nil {
 			return err
 		}
-		return emitFormatted(all, flagRunJobsFormat)
+		return emitFormattedTo(s.inv.stdout, all, s.flagRunJobsFormat)
 	}
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
 	var all []*runv2.GoogleCloudRunV2Job
 	pageToken := ""
 	for {
-		call := svc.Projects.Locations.Jobs.List(runParent(project, flagRunJobsRegion)).Context(ctx)
-		if flagRunJobsPageSize > 0 {
-			call = call.PageSize(flagRunJobsPageSize)
+		call := svc.Projects.Locations.Jobs.List(runParent(project, s.flagRunJobsRegion)).Context(ctx)
+		if s.flagRunJobsPageSize > 0 {
+			call = call.PageSize(s.flagRunJobsPageSize)
 		}
-		if flagRunJobsShowDel {
+		if s.flagRunJobsShowDel {
 			call = call.ShowDeleted(true)
 		}
 		if pageToken != "" {
@@ -361,24 +248,24 @@ func runJobsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagRunJobsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagRunJobsFormat)
 }
 
-func runJobsLogs(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsLogs(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LoggingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Logging(ctx)
 	if err != nil {
 		return err
 	}
 	filter := fmt.Sprintf(
 		`resource.type="cloud_run_job" AND resource.labels.job_name=%q AND resource.labels.location=%q`,
-		args[0], flagRunJobsRegion,
+		args[0], s.flagRunJobsRegion,
 	)
-	limit := flagRunJobsLimit
+	limit := s.flagRunJobsLimit
 	if limit <= 0 {
 		limit = 100
 	}
@@ -392,25 +279,25 @@ func runJobsLogs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing log entries: %w", err)
 	}
-	if flagRunJobsFormat != "" {
-		return emitFormatted(resp.Entries, flagRunJobsFormat)
+	if s.flagRunJobsFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Entries, s.flagRunJobsFormat)
 	}
-	printLogEntries(resp.Entries)
+	s.printLogEntries(resp.Entries)
 	return nil
 }
 
-func runJobsReplace(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsReplace(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &runv2.GoogleCloudRunV2Job{}
-	if err := loadYAMLOrJSONInto(flagRunJobsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagRunJobsConfigFile, body); err != nil {
 		return err
 	}
-	body.Name = runJobsName(project, args[0])
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	body.Name = s.runJobsName(project, args[0])
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
@@ -419,27 +306,27 @@ func runJobsReplace(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("replacing job: %w", err)
 	}
-	fmt.Printf("Replace request issued for job [%s].\n", args[0])
-	return emitFormatted(op, flagRunJobsFormat)
+	fmt.Fprintf(s.inv.stdout, "Replace request issued for job [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunJobsFormat)
 }
 
-func runJobsUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &runv2.GoogleCloudRunV2Job{}
-	if err := loadYAMLOrJSONInto(flagRunJobsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagRunJobsConfigFile, body); err != nil {
 		return err
 	}
-	body.Name = runJobsName(project, args[0])
+	body.Name = s.runJobsName(project, args[0])
 	// The Jobs.Patch RPC in run/v2 (v0.279.0) does not accept an
 	// updateMask parameter; the server derives it from the populated
 	// fields on the request body. --update-mask is accepted for
 	// parity with `gcloud run services update` but not forwarded.
-	_ = flagRunJobsUpdateMask
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	_ = s.flagRunJobsUpdateMask
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
@@ -447,23 +334,23 @@ func runJobsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating job: %w", err)
 	}
-	fmt.Printf("Update request issued for job [%s].\n", args[0])
-	return emitFormatted(op, flagRunJobsFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for job [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunJobsFormat)
 }
 
 // runJobsDeploy performs a conditional Get -> Create/Patch flow, mirroring
 // the `gcloud run jobs deploy` command in the Python CLI.
-func runJobsDeploy(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsDeploy(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	name := runJobsName(project, args[0])
+	name := s.runJobsName(project, args[0])
 	existing, err := svc.Projects.Locations.Jobs.Get(name).Context(ctx).Do()
 	if err != nil && !isNotFound(err) {
 		return fmt.Errorf("checking existing job: %w", err)
@@ -490,76 +377,76 @@ func runJobsDeploy(cmd *cobra.Command, args []string) error {
 		container = &runv2.GoogleCloudRunV2Container{}
 		tt.Containers = []*runv2.GoogleCloudRunV2Container{container}
 	}
-	container.Image = flagRunJobsImage
-	if flagRunJobsCommand != nil {
-		container.Command = flagRunJobsCommand
+	container.Image = s.flagRunJobsImage
+	if s.flagRunJobsCommand != nil {
+		container.Command = s.flagRunJobsCommand
 	}
-	if flagRunJobsArgs != nil {
-		container.Args = flagRunJobsArgs
+	if s.flagRunJobsArgs != nil {
+		container.Args = s.flagRunJobsArgs
 	}
-	if len(flagRunJobsEnvVars) > 0 {
-		container.Env = envVarsFromMap(flagRunJobsEnvVars)
+	if len(s.flagRunJobsEnvVars) > 0 {
+		container.Env = envVarsFromMap(s.flagRunJobsEnvVars)
 	}
-	applyResourceLimits(&container.Resources, flagRunJobsMemory, flagRunJobsCPU)
-	if flagRunJobsServiceAcct != "" {
-		tt.ServiceAccount = flagRunJobsServiceAcct
+	applyResourceLimits(&container.Resources, s.flagRunJobsMemory, s.flagRunJobsCPU)
+	if s.flagRunJobsServiceAcct != "" {
+		tt.ServiceAccount = s.flagRunJobsServiceAcct
 	}
-	if flagRunJobsMaxRetries > 0 {
-		tt.MaxRetries = flagRunJobsMaxRetries
+	if s.flagRunJobsMaxRetries > 0 {
+		tt.MaxRetries = s.flagRunJobsMaxRetries
 	}
-	if flagRunJobsTaskTimeout != "" {
-		tt.Timeout = flagRunJobsTaskTimeout
+	if s.flagRunJobsTaskTimeout != "" {
+		tt.Timeout = s.flagRunJobsTaskTimeout
 	}
-	if flagRunJobsVpcConnector != "" {
+	if s.flagRunJobsVpcConnector != "" {
 		if tt.VpcAccess == nil {
 			tt.VpcAccess = &runv2.GoogleCloudRunV2VpcAccess{}
 		}
-		tt.VpcAccess.Connector = flagRunJobsVpcConnector
+		tt.VpcAccess.Connector = s.flagRunJobsVpcConnector
 	}
-	if flagRunJobsTaskCount > 0 {
-		body.Template.TaskCount = flagRunJobsTaskCount
+	if s.flagRunJobsTaskCount > 0 {
+		body.Template.TaskCount = s.flagRunJobsTaskCount
 	}
-	if flagRunJobsParallelism > 0 {
-		body.Template.Parallelism = flagRunJobsParallelism
+	if s.flagRunJobsParallelism > 0 {
+		body.Template.Parallelism = s.flagRunJobsParallelism
 	}
 
 	if existing == nil {
-		op, err := svc.Projects.Locations.Jobs.Create(runParent(project, flagRunJobsRegion), body).
+		op, err := svc.Projects.Locations.Jobs.Create(runParent(project, s.flagRunJobsRegion), body).
 			JobId(args[0]).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("creating job: %w", err)
 		}
-		fmt.Printf("Created job [%s] (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagRunJobsFormat)
+		fmt.Fprintf(s.inv.stdout, "Created job [%s] (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagRunJobsFormat)
 	}
 	op, err := svc.Projects.Locations.Jobs.Patch(name, body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating job: %w", err)
 	}
-	fmt.Printf("Updated job [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagRunJobsFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated job [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunJobsFormat)
 }
 
-func runJobsGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsGetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	policy, err := svc.Projects.Locations.Jobs.GetIamPolicy(runJobsName(project, args[0])).
+	policy, err := svc.Projects.Locations.Jobs.GetIamPolicy(s.runJobsName(project, args[0])).
 		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagRunJobsFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagRunJobsFormat)
 }
 
-func runJobsSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsSetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
@@ -568,134 +455,134 @@ func runJobsSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	updated, err := svc.Projects.Locations.Jobs.SetIamPolicy(runJobsName(project, args[0]),
+	updated, err := svc.Projects.Locations.Jobs.SetIamPolicy(s.runJobsName(project, args[0]),
 		&runv2.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	runIamUpdatedIam(fmt.Sprintf("job [%s]", args[0]))
-	return emitFormatted(updated, flagRunJobsFormat)
+	s.runIamUpdatedIam(fmt.Sprintf("job [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagRunJobsFormat)
 }
 
-func runJobsAddIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsAddIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	resource := runJobsName(project, args[0])
+	resource := s.runJobsName(project, args[0])
 	policy, err := svc.Projects.Locations.Jobs.GetIamPolicy(resource).
 		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	runIamAddBinding(policy, flagRunJobsIamRole, flagRunJobsIamMember,
-		runIamBuildCondition(flagRunJobsIamCondExpr, flagRunJobsIamCondT, flagRunJobsIamCondD))
+	runIamAddBinding(policy, s.flagRunJobsIamRole, s.flagRunJobsIamMember,
+		runIamBuildCondition(s.flagRunJobsIamCondExpr, s.flagRunJobsIamCondT, s.flagRunJobsIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Locations.Jobs.SetIamPolicy(resource,
 		&runv2.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	runIamUpdatedIam(fmt.Sprintf("job [%s]", args[0]))
-	return emitFormatted(updated, flagRunJobsFormat)
+	s.runIamUpdatedIam(fmt.Sprintf("job [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagRunJobsFormat)
 }
 
-func runJobsRemoveIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsRemoveIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
-	resource := runJobsName(project, args[0])
+	resource := s.runJobsName(project, args[0])
 	policy, err := svc.Projects.Locations.Jobs.GetIamPolicy(resource).
 		OptionsRequestedPolicyVersion(3).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !runIamRemoveBinding(policy, flagRunJobsIamRole, flagRunJobsIamMember,
-		runIamBuildCondition(flagRunJobsIamCondExpr, flagRunJobsIamCondT, flagRunJobsIamCondD),
-		flagRunJobsIamAllCond) {
+	if !runIamRemoveBinding(policy, s.flagRunJobsIamRole, s.flagRunJobsIamMember,
+		runIamBuildCondition(s.flagRunJobsIamCondExpr, s.flagRunJobsIamCondT, s.flagRunJobsIamCondD),
+		s.flagRunJobsIamAllCond) {
 		return fmt.Errorf("policy binding not found for role [%s] and member [%s]",
-			flagRunJobsIamRole, flagRunJobsIamMember)
+			s.flagRunJobsIamRole, s.flagRunJobsIamMember)
 	}
 	updated, err := svc.Projects.Locations.Jobs.SetIamPolicy(resource,
 		&runv2.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	runIamUpdatedIam(fmt.Sprintf("job [%s]", args[0]))
-	return emitFormatted(updated, flagRunJobsFormat)
+	s.runIamUpdatedIam(fmt.Sprintf("job [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagRunJobsFormat)
 }
 
-func runJobsExecDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsExecDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
 	got, err := svc.Projects.Locations.Jobs.Executions.Get(
-		runJobsExecName(project, flagRunJobsExecJob, args[0])).Context(ctx).Do()
+		s.runJobsExecName(project, s.flagRunJobsExecJob, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing execution: %w", err)
 	}
-	return emitFormatted(got, flagRunJobsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagRunJobsFormat)
 }
 
-func runJobsExecDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsExecDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Jobs.Executions.Delete(
-		runJobsExecName(project, flagRunJobsExecJob, args[0])).Context(ctx).Do()
+		s.runJobsExecName(project, s.flagRunJobsExecJob, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting execution: %w", err)
 	}
-	fmt.Printf("Delete request issued for execution [%s].\n", args[0])
-	return emitFormatted(op, flagRunJobsFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for execution [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunJobsFormat)
 }
 
-func runJobsExecCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *runCmds) runJobsExecCancel(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.RunV2Service(ctx, flagAccount, flagRunJobsRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().RunV2(ctx, s.flagRunJobsRegion)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Jobs.Executions.Cancel(
-		runJobsExecName(project, flagRunJobsExecJob, args[0]),
+		s.runJobsExecName(project, s.flagRunJobsExecJob, args[0]),
 		&runv2.GoogleCloudRunV2CancelExecutionRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("cancelling execution: %w", err)
 	}
-	fmt.Printf("Cancel request issued for execution [%s].\n", args[0])
-	return emitFormatted(op, flagRunJobsFormat)
+	fmt.Fprintf(s.inv.stdout, "Cancel request issued for execution [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagRunJobsFormat)
 }
 
 // --- Shared helpers reused by deploy/services/worker-pools. ---

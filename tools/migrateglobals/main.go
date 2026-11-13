@@ -42,6 +42,7 @@ var (
 	ctorName = flag.String("ctor", "", "constructor name, e.g. newStorageCmd")
 	keepArg  = flag.String("keep", "", "comma-separated funcs to keep as free functions")
 	dryRun   = flag.Bool("n", false, "report only")
+	fixTests = flag.Bool("fixtests", false, "rewrite references from _test.go files to use a legacyTestInvocation")
 	audit    = flag.Bool("audit", false, "report calls from the group to outside helpers that use process globals")
 )
 
@@ -60,18 +61,24 @@ var globalFlags = map[string]string{
 type callRule struct{ fun, firstArg string }
 
 var cmdCalls = map[string]callRule{
-	"emitFormatted":      {"emitFormattedTo", "s.inv.stdout"},
-	"printJSON":          {"s.inv.printJSON", ""},
-	"yamlEncode":         {"s.inv.yaml", ""},
-	"printTableHeading":  {"printTableHeadingTo", "s.inv.stdout"},
-	"emitWithPipeline":   {"s.inv.emitWithPipeline", ""},
-	"printListResults":   {"s.inv.printListResults", ""},
-	"resolveProject":     {"s.inv.project", ""},
-	"resolveProjectZone": {"s.inv.projectZone", ""},
-	"promptYesNo":        {"s.inv.confirm", ""},
-	"promptContinue":     {"s.inv.promptContinue", ""},
-	"formatOutput":       {"s.inv.formatOutput", ""},
-	"IsInteractive":      {"", ""}, // whole call -> s.inv.interactive
+	"emitFormatted":         {"emitFormattedTo", "s.inv.stdout"},
+	"printJSON":             {"s.inv.printJSON", ""},
+	"yamlEncode":            {"s.inv.yaml", ""},
+	"printTableHeading":     {"printTableHeadingTo", "s.inv.stdout"},
+	"emitWithPipeline":      {"s.inv.emitWithPipeline", ""},
+	"printListResults":      {"s.inv.printListResults", ""},
+	"resolveProject":        {"s.inv.project", ""},
+	"resolveProjectZone":    {"s.inv.projectZone", ""},
+	"promptYesNo":           {"s.inv.confirm", ""},
+	"promptContinue":        {"s.inv.promptContinue", ""},
+	"formatOutput":          {"s.inv.formatOutput", ""},
+	"IsInteractive":         {"", ""}, // whole call -> s.inv.interactive
+	"resolveRegion":         {"s.inv.region", ""},
+	"httpDebugWriter":       {"s.inv.httpDebugWriter", ""},
+	"newRESTClient":         {"s.inv.restClient", ""},
+	"resolveBillingProject": {"s.inv.billingProject", ""},
+	"restUserProject":       {"s.inv.quotaProject", ""},
+	"adcFilePath":           {"s.inv.adcFilePath", ""},
 }
 
 var fmtCalls = map[string]string{"Printf": "Fprintf", "Println": "Fprintln", "Print": "Fprint"}
@@ -133,6 +140,9 @@ func main() {
 		idx  int
 		init ast.Expr
 		doc  string
+		// dependent vars are initialized from other moved vars, so they
+		// are set after them.
+		dependent bool
 	}
 	moved := map[types.Object]*mvar{}
 	var movedOrder []*mvar
@@ -164,6 +174,7 @@ func main() {
 		})
 	}
 	var initFuncs []*ast.FuncDecl
+	var others []*mvar // group vars not moved (yet)
 	funcs := map[types.Object]*ast.FuncDecl{}
 	for _, f := range pkg.Syntax {
 		if !inGroup(f.Pos()) {
@@ -204,6 +215,14 @@ func main() {
 							mv := &mvar{obj: obj, spec: vs, decl: d, idx: i, init: init, doc: doc}
 							moved[obj] = mv
 							movedOrder = append(movedOrder, mv)
+						} else if init != nil && len(vs.Values) == len(vs.Names) {
+							doc := ""
+							if vs.Doc != nil {
+								doc = vs.Doc.Text()
+							} else if len(d.Specs) == 1 && d.Doc != nil {
+								doc = d.Doc.Text()
+							}
+							others = append(others, &mvar{obj: obj, spec: vs, decl: d, idx: i, init: init, doc: doc})
 						}
 					}
 				}
@@ -216,6 +235,29 @@ func main() {
 					continue
 				}
 				funcs[info.Defs[d.Name]] = d
+			}
+		}
+	}
+
+	// Vars initialized from moved vars move too.
+	for changed := true; changed; {
+		changed = false
+		for _, mv := range others {
+			if moved[mv.obj] != nil {
+				continue
+			}
+			uses := false
+			ast.Inspect(mv.init, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok && moved[info.Uses[id]] != nil {
+					uses = true
+				}
+				return true
+			})
+			if uses {
+				mv.dependent = true
+				moved[mv.obj] = mv
+				movedOrder = append(movedOrder, mv)
+				changed = true
 			}
 		}
 	}
@@ -314,7 +356,7 @@ func main() {
 				if o == nil {
 					return true
 				}
-				if moved[o] != nil {
+				if moved[o] != nil || isRestClientVar(o, scope) {
 					found = true
 				}
 				if _, ok := globalFlags[n.Name]; ok && o.Parent() == scope {
@@ -410,6 +452,16 @@ func main() {
 	fmt.Printf("moved vars: %d, methods: %d, inits: %d\n", len(moved), len(needs), len(initFuncs))
 	if *dryRun {
 		return
+	}
+	if *fixTests && tpkg != nil {
+		groupObjs := map[token.Pos]bool{}
+		for o := range moved {
+			groupObjs[o.Pos()] = true
+		}
+		for o := range needs {
+			groupObjs[o.Pos()] = true
+		}
+		fixTestFiles(tpkg, groupObjs)
 	}
 
 	// Receiver name: the first candidate no converted function uses as a local.
@@ -546,14 +598,14 @@ func main() {
 							t = c + ".Context()"
 						}
 						add(n.Pos(), edit{off(n.Pos()), off(n.End()), t, true})
-					case (strings.HasSuffix(p, "internal/gcp") && legacy[s] != "" || strings.HasSuffix(p, "internal/compute") && s == "NewService") && len(n.Args) == 2:
+					case (strings.HasSuffix(p, "internal/gcp") && legacy[s] != "" || strings.HasSuffix(p, "internal/compute") && s == "NewService") && len(n.Args) >= 2:
 						m := legacy[s]
 						if s == "NewService" {
 							m = "Compute"
 						}
 						add(fun.Pos(), edit{off(fun.Pos()), off(fun.End()), R + ".inv.clients()." + m, false})
 						if id, ok := n.Args[1].(*ast.Ident); ok && id.Name == "flagAccount" {
-							add(n.Args[0].End(), edit{off(n.Args[0].End()), off(n.Rparen), "", true})
+							add(n.Args[0].End(), edit{off(n.Args[0].End()), off(n.Args[1].End()), "", true})
 						} else {
 							fmt.Printf("WARN non-flagAccount account arg at %s\n", fset.Position(n.Pos()))
 						}
@@ -583,6 +635,9 @@ func main() {
 				}
 				if moved[o] != nil || needs[o] {
 					add(n.Pos(), edit{off(n.Pos()), off(n.Pos()), R + ".", false})
+				} else if isState && isRestClientVar(o, scope) {
+					// a package-level REST client: bind it to the invocation
+					add(n.Pos(), edit{off(n.Pos()), off(n.End()), R + ".inv.rest(" + n.Name + ")", true})
 				} else if f, ok := globalFlags[n.Name]; ok && isState {
 					add(n.Pos(), edit{off(n.Pos()), off(n.End()), R + ".inv.flags." + f, false})
 				}
@@ -749,10 +804,12 @@ func main() {
 		}
 		fmt.Fprintf(&fields, "\t%s %s\n", mv.obj.Name(), types.TypeString(mv.obj.Type(), qual))
 	}
-	for _, p := range order {
-		for _, mv := range movedOrder {
-			if fileOf(mv.obj.Pos()) == p && mv.init != nil {
-				fmt.Fprintf(&ctor, "\t%s.%s = %s\n", R, mv.obj.Name(), initText[mv])
+	for _, dependent := range []bool{false, true} {
+		for _, p := range order {
+			for _, mv := range movedOrder {
+				if fileOf(mv.obj.Pos()) == p && mv.init != nil && mv.dependent == dependent {
+					fmt.Fprintf(&ctor, "\t%s.%s = %s\n", R, mv.obj.Name(), initText[mv])
+				}
 			}
 		}
 	}
@@ -789,6 +846,7 @@ func %[3]ss(inv *invocation) *%[1]s {
 		log.Fatal("root var not found")
 	}
 	result[rootFile] += gen
+	registerGroup(filepath.Join(*dir, "cmd", "inprocess.go"), *ctorName)
 
 	for _, p := range order {
 		out, err := imports.Process(p, []byte(result[p]), nil)
@@ -820,7 +878,7 @@ func lineEnd(b []byte, i int) int {
 	return i
 }
 
-var legacyRE = regexp.MustCompile(`func (\w+)\(ctx context\.Context, account string\) \([^)]*\) \{\n\treturn legacyClients\(account\)\.(\w+)\(ctx\)`)
+var legacyRE = regexp.MustCompile(`func (\w+)\(ctx context\.Context, account(?: string)?(?:, \w+ string)?\) \([^)]*\) \{\n\treturn legacyClients\(account\)\.(\w+)\(ctx[,)]`)
 
 func legacyServiceMap(dir string) map[string]string {
 	b, err := os.ReadFile(filepath.Join(dir, "internal/gcp/legacy.go"))
@@ -832,4 +890,131 @@ func legacyServiceMap(dir string) map[string]string {
 		m[s[1]] = s[2]
 	}
 	return m
+}
+
+// isRestClientVar reports whether o is a package-level *restClient variable.
+func isRestClientVar(o types.Object, scope *types.Scope) bool {
+	v, ok := o.(*types.Var)
+	if !ok || v.Parent() != scope {
+		return false
+	}
+	p, ok := v.Type().(*types.Pointer)
+	if !ok {
+		return false
+	}
+	n, ok := p.Elem().(*types.Named)
+	return ok && n.Obj().Name() == "restClient"
+}
+
+// fixTestFiles rewrites test functions that use the group's moved variables
+// or converted functions (groupObjs holds their positions): each such
+// function gets its own group state, built for a legacyTestInvocation, and
+// its references, and the global flags it uses, go through that state.
+// References outside functions are reported for fixing by hand.
+func fixTestFiles(tpkg *packages.Package, groupObjs map[token.Pos]bool) {
+	fset, info := tpkg.Fset, tpkg.TypesInfo
+	scope := tpkg.Types.Scope()
+	isGroup := func(id *ast.Ident) bool {
+		o := info.Uses[id]
+		return o != nil && o.Parent() == scope && groupObjs[o.Pos()]
+	}
+	for _, f := range tpkg.Syntax {
+		fn := fset.Position(f.Pos()).Filename
+		if !strings.HasSuffix(fn, "_test.go") {
+			continue
+		}
+		var edits []edit
+		off := func(pos token.Pos) int { return fset.Position(pos).Offset }
+		for _, d := range f.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok || fd.Body == nil {
+				if gd, ok := d.(*ast.GenDecl); ok {
+					ast.Inspect(gd, func(n ast.Node) bool {
+						if id, ok := n.(*ast.Ident); ok && isGroup(id) {
+							fmt.Printf("MANUAL %s used outside a function at %s\n", id.Name, fset.Position(id.Pos()))
+						}
+						return true
+					})
+				}
+				continue
+			}
+			var refs []*ast.Ident
+			defined := map[string]bool{}
+			ast.Inspect(fd, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok {
+					if isGroup(id) {
+						refs = append(refs, id)
+					}
+					if info.Defs[id] != nil {
+						defined[id.Name] = true
+					}
+				}
+				return true
+			})
+			if len(refs) == 0 {
+				continue
+			}
+			g := "grp"
+			for i := 2; defined[g]; i++ {
+				g = fmt.Sprintf("grp%d", i)
+			}
+			for _, id := range refs {
+				edits = append(edits, edit{off(id.Pos()), off(id.Pos()), g + ".", false})
+			}
+			ast.Inspect(fd.Body, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok {
+					if o := info.Uses[id]; o != nil && o.Parent() == scope {
+						if fl, ok := globalFlags[id.Name]; ok {
+							edits = append(edits, edit{off(id.Pos()), off(id.End()), g + ".inv.flags." + fl, false})
+						}
+					}
+				}
+				return true
+			})
+			edits = append(edits, edit{off(fd.Body.Lbrace) + 1, off(fd.Body.Lbrace) + 1,
+				fmt.Sprintf("\n\t%s := %ss(legacyTestInvocation())", g, *ctorName), false})
+		}
+		if len(edits) == 0 {
+			continue
+		}
+		src, err := os.ReadFile(fn)
+		if err != nil {
+			log.Fatal(err)
+		}
+		sort.SliceStable(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
+		for _, e := range edits {
+			src = append(src[:e.start], append([]byte(e.text), src[e.end:]...)...)
+		}
+		out, err := imports.Process(fn, src, nil)
+		if err != nil {
+			out = src
+			fmt.Printf("FORMAT ERROR %s: %v\n", fn, err)
+		}
+		if err := os.WriteFile(fn, out, 0644); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("FIXED %s\n", fn)
+	}
+}
+
+// registerGroup adds ctor(inv) to the list in migratedGroups in path.
+func registerGroup(path, ctor string) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	s := string(b)
+	i := strings.Index(s, "func migratedGroups(")
+	if i < 0 {
+		log.Fatal("migratedGroups not found")
+	}
+	j := strings.Index(s[i:], "\n\t}\n}")
+	if j < 0 {
+		log.Fatal("end of migratedGroups list not found")
+	}
+	j += i + 1
+	s = s[:j] + "\t\t" + ctor + "(inv),\n" + s[j:]
+	if err := os.WriteFile(path, []byte(s), 0644); err != nil {
+		log.Fatal(err)
+	}
 }

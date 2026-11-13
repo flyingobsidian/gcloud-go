@@ -1,100 +1,50 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
 
 // --- gcloud ai models (#1458) ---
 
-var aiModelsCmd = &cobra.Command{Use: "models", Short: "Manage Vertex AI models"}
-
-var (
-	flagAIMRegion     string
-	flagAIMFormat     string
-	flagAIMConfigFile string
-	flagAIMVersion    string
-	flagAIMFilter     string
-	flagAIMOrderBy    string
-	flagAIMPageSize   int64
-	flagAIMReadMask   string
-)
-
-var (
-	aiMDeleteCmd = &cobra.Command{
-		Use: "delete MODEL", Short: "Delete a model",
-		Args: cobra.ExactArgs(1), RunE: runAIMDelete,
-	}
-	aiMDescribeCmd = &cobra.Command{
-		Use: "describe MODEL", Short: "Describe a model",
-		Args: cobra.ExactArgs(1), RunE: runAIMDescribe,
-	}
-	aiMListCmd = &cobra.Command{
-		Use: "list", Short: "List models",
-		Args: cobra.NoArgs, RunE: runAIMList,
-	}
-	aiMCopyCmd = &cobra.Command{
-		Use: "copy", Short: "Copy a model",
-		Args: cobra.NoArgs, RunE: runAIMCopy,
-	}
-	aiMUploadCmd = &cobra.Command{
-		Use: "upload", Short: "Upload a model",
-		Args: cobra.NoArgs, RunE: runAIMUpload,
-	}
-	aiMListVersionsCmd = &cobra.Command{
-		Use: "list-version MODEL", Short: "List versions of a model",
-		Args: cobra.ExactArgs(1), RunE: runAIMListVersions,
-	}
-	aiMDeleteVersionCmd = &cobra.Command{
-		Use: "delete-version MODEL", Short: "Delete a specific version of a model",
-		Long: "MODEL may be given as \"MODEL@VERSION\" or as MODEL together with " +
-			"--version=VERSION. In either form the resource name sent to the " +
-			"server is MODEL@VERSION.",
-		Args: cobra.ExactArgs(1), RunE: runAIMDeleteVersion,
-	}
-)
-
-func init() {
+func (s *aiCmds) initAiModels() {
 	all := []*cobra.Command{
-		aiMDeleteCmd, aiMDescribeCmd, aiMListCmd,
-		aiMCopyCmd, aiMUploadCmd,
-		aiMListVersionsCmd, aiMDeleteVersionCmd,
+		s.aiMDeleteCmd, s.aiMDescribeCmd, s.aiMListCmd,
+		s.aiMCopyCmd, s.aiMUploadCmd,
+		s.aiMListVersionsCmd, s.aiMDeleteVersionCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAIMRegion, "region", "", "Region where the model lives (required)")
+		c.Flags().StringVar(&s.flagAIMRegion, "region", "", "Region where the model lives (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagAIMFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAIMFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{aiMCopyCmd, aiMUploadCmd} {
-		c.Flags().StringVar(&flagAIMConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.aiMCopyCmd, s.aiMUploadCmd} {
+		c.Flags().StringVar(&s.flagAIMConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	aiMListCmd.Flags().StringVar(&flagAIMFilter, "filter", "", "Server-side filter expression")
-	aiMListCmd.Flags().StringVar(&flagAIMOrderBy, "order-by", "", "Order-by expression")
-	aiMListCmd.Flags().Int64Var(&flagAIMPageSize, "page-size", 0, "Maximum results per page")
-	aiMListCmd.Flags().StringVar(&flagAIMReadMask, "read-mask", "", "Field mask for reads")
-	aiMListVersionsCmd.Flags().StringVar(&flagAIMFilter, "filter", "", "Server-side filter expression")
-	aiMListVersionsCmd.Flags().StringVar(&flagAIMOrderBy, "order-by", "", "Order-by expression")
-	aiMListVersionsCmd.Flags().Int64Var(&flagAIMPageSize, "page-size", 0, "Maximum results per page")
-	aiMListVersionsCmd.Flags().StringVar(&flagAIMReadMask, "read-mask", "", "Field mask for reads")
-	aiMDeleteVersionCmd.Flags().StringVar(&flagAIMVersion, "version", "",
+	s.aiMListCmd.Flags().StringVar(&s.flagAIMFilter, "filter", "", "Server-side filter expression")
+	s.aiMListCmd.Flags().StringVar(&s.flagAIMOrderBy, "order-by", "", "Order-by expression")
+	s.aiMListCmd.Flags().Int64Var(&s.flagAIMPageSize, "page-size", 0, "Maximum results per page")
+	s.aiMListCmd.Flags().StringVar(&s.flagAIMReadMask, "read-mask", "", "Field mask for reads")
+	s.aiMListVersionsCmd.Flags().StringVar(&s.flagAIMFilter, "filter", "", "Server-side filter expression")
+	s.aiMListVersionsCmd.Flags().StringVar(&s.flagAIMOrderBy, "order-by", "", "Order-by expression")
+	s.aiMListVersionsCmd.Flags().Int64Var(&s.flagAIMPageSize, "page-size", 0, "Maximum results per page")
+	s.aiMListVersionsCmd.Flags().StringVar(&s.flagAIMReadMask, "read-mask", "", "Field mask for reads")
+	s.aiMDeleteVersionCmd.Flags().StringVar(&s.flagAIMVersion, "version", "",
 		"Model version ID (may also be supplied inline as MODEL@VERSION)")
 
-	aiModelsCmd.AddCommand(all...)
-	aiCmd.AddCommand(aiModelsCmd)
+	s.aiModelsCmd.AddCommand(all...)
+	s.aiCmd.AddCommand(s.aiModelsCmd)
 }
 
-func aiMParent() (string, error) { return aiParent(flagAIMRegion) }
+func (s *aiCmds) aiMParent() (string, error) { return s.aiParent(s.flagAIMRegion) }
 
-func aiMName(id string) (string, error) {
-	parent, err := aiMParent()
+func (s *aiCmds) aiMName(id string) (string, error) {
+	parent, err := s.aiMParent()
 	if err != nil {
 		return "", err
 	}
@@ -105,7 +55,7 @@ func aiMName(id string) (string, error) {
 // "projects/.../models/<id>@<version>" resource name. Either an inline
 // "@VERSION" suffix on MODEL or a --version flag is required; specifying both
 // values with a conflict is rejected.
-func aiMVersionedName(rawModel, versionFlag string) (string, error) {
+func (s *aiCmds) aiMVersionedName(rawModel, versionFlag string) (string, error) {
 	base := rawModel
 	inline := ""
 	if i := strings.Index(rawModel, "@"); i >= 0 {
@@ -122,7 +72,7 @@ func aiMVersionedName(rawModel, versionFlag string) (string, error) {
 	if version == "" {
 		return "", fmt.Errorf("model version required (use MODEL@VERSION or --version)")
 	}
-	parent, err := aiMParent()
+	parent, err := s.aiMParent()
 	if err != nil {
 		return "", err
 	}
@@ -130,13 +80,13 @@ func aiMVersionedName(rawModel, versionFlag string) (string, error) {
 	return full + "@" + version, nil
 }
 
-func runAIMDelete(cmd *cobra.Command, args []string) error {
-	name, err := aiMName(args[0])
+func (s *aiCmds) runAIMDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.aiMName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIMRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIMRegion)
 	if err != nil {
 		return err
 	}
@@ -144,17 +94,17 @@ func runAIMDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting model: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Delete request issued for model [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAIMFormat)
+	fmt.Fprintf(s.inv.stderr, "Delete request issued for model [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIMFormat)
 }
 
-func runAIMDescribe(cmd *cobra.Command, args []string) error {
-	name, err := aiMName(args[0])
+func (s *aiCmds) runAIMDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.aiMName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIMRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIMRegion)
 	if err != nil {
 		return err
 	}
@@ -162,16 +112,16 @@ func runAIMDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing model: %w", err)
 	}
-	return emitFormatted(got, flagAIMFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIMFormat)
 }
 
-func runAIMList(cmd *cobra.Command, args []string) error {
-	parent, err := aiMParent()
+func (s *aiCmds) runAIMList(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiMParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIMRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIMRegion)
 	if err != nil {
 		return err
 	}
@@ -179,17 +129,17 @@ func runAIMList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Models.List(parent).Context(ctx)
-		if flagAIMFilter != "" {
-			call = call.Filter(flagAIMFilter)
+		if s.flagAIMFilter != "" {
+			call = call.Filter(s.flagAIMFilter)
 		}
-		if flagAIMOrderBy != "" {
-			call = call.OrderBy(flagAIMOrderBy)
+		if s.flagAIMOrderBy != "" {
+			call = call.OrderBy(s.flagAIMOrderBy)
 		}
-		if flagAIMPageSize > 0 {
-			call = call.PageSize(flagAIMPageSize)
+		if s.flagAIMPageSize > 0 {
+			call = call.PageSize(s.flagAIMPageSize)
 		}
-		if flagAIMReadMask != "" {
-			call = call.ReadMask(flagAIMReadMask)
+		if s.flagAIMReadMask != "" {
+			call = call.ReadMask(s.flagAIMReadMask)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -204,20 +154,20 @@ func runAIMList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAIMFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAIMFormat)
 }
 
-func runAIMCopy(cmd *cobra.Command, args []string) error {
-	parent, err := aiMParent()
+func (s *aiCmds) runAIMCopy(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiMParent()
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1CopyModelRequest{}
-	if err := loadYAMLOrJSONInto(flagAIMConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIMConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIMRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIMRegion)
 	if err != nil {
 		return err
 	}
@@ -225,21 +175,21 @@ func runAIMCopy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("copying model: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Copy request issued (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagAIMFormat)
+	fmt.Fprintf(s.inv.stderr, "Copy request issued (operation: %s).\n", op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIMFormat)
 }
 
-func runAIMUpload(cmd *cobra.Command, args []string) error {
-	parent, err := aiMParent()
+func (s *aiCmds) runAIMUpload(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiMParent()
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1UploadModelRequest{}
-	if err := loadYAMLOrJSONInto(flagAIMConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIMConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIMRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIMRegion)
 	if err != nil {
 		return err
 	}
@@ -247,17 +197,17 @@ func runAIMUpload(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("uploading model: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Upload request issued (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagAIMFormat)
+	fmt.Fprintf(s.inv.stderr, "Upload request issued (operation: %s).\n", op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIMFormat)
 }
 
-func runAIMListVersions(cmd *cobra.Command, args []string) error {
-	name, err := aiMName(args[0])
+func (s *aiCmds) runAIMListVersions(cmd *cobra.Command, args []string) error {
+	name, err := s.aiMName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIMRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIMRegion)
 	if err != nil {
 		return err
 	}
@@ -265,17 +215,17 @@ func runAIMListVersions(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Models.ListVersions(name).Context(ctx)
-		if flagAIMFilter != "" {
-			call = call.Filter(flagAIMFilter)
+		if s.flagAIMFilter != "" {
+			call = call.Filter(s.flagAIMFilter)
 		}
-		if flagAIMOrderBy != "" {
-			call = call.OrderBy(flagAIMOrderBy)
+		if s.flagAIMOrderBy != "" {
+			call = call.OrderBy(s.flagAIMOrderBy)
 		}
-		if flagAIMPageSize > 0 {
-			call = call.PageSize(flagAIMPageSize)
+		if s.flagAIMPageSize > 0 {
+			call = call.PageSize(s.flagAIMPageSize)
 		}
-		if flagAIMReadMask != "" {
-			call = call.ReadMask(flagAIMReadMask)
+		if s.flagAIMReadMask != "" {
+			call = call.ReadMask(s.flagAIMReadMask)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -290,16 +240,16 @@ func runAIMListVersions(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAIMFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAIMFormat)
 }
 
-func runAIMDeleteVersion(cmd *cobra.Command, args []string) error {
-	name, err := aiMVersionedName(args[0], flagAIMVersion)
+func (s *aiCmds) runAIMDeleteVersion(cmd *cobra.Command, args []string) error {
+	name, err := s.aiMVersionedName(args[0], s.flagAIMVersion)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAIMRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAIMRegion)
 	if err != nil {
 		return err
 	}
@@ -307,6 +257,6 @@ func runAIMDeleteVersion(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting model version: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Delete-version request issued for [%s] (operation: %s).\n", name, op.Name)
-	return emitFormatted(op, flagAIMFormat)
+	fmt.Fprintf(s.inv.stderr, "Delete-version request issued for [%s] (operation: %s).\n", name, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagAIMFormat)
 }

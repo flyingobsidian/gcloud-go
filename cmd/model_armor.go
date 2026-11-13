@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -16,296 +15,314 @@ import (
 // google.golang.org/api; both subgroups use the shared restClient from
 // rest_helpers.go with a per-service endpoint.
 
-var modelArmorCmd = &cobra.Command{Use: "model-armor", Short: "Manage Google Cloud Model Armor"}
-
 var modelArmorRest = newRESTClient("https://modelarmor.googleapis.com/v1")
 
-func init() {
-	rootCmd.AddCommand(modelArmorCmd)
+func (s *modelArmorCmds) initModelArmor() {
+
 }
 
 // --- model-armor floorsettings (#1423) ---
 
-var modelArmorFSCmd = &cobra.Command{Use: "floorsettings", Short: "Manage Model Armor floor settings"}
-
-var (
-	flagMAFSFullURI    string
-	flagMAFSFormat     string
-	flagMAFSConfigFile string
-	flagMAFSUpdateMask string
-)
-
-var (
-	modelArmorFSDescribeCmd = &cobra.Command{
-		Use: "describe", Short: "Describe a FloorSetting resource",
-		Args: cobra.NoArgs, RunE: runMAFSDescribe,
-	}
-	modelArmorFSUpdateCmd = &cobra.Command{
-		Use: "update", Short: "Update a FloorSetting resource",
-		Args: cobra.NoArgs, RunE: runMAFSUpdate,
-	}
-)
-
-func init() {
-	for _, c := range []*cobra.Command{modelArmorFSDescribeCmd, modelArmorFSUpdateCmd} {
-		c.Flags().StringVar(&flagMAFSFullURI, "full-uri", "",
+func (s *modelArmorCmds) initModelArmor1() {
+	for _, c := range []*cobra.Command{s.modelArmorFSDescribeCmd, s.modelArmorFSUpdateCmd} {
+		c.Flags().StringVar(&s.flagMAFSFullURI, "full-uri", "",
 			"Full resource URI of the FloorSetting (required, e.g. projects/PROJECT/locations/LOCATION/floorSetting)")
 		_ = c.MarkFlagRequired("full-uri")
-		c.Flags().StringVar(&flagMAFSFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagMAFSFormat, "format", "", "Output format")
 	}
-	modelArmorFSUpdateCmd.Flags().StringVar(&flagMAFSConfigFile, "config-file", "",
+	s.modelArmorFSUpdateCmd.Flags().StringVar(&s.flagMAFSConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the FloorSetting body (required)")
-	_ = modelArmorFSUpdateCmd.MarkFlagRequired("config-file")
-	modelArmorFSUpdateCmd.Flags().StringVar(&flagMAFSUpdateMask, "update-mask", "",
+	_ = s.modelArmorFSUpdateCmd.MarkFlagRequired("config-file")
+	s.modelArmorFSUpdateCmd.Flags().StringVar(&s.flagMAFSUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update")
 
-	modelArmorFSCmd.AddCommand(modelArmorFSDescribeCmd, modelArmorFSUpdateCmd)
-	modelArmorCmd.AddCommand(modelArmorFSCmd)
+	s.modelArmorFSCmd.AddCommand(s.modelArmorFSDescribeCmd, s.modelArmorFSUpdateCmd)
+	s.modelArmorCmd.AddCommand(s.modelArmorFSCmd)
 }
 
-func runMAFSDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+func (s *modelArmorCmds) runMAFSDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := modelArmorRest.do(ctx, http.MethodGet, "/"+strings.TrimPrefix(flagMAFSFullURI, "/"), nil, nil, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodGet, "/"+strings.TrimPrefix(s.flagMAFSFullURI, "/"), nil, nil, &got); err != nil {
 		return fmt.Errorf("describing floor setting: %w", err)
 	}
-	return emitFormatted(got, flagMAFSFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMAFSFormat)
 }
 
-func runMAFSUpdate(cmd *cobra.Command, args []string) error {
+func (s *modelArmorCmds) runMAFSUpdate(cmd *cobra.Command, args []string) error {
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMAFSConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMAFSConfigFile, &body); err != nil {
 		return err
 	}
 	q := url.Values{}
-	mask := flagMAFSUpdateMask
+	mask := s.flagMAFSUpdateMask
 	if mask == "" {
 		mask = joinMask(dcTopLevelKeys(body))
 	}
 	if mask != "" {
 		q.Set("updateMask", mask)
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := modelArmorRest.do(ctx, http.MethodPatch, "/"+strings.TrimPrefix(flagMAFSFullURI, "/"), q, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPatch, "/"+strings.TrimPrefix(s.flagMAFSFullURI, "/"), q, body, &got); err != nil {
 		return fmt.Errorf("updating floor setting: %w", err)
 	}
-	fmt.Printf("Updated floor setting [%s].\n", flagMAFSFullURI)
-	return emitFormatted(got, flagMAFSFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated floor setting [%s].\n", s.flagMAFSFullURI)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMAFSFormat)
 }
 
 // --- model-armor templates (#1424) ---
 
-var modelArmorTplCmd = &cobra.Command{Use: "templates", Short: "Manage Model Armor templates"}
-
-var (
-	flagMATplLocation   string
-	flagMATplFormat     string
-	flagMATplConfigFile string
-	flagMATplUpdateMask string
-	flagMATplPageSize   int64
-	flagMATplFilter     string
-)
-
-var (
-	modelArmorTplCreateCmd = &cobra.Command{
-		Use: "create TEMPLATE", Short: "Create a Model Armor template",
-		Args: cobra.ExactArgs(1), RunE: runMATplCreate,
-	}
-	modelArmorTplDeleteCmd = &cobra.Command{
-		Use: "delete TEMPLATE", Short: "Delete a Model Armor template",
-		Args: cobra.ExactArgs(1), RunE: runMATplDelete,
-	}
-	modelArmorTplDescribeCmd = &cobra.Command{
-		Use: "describe TEMPLATE", Short: "Describe a Model Armor template",
-		Args: cobra.ExactArgs(1), RunE: runMATplDescribe,
-	}
-	modelArmorTplListCmd = &cobra.Command{
-		Use: "list", Short: "List Model Armor templates",
-		Args: cobra.NoArgs, RunE: runMATplList,
-	}
-	modelArmorTplUpdateCmd = &cobra.Command{
-		Use: "update TEMPLATE", Short: "Update a Model Armor template",
-		Args: cobra.ExactArgs(1), RunE: runMATplUpdate,
-	}
-	modelArmorTplSanitizeModelCmd = &cobra.Command{
-		Use:   "sanitize-model-response TEMPLATE",
-		Short: "Send a model response through the template's filters",
-		Args:  cobra.ExactArgs(1), RunE: runMATplSanitizeModel,
-	}
-	modelArmorTplSanitizeUserCmd = &cobra.Command{
-		Use:   "sanitize-user-prompt TEMPLATE",
-		Short: "Send a user prompt through the template's filters",
-		Args:  cobra.ExactArgs(1), RunE: runMATplSanitizeUser,
-	}
-)
-
-func init() {
+func (s *modelArmorCmds) initModelArmor2() {
 	all := []*cobra.Command{
-		modelArmorTplCreateCmd, modelArmorTplDeleteCmd, modelArmorTplDescribeCmd,
-		modelArmorTplListCmd, modelArmorTplUpdateCmd,
-		modelArmorTplSanitizeModelCmd, modelArmorTplSanitizeUserCmd,
+		s.modelArmorTplCreateCmd, s.modelArmorTplDeleteCmd, s.modelArmorTplDescribeCmd,
+		s.modelArmorTplListCmd, s.modelArmorTplUpdateCmd,
+		s.modelArmorTplSanitizeModelCmd, s.modelArmorTplSanitizeUserCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagMATplLocation, "location", "", "Model Armor location (required)")
+		c.Flags().StringVar(&s.flagMATplLocation, "location", "", "Model Armor location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagMATplFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagMATplFormat, "format", "", "Output format")
 	}
 	for _, c := range []*cobra.Command{
-		modelArmorTplCreateCmd, modelArmorTplUpdateCmd,
-		modelArmorTplSanitizeModelCmd, modelArmorTplSanitizeUserCmd,
+		s.modelArmorTplCreateCmd, s.modelArmorTplUpdateCmd,
+		s.modelArmorTplSanitizeModelCmd, s.modelArmorTplSanitizeUserCmd,
 	} {
-		c.Flags().StringVar(&flagMATplConfigFile, "config-file", "",
+		c.Flags().StringVar(&s.flagMATplConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	modelArmorTplUpdateCmd.Flags().StringVar(&flagMATplUpdateMask, "update-mask", "",
+	s.modelArmorTplUpdateCmd.Flags().StringVar(&s.flagMATplUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update")
-	modelArmorTplListCmd.Flags().Int64Var(&flagMATplPageSize, "page-size", 0, "Maximum results per page")
-	modelArmorTplListCmd.Flags().StringVar(&flagMATplFilter, "filter", "", "Server-side filter expression")
+	s.modelArmorTplListCmd.Flags().Int64Var(&s.flagMATplPageSize, "page-size", 0, "Maximum results per page")
+	s.modelArmorTplListCmd.Flags().StringVar(&s.flagMATplFilter, "filter", "", "Server-side filter expression")
 
-	modelArmorTplCmd.AddCommand(all...)
-	modelArmorCmd.AddCommand(modelArmorTplCmd)
+	s.modelArmorTplCmd.AddCommand(all...)
+	s.modelArmorCmd.AddCommand(s.modelArmorTplCmd)
 }
 
-func maTplParent() (string, error) {
-	project, err := resolveProject()
+func (s *modelArmorCmds) maTplParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagMATplLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagMATplLocation), nil
 }
 
-func maTplName(id string) (string, error) {
+func (s *modelArmorCmds) maTplName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := maTplParent()
+	parent, err := s.maTplParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/templates/%s", parent, id), nil
 }
 
-func runMATplCreate(cmd *cobra.Command, args []string) error {
-	parent, err := maTplParent()
+func (s *modelArmorCmds) runMATplCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.maTplParent()
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMATplConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMATplConfigFile, &body); err != nil {
 		return err
 	}
 	q := url.Values{}
 	q.Set("templateId", args[0])
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := modelArmorRest.do(ctx, http.MethodPost, "/"+parent+"/templates", q, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPost, "/"+parent+"/templates", q, body, &got); err != nil {
 		return fmt.Errorf("creating template: %w", err)
 	}
-	fmt.Printf("Created template [%s].\n", args[0])
-	return emitFormatted(got, flagMATplFormat)
+	fmt.Fprintf(s.inv.stdout, "Created template [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagMATplFormat)
 }
 
-func runMATplDelete(cmd *cobra.Command, args []string) error {
-	name, err := maTplName(args[0])
+func (s *modelArmorCmds) runMATplDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.maTplName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if err := modelArmorRest.do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	ctx := cmd.Context()
+	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting template: %w", err)
 	}
-	fmt.Printf("Deleted template [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted template [%s].\n", args[0])
 	return nil
 }
 
-func runMATplDescribe(cmd *cobra.Command, args []string) error {
-	name, err := maTplName(args[0])
+func (s *modelArmorCmds) runMATplDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.maTplName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := modelArmorRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing template: %w", err)
 	}
-	return emitFormatted(got, flagMATplFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMATplFormat)
 }
 
-func runMATplList(cmd *cobra.Command, args []string) error {
-	parent, err := maTplParent()
+func (s *modelArmorCmds) runMATplList(cmd *cobra.Command, args []string) error {
+	parent, err := s.maTplParent()
 	if err != nil {
 		return err
 	}
 	base := url.Values{}
-	if flagMATplFilter != "" {
-		base.Set("filter", flagMATplFilter)
+	if s.flagMATplFilter != "" {
+		base.Set("filter", s.flagMATplFilter)
 	}
-	ctx := context.Background()
-	items, err := modelArmorRest.paginate(ctx, "/"+parent+"/templates", base, "templates", flagMATplPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(modelArmorRest).paginate(ctx, "/"+parent+"/templates", base, "templates", s.flagMATplPageSize)
 	if err != nil {
 		return fmt.Errorf("listing templates: %w", err)
 	}
-	return emitFormatted(items, flagMATplFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagMATplFormat)
 }
 
-func runMATplUpdate(cmd *cobra.Command, args []string) error {
-	name, err := maTplName(args[0])
+func (s *modelArmorCmds) runMATplUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.maTplName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMATplConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMATplConfigFile, &body); err != nil {
 		return err
 	}
 	q := url.Values{}
-	mask := flagMATplUpdateMask
+	mask := s.flagMATplUpdateMask
 	if mask == "" {
 		mask = joinMask(dcTopLevelKeys(body))
 	}
 	if mask != "" {
 		q.Set("updateMask", mask)
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := modelArmorRest.do(ctx, http.MethodPatch, "/"+name, q, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPatch, "/"+name, q, body, &got); err != nil {
 		return fmt.Errorf("updating template: %w", err)
 	}
-	fmt.Printf("Updated template [%s].\n", args[0])
-	return emitFormatted(got, flagMATplFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated template [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagMATplFormat)
 }
 
-func runMATplSanitizeModel(cmd *cobra.Command, args []string) error {
-	name, err := maTplName(args[0])
+func (s *modelArmorCmds) runMATplSanitizeModel(cmd *cobra.Command, args []string) error {
+	name, err := s.maTplName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMATplConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMATplConfigFile, &body); err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := modelArmorRest.do(ctx, http.MethodPost, "/"+name+":sanitizeModelResponse", nil, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPost, "/"+name+":sanitizeModelResponse", nil, body, &got); err != nil {
 		return fmt.Errorf("sanitizing model response: %w", err)
 	}
-	return emitFormatted(got, flagMATplFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMATplFormat)
 }
 
-func runMATplSanitizeUser(cmd *cobra.Command, args []string) error {
-	name, err := maTplName(args[0])
+func (s *modelArmorCmds) runMATplSanitizeUser(cmd *cobra.Command, args []string) error {
+	name, err := s.maTplName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMATplConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMATplConfigFile, &body); err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := modelArmorRest.do(ctx, http.MethodPost, "/"+name+":sanitizeUserPrompt", nil, body, &got); err != nil {
+	if err := s.inv.rest(modelArmorRest).do(ctx, http.MethodPost, "/"+name+":sanitizeUserPrompt", nil, body, &got); err != nil {
 		return fmt.Errorf("sanitizing user prompt: %w", err)
 	}
-	return emitFormatted(got, flagMATplFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMATplFormat)
+}
+
+// modelArmorCmds holds the commands and flag values of one invocation's "modelArmor"
+// command group, so invocations don't share state (#2070).
+type modelArmorCmds struct {
+	inv *invocation
+
+	modelArmorCmd                 *cobra.Command
+	modelArmorFSCmd               *cobra.Command
+	flagMAFSFullURI               string
+	flagMAFSFormat                string
+	flagMAFSConfigFile            string
+	flagMAFSUpdateMask            string
+	modelArmorFSDescribeCmd       *cobra.Command
+	modelArmorFSUpdateCmd         *cobra.Command
+	modelArmorTplCmd              *cobra.Command
+	flagMATplLocation             string
+	flagMATplFormat               string
+	flagMATplConfigFile           string
+	flagMATplUpdateMask           string
+	flagMATplPageSize             int64
+	flagMATplFilter               string
+	modelArmorTplCreateCmd        *cobra.Command
+	modelArmorTplDeleteCmd        *cobra.Command
+	modelArmorTplDescribeCmd      *cobra.Command
+	modelArmorTplListCmd          *cobra.Command
+	modelArmorTplUpdateCmd        *cobra.Command
+	modelArmorTplSanitizeModelCmd *cobra.Command
+	modelArmorTplSanitizeUserCmd  *cobra.Command
+}
+
+// newModelArmorCmd returns the "modelArmor" command group for inv.
+func newModelArmorCmd(inv *invocation) *cobra.Command {
+	return newModelArmorCmds(inv).modelArmorCmd
+}
+
+// newModelArmorCmds builds the "modelArmor" command group for inv and returns its state.
+func newModelArmorCmds(inv *invocation) *modelArmorCmds {
+	s := &modelArmorCmds{inv: inv}
+	s.modelArmorCmd = &cobra.Command{Use: "model-armor", Short: "Manage Google Cloud Model Armor"}
+	s.modelArmorFSCmd = &cobra.Command{Use: "floorsettings", Short: "Manage Model Armor floor settings"}
+	s.modelArmorFSDescribeCmd = &cobra.Command{
+		Use: "describe", Short: "Describe a FloorSetting resource",
+		Args: cobra.NoArgs, RunE: s.runMAFSDescribe,
+	}
+	s.modelArmorFSUpdateCmd = &cobra.Command{
+		Use: "update", Short: "Update a FloorSetting resource",
+		Args: cobra.NoArgs, RunE: s.runMAFSUpdate,
+	}
+	s.modelArmorTplCmd = &cobra.Command{Use: "templates", Short: "Manage Model Armor templates"}
+	s.modelArmorTplCreateCmd = &cobra.Command{
+		Use: "create TEMPLATE", Short: "Create a Model Armor template",
+		Args: cobra.ExactArgs(1), RunE: s.runMATplCreate,
+	}
+	s.modelArmorTplDeleteCmd = &cobra.Command{
+		Use: "delete TEMPLATE", Short: "Delete a Model Armor template",
+		Args: cobra.ExactArgs(1), RunE: s.runMATplDelete,
+	}
+	s.modelArmorTplDescribeCmd = &cobra.Command{
+		Use: "describe TEMPLATE", Short: "Describe a Model Armor template",
+		Args: cobra.ExactArgs(1), RunE: s.runMATplDescribe,
+	}
+	s.modelArmorTplListCmd = &cobra.Command{
+		Use: "list", Short: "List Model Armor templates",
+		Args: cobra.NoArgs, RunE: s.runMATplList,
+	}
+	s.modelArmorTplUpdateCmd = &cobra.Command{
+		Use: "update TEMPLATE", Short: "Update a Model Armor template",
+		Args: cobra.ExactArgs(1), RunE: s.runMATplUpdate,
+	}
+	s.modelArmorTplSanitizeModelCmd = &cobra.Command{
+		Use:   "sanitize-model-response TEMPLATE",
+		Short: "Send a model response through the template's filters",
+		Args:  cobra.ExactArgs(1), RunE: s.runMATplSanitizeModel,
+	}
+	s.modelArmorTplSanitizeUserCmd = &cobra.Command{
+		Use:   "sanitize-user-prompt TEMPLATE",
+		Short: "Send a user prompt through the template's filters",
+		Args:  cobra.ExactArgs(1), RunE: s.runMATplSanitizeUser,
+	}
+	s.initModelArmor()
+	s.initModelArmor1()
+	s.initModelArmor2()
+	return s
 }

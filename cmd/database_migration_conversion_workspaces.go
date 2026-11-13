@@ -1,242 +1,122 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	datamigration "google.golang.org/api/datamigration/v1"
 )
 
-var dmCWCmd = &cobra.Command{
-	Use:   "conversion-workspaces",
-	Short: "Manage Database Migration Service conversion workspaces",
-}
-
-var (
-	dmCWCreateCmd = &cobra.Command{
-		Use: "create WORKSPACE", Short: "Create a conversion workspace from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runDMCWCreate,
-	}
-	dmCWDeleteCmd = &cobra.Command{
-		Use: "delete WORKSPACE", Short: "Delete a conversion workspace",
-		Args: cobra.ExactArgs(1), RunE: runDMCWDelete,
-	}
-	dmCWDescribeCmd = &cobra.Command{
-		Use: "describe WORKSPACE", Short: "Show details about a conversion workspace",
-		Args: cobra.ExactArgs(1), RunE: runDMCWDescribe,
-	}
-	dmCWUpdateCmd = &cobra.Command{
-		Use: "update WORKSPACE", Short: "Update a conversion workspace from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runDMCWUpdate,
-	}
-	dmCWListCmd = &cobra.Command{
-		Use: "list", Short: "List conversion workspaces in a region",
-		Args: cobra.NoArgs, RunE: runDMCWList,
-	}
-	dmCWApplyCmd = &cobra.Command{
-		Use: "apply WORKSPACE", Short: "Apply the conversion workspace to the destination",
-		Args: cobra.ExactArgs(1), RunE: runDMCWApply,
-	}
-	dmCWCommitCmd = &cobra.Command{
-		Use: "commit WORKSPACE", Short: "Commit a conversion workspace revision",
-		Args: cobra.ExactArgs(1), RunE: runDMCWCommit,
-	}
-	dmCWConvertCmd = &cobra.Command{
-		Use: "convert WORKSPACE", Short: "Convert a conversion workspace",
-		Args: cobra.ExactArgs(1), RunE: runDMCWConvert,
-	}
-	dmCWRollbackCmd = &cobra.Command{
-		Use: "rollback WORKSPACE", Short: "Rollback the conversion workspace to the previous commit",
-		Args: cobra.ExactArgs(1), RunE: runDMCWRollback,
-	}
-	dmCWSeedCmd = &cobra.Command{
-		Use: "seed WORKSPACE", Short: "Seed a conversion workspace from a connection profile",
-		Args: cobra.ExactArgs(1), RunE: runDMCWSeed,
-	}
-	dmCWDescribeDDLsCmd = &cobra.Command{
-		Use: "describe-ddls WORKSPACE", Short: "Describe the DDLs for a conversion workspace",
-		Args: cobra.ExactArgs(1), RunE: runDMCWDescribeDDLs,
-	}
-	dmCWDescribeEntitiesCmd = &cobra.Command{
-		Use: "describe-entities WORKSPACE", Short: "Describe entities in a conversion workspace",
-		Args: cobra.ExactArgs(1), RunE: runDMCWDescribeEntities,
-	}
-	dmCWDescribeIssuesCmd = &cobra.Command{
-		Use: "describe-issues WORKSPACE", Short: "Describe conversion issues in a conversion workspace",
-		Args: cobra.ExactArgs(1), RunE: runDMCWDescribeIssues,
-	}
-	dmCWImportRulesCmd = &cobra.Command{
-		Use: "import-rules WORKSPACE", Short: "Import mapping rules into a conversion workspace",
-		Args: cobra.ExactArgs(1), RunE: runDMCWImportRules,
-	}
-	dmCWListBackgroundJobsCmd = &cobra.Command{
-		Use: "list-background-jobs WORKSPACE", Short: "List background jobs for a conversion workspace",
-		Args: cobra.ExactArgs(1), RunE: runDMCWListBackgroundJobs,
-	}
-	dmCWMappingRulesCmd = &cobra.Command{
-		Use:   "mapping-rules",
-		Short: "Manage mapping rules for a conversion workspace",
-	}
-	dmCWMRListCmd = &cobra.Command{
-		Use: "list", Short: "List mapping rules in a conversion workspace",
-		Args: cobra.NoArgs, RunE: runDMCWMRList,
-	}
-	dmCWMRDescribeCmd = &cobra.Command{
-		Use: "describe RULE", Short: "Show a mapping rule",
-		Args: cobra.ExactArgs(1), RunE: runDMCWMRDescribe,
-	}
-	dmCWMRDeleteCmd = &cobra.Command{
-		Use: "delete RULE", Short: "Delete a mapping rule",
-		Args: cobra.ExactArgs(1), RunE: runDMCWMRDelete,
-	}
-	dmCWMRCreateCmd = &cobra.Command{
-		Use: "create RULE", Short: "Create a mapping rule from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runDMCWMRCreate,
-	}
-)
-
-var (
-	flagDMCWRegion            string
-	flagDMCWFormat            string
-	flagDMCWConfigFile        string
-	flagDMCWUpdateMask        string
-	flagDMCWListPageSize      int64
-	flagDMCWListLimit         int64
-	flagDMCWListFilter        string
-	flagDMCWListURI           bool
-	flagDMCWAsync             bool
-	flagDMCWApplyAutoCommit   bool
-	flagDMCWAutoCommit        bool
-	flagDMCWNoAutoCommit      bool
-	flagDMCWDryRun            bool
-	flagDMCWFilter            string
-	flagDMCWDestConnProfile   string
-	flagDMCWSourceConnProfile string
-	flagDMCWConnProfile       string
-	flagDMCWCommitName        string
-	flagDMCWConvertFullPath   bool
-	flagDMCWDescribeCommitID  string
-	flagDMCWDescribeTree      string
-	flagDMCWDescribeView      string
-	flagDMCWDescribeUncomm    bool
-	flagDMCWDescribeDBName    string
-	flagDMCWRulesFormat       string
-	flagDMCWRulesFiles        []string
-	flagDMCWWorkspace         string
-)
-
-func init() {
+func (s *databaseMigrationCmds) initDatabaseMigrationConversionWorkspaces() {
 	// Top-level workspace commands.
 	topCommands := []*cobra.Command{
-		dmCWCreateCmd, dmCWDeleteCmd, dmCWDescribeCmd, dmCWUpdateCmd, dmCWListCmd,
-		dmCWApplyCmd, dmCWCommitCmd, dmCWConvertCmd, dmCWRollbackCmd, dmCWSeedCmd,
-		dmCWDescribeDDLsCmd, dmCWDescribeEntitiesCmd, dmCWDescribeIssuesCmd,
-		dmCWImportRulesCmd, dmCWListBackgroundJobsCmd,
+		s.dmCWCreateCmd, s.dmCWDeleteCmd, s.dmCWDescribeCmd, s.dmCWUpdateCmd, s.dmCWListCmd,
+		s.dmCWApplyCmd, s.dmCWCommitCmd, s.dmCWConvertCmd, s.dmCWRollbackCmd, s.dmCWSeedCmd,
+		s.dmCWDescribeDDLsCmd, s.dmCWDescribeEntitiesCmd, s.dmCWDescribeIssuesCmd,
+		s.dmCWImportRulesCmd, s.dmCWListBackgroundJobsCmd,
 	}
 	for _, c := range topCommands {
-		c.Flags().StringVar(&flagDMCWRegion, "region", "", "Region containing the conversion workspace (required)")
+		c.Flags().StringVar(&s.flagDMCWRegion, "region", "", "Region containing the conversion workspace (required)")
 		_ = c.MarkFlagRequired("region")
 	}
 
-	for _, c := range []*cobra.Command{dmCWCreateCmd, dmCWUpdateCmd} {
-		c.Flags().StringVar(&flagDMCWConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dmCWCreateCmd, s.dmCWUpdateCmd} {
+		c.Flags().StringVar(&s.flagDMCWConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the ConversionWorkspace message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dmCWUpdateCmd.Flags().StringVar(&flagDMCWUpdateMask, "update-mask", "",
+	s.dmCWUpdateCmd.Flags().StringVar(&s.flagDMCWUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 
 	// LRO commands get --async.
 	for _, c := range []*cobra.Command{
-		dmCWCreateCmd, dmCWDeleteCmd, dmCWUpdateCmd, dmCWApplyCmd, dmCWCommitCmd,
-		dmCWConvertCmd, dmCWRollbackCmd, dmCWSeedCmd, dmCWImportRulesCmd,
+		s.dmCWCreateCmd, s.dmCWDeleteCmd, s.dmCWUpdateCmd, s.dmCWApplyCmd, s.dmCWCommitCmd,
+		s.dmCWConvertCmd, s.dmCWRollbackCmd, s.dmCWSeedCmd, s.dmCWImportRulesCmd,
 	} {
-		c.Flags().BoolVar(&flagDMCWAsync, "async", false, "Return the long-running operation without waiting")
+		c.Flags().BoolVar(&s.flagDMCWAsync, "async", false, "Return the long-running operation without waiting")
 	}
 
 	// apply / convert / seed common options.
-	for _, c := range []*cobra.Command{dmCWApplyCmd, dmCWConvertCmd, dmCWSeedCmd} {
-		c.Flags().StringVar(&flagDMCWFilter, "filter", "", "AIP-160 style filter for entities to include")
+	for _, c := range []*cobra.Command{s.dmCWApplyCmd, s.dmCWConvertCmd, s.dmCWSeedCmd} {
+		c.Flags().StringVar(&s.flagDMCWFilter, "filter", "", "AIP-160 style filter for entities to include")
 	}
 	// apply keeps the historical opt-in default (false); a separate variable
 	// prevents the convert/seed/import-rules default flip from leaking into it.
-	dmCWApplyCmd.Flags().BoolVar(&flagDMCWApplyAutoCommit, "auto-commit", false,
+	s.dmCWApplyCmd.Flags().BoolVar(&s.flagDMCWApplyAutoCommit, "auto-commit", false,
 		"Commit the workspace automatically after the operation")
 	// convert / seed / import-rules default --auto-commit to true (matching
 	// gcloud-python 578.0.0). Users can pass --no-auto-commit to opt out.
-	for _, c := range []*cobra.Command{dmCWConvertCmd, dmCWSeedCmd, dmCWImportRulesCmd} {
-		c.Flags().BoolVar(&flagDMCWAutoCommit, "auto-commit", true,
+	for _, c := range []*cobra.Command{s.dmCWConvertCmd, s.dmCWSeedCmd, s.dmCWImportRulesCmd} {
+		c.Flags().BoolVar(&s.flagDMCWAutoCommit, "auto-commit", true,
 			"Commit the workspace automatically after the operation")
-		c.Flags().BoolVar(&flagDMCWNoAutoCommit, "no-auto-commit", false,
+		c.Flags().BoolVar(&s.flagDMCWNoAutoCommit, "no-auto-commit", false,
 			"Disable automatic commit (overrides --auto-commit)")
 	}
-	dmCWApplyCmd.Flags().BoolVar(&flagDMCWDryRun, "dry-run", false,
+	s.dmCWApplyCmd.Flags().BoolVar(&s.flagDMCWDryRun, "dry-run", false,
 		"Validate the apply without changing the destination database")
-	dmCWApplyCmd.Flags().StringVar(&flagDMCWConnProfile, "connection-profile", "",
+	s.dmCWApplyCmd.Flags().StringVar(&s.flagDMCWConnProfile, "connection-profile", "",
 		"Fully qualified name of the destination connection profile")
-	dmCWConvertCmd.Flags().BoolVar(&flagDMCWConvertFullPath, "convert-full-path", false,
+	s.dmCWConvertCmd.Flags().BoolVar(&s.flagDMCWConvertFullPath, "convert-full-path", false,
 		"Automatically convert the full entity path for each entity matching --filter")
 
-	dmCWSeedCmd.Flags().StringVar(&flagDMCWSourceConnProfile, "source-connection-profile", "",
+	s.dmCWSeedCmd.Flags().StringVar(&s.flagDMCWSourceConnProfile, "source-connection-profile", "",
 		"Fully qualified name of the source connection profile")
-	dmCWSeedCmd.Flags().StringVar(&flagDMCWDestConnProfile, "destination-connection-profile", "",
+	s.dmCWSeedCmd.Flags().StringVar(&s.flagDMCWDestConnProfile, "destination-connection-profile", "",
 		"Fully qualified name of the destination connection profile")
 
-	dmCWCommitCmd.Flags().StringVar(&flagDMCWCommitName, "commit-name", "", "Optional name for the commit")
+	s.dmCWCommitCmd.Flags().StringVar(&s.flagDMCWCommitName, "commit-name", "", "Optional name for the commit")
 
 	// describe-entities / describe-ddls / describe-issues shared filters.
-	for _, c := range []*cobra.Command{dmCWDescribeDDLsCmd, dmCWDescribeEntitiesCmd, dmCWDescribeIssuesCmd} {
-		c.Flags().StringVar(&flagDMCWDescribeCommitID, "commit-id", "", "Describe entities as of this commit")
-		c.Flags().StringVar(&flagDMCWDescribeTree, "tree", "", "Which entity tree to walk (SOURCE, DRAFT, DESTINATION)")
-		c.Flags().BoolVar(&flagDMCWDescribeUncomm, "uncommitted", false, "Include uncommitted changes")
-		c.Flags().StringVar(&flagDMCWDescribeDBName, "database", "", "Restrict entities to this database")
-		c.Flags().StringVar(&flagDMCWFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{s.dmCWDescribeDDLsCmd, s.dmCWDescribeEntitiesCmd, s.dmCWDescribeIssuesCmd} {
+		c.Flags().StringVar(&s.flagDMCWDescribeCommitID, "commit-id", "", "Describe entities as of this commit")
+		c.Flags().StringVar(&s.flagDMCWDescribeTree, "tree", "", "Which entity tree to walk (SOURCE, DRAFT, DESTINATION)")
+		c.Flags().BoolVar(&s.flagDMCWDescribeUncomm, "uncommitted", false, "Include uncommitted changes")
+		c.Flags().StringVar(&s.flagDMCWDescribeDBName, "database", "", "Restrict entities to this database")
+		c.Flags().StringVar(&s.flagDMCWFormat, "format", "", "Output format")
 	}
-	dmCWDescribeEntitiesCmd.Flags().StringVar(&flagDMCWDescribeView, "view", "",
+	s.dmCWDescribeEntitiesCmd.Flags().StringVar(&s.flagDMCWDescribeView, "view", "",
 		"Which entity view to return (BASIC or FULL)")
 
-	dmCWImportRulesCmd.Flags().StringSliceVar(&flagDMCWRulesFiles, "file", nil,
+	s.dmCWImportRulesCmd.Flags().StringSliceVar(&s.flagDMCWRulesFiles, "file", nil,
 		"Path(s) to rules files (repeat to import multiple files)")
-	dmCWImportRulesCmd.Flags().StringVar(&flagDMCWRulesFormat, "rules-format", "IMPORT_RULES_FILE_FORMAT_HARBOUR_BRIDGE_SESSION_FILE",
+	s.dmCWImportRulesCmd.Flags().StringVar(&s.flagDMCWRulesFormat, "rules-format", "IMPORT_RULES_FILE_FORMAT_HARBOUR_BRIDGE_SESSION_FILE",
 		"Format of the rules content file")
 	// --auto-commit / --no-auto-commit for import-rules are registered above
 	// alongside convert/seed.
-	_ = dmCWImportRulesCmd.MarkFlagRequired("file")
+	_ = s.dmCWImportRulesCmd.MarkFlagRequired("file")
 
-	dmCWDescribeCmd.Flags().StringVar(&flagDMCWFormat, "format", "", "Output format")
-	dmCWListCmd.Flags().StringVar(&flagDMCWFormat, "format", "", "Output format")
-	dmCWListCmd.Flags().Int64Var(&flagDMCWListPageSize, "page-size", 0, "Page size")
-	dmCWListCmd.Flags().Int64Var(&flagDMCWListLimit, "limit", 0, "Cap total results")
-	dmCWListCmd.Flags().StringVar(&flagDMCWListFilter, "filter", "", "Server-side filter expression")
-	dmCWListCmd.Flags().BoolVar(&flagDMCWListURI, "uri", false, "Print resource names only")
+	s.dmCWDescribeCmd.Flags().StringVar(&s.flagDMCWFormat, "format", "", "Output format")
+	s.dmCWListCmd.Flags().StringVar(&s.flagDMCWFormat, "format", "", "Output format")
+	s.dmCWListCmd.Flags().Int64Var(&s.flagDMCWListPageSize, "page-size", 0, "Page size")
+	s.dmCWListCmd.Flags().Int64Var(&s.flagDMCWListLimit, "limit", 0, "Cap total results")
+	s.dmCWListCmd.Flags().StringVar(&s.flagDMCWListFilter, "filter", "", "Server-side filter expression")
+	s.dmCWListCmd.Flags().BoolVar(&s.flagDMCWListURI, "uri", false, "Print resource names only")
 
-	dmCWListBackgroundJobsCmd.Flags().StringVar(&flagDMCWFormat, "format", "", "Output format")
-	dmCWListBackgroundJobsCmd.Flags().Int64Var(&flagDMCWListLimit, "limit", 0, "Cap total results (0 = no cap)")
+	s.dmCWListBackgroundJobsCmd.Flags().StringVar(&s.flagDMCWFormat, "format", "", "Output format")
+	s.dmCWListBackgroundJobsCmd.Flags().Int64Var(&s.flagDMCWListLimit, "limit", 0, "Cap total results (0 = no cap)")
 
-	dmCWMappingRulesCmd.AddCommand(dmCWMRCreateCmd, dmCWMRDeleteCmd, dmCWMRDescribeCmd, dmCWMRListCmd)
-	for _, c := range dmCWMappingRulesCmd.Commands() {
-		c.Flags().StringVar(&flagDMCWRegion, "region", "", "Region containing the conversion workspace (required)")
-		c.Flags().StringVar(&flagDMCWWorkspace, "conversion-workspace", "",
+	s.dmCWMappingRulesCmd.AddCommand(s.dmCWMRCreateCmd, s.dmCWMRDeleteCmd, s.dmCWMRDescribeCmd, s.dmCWMRListCmd)
+	for _, c := range s.dmCWMappingRulesCmd.Commands() {
+		c.Flags().StringVar(&s.flagDMCWRegion, "region", "", "Region containing the conversion workspace (required)")
+		c.Flags().StringVar(&s.flagDMCWWorkspace, "conversion-workspace", "",
 			"Name of the parent conversion workspace (required)")
 		_ = c.MarkFlagRequired("region")
 		_ = c.MarkFlagRequired("conversion-workspace")
 	}
-	dmCWMRListCmd.Flags().Int64Var(&flagDMCWListPageSize, "page-size", 0, "Page size")
-	dmCWMRListCmd.Flags().Int64Var(&flagDMCWListLimit, "limit", 0, "Cap total results")
-	dmCWMRListCmd.Flags().StringVar(&flagDMCWFormat, "format", "", "Output format")
-	dmCWMRDescribeCmd.Flags().StringVar(&flagDMCWFormat, "format", "", "Output format")
-	dmCWMRCreateCmd.Flags().StringVar(&flagDMCWConfigFile, "config-file", "",
+	s.dmCWMRListCmd.Flags().Int64Var(&s.flagDMCWListPageSize, "page-size", 0, "Page size")
+	s.dmCWMRListCmd.Flags().Int64Var(&s.flagDMCWListLimit, "limit", 0, "Cap total results")
+	s.dmCWMRListCmd.Flags().StringVar(&s.flagDMCWFormat, "format", "", "Output format")
+	s.dmCWMRDescribeCmd.Flags().StringVar(&s.flagDMCWFormat, "format", "", "Output format")
+	s.dmCWMRCreateCmd.Flags().StringVar(&s.flagDMCWConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the MappingRule message body (required)")
-	_ = dmCWMRCreateCmd.MarkFlagRequired("config-file")
+	_ = s.dmCWMRCreateCmd.MarkFlagRequired("config-file")
 
-	dmCWCmd.AddCommand(topCommands...)
-	dmCWCmd.AddCommand(dmCWMappingRulesCmd)
-	databaseMigrationCmd.AddCommand(dmCWCmd)
+	s.dmCWCmd.AddCommand(topCommands...)
+	s.dmCWCmd.AddCommand(s.dmCWMappingRulesCmd)
+	s.databaseMigrationCmd.AddCommand(s.dmCWCmd)
 }
 
 func dmCWResourceName(name, project, region string) string {
@@ -258,115 +138,115 @@ func dmCWMRResourceName(name, project, region, workspace string) string {
 // and import-rules. --no-auto-commit wins over --auto-commit so scripts can
 // opt back into the historical false default even though gcloud-python 578.0.0
 // flipped the on-by-default behaviour.
-func dmCWAutoCommit() bool {
-	if flagDMCWNoAutoCommit {
+func (s *databaseMigrationCmds) dmCWAutoCommit() bool {
+	if s.flagDMCWNoAutoCommit {
 		return false
 	}
-	return flagDMCWAutoCommit
+	return s.flagDMCWAutoCommit
 }
 
-func runDMCWCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	cw := &datamigration.ConversionWorkspace{}
-	if err := loadYAMLOrJSONInto(flagDMCWConfigFile, cw); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDMCWConfigFile, cw); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.ConversionWorkspaces.Create(dmParent(project, flagDMCWRegion), cw).
+	op, err := svc.Projects.Locations.ConversionWorkspaces.Create(dmParent(project, s.flagDMCWRegion), cw).
 		ConversionWorkspaceId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating conversion workspace: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Create", args[0], flagDMCWAsync)
+	return s.dmFinishOp(ctx, svc, op, "Create", args[0], s.flagDMCWAsync)
 }
 
-func runDMCWDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.ConversionWorkspaces.Delete(dmCWResourceName(args[0], project, flagDMCWRegion)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.ConversionWorkspaces.Delete(dmCWResourceName(args[0], project, s.flagDMCWRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting conversion workspace: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Delete", args[0], flagDMCWAsync)
+	return s.dmFinishOp(ctx, svc, op, "Delete", args[0], s.flagDMCWAsync)
 }
 
-func runDMCWDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	cw, err := svc.Projects.Locations.ConversionWorkspaces.Get(dmCWResourceName(args[0], project, flagDMCWRegion)).Context(ctx).Do()
+	cw, err := svc.Projects.Locations.ConversionWorkspaces.Get(dmCWResourceName(args[0], project, s.flagDMCWRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing conversion workspace: %w", err)
 	}
-	return emitFormatted(cw, flagDMCWFormat)
+	return emitFormattedTo(s.inv.stdout, cw, s.flagDMCWFormat)
 }
 
-func runDMCWUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	cw := &datamigration.ConversionWorkspace{}
-	if err := loadYAMLOrJSONInto(flagDMCWConfigFile, cw); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDMCWConfigFile, cw); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	mask := flagDMCWUpdateMask
+	mask := s.flagDMCWUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(cw))
 	}
-	op, err := svc.Projects.Locations.ConversionWorkspaces.Patch(dmCWResourceName(args[0], project, flagDMCWRegion), cw).
+	op, err := svc.Projects.Locations.ConversionWorkspaces.Patch(dmCWResourceName(args[0], project, s.flagDMCWRegion), cw).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating conversion workspace: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Update", args[0], flagDMCWAsync)
+	return s.dmFinishOp(ctx, svc, op, "Update", args[0], s.flagDMCWAsync)
 }
 
-func runDMCWList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	parent := dmParent(project, flagDMCWRegion)
+	parent := dmParent(project, s.flagDMCWRegion)
 	var all []*datamigration.ConversionWorkspace
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.ConversionWorkspaces.List(parent).Context(ctx)
-		if flagDMCWListFilter != "" {
-			call = call.Filter(flagDMCWListFilter)
+		if s.flagDMCWListFilter != "" {
+			call = call.Filter(s.flagDMCWListFilter)
 		}
-		if flagDMCWListPageSize > 0 {
-			call = call.PageSize(flagDMCWListPageSize)
+		if s.flagDMCWListPageSize > 0 {
+			call = call.PageSize(s.flagDMCWListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -376,8 +256,8 @@ func runDMCWList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing conversion workspaces: %w", err)
 		}
 		all = append(all, resp.ConversionWorkspaces...)
-		if flagDMCWListLimit > 0 && int64(len(all)) >= flagDMCWListLimit {
-			all = all[:flagDMCWListLimit]
+		if s.flagDMCWListLimit > 0 && int64(len(all)) >= s.flagDMCWListLimit {
+			all = all[:s.flagDMCWListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -385,183 +265,183 @@ func runDMCWList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDMCWListURI {
+	if s.flagDMCWListURI {
 		for _, c := range all {
-			fmt.Println(c.Name)
+			fmt.Fprintln(s.inv.stdout, c.Name)
 		}
 		return nil
 	}
-	if flagDMCWFormat != "" {
-		return emitFormatted(all, flagDMCWFormat)
+	if s.flagDMCWFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDMCWFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, c := range all {
-		fmt.Printf("%-40s %s\n", path.Base(c.Name), c.DisplayName)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(c.Name), c.DisplayName)
 	}
 	return nil
 }
 
-func runDMCWApply(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWApply(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
 	req := &datamigration.ApplyConversionWorkspaceRequest{
-		AutoCommit:        flagDMCWApplyAutoCommit,
-		ConnectionProfile: flagDMCWConnProfile,
-		DryRun:            flagDMCWDryRun,
-		Filter:            flagDMCWFilter,
+		AutoCommit:        s.flagDMCWApplyAutoCommit,
+		ConnectionProfile: s.flagDMCWConnProfile,
+		DryRun:            s.flagDMCWDryRun,
+		Filter:            s.flagDMCWFilter,
 	}
-	op, err := svc.Projects.Locations.ConversionWorkspaces.Apply(dmCWResourceName(args[0], project, flagDMCWRegion), req).Context(ctx).Do()
+	op, err := svc.Projects.Locations.ConversionWorkspaces.Apply(dmCWResourceName(args[0], project, s.flagDMCWRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("applying conversion workspace: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Apply", args[0], flagDMCWAsync)
+	return s.dmFinishOp(ctx, svc, op, "Apply", args[0], s.flagDMCWAsync)
 }
 
-func runDMCWCommit(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWCommit(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	req := &datamigration.CommitConversionWorkspaceRequest{CommitName: flagDMCWCommitName}
-	op, err := svc.Projects.Locations.ConversionWorkspaces.Commit(dmCWResourceName(args[0], project, flagDMCWRegion), req).Context(ctx).Do()
+	req := &datamigration.CommitConversionWorkspaceRequest{CommitName: s.flagDMCWCommitName}
+	op, err := svc.Projects.Locations.ConversionWorkspaces.Commit(dmCWResourceName(args[0], project, s.flagDMCWRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("committing conversion workspace: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Commit", args[0], flagDMCWAsync)
+	return s.dmFinishOp(ctx, svc, op, "Commit", args[0], s.flagDMCWAsync)
 }
 
-func runDMCWConvert(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWConvert(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
 	req := &datamigration.ConvertConversionWorkspaceRequest{
-		AutoCommit:      dmCWAutoCommit(),
-		ConvertFullPath: flagDMCWConvertFullPath,
-		Filter:          flagDMCWFilter,
+		AutoCommit:      s.dmCWAutoCommit(),
+		ConvertFullPath: s.flagDMCWConvertFullPath,
+		Filter:          s.flagDMCWFilter,
 	}
-	op, err := svc.Projects.Locations.ConversionWorkspaces.Convert(dmCWResourceName(args[0], project, flagDMCWRegion), req).Context(ctx).Do()
+	op, err := svc.Projects.Locations.ConversionWorkspaces.Convert(dmCWResourceName(args[0], project, s.flagDMCWRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("converting conversion workspace: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Convert", args[0], flagDMCWAsync)
+	return s.dmFinishOp(ctx, svc, op, "Convert", args[0], s.flagDMCWAsync)
 }
 
-func runDMCWRollback(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWRollback(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.ConversionWorkspaces.Rollback(
-		dmCWResourceName(args[0], project, flagDMCWRegion),
+		dmCWResourceName(args[0], project, s.flagDMCWRegion),
 		&datamigration.RollbackConversionWorkspaceRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("rolling back conversion workspace: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Rollback", args[0], flagDMCWAsync)
+	return s.dmFinishOp(ctx, svc, op, "Rollback", args[0], s.flagDMCWAsync)
 }
 
-func runDMCWSeed(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWSeed(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
 	req := &datamigration.SeedConversionWorkspaceRequest{
-		AutoCommit:                   dmCWAutoCommit(),
-		SourceConnectionProfile:      flagDMCWSourceConnProfile,
-		DestinationConnectionProfile: flagDMCWDestConnProfile,
+		AutoCommit:                   s.dmCWAutoCommit(),
+		SourceConnectionProfile:      s.flagDMCWSourceConnProfile,
+		DestinationConnectionProfile: s.flagDMCWDestConnProfile,
 	}
-	op, err := svc.Projects.Locations.ConversionWorkspaces.Seed(dmCWResourceName(args[0], project, flagDMCWRegion), req).Context(ctx).Do()
+	op, err := svc.Projects.Locations.ConversionWorkspaces.Seed(dmCWResourceName(args[0], project, s.flagDMCWRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("seeding conversion workspace: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Seed", args[0], flagDMCWAsync)
+	return s.dmFinishOp(ctx, svc, op, "Seed", args[0], s.flagDMCWAsync)
 }
 
-func runDMCWDescribeDDLs(cmd *cobra.Command, args []string) error {
-	return runDMCWDescribeEntitiesFiltered(args[0], "DDL")
+func (s *databaseMigrationCmds) runDMCWDescribeDDLs(cmd *cobra.Command, args []string) error {
+	return s.runDMCWDescribeEntitiesFiltered(args[0], "DDL")
 }
 
-func runDMCWDescribeIssues(cmd *cobra.Command, args []string) error {
-	return runDMCWDescribeEntitiesFiltered(args[0], "ISSUES")
+func (s *databaseMigrationCmds) runDMCWDescribeIssues(cmd *cobra.Command, args []string) error {
+	return s.runDMCWDescribeEntitiesFiltered(args[0], "ISSUES")
 }
 
-func runDMCWDescribeEntities(cmd *cobra.Command, args []string) error {
-	return runDMCWDescribeEntitiesFiltered(args[0], "")
+func (s *databaseMigrationCmds) runDMCWDescribeEntities(cmd *cobra.Command, args []string) error {
+	return s.runDMCWDescribeEntitiesFiltered(args[0], "")
 }
 
-func runDMCWDescribeEntitiesFiltered(workspace, view string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWDescribeEntitiesFiltered(workspace, view string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := s.inv.context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	call := svc.Projects.Locations.ConversionWorkspaces.DescribeDatabaseEntities(dmCWResourceName(workspace, project, flagDMCWRegion)).Context(ctx)
-	if flagDMCWDescribeCommitID != "" {
-		call = call.CommitId(flagDMCWDescribeCommitID)
+	call := svc.Projects.Locations.ConversionWorkspaces.DescribeDatabaseEntities(dmCWResourceName(workspace, project, s.flagDMCWRegion)).Context(ctx)
+	if s.flagDMCWDescribeCommitID != "" {
+		call = call.CommitId(s.flagDMCWDescribeCommitID)
 	}
-	if flagDMCWDescribeTree != "" {
-		call = call.Tree(flagDMCWDescribeTree)
+	if s.flagDMCWDescribeTree != "" {
+		call = call.Tree(s.flagDMCWDescribeTree)
 	}
-	if flagDMCWDescribeUncomm {
+	if s.flagDMCWDescribeUncomm {
 		call = call.Uncommitted(true)
 	}
-	if flagDMCWDescribeDBName != "" {
-		call = call.Filter(fmt.Sprintf(`database="%s"`, flagDMCWDescribeDBName))
+	if s.flagDMCWDescribeDBName != "" {
+		call = call.Filter(fmt.Sprintf(`database="%s"`, s.flagDMCWDescribeDBName))
 	}
 	if view != "" {
 		call = call.View(view)
-	} else if flagDMCWDescribeView != "" {
-		call = call.View(flagDMCWDescribeView)
+	} else if s.flagDMCWDescribeView != "" {
+		call = call.View(s.flagDMCWDescribeView)
 	}
 	resp, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("describing database entities: %w", err)
 	}
-	return emitFormatted(resp, flagDMCWFormat)
+	return emitFormattedTo(s.inv.stdout, resp, s.flagDMCWFormat)
 }
 
-func runDMCWImportRules(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWImportRules(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	if len(flagDMCWRulesFiles) == 0 {
+	if len(s.flagDMCWRulesFiles) == 0 {
 		return fmt.Errorf("at least one --file is required")
 	}
 	var rules []*datamigration.RulesFile
-	for _, p := range flagDMCWRulesFiles {
+	for _, p := range s.flagDMCWRulesFiles {
 		body, err := os.ReadFile(p)
 		if err != nil {
 			return fmt.Errorf("reading rules file %s: %w", p, err)
@@ -571,63 +451,63 @@ func runDMCWImportRules(cmd *cobra.Command, args []string) error {
 			RulesContent:        string(body),
 		})
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
 	req := &datamigration.ImportMappingRulesRequest{
-		AutoCommit:  dmCWAutoCommit(),
-		RulesFormat: flagDMCWRulesFormat,
+		AutoCommit:  s.dmCWAutoCommit(),
+		RulesFormat: s.flagDMCWRulesFormat,
 		RulesFiles:  rules,
 	}
-	op, err := svc.Projects.Locations.ConversionWorkspaces.MappingRules.Import(dmCWResourceName(args[0], project, flagDMCWRegion), req).Context(ctx).Do()
+	op, err := svc.Projects.Locations.ConversionWorkspaces.MappingRules.Import(dmCWResourceName(args[0], project, s.flagDMCWRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("importing mapping rules: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Import rules", args[0], flagDMCWAsync)
+	return s.dmFinishOp(ctx, svc, op, "Import rules", args[0], s.flagDMCWAsync)
 }
 
-func runDMCWListBackgroundJobs(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWListBackgroundJobs(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	call := svc.Projects.Locations.ConversionWorkspaces.SearchBackgroundJobs(dmCWResourceName(args[0], project, flagDMCWRegion)).Context(ctx)
-	if flagDMCWListLimit > 0 {
-		call = call.MaxSize(flagDMCWListLimit)
+	call := svc.Projects.Locations.ConversionWorkspaces.SearchBackgroundJobs(dmCWResourceName(args[0], project, s.flagDMCWRegion)).Context(ctx)
+	if s.flagDMCWListLimit > 0 {
+		call = call.MaxSize(s.flagDMCWListLimit)
 	}
 	resp, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("listing background jobs: %w", err)
 	}
-	return emitFormatted(resp, flagDMCWFormat)
+	return emitFormattedTo(s.inv.stdout, resp, s.flagDMCWFormat)
 }
 
 // --- mapping-rules subcommands ---
 
-func runDMCWMRList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWMRList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	parent := dmCWResourceName(flagDMCWWorkspace, project, flagDMCWRegion)
+	parent := dmCWResourceName(s.flagDMCWWorkspace, project, s.flagDMCWRegion)
 	var all []*datamigration.MappingRule
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.ConversionWorkspaces.MappingRules.List(parent).Context(ctx)
-		if flagDMCWListPageSize > 0 {
-			call = call.PageSize(flagDMCWListPageSize)
+		if s.flagDMCWListPageSize > 0 {
+			call = call.PageSize(s.flagDMCWListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -637,8 +517,8 @@ func runDMCWMRList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing mapping rules: %w", err)
 		}
 		all = append(all, resp.MappingRules...)
-		if flagDMCWListLimit > 0 && int64(len(all)) >= flagDMCWListLimit {
-			all = all[:flagDMCWListLimit]
+		if s.flagDMCWListLimit > 0 && int64(len(all)) >= s.flagDMCWListLimit {
+			all = all[:s.flagDMCWListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -646,71 +526,71 @@ func runDMCWMRList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDMCWFormat != "" {
-		return emitFormatted(all, flagDMCWFormat)
+	if s.flagDMCWFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDMCWFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, r := range all {
-		fmt.Printf("%-40s %s\n", path.Base(r.Name), r.State)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(r.Name), r.State)
 	}
 	return nil
 }
 
-func runDMCWMRDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWMRDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
 	r, err := svc.Projects.Locations.ConversionWorkspaces.MappingRules.Get(
-		dmCWMRResourceName(args[0], project, flagDMCWRegion, flagDMCWWorkspace)).Context(ctx).Do()
+		dmCWMRResourceName(args[0], project, s.flagDMCWRegion, s.flagDMCWWorkspace)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing mapping rule: %w", err)
 	}
-	return emitFormatted(r, flagDMCWFormat)
+	return emitFormattedTo(s.inv.stdout, r, s.flagDMCWFormat)
 }
 
-func runDMCWMRDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWMRDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.ConversionWorkspaces.MappingRules.Delete(
-		dmCWMRResourceName(args[0], project, flagDMCWRegion, flagDMCWWorkspace)).Context(ctx).Do(); err != nil {
+		dmCWMRResourceName(args[0], project, s.flagDMCWRegion, s.flagDMCWWorkspace)).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting mapping rule: %w", err)
 	}
-	fmt.Printf("Deleted mapping rule [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted mapping rule [%s].\n", args[0])
 	return nil
 }
 
-func runDMCWMRCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMCWMRCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	rule := &datamigration.MappingRule{}
-	if err := loadYAMLOrJSONInto(flagDMCWConfigFile, rule); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDMCWConfigFile, rule); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	parent := dmCWResourceName(flagDMCWWorkspace, project, flagDMCWRegion)
+	parent := dmCWResourceName(s.flagDMCWWorkspace, project, s.flagDMCWRegion)
 	r, err := svc.Projects.Locations.ConversionWorkspaces.MappingRules.Create(parent, rule).
 		MappingRuleId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating mapping rule: %w", err)
 	}
-	return emitFormatted(r, "")
+	return emitFormattedTo(s.inv.stdout, r, "")
 }

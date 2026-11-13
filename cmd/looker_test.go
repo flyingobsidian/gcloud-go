@@ -7,7 +7,8 @@ import (
 )
 
 func lookerSubgroup(name string) *cobra.Command {
-	for _, c := range lookerCmd.Commands() {
+	grp := newLookerCmds(legacyTestInvocation())
+	for _, c := range grp.lookerCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

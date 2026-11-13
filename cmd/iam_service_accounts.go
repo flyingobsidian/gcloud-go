@@ -1,13 +1,11 @@
 package cmd
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	iam "google.golang.org/api/iam/v1"
 	iamcredentials "google.golang.org/api/iamcredentials/v1"
@@ -16,172 +14,51 @@ import (
 
 // --- iam service-accounts (#244, #517) ---
 
-var serviceAccountsCmd = &cobra.Command{
-	Use:   "service-accounts",
-	Short: "Manage service accounts",
-}
+func (s *iamCmds) initIamServiceAccounts() {
+	s.saCreateCmd.Flags().StringVar(&s.flagSADisplayName, "display-name", "", "Display name for the service account")
+	s.saCreateCmd.Flags().StringVar(&s.flagSADescription, "description", "", "Description for the service account")
 
-var saCreateCmd = &cobra.Command{
-	Use:   "create NAME",
-	Short: "Create a service account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSACreate,
-}
+	s.saUpdateCmd.Flags().StringVar(&s.flagSAUpdateName, "display-name", "", "New display name for the service account")
+	s.saUpdateCmd.Flags().StringVar(&s.flagSAUpdateDesc, "description", "", "New description for the service account")
 
-var saDescribeCmd = &cobra.Command{
-	Use:   "describe SERVICE_ACCOUNT_EMAIL",
-	Short: "Show metadata for a service account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSADescribe,
-}
+	s.saListCmd.Flags().Int64Var(&s.flagSAListLimit, "limit", 0, "Maximum number of service accounts to list (0 = no limit)")
+	s.saListCmd.Flags().Int64Var(&s.flagSAListPageSize, "page-size", 0, "Page size for API pagination")
+	s.saListCmd.Flags().StringVar(&s.flagSAListFormat, "format", "", "Output format (json, yaml, or table)")
+	s.saListCmd.Flags().BoolVar(&s.flagSAListURI, "uri", false, "Print resource names only")
 
-var saDeleteCmd = &cobra.Command{
-	Use:   "delete SERVICE_ACCOUNT_EMAIL",
-	Short: "Delete a service account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSADelete,
-}
-
-var saDisableCmd = &cobra.Command{
-	Use:   "disable SERVICE_ACCOUNT_EMAIL",
-	Short: "Disable a service account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSADisable,
-}
-
-var saEnableCmd = &cobra.Command{
-	Use:   "enable SERVICE_ACCOUNT_EMAIL",
-	Short: "Enable a service account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSAEnable,
-}
-
-var saListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List service accounts for a project",
-	Args:  cobra.NoArgs,
-	RunE:  runSAList,
-}
-
-var saUndeleteCmd = &cobra.Command{
-	Use:   "undelete ACCOUNT_ID",
-	Short: "Undelete a deleted service account by its numeric unique ID",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSAUndelete,
-}
-
-var saUpdateCmd = &cobra.Command{
-	Use:   "update SERVICE_ACCOUNT_EMAIL",
-	Short: "Update the display name or description of a service account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSAUpdate,
-}
-
-var saGetIamPolicyCmd = &cobra.Command{
-	Use:   "get-iam-policy SERVICE_ACCOUNT_EMAIL",
-	Short: "Get the IAM policy for a service account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSAGetIamPolicy,
-}
-
-var saSetIamPolicyCmd = &cobra.Command{
-	Use:   "set-iam-policy SERVICE_ACCOUNT_EMAIL POLICY_FILE",
-	Short: "Set the IAM policy for a service account",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runSASetIamPolicy,
-}
-
-var saAddIamBindingCmd = &cobra.Command{
-	Use:   "add-iam-policy-binding SERVICE_ACCOUNT_EMAIL",
-	Short: "Add an IAM policy binding to a service account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSAAddIamBinding,
-}
-
-var saRemoveIamBindingCmd = &cobra.Command{
-	Use:   "remove-iam-policy-binding SERVICE_ACCOUNT_EMAIL",
-	Short: "Remove an IAM policy binding from a service account",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSARemoveIamBinding,
-}
-
-var saSignBlobCmd = &cobra.Command{
-	Use:   "sign-blob INPUT_FILE OUTPUT_FILE",
-	Short: "Sign a blob with a managed service account key",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runSASignBlob,
-}
-
-var saSignJwtCmd = &cobra.Command{
-	Use:   "sign-jwt INPUT_FILE OUTPUT_FILE",
-	Short: "Sign a JWT with a managed service account key",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runSASignJwt,
-}
-
-var (
-	flagSADisplayName    string
-	flagSADescription    string
-	flagSAUpdateName     string
-	flagSAUpdateDesc     string
-	flagSAListLimit      int64
-	flagSAListPageSize   int64
-	flagSAListFormat     string
-	flagSAListURI        bool
-	flagSAIamMember      string
-	flagSAIamRole        string
-	flagSAIamCondExpr    string
-	flagSAIamCondTitle   string
-	flagSAIamCondDesc    string
-	flagSAIamAllCond     bool
-	flagSASignIamAccount string
-)
-
-func init() {
-	saCreateCmd.Flags().StringVar(&flagSADisplayName, "display-name", "", "Display name for the service account")
-	saCreateCmd.Flags().StringVar(&flagSADescription, "description", "", "Description for the service account")
-
-	saUpdateCmd.Flags().StringVar(&flagSAUpdateName, "display-name", "", "New display name for the service account")
-	saUpdateCmd.Flags().StringVar(&flagSAUpdateDesc, "description", "", "New description for the service account")
-
-	saListCmd.Flags().Int64Var(&flagSAListLimit, "limit", 0, "Maximum number of service accounts to list (0 = no limit)")
-	saListCmd.Flags().Int64Var(&flagSAListPageSize, "page-size", 0, "Page size for API pagination")
-	saListCmd.Flags().StringVar(&flagSAListFormat, "format", "", "Output format (json, yaml, or table)")
-	saListCmd.Flags().BoolVar(&flagSAListURI, "uri", false, "Print resource names only")
-
-	for _, c := range []*cobra.Command{saAddIamBindingCmd, saRemoveIamBindingCmd} {
-		c.Flags().StringVar(&flagSAIamMember, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
-		c.Flags().StringVar(&flagSAIamRole, "role", "", "IAM role to bind (e.g. roles/iam.serviceAccountUser) (required)")
-		c.Flags().StringVar(&flagSAIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding")
-		c.Flags().StringVar(&flagSAIamCondTitle, "condition-title", "", "Title for a conditional binding")
-		c.Flags().StringVar(&flagSAIamCondDesc, "condition-description", "", "Description for a conditional binding")
+	for _, c := range []*cobra.Command{s.saAddIamBindingCmd, s.saRemoveIamBindingCmd} {
+		c.Flags().StringVar(&s.flagSAIamMember, "member", "", "IAM member (e.g. user:alice@example.com) (required)")
+		c.Flags().StringVar(&s.flagSAIamRole, "role", "", "IAM role to bind (e.g. roles/iam.serviceAccountUser) (required)")
+		c.Flags().StringVar(&s.flagSAIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding")
+		c.Flags().StringVar(&s.flagSAIamCondTitle, "condition-title", "", "Title for a conditional binding")
+		c.Flags().StringVar(&s.flagSAIamCondDesc, "condition-description", "", "Description for a conditional binding")
 		c.MarkFlagRequired("member")
 		c.MarkFlagRequired("role")
 	}
-	saRemoveIamBindingCmd.Flags().BoolVar(&flagSAIamAllCond, "all", false, "Remove the member from all bindings for the role, regardless of condition")
+	s.saRemoveIamBindingCmd.Flags().BoolVar(&s.flagSAIamAllCond, "all", false, "Remove the member from all bindings for the role, regardless of condition")
 
-	for _, c := range []*cobra.Command{saSignBlobCmd, saSignJwtCmd} {
-		c.Flags().StringVar(&flagSASignIamAccount, "iam-account", "", "The service account to sign as (required)")
+	for _, c := range []*cobra.Command{s.saSignBlobCmd, s.saSignJwtCmd} {
+		c.Flags().StringVar(&s.flagSASignIamAccount, "iam-account", "", "The service account to sign as (required)")
 		c.MarkFlagRequired("iam-account")
 	}
 
-	serviceAccountsCmd.AddCommand(
-		saAddIamBindingCmd,
-		saCreateCmd,
-		saDeleteCmd,
-		saDescribeCmd,
-		saDisableCmd,
-		saEnableCmd,
-		saGetIamPolicyCmd,
-		saListCmd,
-		saRemoveIamBindingCmd,
-		saSetIamPolicyCmd,
-		saSignBlobCmd,
-		saSignJwtCmd,
-		saUndeleteCmd,
-		saUpdateCmd,
+	s.serviceAccountsCmd.AddCommand(
+		s.saAddIamBindingCmd,
+		s.saCreateCmd,
+		s.saDeleteCmd,
+		s.saDescribeCmd,
+		s.saDisableCmd,
+		s.saEnableCmd,
+		s.saGetIamPolicyCmd,
+		s.saListCmd,
+		s.saRemoveIamBindingCmd,
+		s.saSetIamPolicyCmd,
+		s.saSignBlobCmd,
+		s.saSignJwtCmd,
+		s.saUndeleteCmd,
+		s.saUpdateCmd,
 	)
-	iamCmd.AddCommand(serviceAccountsCmd)
+	s.iamCmd.AddCommand(s.serviceAccountsCmd)
 }
 
 // saResourceName returns the full resource name for a service account. The
@@ -197,41 +74,41 @@ func saResourceName(id string) string {
 // buildCreateServiceAccountRequest builds the API request from the account ID
 // and the --display-name / --description flags. The ServiceAccount body is only
 // populated when at least one user-assignable field is set.
-func buildCreateServiceAccountRequest(accountID string) *iam.CreateServiceAccountRequest {
+func (s *iamCmds) buildCreateServiceAccountRequest(accountID string) *iam.CreateServiceAccountRequest {
 	req := &iam.CreateServiceAccountRequest{AccountId: accountID}
-	if flagSADisplayName != "" || flagSADescription != "" {
+	if s.flagSADisplayName != "" || s.flagSADescription != "" {
 		req.ServiceAccount = &iam.ServiceAccount{
-			DisplayName: flagSADisplayName,
-			Description: flagSADescription,
+			DisplayName: s.flagSADisplayName,
+			Description: s.flagSADescription,
 		}
 	}
 	return req
 }
 
-func runSACreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *iamCmds) runSACreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
 
-	req := buildCreateServiceAccountRequest(args[0])
+	req := s.buildCreateServiceAccountRequest(args[0])
 	sa, err := svc.Projects.ServiceAccounts.Create("projects/"+project, req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating service account: %w", err)
 	}
-	fmt.Printf("Created service account [%s].\n", sa.Email)
+	fmt.Fprintf(s.inv.stdout, "Created service account [%s].\n", sa.Email)
 	return nil
 }
 
-func runSADescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+func (s *iamCmds) runSADescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -239,56 +116,56 @@ func runSADescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing service account: %w", err)
 	}
-	return yamlEncode(sa)
+	return s.inv.yaml(sa)
 }
 
-func runSADelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+func (s *iamCmds) runSADelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.ServiceAccounts.Delete(saResourceName(args[0])).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting service account: %w", err)
 	}
-	fmt.Printf("Deleted service account [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted service account [%s].\n", args[0])
 	return nil
 }
 
-func runSADisable(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+func (s *iamCmds) runSADisable(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.ServiceAccounts.Disable(saResourceName(args[0]), &iam.DisableServiceAccountRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("disabling service account: %w", err)
 	}
-	fmt.Printf("Disabled service account [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Disabled service account [%s].\n", args[0])
 	return nil
 }
 
-func runSAEnable(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+func (s *iamCmds) runSAEnable(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.ServiceAccounts.Enable(saResourceName(args[0]), &iam.EnableServiceAccountRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("enabling service account: %w", err)
 	}
-	fmt.Printf("Enabled service account [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Enabled service account [%s].\n", args[0])
 	return nil
 }
 
-func runSAList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *iamCmds) runSAList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -297,8 +174,8 @@ func runSAList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.ServiceAccounts.List("projects/" + project).Context(ctx)
-		if flagSAListPageSize > 0 {
-			call = call.PageSize(flagSAListPageSize)
+		if s.flagSAListPageSize > 0 {
+			call = call.PageSize(s.flagSAListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -308,8 +185,8 @@ func runSAList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing service accounts: %w", err)
 		}
 		all = append(all, resp.Accounts...)
-		if flagSAListLimit > 0 && int64(len(all)) >= flagSAListLimit {
-			all = all[:flagSAListLimit]
+		if s.flagSAListLimit > 0 && int64(len(all)) >= s.flagSAListLimit {
+			all = all[:s.flagSAListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -318,41 +195,41 @@ func runSAList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagSAListURI {
+	if s.flagSAListURI {
 		for _, sa := range all {
-			fmt.Println(sa.Name)
+			fmt.Fprintln(s.inv.stdout, sa.Name)
 		}
 		return nil
 	}
 
-	switch flagSAListFormat {
+	switch s.flagSAListFormat {
 	case "json":
-		return printJSON(all)
+		return s.inv.printJSON(all)
 	case "yaml":
-		return yamlEncode(all)
+		return s.inv.yaml(all)
 	}
 
-	printTableHeading(len(all), "%-40s %-50s %s\n", "DISPLAY NAME", "EMAIL", "DISABLED")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-50s %s\n", "DISPLAY NAME", "EMAIL", "DISABLED")
 	for _, sa := range all {
-		fmt.Printf("%-40s %-50s %v\n", sa.DisplayName, sa.Email, sa.Disabled)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-50s %v\n", sa.DisplayName, sa.Email, sa.Disabled)
 	}
 	return nil
 }
 
-func runSAUndelete(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runSAUndelete(cmd *cobra.Command, args []string) error {
 	id := args[0]
 	if !isDigitString(id) {
 		return fmt.Errorf("undelete requires the numeric unique ID of the deleted service account, got %q", id)
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.ServiceAccounts.Undelete(saResourceName(id), &iam.UndeleteServiceAccountRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("undeleting service account: %w", err)
 	}
-	fmt.Printf("Undeleted service account [%s].\n", id)
+	fmt.Fprintf(s.inv.stdout, "Undeleted service account [%s].\n", id)
 	return nil
 }
 
@@ -368,12 +245,12 @@ func isDigitString(s string) bool {
 	return true
 }
 
-func runSAUpdate(cmd *cobra.Command, args []string) error {
-	if flagSAUpdateName == "" && flagSAUpdateDesc == "" {
+func (s *iamCmds) runSAUpdate(cmd *cobra.Command, args []string) error {
+	if s.flagSAUpdateName == "" && s.flagSAUpdateDesc == "" {
 		return fmt.Errorf("at least one of --display-name or --description must be provided")
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -381,11 +258,11 @@ func runSAUpdate(cmd *cobra.Command, args []string) error {
 	sa := &iam.ServiceAccount{}
 	var masks []string
 	if cmd.Flags().Changed("display-name") {
-		sa.DisplayName = flagSAUpdateName
+		sa.DisplayName = s.flagSAUpdateName
 		masks = append(masks, "displayName")
 	}
 	if cmd.Flags().Changed("description") {
-		sa.Description = flagSAUpdateDesc
+		sa.Description = s.flagSAUpdateDesc
 		masks = append(masks, "description")
 	}
 
@@ -396,13 +273,13 @@ func runSAUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating service account: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated service account [%s].\n", args[0])
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Updated service account [%s].\n", args[0])
+	return s.inv.yaml(updated)
 }
 
-func runSAGetIamPolicy(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+func (s *iamCmds) runSAGetIamPolicy(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -411,7 +288,7 @@ func runSAGetIamPolicy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return yamlEncode(policy)
+	return s.inv.yaml(policy)
 }
 
 // parseIAMPolicyFile reads and decodes an IAM policy from JSON or YAML on
@@ -428,13 +305,13 @@ func parseIAMPolicyFile(pathname string) (*iam.Policy, error) {
 	return policy, nil
 }
 
-func runSASetIamPolicy(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runSASetIamPolicy(cmd *cobra.Command, args []string) error {
 	policy, err := parseIAMPolicyFile(args[1])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -445,20 +322,20 @@ func runSASetIamPolicy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for service account [%s].\n", args[0])
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for service account [%s].\n", args[0])
+	return s.inv.yaml(updated)
 }
 
 // iamBuildCondition returns an *iam.Expr from the current --condition-* flag
 // values, or nil if none are set.
-func iamBuildCondition() *iam.Expr {
-	if flagSAIamCondExpr == "" && flagSAIamCondTitle == "" && flagSAIamCondDesc == "" {
+func (s *iamCmds) iamBuildCondition() *iam.Expr {
+	if s.flagSAIamCondExpr == "" && s.flagSAIamCondTitle == "" && s.flagSAIamCondDesc == "" {
 		return nil
 	}
 	return &iam.Expr{
-		Expression:  flagSAIamCondExpr,
-		Title:       flagSAIamCondTitle,
-		Description: flagSAIamCondDesc,
+		Expression:  s.flagSAIamCondExpr,
+		Title:       s.flagSAIamCondTitle,
+		Description: s.flagSAIamCondDesc,
 	}
 }
 
@@ -529,9 +406,9 @@ func iamRemoveBindingFromPolicy(policy *iam.Policy, role, member string, conditi
 	return changed
 }
 
-func runSAAddIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+func (s *iamCmds) runSAAddIamBinding(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -542,7 +419,7 @@ func runSAAddIamBinding(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	iamAddBindingToPolicy(policy, flagSAIamRole, flagSAIamMember, iamBuildCondition())
+	iamAddBindingToPolicy(policy, s.flagSAIamRole, s.flagSAIamMember, s.iamBuildCondition())
 	policy.Version = 3
 
 	updated, err := svc.Projects.ServiceAccounts.SetIamPolicy(resource, &iam.SetIamPolicyRequest{
@@ -551,13 +428,13 @@ func runSAAddIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for service account [%s].\n", args[0])
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for service account [%s].\n", args[0])
+	return s.inv.yaml(updated)
 }
 
-func runSARemoveIamBinding(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+func (s *iamCmds) runSARemoveIamBinding(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -568,8 +445,8 @@ func runSARemoveIamBinding(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
 
-	if !iamRemoveBindingFromPolicy(policy, flagSAIamRole, flagSAIamMember, iamBuildCondition(), flagSAIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagSAIamRole, flagSAIamMember)
+	if !iamRemoveBindingFromPolicy(policy, s.flagSAIamRole, s.flagSAIamMember, s.iamBuildCondition(), s.flagSAIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagSAIamRole, s.flagSAIamMember)
 	}
 
 	updated, err := svc.Projects.ServiceAccounts.SetIamPolicy(resource, &iam.SetIamPolicyRequest{
@@ -578,23 +455,23 @@ func runSARemoveIamBinding(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for service account [%s].\n", args[0])
-	return yamlEncode(updated)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for service account [%s].\n", args[0])
+	return s.inv.yaml(updated)
 }
 
-func runSASignBlob(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runSASignBlob(cmd *cobra.Command, args []string) error {
 	payload, err := os.ReadFile(args[0])
 	if err != nil {
 		return fmt.Errorf("reading input file: %w", err)
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.IAMCredentialsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAMCredentials(ctx)
 	if err != nil {
 		return err
 	}
 
-	resp, err := svc.Projects.ServiceAccounts.SignBlob(saResourceName(flagSASignIamAccount), &iamcredentials.SignBlobRequest{
+	resp, err := svc.Projects.ServiceAccounts.SignBlob(saResourceName(s.flagSASignIamAccount), &iamcredentials.SignBlobRequest{
 		Payload: base64.StdEncoding.EncodeToString(payload),
 	}).Context(ctx).Do()
 	if err != nil {
@@ -608,24 +485,24 @@ func runSASignBlob(cmd *cobra.Command, args []string) error {
 	if err := os.WriteFile(args[1], signed, 0600); err != nil {
 		return fmt.Errorf("writing output file: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "signed blob [%s] as [%s] for [%s] using key [%s]\n",
-		args[0], args[1], flagSASignIamAccount, resp.KeyId)
+	fmt.Fprintf(s.inv.stderr, "signed blob [%s] as [%s] for [%s] using key [%s]\n",
+		args[0], args[1], s.flagSASignIamAccount, resp.KeyId)
 	return nil
 }
 
-func runSASignJwt(cmd *cobra.Command, args []string) error {
+func (s *iamCmds) runSASignJwt(cmd *cobra.Command, args []string) error {
 	payload, err := os.ReadFile(args[0])
 	if err != nil {
 		return fmt.Errorf("reading input file: %w", err)
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.IAMCredentialsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAMCredentials(ctx)
 	if err != nil {
 		return err
 	}
 
-	resp, err := svc.Projects.ServiceAccounts.SignJwt(saResourceName(flagSASignIamAccount), &iamcredentials.SignJwtRequest{
+	resp, err := svc.Projects.ServiceAccounts.SignJwt(saResourceName(s.flagSASignIamAccount), &iamcredentials.SignJwtRequest{
 		Payload: string(payload),
 	}).Context(ctx).Do()
 	if err != nil {
@@ -635,7 +512,7 @@ func runSASignJwt(cmd *cobra.Command, args []string) error {
 	if err := os.WriteFile(args[1], []byte(resp.SignedJwt), 0600); err != nil {
 		return fmt.Errorf("writing output file: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "signed jwt [%s] as [%s] for [%s] using key [%s]\n",
-		args[0], args[1], flagSASignIamAccount, resp.KeyId)
+	fmt.Fprintf(s.inv.stderr, "signed jwt [%s] as [%s] for [%s] using key [%s]\n",
+		args[0], args[1], s.flagSASignIamAccount, resp.KeyId)
 	return nil
 }

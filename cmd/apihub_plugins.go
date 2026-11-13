@@ -1,176 +1,109 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apihub "google.golang.org/api/apihub/v1"
 )
 
 // --- gcloud apihub plugins (#1164) ---
 
-var apihubPluginsCmd = &cobra.Command{Use: "plugins", Short: "Manage API Hub plugins"}
-
-var apihubPluginsInstancesCmd = &cobra.Command{
-	Use: "instances", Short: "Manage API Hub plugin instances",
-}
-
-var (
-	flagAPPluginsLocation    string
-	flagAPPluginsFormat      string
-	flagAPPluginsFilter      string
-	flagAPPluginsPageSize    int64
-	flagAPPluginsConfigFile  string
-	flagAPPluginsPlugin      string
-	flagAPPluginsUpdateMask  string
-	flagAPPluginsInstanceCfg string
-)
-
-var (
-	apihubPluginsCreateCmd = &cobra.Command{
-		Use: "create PLUGIN", Short: "Create an API Hub plugin",
-		Args: cobra.ExactArgs(1), RunE: runAPPluginCreate,
-	}
-	apihubPluginsDeleteCmd = &cobra.Command{
-		Use: "delete PLUGIN", Short: "Delete an API Hub plugin",
-		Args: cobra.ExactArgs(1), RunE: runAPPluginDelete,
-	}
-	apihubPluginsDescribeCmd = &cobra.Command{
-		Use: "describe PLUGIN", Short: "Describe an API Hub plugin",
-		Args: cobra.ExactArgs(1), RunE: runAPPluginDescribe,
-	}
-	apihubPluginsDisableCmd = &cobra.Command{
-		Use: "disable PLUGIN", Short: "Disable an API Hub plugin",
-		Args: cobra.ExactArgs(1), RunE: runAPPluginDisable,
-	}
-	apihubPluginsEnableCmd = &cobra.Command{
-		Use: "enable PLUGIN", Short: "Enable an API Hub plugin",
-		Args: cobra.ExactArgs(1), RunE: runAPPluginEnable,
-	}
-	apihubPluginsListCmd = &cobra.Command{
-		Use: "list", Short: "List API Hub plugins in a location",
-		Args: cobra.NoArgs, RunE: runAPPluginList,
-	}
-
-	apihubPluginsInstCreateCmd = &cobra.Command{
-		Use: "create INSTANCE", Short: "Create an API Hub plugin instance",
-		Args: cobra.ExactArgs(1), RunE: runAPPluginInstCreate,
-	}
-	apihubPluginsInstDeleteCmd = &cobra.Command{
-		Use: "delete INSTANCE", Short: "Delete an API Hub plugin instance",
-		Args: cobra.ExactArgs(1), RunE: runAPPluginInstDelete,
-	}
-	apihubPluginsInstDescribeCmd = &cobra.Command{
-		Use: "describe INSTANCE", Short: "Describe an API Hub plugin instance",
-		Args: cobra.ExactArgs(1), RunE: runAPPluginInstDescribe,
-	}
-	apihubPluginsInstListCmd = &cobra.Command{
-		Use: "list", Short: "List API Hub plugin instances under a plugin",
-		Args: cobra.NoArgs, RunE: runAPPluginInstList,
-	}
-	apihubPluginsInstUpdateCmd = &cobra.Command{
-		Use: "update INSTANCE", Short: "Update an API Hub plugin instance",
-		Args: cobra.ExactArgs(1), RunE: runAPPluginInstUpdate,
-	}
-)
-
-func init() {
+func (g *apihubCmds) initApihubPlugins() {
 	pluginCmds := []*cobra.Command{
-		apihubPluginsCreateCmd, apihubPluginsDeleteCmd, apihubPluginsDescribeCmd,
-		apihubPluginsDisableCmd, apihubPluginsEnableCmd, apihubPluginsListCmd,
+		g.apihubPluginsCreateCmd, g.apihubPluginsDeleteCmd, g.apihubPluginsDescribeCmd,
+		g.apihubPluginsDisableCmd, g.apihubPluginsEnableCmd, g.apihubPluginsListCmd,
 	}
 	for _, c := range pluginCmds {
-		c.Flags().StringVar(&flagAPPluginsLocation, "location", "",
+		c.Flags().StringVar(&g.flagAPPluginsLocation, "location", "",
 			"Location that owns the plugin (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagAPPluginsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagAPPluginsFormat, "format", "", "Output format")
 	}
-	apihubPluginsCreateCmd.Flags().StringVar(&flagAPPluginsConfigFile, "config-file", "",
+	g.apihubPluginsCreateCmd.Flags().StringVar(&g.flagAPPluginsConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the Plugin body (required)")
-	_ = apihubPluginsCreateCmd.MarkFlagRequired("config-file")
-	apihubPluginsListCmd.Flags().StringVar(&flagAPPluginsFilter, "filter", "", "Server-side filter expression")
-	apihubPluginsListCmd.Flags().Int64Var(&flagAPPluginsPageSize, "page-size", 0, "Maximum number of results per page")
+	_ = g.apihubPluginsCreateCmd.MarkFlagRequired("config-file")
+	g.apihubPluginsListCmd.Flags().StringVar(&g.flagAPPluginsFilter, "filter", "", "Server-side filter expression")
+	g.apihubPluginsListCmd.Flags().Int64Var(&g.flagAPPluginsPageSize, "page-size", 0, "Maximum number of results per page")
 
 	instCmds := []*cobra.Command{
-		apihubPluginsInstCreateCmd, apihubPluginsInstDeleteCmd, apihubPluginsInstDescribeCmd,
-		apihubPluginsInstListCmd, apihubPluginsInstUpdateCmd,
+		g.apihubPluginsInstCreateCmd, g.apihubPluginsInstDeleteCmd, g.apihubPluginsInstDescribeCmd,
+		g.apihubPluginsInstListCmd, g.apihubPluginsInstUpdateCmd,
 	}
 	for _, c := range instCmds {
-		c.Flags().StringVar(&flagAPPluginsLocation, "location", "",
+		c.Flags().StringVar(&g.flagAPPluginsLocation, "location", "",
 			"Location that owns the plugin (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagAPPluginsFormat, "format", "", "Output format")
-		c.Flags().StringVar(&flagAPPluginsPlugin, "plugin", "",
+		c.Flags().StringVar(&g.flagAPPluginsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagAPPluginsPlugin, "plugin", "",
 			"Parent plugin ID (required)")
 		_ = c.MarkFlagRequired("plugin")
 	}
-	for _, c := range []*cobra.Command{apihubPluginsInstCreateCmd, apihubPluginsInstUpdateCmd} {
-		c.Flags().StringVar(&flagAPPluginsInstanceCfg, "config-file", "",
+	for _, c := range []*cobra.Command{g.apihubPluginsInstCreateCmd, g.apihubPluginsInstUpdateCmd} {
+		c.Flags().StringVar(&g.flagAPPluginsInstanceCfg, "config-file", "",
 			"Path to a YAML/JSON file with the PluginInstance body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	apihubPluginsInstUpdateCmd.Flags().StringVar(&flagAPPluginsUpdateMask, "update-mask", "",
+	g.apihubPluginsInstUpdateCmd.Flags().StringVar(&g.flagAPPluginsUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (default: top-level fields in --config-file)")
-	apihubPluginsInstListCmd.Flags().StringVar(&flagAPPluginsFilter, "filter", "", "Server-side filter expression")
-	apihubPluginsInstListCmd.Flags().Int64Var(&flagAPPluginsPageSize, "page-size", 0, "Maximum number of results per page")
+	g.apihubPluginsInstListCmd.Flags().StringVar(&g.flagAPPluginsFilter, "filter", "", "Server-side filter expression")
+	g.apihubPluginsInstListCmd.Flags().Int64Var(&g.flagAPPluginsPageSize, "page-size", 0, "Maximum number of results per page")
 
-	apihubPluginsCmd.AddCommand(pluginCmds...)
-	apihubPluginsInstancesCmd.AddCommand(instCmds...)
-	apihubPluginsCmd.AddCommand(apihubPluginsInstancesCmd)
-	apihubCmd.AddCommand(apihubPluginsCmd)
+	g.apihubPluginsCmd.AddCommand(pluginCmds...)
+	g.apihubPluginsInstancesCmd.AddCommand(instCmds...)
+	g.apihubPluginsCmd.AddCommand(g.apihubPluginsInstancesCmd)
+	g.apihubCmd.AddCommand(g.apihubPluginsCmd)
 }
 
-func apihubPluginsParent() (string, error) {
-	project, err := resolveProject()
+func (g *apihubCmds) apihubPluginsParent() (string, error) {
+	project, err := g.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagAPPluginsLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, g.flagAPPluginsLocation), nil
 }
 
-func apihubPluginName(id string) (string, error) {
+func (g *apihubCmds) apihubPluginName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := apihubPluginsParent()
+	parent, err := g.apihubPluginsParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/plugins/%s", parent, id), nil
 }
 
-func apihubPluginParentForInstance() (string, error) {
-	if strings.HasPrefix(flagAPPluginsPlugin, "projects/") {
-		return flagAPPluginsPlugin, nil
+func (g *apihubCmds) apihubPluginParentForInstance() (string, error) {
+	if strings.HasPrefix(g.flagAPPluginsPlugin, "projects/") {
+		return g.flagAPPluginsPlugin, nil
 	}
-	return apihubPluginName(flagAPPluginsPlugin)
+	return g.apihubPluginName(g.flagAPPluginsPlugin)
 }
 
-func apihubPluginInstanceName(id string) (string, error) {
+func (g *apihubCmds) apihubPluginInstanceName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	pluginName, err := apihubPluginParentForInstance()
+	pluginName, err := g.apihubPluginParentForInstance()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/instances/%s", pluginName, id), nil
 }
 
-func runAPPluginCreate(cmd *cobra.Command, args []string) error {
-	parent, err := apihubPluginsParent()
+func (g *apihubCmds) runAPPluginCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubPluginsParent()
 	if err != nil {
 		return err
 	}
 	body := &apihub.GoogleCloudApihubV1Plugin{}
-	if err := loadYAMLOrJSONInto(flagAPPluginsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagAPPluginsConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -179,16 +112,16 @@ func runAPPluginCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating plugin: %w", err)
 	}
-	return emitFormatted(got, flagAPPluginsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAPPluginsFormat)
 }
 
-func runAPPluginDelete(cmd *cobra.Command, args []string) error {
-	name, err := apihubPluginName(args[0])
+func (g *apihubCmds) runAPPluginDelete(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubPluginName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -196,17 +129,17 @@ func runAPPluginDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting plugin: %w", err)
 	}
-	fmt.Printf("Delete request issued for plugin [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAPPluginsFormat)
+	fmt.Fprintf(g.inv.stdout, "Delete request issued for plugin [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(g.inv.stdout, op, g.flagAPPluginsFormat)
 }
 
-func runAPPluginDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apihubPluginName(args[0])
+func (g *apihubCmds) runAPPluginDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubPluginName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -214,16 +147,16 @@ func runAPPluginDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing plugin: %w", err)
 	}
-	return emitFormatted(got, flagAPPluginsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAPPluginsFormat)
 }
 
-func runAPPluginDisable(cmd *cobra.Command, args []string) error {
-	name, err := apihubPluginName(args[0])
+func (g *apihubCmds) runAPPluginDisable(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubPluginName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -232,16 +165,16 @@ func runAPPluginDisable(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("disabling plugin: %w", err)
 	}
-	return emitFormatted(got, flagAPPluginsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAPPluginsFormat)
 }
 
-func runAPPluginEnable(cmd *cobra.Command, args []string) error {
-	name, err := apihubPluginName(args[0])
+func (g *apihubCmds) runAPPluginEnable(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubPluginName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -250,16 +183,16 @@ func runAPPluginEnable(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("enabling plugin: %w", err)
 	}
-	return emitFormatted(got, flagAPPluginsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAPPluginsFormat)
 }
 
-func runAPPluginList(cmd *cobra.Command, args []string) error {
-	parent, err := apihubPluginsParent()
+func (g *apihubCmds) runAPPluginList(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubPluginsParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -267,11 +200,11 @@ func runAPPluginList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Plugins.List(parent).Context(ctx)
-		if flagAPPluginsFilter != "" {
-			call = call.Filter(flagAPPluginsFilter)
+		if g.flagAPPluginsFilter != "" {
+			call = call.Filter(g.flagAPPluginsFilter)
 		}
-		if flagAPPluginsPageSize > 0 {
-			call = call.PageSize(flagAPPluginsPageSize)
+		if g.flagAPPluginsPageSize > 0 {
+			call = call.PageSize(g.flagAPPluginsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -286,20 +219,20 @@ func runAPPluginList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAPPluginsFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagAPPluginsFormat)
 }
 
-func runAPPluginInstCreate(cmd *cobra.Command, args []string) error {
-	parent, err := apihubPluginParentForInstance()
+func (g *apihubCmds) runAPPluginInstCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubPluginParentForInstance()
 	if err != nil {
 		return err
 	}
 	body := &apihub.GoogleCloudApihubV1PluginInstance{}
-	if err := loadYAMLOrJSONInto(flagAPPluginsInstanceCfg, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagAPPluginsInstanceCfg, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -308,17 +241,17 @@ func runAPPluginInstCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating plugin instance: %w", err)
 	}
-	fmt.Printf("Create request issued for plugin instance [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAPPluginsFormat)
+	fmt.Fprintf(g.inv.stdout, "Create request issued for plugin instance [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(g.inv.stdout, op, g.flagAPPluginsFormat)
 }
 
-func runAPPluginInstDelete(cmd *cobra.Command, args []string) error {
-	name, err := apihubPluginInstanceName(args[0])
+func (g *apihubCmds) runAPPluginInstDelete(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubPluginInstanceName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -326,17 +259,17 @@ func runAPPluginInstDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting plugin instance: %w", err)
 	}
-	fmt.Printf("Delete request issued for plugin instance [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagAPPluginsFormat)
+	fmt.Fprintf(g.inv.stdout, "Delete request issued for plugin instance [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(g.inv.stdout, op, g.flagAPPluginsFormat)
 }
 
-func runAPPluginInstDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apihubPluginInstanceName(args[0])
+func (g *apihubCmds) runAPPluginInstDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubPluginInstanceName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -344,16 +277,16 @@ func runAPPluginInstDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing plugin instance: %w", err)
 	}
-	return emitFormatted(got, flagAPPluginsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAPPluginsFormat)
 }
 
-func runAPPluginInstList(cmd *cobra.Command, args []string) error {
-	parent, err := apihubPluginParentForInstance()
+func (g *apihubCmds) runAPPluginInstList(cmd *cobra.Command, args []string) error {
+	parent, err := g.apihubPluginParentForInstance()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -361,11 +294,11 @@ func runAPPluginInstList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Plugins.Instances.List(parent).Context(ctx)
-		if flagAPPluginsFilter != "" {
-			call = call.Filter(flagAPPluginsFilter)
+		if g.flagAPPluginsFilter != "" {
+			call = call.Filter(g.flagAPPluginsFilter)
 		}
-		if flagAPPluginsPageSize > 0 {
-			call = call.PageSize(flagAPPluginsPageSize)
+		if g.flagAPPluginsPageSize > 0 {
+			call = call.PageSize(g.flagAPPluginsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -380,24 +313,24 @@ func runAPPluginInstList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAPPluginsFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagAPPluginsFormat)
 }
 
-func runAPPluginInstUpdate(cmd *cobra.Command, args []string) error {
-	name, err := apihubPluginInstanceName(args[0])
+func (g *apihubCmds) runAPPluginInstUpdate(cmd *cobra.Command, args []string) error {
+	name, err := g.apihubPluginInstanceName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &apihub.GoogleCloudApihubV1PluginInstance{}
-	if err := loadYAMLOrJSONInto(flagAPPluginsInstanceCfg, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagAPPluginsInstanceCfg, body); err != nil {
 		return err
 	}
-	mask := flagAPPluginsUpdateMask
+	mask := g.flagAPPluginsUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ApiHubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ApiHub(ctx)
 	if err != nil {
 		return err
 	}
@@ -406,5 +339,5 @@ func runAPPluginInstUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating plugin instance: %w", err)
 	}
-	return emitFormatted(got, flagAPPluginsFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAPPluginsFormat)
 }

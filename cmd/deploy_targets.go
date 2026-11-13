@@ -1,138 +1,68 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	clouddeploy "google.golang.org/api/clouddeploy/v1"
 )
 
 // --- gcloud deploy targets (#1532) ---
 
-var deployTargetsCmd = &cobra.Command{Use: "targets", Short: "Manage Cloud Deploy targets"}
-
-var (
-	flagDeployTgtRegion   string
-	flagDeployTgtFormat   string
-	flagDeployTgtPageSize int64
-
-	// rollback/redeploy shared flags
-	flagDeployTgtPipeline    string
-	flagDeployTgtRelease     string
-	flagDeployTgtRolloutID   string
-	flagDeployTgtDescription string
-	flagDeployTgtStartPhase  string
-	flagDeployTgtOverridePol []string
-
-	flagDeployTgtIamMember   string
-	flagDeployTgtIamRole     string
-	flagDeployTgtIamCondExpr string
-	flagDeployTgtIamCondT    string
-	flagDeployTgtIamCondD    string
-	flagDeployTgtIamAllCond  bool
-)
-
-var (
-	deployTgtDeleteCmd = &cobra.Command{
-		Use: "delete TARGET", Short: "Delete a target",
-		Args: cobra.ExactArgs(1), RunE: runDeployTgtDelete,
-	}
-	deployTgtDescribeCmd = &cobra.Command{
-		Use: "describe TARGET", Short: "Describe a target",
-		Args: cobra.ExactArgs(1), RunE: runDeployTgtDescribe,
-	}
-	deployTgtExportCmd = &cobra.Command{
-		Use: "export TARGET", Short: "Export a target",
-		Args: cobra.ExactArgs(1), RunE: runDeployTgtExport,
-	}
-	deployTgtListCmd = &cobra.Command{
-		Use: "list", Short: "List targets",
-		Args: cobra.NoArgs, RunE: runDeployTgtList,
-	}
-	deployTgtRedeployCmd = &cobra.Command{
-		Use:   "redeploy TARGET",
-		Short: "Redeploy the most recent release for a target by creating a new rollout",
-		Args:  cobra.ExactArgs(1), RunE: runDeployTgtRedeploy,
-	}
-	deployTgtRollbackCmd = &cobra.Command{
-		Use:   "rollback TARGET",
-		Short: "Roll a target back to a previous release",
-		Args:  cobra.ExactArgs(1), RunE: runDeployTgtRollback,
-	}
-	deployTgtGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy TARGET", Short: "Get the IAM policy",
-		Args: cobra.ExactArgs(1), RunE: runDeployTgtGetIam,
-	}
-	deployTgtSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy TARGET POLICY_FILE", Short: "Set the IAM policy",
-		Args: cobra.ExactArgs(2), RunE: runDeployTgtSetIam,
-	}
-	deployTgtAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding TARGET", Short: "Add an IAM policy binding",
-		Args: cobra.ExactArgs(1), RunE: runDeployTgtAddIam,
-	}
-	deployTgtRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding TARGET", Short: "Remove an IAM policy binding",
-		Args: cobra.ExactArgs(1), RunE: runDeployTgtRemoveIam,
-	}
-)
-
-func init() {
+func (s *deployCmds) initDeployTargets() {
 	all := []*cobra.Command{
-		deployTgtDeleteCmd, deployTgtDescribeCmd, deployTgtExportCmd, deployTgtListCmd,
-		deployTgtRedeployCmd, deployTgtRollbackCmd, deployTgtGetIamCmd, deployTgtSetIamCmd,
-		deployTgtAddIamCmd, deployTgtRemoveIamCmd,
+		s.deployTgtDeleteCmd, s.deployTgtDescribeCmd, s.deployTgtExportCmd, s.deployTgtListCmd,
+		s.deployTgtRedeployCmd, s.deployTgtRollbackCmd, s.deployTgtGetIamCmd, s.deployTgtSetIamCmd,
+		s.deployTgtAddIamCmd, s.deployTgtRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDeployTgtRegion, "region", "", "Cloud Deploy region (required)")
+		c.Flags().StringVar(&s.flagDeployTgtRegion, "region", "", "Cloud Deploy region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDeployTgtFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDeployTgtFormat, "format", "", "Output format")
 	}
-	deployTgtListCmd.Flags().Int64Var(&flagDeployTgtPageSize, "page-size", 0, "Maximum results per page")
+	s.deployTgtListCmd.Flags().Int64Var(&s.flagDeployTgtPageSize, "page-size", 0, "Maximum results per page")
 
-	for _, c := range []*cobra.Command{deployTgtRedeployCmd, deployTgtRollbackCmd} {
-		c.Flags().StringVar(&flagDeployTgtPipeline, "delivery-pipeline", "",
+	for _, c := range []*cobra.Command{s.deployTgtRedeployCmd, s.deployTgtRollbackCmd} {
+		c.Flags().StringVar(&s.flagDeployTgtPipeline, "delivery-pipeline", "",
 			"Delivery pipeline that owns the target (required)")
 		_ = c.MarkFlagRequired("delivery-pipeline")
-		c.Flags().StringVar(&flagDeployTgtRelease, "release", "",
+		c.Flags().StringVar(&s.flagDeployTgtRelease, "release", "",
 			"Release to redeploy/roll back to (required for rollback; defaults to the target's latest for redeploy)")
-		c.Flags().StringVar(&flagDeployTgtRolloutID, "rollout-id", "",
+		c.Flags().StringVar(&s.flagDeployTgtRolloutID, "rollout-id", "",
 			"Optional rollout ID (auto-generated when omitted)")
-		c.Flags().StringVar(&flagDeployTgtDescription, "description", "", "Rollout description")
-		c.Flags().StringVar(&flagDeployTgtStartPhase, "starting-phase-id", "", "Starting phase for the rollout")
-		c.Flags().StringSliceVar(&flagDeployTgtOverridePol, "override-deploy-policies", nil,
+		c.Flags().StringVar(&s.flagDeployTgtDescription, "description", "", "Rollout description")
+		c.Flags().StringVar(&s.flagDeployTgtStartPhase, "starting-phase-id", "", "Starting phase for the rollout")
+		c.Flags().StringSliceVar(&s.flagDeployTgtOverridePol, "override-deploy-policies", nil,
 			"Deploy policies to override (repeatable)")
 	}
-	_ = deployTgtRollbackCmd.MarkFlagRequired("release")
+	_ = s.deployTgtRollbackCmd.MarkFlagRequired("release")
 
-	for _, c := range []*cobra.Command{deployTgtAddIamCmd, deployTgtRemoveIamCmd} {
-		deployIamMemberFlags(c, &flagDeployTgtIamMember, &flagDeployTgtIamRole,
-			&flagDeployTgtIamCondExpr, &flagDeployTgtIamCondT, &flagDeployTgtIamCondD)
+	for _, c := range []*cobra.Command{s.deployTgtAddIamCmd, s.deployTgtRemoveIamCmd} {
+		deployIamMemberFlags(c, &s.flagDeployTgtIamMember, &s.flagDeployTgtIamRole,
+			&s.flagDeployTgtIamCondExpr, &s.flagDeployTgtIamCondT, &s.flagDeployTgtIamCondD)
 	}
-	deployTgtRemoveIamCmd.Flags().BoolVar(&flagDeployTgtIamAllCond, "all", false,
+	s.deployTgtRemoveIamCmd.Flags().BoolVar(&s.flagDeployTgtIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	deployTargetsCmd.AddCommand(all...)
-	deployCmd.AddCommand(deployTargetsCmd)
+	s.deployTargetsCmd.AddCommand(all...)
+	s.deployCmd.AddCommand(s.deployTargetsCmd)
 }
 
-func deployTgtName(id string) (string, error) {
-	project, err := resolveProject()
+func (s *deployCmds) deployTgtName(id string) (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return deployChild("targets", id, deployLocationParent(project, flagDeployTgtRegion)), nil
+	return deployChild("targets", id, deployLocationParent(project, s.flagDeployTgtRegion)), nil
 }
 
-func runDeployTgtDelete(cmd *cobra.Command, args []string) error {
-	name, err := deployTgtName(args[0])
+func (s *deployCmds) runDeployTgtDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.deployTgtName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,17 +70,17 @@ func runDeployTgtDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting target: %w", err)
 	}
-	fmt.Printf("Delete request issued for target [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDeployTgtFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for target [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDeployTgtFormat)
 }
 
-func runDeployTgtDescribe(cmd *cobra.Command, args []string) error {
-	name, err := deployTgtName(args[0])
+func (s *deployCmds) runDeployTgtDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.deployTgtName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -158,16 +88,16 @@ func runDeployTgtDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing target: %w", err)
 	}
-	return emitFormatted(got, flagDeployTgtFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDeployTgtFormat)
 }
 
-func runDeployTgtExport(cmd *cobra.Command, args []string) error {
-	name, err := deployTgtName(args[0])
+func (s *deployCmds) runDeployTgtExport(cmd *cobra.Command, args []string) error {
+	name, err := s.deployTgtName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -175,21 +105,21 @@ func runDeployTgtExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting target: %w", err)
 	}
-	format := flagDeployTgtFormat
+	format := s.flagDeployTgtFormat
 	if format == "" {
 		format = "yaml"
 	}
-	return emitFormatted(got, format)
+	return emitFormattedTo(s.inv.stdout, got, format)
 }
 
-func runDeployTgtList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *deployCmds) runDeployTgtList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	parent := deployLocationParent(project, flagDeployTgtRegion)
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	parent := deployLocationParent(project, s.flagDeployTgtRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -197,8 +127,8 @@ func runDeployTgtList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Targets.List(parent).Context(ctx)
-		if flagDeployTgtPageSize > 0 {
-			call = call.PageSize(flagDeployTgtPageSize)
+		if s.flagDeployTgtPageSize > 0 {
+			call = call.PageSize(s.flagDeployTgtPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -213,32 +143,32 @@ func runDeployTgtList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDeployTgtFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDeployTgtFormat)
 }
 
-func runDeployTgtRollback(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *deployCmds) runDeployTgtRollback(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	parent := deployLocationParent(project, flagDeployTgtRegion)
-	pipeline := deployChild("deliveryPipelines", flagDeployTgtPipeline, parent)
+	parent := deployLocationParent(project, s.flagDeployTgtRegion)
+	pipeline := deployChild("deliveryPipelines", s.flagDeployTgtPipeline, parent)
 	req := &clouddeploy.RollbackTargetRequest{
 		TargetId:             args[0],
-		ReleaseId:            flagDeployTgtRelease,
-		RolloutId:            flagDeployTgtRolloutID,
-		OverrideDeployPolicy: flagDeployTgtOverridePol,
+		ReleaseId:            s.flagDeployTgtRelease,
+		RolloutId:            s.flagDeployTgtRolloutID,
+		OverrideDeployPolicy: s.flagDeployTgtOverridePol,
 	}
-	if flagDeployTgtDescription != "" || flagDeployTgtStartPhase != "" {
+	if s.flagDeployTgtDescription != "" || s.flagDeployTgtStartPhase != "" {
 		req.RollbackConfig = &clouddeploy.RollbackTargetConfig{
 			Rollout: &clouddeploy.Rollout{
-				Description: flagDeployTgtDescription,
+				Description: s.flagDeployTgtDescription,
 			},
-			StartingPhaseId: flagDeployTgtStartPhase,
+			StartingPhaseId: s.flagDeployTgtStartPhase,
 		}
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -246,54 +176,54 @@ func runDeployTgtRollback(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("rolling back target: %w", err)
 	}
-	fmt.Printf("Rollback issued for target [%s].\n", args[0])
-	return emitFormatted(resp, flagDeployTgtFormat)
+	fmt.Fprintf(s.inv.stdout, "Rollback issued for target [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, resp, s.flagDeployTgtFormat)
 }
 
-func runDeployTgtRedeploy(cmd *cobra.Command, args []string) error {
+func (s *deployCmds) runDeployTgtRedeploy(cmd *cobra.Command, args []string) error {
 	// Redeploy: create a new Rollout on the target's most-recent (or --release'd) release.
-	if flagDeployTgtRelease == "" {
+	if s.flagDeployTgtRelease == "" {
 		return fmt.Errorf("--release is required (Cloud Deploy has no server-side 'latest' resolver here)")
 	}
-	if flagDeployTgtRolloutID == "" {
+	if s.flagDeployTgtRolloutID == "" {
 		return fmt.Errorf("--rollout-id is required (auto-generation not supported)")
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	parent := deployLocationParent(project, flagDeployTgtRegion)
-	release := deployChild("releases", flagDeployTgtRelease,
-		deployChild("deliveryPipelines", flagDeployTgtPipeline, parent))
+	parent := deployLocationParent(project, s.flagDeployTgtRegion)
+	release := deployChild("releases", s.flagDeployTgtRelease,
+		deployChild("deliveryPipelines", s.flagDeployTgtPipeline, parent))
 	rollout := &clouddeploy.Rollout{
 		TargetId:    args[0],
-		Description: flagDeployTgtDescription,
+		Description: s.flagDeployTgtDescription,
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
-	call := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.Create(release, rollout).RolloutId(flagDeployTgtRolloutID).Context(ctx)
-	if flagDeployTgtStartPhase != "" {
-		call = call.StartingPhaseId(flagDeployTgtStartPhase)
+	call := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.Create(release, rollout).RolloutId(s.flagDeployTgtRolloutID).Context(ctx)
+	if s.flagDeployTgtStartPhase != "" {
+		call = call.StartingPhaseId(s.flagDeployTgtStartPhase)
 	}
-	_ = flagDeployTgtOverridePol
+	_ = s.flagDeployTgtOverridePol
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("redeploying: %w", err)
 	}
-	fmt.Printf("Redeploy issued for target [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDeployTgtFormat)
+	fmt.Fprintf(s.inv.stdout, "Redeploy issued for target [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDeployTgtFormat)
 }
 
-func runDeployTgtGetIam(cmd *cobra.Command, args []string) error {
-	name, err := deployTgtName(args[0])
+func (s *deployCmds) runDeployTgtGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployTgtName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -301,11 +231,11 @@ func runDeployTgtGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagDeployTgtFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagDeployTgtFormat)
 }
 
-func runDeployTgtSetIam(cmd *cobra.Command, args []string) error {
-	name, err := deployTgtName(args[0])
+func (s *deployCmds) runDeployTgtSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployTgtName(args[0])
 	if err != nil {
 		return err
 	}
@@ -314,8 +244,8 @@ func runDeployTgtSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -323,17 +253,17 @@ func runDeployTgtSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	deployUpdatedIam(fmt.Sprintf("target [%s]", args[0]))
-	return emitFormatted(updated, flagDeployTgtFormat)
+	s.deployUpdatedIam(fmt.Sprintf("target [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDeployTgtFormat)
 }
 
-func runDeployTgtAddIam(cmd *cobra.Command, args []string) error {
-	name, err := deployTgtName(args[0])
+func (s *deployCmds) runDeployTgtAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployTgtName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -341,24 +271,24 @@ func runDeployTgtAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	deployAddBinding(policy, flagDeployTgtIamRole, flagDeployTgtIamMember,
-		deployBuildCondition(flagDeployTgtIamCondExpr, flagDeployTgtIamCondT, flagDeployTgtIamCondD))
+	deployAddBinding(policy, s.flagDeployTgtIamRole, s.flagDeployTgtIamMember,
+		deployBuildCondition(s.flagDeployTgtIamCondExpr, s.flagDeployTgtIamCondT, s.flagDeployTgtIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Locations.Targets.SetIamPolicy(name, &clouddeploy.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	deployUpdatedIam(fmt.Sprintf("target [%s]", args[0]))
-	return emitFormatted(updated, flagDeployTgtFormat)
+	s.deployUpdatedIam(fmt.Sprintf("target [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDeployTgtFormat)
 }
 
-func runDeployTgtRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := deployTgtName(args[0])
+func (s *deployCmds) runDeployTgtRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployTgtName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -366,14 +296,14 @@ func runDeployTgtRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !deployRemoveBinding(policy, flagDeployTgtIamRole, flagDeployTgtIamMember,
-		deployBuildCondition(flagDeployTgtIamCondExpr, flagDeployTgtIamCondT, flagDeployTgtIamCondD), flagDeployTgtIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagDeployTgtIamRole, flagDeployTgtIamMember)
+	if !deployRemoveBinding(policy, s.flagDeployTgtIamRole, s.flagDeployTgtIamMember,
+		deployBuildCondition(s.flagDeployTgtIamCondExpr, s.flagDeployTgtIamCondT, s.flagDeployTgtIamCondD), s.flagDeployTgtIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagDeployTgtIamRole, s.flagDeployTgtIamMember)
 	}
 	updated, err := svc.Projects.Locations.Targets.SetIamPolicy(name, &clouddeploy.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	deployUpdatedIam(fmt.Sprintf("target [%s]", args[0]))
-	return emitFormatted(updated, flagDeployTgtFormat)
+	s.deployUpdatedIam(fmt.Sprintf("target [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDeployTgtFormat)
 }

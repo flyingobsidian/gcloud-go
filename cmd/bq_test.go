@@ -7,7 +7,8 @@ import (
 )
 
 func bqSubgroup(name string) *cobra.Command {
-	for _, c := range bqCmd.Commands() {
+	grp := newBqCmds(legacyTestInvocation())
+	for _, c := range grp.bqCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

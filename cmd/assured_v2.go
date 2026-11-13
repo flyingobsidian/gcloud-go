@@ -25,24 +25,6 @@ import (
 // then fetch the resulting workload with a v2 GET, as Python's
 // CloudOperationPoller does.
 
-var (
-	flagAssuredVersion           string
-	flagAssuredAsync             bool
-	flagAssuredWorkloadID        string
-	flagAssuredExternalID        string
-	flagAssuredDescription       string
-	flagAssuredTargetProject     string
-	flagAssuredTargetFolder      string
-	flagAssuredNewProjectConfig  map[string]string
-	flagAssuredNewFolderConfig   map[string]string
-	flagAssuredFramework         string
-	flagAssuredFrameworkRevision int64
-	flagAssuredCloudControlCfg   []string
-	flagAssuredCloudControlFile  string
-	flagAssuredCmekKeyRing       string
-	flagAssuredCmekDedicated     map[string]string
-)
-
 // assuredVersionFlag pairs a flag with the remediation shown when it is used
 // with the other API version (gcloud-python's V1_ONLY_*/V2_ONLY_* tables).
 type assuredVersionFlag struct{ name, remediation string }
@@ -79,61 +61,61 @@ var (
 	}
 )
 
-func init() {
-	for _, c := range []*cobra.Command{assuredWorkloadCreateCmd, assuredWorkloadDeleteCmd,
-		assuredWorkloadDescribeCmd, assuredWorkloadListCmd, assuredWorkloadUpdateCmd} {
-		c.Flags().StringVar(&flagAssuredVersion, "version", "v1",
+func (g *assuredCmds) initAssuredV2() {
+	for _, c := range []*cobra.Command{g.assuredWorkloadCreateCmd, g.assuredWorkloadDeleteCmd,
+		g.assuredWorkloadDescribeCmd, g.assuredWorkloadListCmd, g.assuredWorkloadUpdateCmd} {
+		c.Flags().StringVar(&g.flagAssuredVersion, "version", "v1",
 			"Assured Workloads API version to use. Options are v1 and v2. Defaults to v1.")
 	}
-	for _, c := range []*cobra.Command{assuredWorkloadCreateCmd, assuredWorkloadDeleteCmd, assuredWorkloadUpdateCmd} {
-		c.Flags().BoolVar(&flagAssuredAsync, "async", false,
+	for _, c := range []*cobra.Command{g.assuredWorkloadCreateCmd, g.assuredWorkloadDeleteCmd, g.assuredWorkloadUpdateCmd} {
+		c.Flags().BoolVar(&g.flagAssuredAsync, "async", false,
 			"Return immediately, without waiting for the operation in progress to complete (V2).")
 	}
 	ccFlags := func(c *cobra.Command) {
-		c.Flags().StringArrayVar(&flagAssuredCloudControlCfg, "cloud-control-config", nil,
+		c.Flags().StringArrayVar(&g.flagAssuredCloudControlCfg, "cloud-control-config", nil,
 			"Repeated inline control configuration, as PROPERTY=VALUE pairs (V2)")
-		c.Flags().StringVar(&flagAssuredCloudControlFile, "cloud-control-configs-from-file", "",
+		c.Flags().StringVar(&g.flagAssuredCloudControlFile, "cloud-control-configs-from-file", "",
 			"Path to JSON/YAML file specifying multiple control configurations (V2)")
 		c.MarkFlagsMutuallyExclusive("cloud-control-config", "cloud-control-configs-from-file")
-		c.Flags().Int64Var(&flagAssuredFrameworkRevision, "framework-major-revision", 0,
+		c.Flags().Int64Var(&g.flagAssuredFrameworkRevision, "framework-major-revision", 0,
 			"Major revision ID of the compliance framework (V2)")
 	}
 
-	c := assuredWorkloadCreateCmd
+	c := g.assuredWorkloadCreateCmd
 	c.Use = "create [WORKLOAD_ID]"
 	c.Args = cobra.MaximumNArgs(1)
-	c.Flags().StringVar(&flagAssuredWorkloadID, "workload-id", "", "User-assigned unique identifier for the workload (V2)")
-	c.Flags().StringVar(&flagAssuredExternalID, "external-identifier", "", "The external identifier of the Assured Workloads environment")
+	c.Flags().StringVar(&g.flagAssuredWorkloadID, "workload-id", "", "User-assigned unique identifier for the workload (V2)")
+	c.Flags().StringVar(&g.flagAssuredExternalID, "external-identifier", "", "The external identifier of the Assured Workloads environment")
 	c.MarkFlagsMutuallyExclusive("workload-id", "external-identifier")
-	c.Flags().StringVar(&flagAssuredDescription, "description", "", "User-friendly description for the workload (V2)")
-	c.Flags().StringVar(&flagAssuredTargetProject, "target-project", "",
+	c.Flags().StringVar(&g.flagAssuredDescription, "description", "", "User-friendly description for the workload (V2)")
+	c.Flags().StringVar(&g.flagAssuredTargetProject, "target-project", "",
 		"Existing Project ID or project number to onboard into Assured Workloads (V2)")
-	c.Flags().StringVar(&flagAssuredTargetFolder, "target-folder", "", "Existing Folder ID to onboard into Assured Workloads (V2)")
-	c.Flags().StringToStringVar(&flagAssuredNewProjectConfig, "new-project-config", nil,
+	c.Flags().StringVar(&g.flagAssuredTargetFolder, "target-folder", "", "Existing Folder ID to onboard into Assured Workloads (V2)")
+	c.Flags().StringToStringVar(&g.flagAssuredNewProjectConfig, "new-project-config", nil,
 		"Specification for provisioning a new project: parent, display_name, billing_account (V2)")
-	c.Flags().StringToStringVar(&flagAssuredNewFolderConfig, "new-folder-config", nil,
+	c.Flags().StringToStringVar(&g.flagAssuredNewFolderConfig, "new-folder-config", nil,
 		"Specification for provisioning a new folder: parent, display_name (V2)")
 	c.MarkFlagsMutuallyExclusive("target-project", "target-folder", "new-project-config", "new-folder-config")
-	c.Flags().StringVar(&flagAssuredFramework, "framework", "",
+	c.Flags().StringVar(&g.flagAssuredFramework, "framework", "",
 		"Compliance framework resource name or ID, for example, fedramp-moderate (V2)")
 	ccFlags(c)
-	c.Flags().StringVar(&flagAssuredCmekKeyRing, "cmek-key-ring", "",
+	c.Flags().StringVar(&g.flagAssuredCmekKeyRing, "cmek-key-ring", "",
 		"KMS Key Ring resource path for Customer-Managed Encryption Keys (V2)")
-	c.Flags().StringToStringVar(&flagAssuredCmekDedicated, "cmek-dedicated-project-config", nil,
+	c.Flags().StringToStringVar(&g.flagAssuredCmekDedicated, "cmek-dedicated-project-config", nil,
 		"Dedicated KMS project configuration: project_id, billing_account, display_name (valid only with folder targets)")
 
-	ccFlags(assuredWorkloadUpdateCmd)
+	ccFlags(g.assuredWorkloadUpdateCmd)
 }
 
 // assuredAPIVersion validates and returns --version.
-func assuredAPIVersion() (string, error) {
-	switch flagAssuredVersion {
+func (g *assuredCmds) assuredAPIVersion() (string, error) {
+	switch g.flagAssuredVersion {
 	case "", "v1":
 		return "v1", nil
 	case "v2":
 		return "v2", nil
 	}
-	return "", fmt.Errorf("argument --version: Invalid choice: '%s'. Valid choices are [v1, v2].", flagAssuredVersion)
+	return "", fmt.Errorf("argument --version: Invalid choice: '%s'. Valid choices are [v1, v2].", g.flagAssuredVersion)
 }
 
 // assuredValidateVersionFlags rejects flags that belong to the other API
@@ -210,12 +192,12 @@ func assuredValidateDeleteFlags(cmd *cobra.Command, version string) error {
 // assuredRegionalEndpoint returns the regional Assured Workloads endpoint
 // (https://REGION-assuredworkloads.googleapis.com/), or the global one when
 // region is empty, and logs it as gcloud-python does.
-func assuredRegionalEndpoint(region string) string {
+func (g *assuredCmds) assuredRegionalEndpoint(region string) string {
 	ep := "https://assuredworkloads.googleapis.com/"
 	if region != "" {
 		ep = "https://" + region + "-assuredworkloads.googleapis.com/"
 	}
-	fmt.Fprintf(os.Stderr, "Using endpoint [%s]\n", ep)
+	fmt.Fprintf(g.inv.stderr, "Using endpoint [%s]\n", ep)
 	return ep
 }
 
@@ -263,14 +245,14 @@ func assuredStr(m map[string]string, keys ...string) string {
 }
 
 // assuredResourceConfig builds the v2 ResourceConfig (BuildResourceConfig).
-func assuredResourceConfig() (map[string]any, error) {
+func (g *assuredCmds) assuredResourceConfig() (map[string]any, error) {
 	switch {
-	case flagAssuredTargetProject != "":
-		return map[string]any{"existingProject": flagAssuredTargetProject}, nil
-	case flagAssuredTargetFolder != "":
-		return map[string]any{"existingFolder": flagAssuredTargetFolder}, nil
-	case flagAssuredNewProjectConfig != nil:
-		m := flagAssuredNewProjectConfig
+	case g.flagAssuredTargetProject != "":
+		return map[string]any{"existingProject": g.flagAssuredTargetProject}, nil
+	case g.flagAssuredTargetFolder != "":
+		return map[string]any{"existingFolder": g.flagAssuredTargetFolder}, nil
+	case g.flagAssuredNewProjectConfig != nil:
+		m := g.flagAssuredNewProjectConfig
 		parent := m["parent"]
 		dn := assuredStr(m, "display_name", "displayName", "display-name")
 		ba := assuredStr(m, "billing_account", "billingAccount", "billing-account")
@@ -278,8 +260,8 @@ func assuredResourceConfig() (map[string]any, error) {
 			return nil, fmt.Errorf("Invalid value for [new_project_config]: new_project_dict must contain parent, display_name, and billing_account.")
 		}
 		return map[string]any{"newProjectConfig": map[string]any{"parent": parent, "displayName": dn, "billingAccount": ba}}, nil
-	case flagAssuredNewFolderConfig != nil:
-		m := flagAssuredNewFolderConfig
+	case g.flagAssuredNewFolderConfig != nil:
+		m := g.flagAssuredNewFolderConfig
 		parent := m["parent"]
 		dn := assuredStr(m, "display_name", "displayName", "display-name")
 		if parent == "" || dn == "" {
@@ -291,12 +273,12 @@ func assuredResourceConfig() (map[string]any, error) {
 }
 
 // assuredCmekConfig builds the v2 CmekConfig (BuildCmekConfig).
-func assuredCmekConfig(isFolderTarget bool) (map[string]any, error) {
-	if flagAssuredCmekKeyRing == "" {
+func (g *assuredCmds) assuredCmekConfig(isFolderTarget bool) (map[string]any, error) {
+	if g.flagAssuredCmekKeyRing == "" {
 		return nil, fmt.Errorf("Invalid value for [key_ring_id]: Key ring ID is required for CMEK configuration.")
 	}
-	cfg := map[string]any{"keyRingId": flagAssuredCmekKeyRing}
-	if m := flagAssuredCmekDedicated; len(m) > 0 {
+	cfg := map[string]any{"keyRingId": g.flagAssuredCmekKeyRing}
+	if m := g.flagAssuredCmekDedicated; len(m) > 0 {
 		if !isFolderTarget {
 			return nil, fmt.Errorf("Invalid value for [dedicated_project_config]: Dedicated CMEK project configuration is only valid when the target resource is a folder.")
 		}
@@ -392,16 +374,16 @@ func assuredParameter(name string, v any) (map[string]any, error) {
 // assuredCloudControlConfigs builds v2 CloudControlConfig objects from
 // --cloud-control-config values or --cloud-control-configs-from-file
 // (BuildCloudControlConfigs).
-func assuredCloudControlConfigs() ([]map[string]any, error) {
+func (g *assuredCmds) assuredCloudControlConfigs() ([]map[string]any, error) {
 	var items []any
-	if flagAssuredCloudControlFile != "" {
-		data, err := os.ReadFile(flagAssuredCloudControlFile)
+	if g.flagAssuredCloudControlFile != "" {
+		data, err := os.ReadFile(g.flagAssuredCloudControlFile)
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", flagAssuredCloudControlFile, err)
+			return nil, fmt.Errorf("reading %s: %w", g.flagAssuredCloudControlFile, err)
 		}
 		var raw any
 		if err := yaml.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", flagAssuredCloudControlFile, err)
+			return nil, fmt.Errorf("parsing %s: %w", g.flagAssuredCloudControlFile, err)
 		}
 		switch t := raw.(type) {
 		case map[string]any:
@@ -412,7 +394,7 @@ func assuredCloudControlConfigs() ([]map[string]any, error) {
 			return nil, fmt.Errorf("Invalid value for [cloud_control_configs]: Cloud control configs must be a list of configurations or a path to a YAML file.")
 		}
 	} else {
-		for _, s := range flagAssuredCloudControlCfg {
+		for _, s := range g.flagAssuredCloudControlCfg {
 			items = append(items, assuredSplitArgDict(s))
 		}
 	}
@@ -505,29 +487,29 @@ func assuredCloudControlConfigs() ([]map[string]any, error) {
 
 // assuredV2Clients returns REST clients for the regional v2 API and the v1
 // operations service used to poll its long-running operations.
-func assuredV2Clients(region string) (v2, ops *restClient) {
-	ep := strings.TrimSuffix(assuredRegionalEndpoint(region), "/")
-	return newRESTClient(ep + "/v2"), newRESTClient(ep + "/v1")
+func (g *assuredCmds) assuredV2Clients(region string) (v2, ops *restClient) {
+	ep := strings.TrimSuffix(g.assuredRegionalEndpoint(region), "/")
+	return g.inv.restClient(ep + "/v2"), g.inv.restClient(ep + "/v1")
 }
 
 // assuredV2Wait polls a v2 operation via the v1 operations service, printing
 // gcloud's "<progress>...done." line, and returns the finished operation.
-func assuredV2Wait(ctx context.Context, ops *restClient, op map[string]any, progress string) (map[string]any, error) {
+func (g *assuredCmds) assuredV2Wait(ctx context.Context, ops *restClient, op map[string]any, progress string) (map[string]any, error) {
 	name, _ := op["name"].(string)
-	fmt.Fprintf(os.Stderr, "%s...", progress)
+	fmt.Fprintf(g.inv.stderr, "%s...", progress)
 	if done, _ := op["done"].(bool); !done {
 		got, err := ops.waitOperation(ctx, name, 0)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "failed.")
+			fmt.Fprintln(g.inv.stderr, "failed.")
 			return nil, err
 		}
 		op = got
 	}
 	if e, ok := op["error"].(map[string]any); ok {
-		fmt.Fprintln(os.Stderr, "failed.")
+		fmt.Fprintln(g.inv.stderr, "failed.")
 		return nil, fmt.Errorf("operation %s failed: %v", name, e["message"])
 	}
-	fmt.Fprintln(os.Stderr, "done.")
+	fmt.Fprintln(g.inv.stderr, "done.")
 	return op, nil
 }
 
@@ -548,37 +530,37 @@ func assuredV2Result(ctx context.Context, v2 *restClient, op map[string]any) (ma
 
 // assuredLogChange prints gcloud's log.CreatedResource / UpdatedResource /
 // DeletedResource line for an Assured Workloads environment.
-func assuredLogChange(op, name string, async bool) {
+func (g *assuredCmds) assuredLogChange(op, name string, async bool) {
 	if async {
-		fmt.Fprintf(os.Stderr, "%s in progress for Assured Workloads environment [%s].\n",
+		fmt.Fprintf(g.inv.stderr, "%s in progress for Assured Workloads environment [%s].\n",
 			strings.ToUpper(op[:1])+op[1:], name)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%sd Assured Workloads environment [%s].\n", strings.ToUpper(op[:1])+op[1:], name)
+	fmt.Fprintf(g.inv.stderr, "%sd Assured Workloads environment [%s].\n", strings.ToUpper(op[:1])+op[1:], name)
 }
 
-func runAssuredWorkloadCreateV2(cmd *cobra.Command, args []string) error {
-	parent := assuredParent()
+func (g *assuredCmds) runAssuredWorkloadCreateV2(cmd *cobra.Command, args []string) error {
+	parent := g.assuredParent()
 	body := map[string]any{}
-	if flagAssuredCmekKeyRing != "" || len(flagAssuredCmekDedicated) > 0 {
-		cmek, err := assuredCmekConfig(flagAssuredTargetFolder != "" || flagAssuredNewFolderConfig != nil)
+	if g.flagAssuredCmekKeyRing != "" || len(g.flagAssuredCmekDedicated) > 0 {
+		cmek, err := g.assuredCmekConfig(g.flagAssuredTargetFolder != "" || g.flagAssuredNewFolderConfig != nil)
 		if err != nil {
 			return err
 		}
 		body["cmekConfig"] = cmek
 	}
-	rc, err := assuredResourceConfig()
+	rc, err := g.assuredResourceConfig()
 	if err != nil {
 		return err
 	}
 	body["resourceConfig"] = rc
-	fw := map[string]any{"framework": flagAssuredFramework}
+	fw := map[string]any{"framework": g.flagAssuredFramework}
 	if cmd.Flags().Changed("framework-major-revision") {
-		fw["majorRevisionId"] = flagAssuredFrameworkRevision
+		fw["majorRevisionId"] = g.flagAssuredFrameworkRevision
 	}
 	body["framework"] = fw
-	if flagAssuredCloudControlFile != "" || len(flagAssuredCloudControlCfg) > 0 {
-		ccs, err := assuredCloudControlConfigs()
+	if g.flagAssuredCloudControlFile != "" || len(g.flagAssuredCloudControlCfg) > 0 {
+		ccs, err := g.assuredCloudControlConfigs()
 		if err != nil {
 			return err
 		}
@@ -586,36 +568,36 @@ func runAssuredWorkloadCreateV2(cmd *cobra.Command, args []string) error {
 			body["cloudControlConfigs"] = ccs
 		}
 	}
-	if flagAssuredDescription != "" {
-		body["description"] = flagAssuredDescription
+	if g.flagAssuredDescription != "" {
+		body["description"] = g.flagAssuredDescription
 	}
 	q := url.Values{}
-	workloadID := flagAssuredWorkloadID
+	workloadID := g.flagAssuredWorkloadID
 	if len(args) > 0 {
 		workloadID = args[0]
 	}
 	if workloadID == "" {
-		workloadID = flagAssuredExternalID
+		workloadID = g.flagAssuredExternalID
 	}
 	if workloadID != "" {
 		q.Set("workloadId", workloadID)
 	}
 
-	ctx := context.Background()
-	v2, ops := assuredV2Clients(flagAssuredLocation)
+	ctx := cmd.Context()
+	v2, ops := g.assuredV2Clients(g.flagAssuredLocation)
 	var op map[string]any
 	if err := v2.do(ctx, http.MethodPost, "/"+parent+"/workloads", q, body, &op); err != nil {
 		return fmt.Errorf("creating workload: %w", err)
 	}
-	if flagAssuredAsync {
-		if err := emitFormatted(op, ""); err != nil {
+	if g.flagAssuredAsync {
+		if err := emitFormattedTo(g.inv.stdout, op, ""); err != nil {
 			return err
 		}
 		name, _ := op["name"].(string)
-		assuredLogChange("create", name, true)
+		g.assuredLogChange("create", name, true)
 		return nil
 	}
-	done, err := assuredV2Wait(ctx, ops, op, "Creating Assured Workloads environment")
+	done, err := g.assuredV2Wait(ctx, ops, op, "Creating Assured Workloads environment")
 	if err != nil {
 		return err
 	}
@@ -623,23 +605,23 @@ func runAssuredWorkloadCreateV2(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := emitFormatted(w, ""); err != nil {
+	if err := emitFormattedTo(g.inv.stdout, w, ""); err != nil {
 		return err
 	}
 	if name, _ := w["name"].(string); name != "" {
-		assuredLogChange("create", name, false)
+		g.assuredLogChange("create", name, false)
 	}
 	return nil
 }
 
-func runAssuredWorkloadUpdateV2(cmd *cobra.Command, name string) error {
+func (g *assuredCmds) runAssuredWorkloadUpdateV2(cmd *cobra.Command, name string) error {
 	body := map[string]any{}
 	var mask []string
 	if cmd.Flags().Changed("framework-major-revision") {
-		body["framework"] = map[string]any{"majorRevisionId": flagAssuredFrameworkRevision}
+		body["framework"] = map[string]any{"majorRevisionId": g.flagAssuredFrameworkRevision}
 		mask = append(mask, "framework.major_revision_id")
 	}
-	ccs, err := assuredCloudControlConfigs()
+	ccs, err := g.assuredCloudControlConfigs()
 	if err != nil {
 		return err
 	}
@@ -649,26 +631,26 @@ func runAssuredWorkloadUpdateV2(cmd *cobra.Command, name string) error {
 	body["cloudControlConfigs"] = ccs
 	mask = append(mask, "cloud_control_configs")
 	if cmd.Flags().Changed("etag") {
-		body["etag"] = flagAssuredEtag
+		body["etag"] = g.flagAssuredEtag
 	}
 	q := url.Values{}
 	q.Set("updateMask", strings.Join(mask, ","))
 
-	ctx := context.Background()
-	v2, ops := assuredV2Clients(assuredRegionOf(name))
+	ctx := cmd.Context()
+	v2, ops := g.assuredV2Clients(assuredRegionOf(name))
 	var op map[string]any
 	if err := v2.do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating workload: %w", err)
 	}
-	if flagAssuredAsync {
-		if err := emitFormatted(op, ""); err != nil {
+	if g.flagAssuredAsync {
+		if err := emitFormattedTo(g.inv.stdout, op, ""); err != nil {
 			return err
 		}
 		opName, _ := op["name"].(string)
-		assuredLogChange("update", opName, true)
+		g.assuredLogChange("update", opName, true)
 		return nil
 	}
-	done, err := assuredV2Wait(ctx, ops, op, "Updating Assured Workloads environment")
+	done, err := g.assuredV2Wait(ctx, ops, op, "Updating Assured Workloads environment")
 	if err != nil {
 		return err
 	}
@@ -676,67 +658,67 @@ func runAssuredWorkloadUpdateV2(cmd *cobra.Command, name string) error {
 	if err != nil {
 		return err
 	}
-	if err := emitFormatted(w, ""); err != nil {
+	if err := emitFormattedTo(g.inv.stdout, w, ""); err != nil {
 		return err
 	}
 	if n, _ := w["name"].(string); n != "" {
-		assuredLogChange("update", n, false)
+		g.assuredLogChange("update", n, false)
 	}
 	return nil
 }
 
-func runAssuredWorkloadDeleteV2(name string) error {
+func (g *assuredCmds) runAssuredWorkloadDeleteV2(name string) error {
 	q := url.Values{}
-	if flagAssuredEtag != "" {
-		q.Set("etag", flagAssuredEtag)
+	if g.flagAssuredEtag != "" {
+		q.Set("etag", g.flagAssuredEtag)
 	}
-	ctx := context.Background()
-	v2, ops := assuredV2Clients(assuredRegionOf(name))
+	ctx := g.inv.context()
+	v2, ops := g.assuredV2Clients(assuredRegionOf(name))
 	var op map[string]any
 	if err := v2.do(ctx, http.MethodDelete, "/"+name, q, nil, &op); err != nil {
 		return fmt.Errorf("deleting workload: %w", err)
 	}
-	if flagAssuredAsync {
-		if err := emitFormatted(op, ""); err != nil {
+	if g.flagAssuredAsync {
+		if err := emitFormattedTo(g.inv.stdout, op, ""); err != nil {
 			return err
 		}
-		assuredLogChange("delete", name, true)
+		g.assuredLogChange("delete", name, true)
 		return nil
 	}
-	if _, err := assuredV2Wait(ctx, ops, op, "Deleting Assured Workloads environment"); err != nil {
+	if _, err := g.assuredV2Wait(ctx, ops, op, "Deleting Assured Workloads environment"); err != nil {
 		return err
 	}
-	assuredLogChange("delete", name, false)
+	g.assuredLogChange("delete", name, false)
 	return nil
 }
 
-func runAssuredWorkloadDescribeV2(name string) error {
-	v2, _ := assuredV2Clients(assuredRegionOf(name))
+func (g *assuredCmds) runAssuredWorkloadDescribeV2(name string) error {
+	v2, _ := g.assuredV2Clients(assuredRegionOf(name))
 	var w map[string]any
-	if err := v2.do(context.Background(), http.MethodGet, "/"+name, nil, nil, &w); err != nil {
+	if err := v2.do(g.inv.context(), http.MethodGet, "/"+name, nil, nil, &w); err != nil {
 		return fmt.Errorf("describing workload: %w", err)
 	}
-	return emitFormatted(w, "")
+	return emitFormattedTo(g.inv.stdout, w, "")
 }
 
-func runAssuredWorkloadListV2() error {
-	filter := flagAssuredListFilter
+func (g *assuredCmds) runAssuredWorkloadListV2() error {
+	filter := g.flagAssuredListFilter
 	if filter == "" {
-		filter = flagFilter
+		filter = g.inv.flags.filter
 	}
 	q := url.Values{}
 	if filter != "" {
 		q.Set("filter", filter)
 	}
-	v2, _ := assuredV2Clients(flagAssuredLocation)
-	all, err := v2.paginate(context.Background(), "/"+assuredParent()+"/workloads", q, "workloads", flagAssuredListPageSize)
+	v2, _ := g.assuredV2Clients(g.flagAssuredLocation)
+	all, err := v2.paginate(g.inv.context(), "/"+g.assuredParent()+"/workloads", q, "workloads", g.flagAssuredListPageSize)
 	if err != nil {
 		return fmt.Errorf("listing workloads: %w", err)
 	}
-	if flagAssuredListLimit > 0 && int64(len(all)) > flagAssuredListLimit {
-		all = all[:flagAssuredListLimit]
+	if g.flagAssuredListLimit > 0 && int64(len(all)) > g.flagAssuredListLimit {
+		all = all[:g.flagAssuredListLimit]
 	}
-	return emitAssuredV2List(os.Stdout, os.Stderr, all, flagAssuredListFormat)
+	return emitAssuredV2List(g.inv.stdout, g.inv.stderr, all, g.flagAssuredListFormat)
 }
 
 // emitAssuredV2List renders v2 workloads with gcloud-python's _FORMAT_V2

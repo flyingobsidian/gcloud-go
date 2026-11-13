@@ -1,125 +1,71 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	datacatalog "google.golang.org/api/datacatalog/v1"
 )
 
 // --- gcloud data-catalog tag-templates (#1508) ---
 
-var dcTTCmd = &cobra.Command{Use: "tag-templates", Short: "Manage Data Catalog tag templates"}
-
-var (
-	flagDCTTLocation   string
-	flagDCTTFormat     string
-	flagDCTTConfigFile string
-	flagDCTTUpdateMask string
-	flagDCTTForce      bool
-
-	flagDCTTIamMember   string
-	flagDCTTIamRole     string
-	flagDCTTIamCondExpr string
-	flagDCTTIamCondT    string
-	flagDCTTIamCondD    string
-	flagDCTTIamAllCond  bool
-)
-
-var (
-	dcTTCreateCmd = &cobra.Command{
-		Use: "create TAG_TEMPLATE", Short: "Create a tag template",
-		Args: cobra.ExactArgs(1), RunE: runDCTTCreate,
-	}
-	dcTTDeleteCmd = &cobra.Command{
-		Use: "delete TAG_TEMPLATE", Short: "Delete a tag template",
-		Args: cobra.ExactArgs(1), RunE: runDCTTDelete,
-	}
-	dcTTDescribeCmd = &cobra.Command{
-		Use: "describe TAG_TEMPLATE", Short: "Describe a tag template",
-		Args: cobra.ExactArgs(1), RunE: runDCTTDescribe,
-	}
-	dcTTUpdateCmd = &cobra.Command{
-		Use: "update TAG_TEMPLATE", Short: "Update a tag template",
-		Args: cobra.ExactArgs(1), RunE: runDCTTUpdate,
-	}
-	dcTTGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy TAG_TEMPLATE", Short: "Get the IAM policy for a tag template",
-		Args: cobra.ExactArgs(1), RunE: runDCTTGetIam,
-	}
-	dcTTSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy TAG_TEMPLATE POLICY_FILE", Short: "Set the IAM policy for a tag template",
-		Args: cobra.ExactArgs(2), RunE: runDCTTSetIam,
-	}
-	dcTTAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding TAG_TEMPLATE", Short: "Add an IAM policy binding to a tag template",
-		Args: cobra.ExactArgs(1), RunE: runDCTTAddIam,
-	}
-	dcTTRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding TAG_TEMPLATE", Short: "Remove an IAM policy binding from a tag template",
-		Args: cobra.ExactArgs(1), RunE: runDCTTRemoveIam,
-	}
-)
-
-func init() {
+func (s *dataCatalogCmds) initDataCatalogTagTemplates() {
 	all := []*cobra.Command{
-		dcTTCreateCmd, dcTTDeleteCmd, dcTTDescribeCmd, dcTTUpdateCmd,
-		dcTTGetIamCmd, dcTTSetIamCmd, dcTTAddIamCmd, dcTTRemoveIamCmd,
+		s.dcTTCreateCmd, s.dcTTDeleteCmd, s.dcTTDescribeCmd, s.dcTTUpdateCmd,
+		s.dcTTGetIamCmd, s.dcTTSetIamCmd, s.dcTTAddIamCmd, s.dcTTRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDCTTLocation, "location", "", "Location for the tag template (required)")
+		c.Flags().StringVar(&s.flagDCTTLocation, "location", "", "Location for the tag template (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagDCTTFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDCTTFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dcTTCreateCmd, dcTTUpdateCmd} {
-		c.Flags().StringVar(&flagDCTTConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dcTTCreateCmd, s.dcTTUpdateCmd} {
+		c.Flags().StringVar(&s.flagDCTTConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the TagTemplate body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dcTTUpdateCmd.Flags().StringVar(&flagDCTTUpdateMask, "update-mask", "",
+	s.dcTTUpdateCmd.Flags().StringVar(&s.flagDCTTUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	dcTTDeleteCmd.Flags().BoolVar(&flagDCTTForce, "force", false, "Force delete even if the template has tags")
+	s.dcTTDeleteCmd.Flags().BoolVar(&s.flagDCTTForce, "force", false, "Force delete even if the template has tags")
 
-	for _, c := range []*cobra.Command{dcTTAddIamCmd, dcTTRemoveIamCmd} {
-		dcIamMemberFlags(c, &flagDCTTIamMember, &flagDCTTIamRole, &flagDCTTIamCondExpr, &flagDCTTIamCondT, &flagDCTTIamCondD)
+	for _, c := range []*cobra.Command{s.dcTTAddIamCmd, s.dcTTRemoveIamCmd} {
+		dcIamMemberFlags(c, &s.flagDCTTIamMember, &s.flagDCTTIamRole, &s.flagDCTTIamCondExpr, &s.flagDCTTIamCondT, &s.flagDCTTIamCondD)
 	}
-	dcTTRemoveIamCmd.Flags().BoolVar(&flagDCTTIamAllCond, "all", false,
+	s.dcTTRemoveIamCmd.Flags().BoolVar(&s.flagDCTTIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	dcTTCmd.AddCommand(all...)
-	dcTTCmd.AddCommand(dcTTFieldsCmd)
-	dataCatalogCmd.AddCommand(dcTTCmd)
+	s.dcTTCmd.AddCommand(all...)
+	s.dcTTCmd.AddCommand(s.dcTTFieldsCmd)
+	s.dataCatalogCmd.AddCommand(s.dcTTCmd)
 }
 
-func dcTTParent() (string, error) {
-	project, err := resolveProject()
+func (s *dataCatalogCmds) dcTTParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return dcLocationParent(project, flagDCTTLocation), nil
+	return dcLocationParent(project, s.flagDCTTLocation), nil
 }
 
-func dcTTName(id string) (string, error) {
-	parent, err := dcTTParent()
+func (s *dataCatalogCmds) dcTTName(id string) (string, error) {
+	parent, err := s.dcTTParent()
 	if err != nil {
 		return "", err
 	}
 	return dcChild("tagTemplates", id, parent), nil
 }
 
-func runDCTTCreate(cmd *cobra.Command, args []string) error {
-	parent, err := dcTTParent()
+func (s *dataCatalogCmds) runDCTTCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.dcTTParent()
 	if err != nil {
 		return err
 	}
 	body := &datacatalog.GoogleCloudDatacatalogV1TagTemplate{}
-	if err := loadYAMLOrJSONInto(flagDCTTConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDCTTConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -127,38 +73,38 @@ func runDCTTCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating tag template: %w", err)
 	}
-	fmt.Printf("Created tag template [%s].\n", args[0])
-	return emitFormatted(got, flagDCTTFormat)
+	fmt.Fprintf(s.inv.stdout, "Created tag template [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCTTFormat)
 }
 
-func runDCTTDelete(cmd *cobra.Command, args []string) error {
-	name, err := dcTTName(args[0])
+func (s *dataCatalogCmds) runDCTTDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.dcTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Projects.Locations.TagTemplates.Delete(name).Context(ctx)
-	if flagDCTTForce {
+	if s.flagDCTTForce {
 		call = call.Force(true)
 	}
 	if _, err := call.Do(); err != nil {
 		return fmt.Errorf("deleting tag template: %w", err)
 	}
-	fmt.Printf("Deleted tag template [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted tag template [%s].\n", args[0])
 	return nil
 }
 
-func runDCTTDescribe(cmd *cobra.Command, args []string) error {
-	name, err := dcTTName(args[0])
+func (s *dataCatalogCmds) runDCTTDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.dcTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -166,24 +112,24 @@ func runDCTTDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing tag template: %w", err)
 	}
-	return emitFormatted(got, flagDCTTFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCTTFormat)
 }
 
-func runDCTTUpdate(cmd *cobra.Command, args []string) error {
-	name, err := dcTTName(args[0])
+func (s *dataCatalogCmds) runDCTTUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.dcTTName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &datacatalog.GoogleCloudDatacatalogV1TagTemplate{}
-	if err := loadYAMLOrJSONInto(flagDCTTConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDCTTConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagDCTTUpdateMask
+	mask := s.flagDCTTUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -195,17 +141,17 @@ func runDCTTUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating tag template: %w", err)
 	}
-	fmt.Printf("Updated tag template [%s].\n", args[0])
-	return emitFormatted(got, flagDCTTFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated tag template [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCTTFormat)
 }
 
-func runDCTTGetIam(cmd *cobra.Command, args []string) error {
-	name, err := dcTTName(args[0])
+func (s *dataCatalogCmds) runDCTTGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dcTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -215,11 +161,11 @@ func runDCTTGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagDCTTFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagDCTTFormat)
 }
 
-func runDCTTSetIam(cmd *cobra.Command, args []string) error {
-	name, err := dcTTName(args[0])
+func (s *dataCatalogCmds) runDCTTSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dcTTName(args[0])
 	if err != nil {
 		return err
 	}
@@ -228,8 +174,8 @@ func runDCTTSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -237,17 +183,17 @@ func runDCTTSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	dcUpdatedIam(fmt.Sprintf("tag template [%s]", args[0]))
-	return emitFormatted(updated, flagDCTTFormat)
+	s.dcUpdatedIam(fmt.Sprintf("tag template [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDCTTFormat)
 }
 
-func runDCTTAddIam(cmd *cobra.Command, args []string) error {
-	name, err := dcTTName(args[0])
+func (s *dataCatalogCmds) runDCTTAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dcTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -257,24 +203,24 @@ func runDCTTAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	dcAddBinding(policy, flagDCTTIamRole, flagDCTTIamMember,
-		dcBuildCondition(flagDCTTIamCondExpr, flagDCTTIamCondT, flagDCTTIamCondD))
+	dcAddBinding(policy, s.flagDCTTIamRole, s.flagDCTTIamMember,
+		dcBuildCondition(s.flagDCTTIamCondExpr, s.flagDCTTIamCondT, s.flagDCTTIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Locations.TagTemplates.SetIamPolicy(name, &datacatalog.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	dcUpdatedIam(fmt.Sprintf("tag template [%s]", args[0]))
-	return emitFormatted(updated, flagDCTTFormat)
+	s.dcUpdatedIam(fmt.Sprintf("tag template [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDCTTFormat)
 }
 
-func runDCTTRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := dcTTName(args[0])
+func (s *dataCatalogCmds) runDCTTRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dcTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -284,101 +230,69 @@ func runDCTTRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !dcRemoveBinding(policy, flagDCTTIamRole, flagDCTTIamMember,
-		dcBuildCondition(flagDCTTIamCondExpr, flagDCTTIamCondT, flagDCTTIamCondD), flagDCTTIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagDCTTIamRole, flagDCTTIamMember)
+	if !dcRemoveBinding(policy, s.flagDCTTIamRole, s.flagDCTTIamMember,
+		dcBuildCondition(s.flagDCTTIamCondExpr, s.flagDCTTIamCondT, s.flagDCTTIamCondD), s.flagDCTTIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagDCTTIamRole, s.flagDCTTIamMember)
 	}
 	updated, err := svc.Projects.Locations.TagTemplates.SetIamPolicy(name, &datacatalog.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	dcUpdatedIam(fmt.Sprintf("tag template [%s]", args[0]))
-	return emitFormatted(updated, flagDCTTFormat)
+	s.dcUpdatedIam(fmt.Sprintf("tag template [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDCTTFormat)
 }
 
 // --- tag-templates fields subgroup ---
 
-var dcTTFieldsCmd = &cobra.Command{Use: "fields", Short: "Manage tag template fields"}
-
-var (
-	flagDCTTFieldConfigFile string
-	flagDCTTFieldUpdateMask string
-	flagDCTTFieldNewID      string
-	flagDCTTFieldEnumRename string
-)
-
-var (
-	dcTTFieldCreateCmd = &cobra.Command{
-		Use: "create FIELD", Short: "Create a tag template field",
-		Args: cobra.ExactArgs(1), RunE: runDCTTFieldCreate,
-	}
-	dcTTFieldDeleteCmd = &cobra.Command{
-		Use: "delete FIELD", Short: "Delete a tag template field",
-		Args: cobra.ExactArgs(1), RunE: runDCTTFieldDelete,
-	}
-	dcTTFieldUpdateCmd = &cobra.Command{
-		Use: "update FIELD", Short: "Update a tag template field",
-		Args: cobra.ExactArgs(1), RunE: runDCTTFieldUpdate,
-	}
-	dcTTFieldRenameCmd = &cobra.Command{
-		Use: "rename FIELD", Short: "Rename a tag template field ID",
-		Args: cobra.ExactArgs(1), RunE: runDCTTFieldRename,
-	}
-	dcTTFieldRenameEnumCmd = &cobra.Command{
-		Use: "rename-enum-value FIELD ENUM_VALUE", Short: "Rename an enum value on a tag template field",
-		Args: cobra.ExactArgs(2), RunE: runDCTTFieldRenameEnum,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{dcTTFieldCreateCmd, dcTTFieldDeleteCmd, dcTTFieldUpdateCmd, dcTTFieldRenameCmd, dcTTFieldRenameEnumCmd}
+func (s *dataCatalogCmds) initDataCatalogTagTemplates5() {
+	all := []*cobra.Command{s.dcTTFieldCreateCmd, s.dcTTFieldDeleteCmd, s.dcTTFieldUpdateCmd, s.dcTTFieldRenameCmd, s.dcTTFieldRenameEnumCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDCTTLocation, "location", "", "Location for the tag template (required)")
+		c.Flags().StringVar(&s.flagDCTTLocation, "location", "", "Location for the tag template (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagDCTTFieldTemplate, "template", "", "Tag template ID that owns the field (required)")
+		c.Flags().StringVar(&s.flagDCTTFieldTemplate, "template", "", "Tag template ID that owns the field (required)")
 		_ = c.MarkFlagRequired("template")
-		c.Flags().StringVar(&flagDCTTFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDCTTFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dcTTFieldCreateCmd, dcTTFieldUpdateCmd} {
-		c.Flags().StringVar(&flagDCTTFieldConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dcTTFieldCreateCmd, s.dcTTFieldUpdateCmd} {
+		c.Flags().StringVar(&s.flagDCTTFieldConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the TagTemplateField body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dcTTFieldUpdateCmd.Flags().StringVar(&flagDCTTFieldUpdateMask, "update-mask", "",
+	s.dcTTFieldUpdateCmd.Flags().StringVar(&s.flagDCTTFieldUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	dcTTFieldRenameCmd.Flags().StringVar(&flagDCTTFieldNewID, "new-id", "", "New tag template field ID (required)")
-	_ = dcTTFieldRenameCmd.MarkFlagRequired("new-id")
-	dcTTFieldRenameEnumCmd.Flags().StringVar(&flagDCTTFieldEnumRename, "new-display-name", "",
+	s.dcTTFieldRenameCmd.Flags().StringVar(&s.flagDCTTFieldNewID, "new-id", "", "New tag template field ID (required)")
+	_ = s.dcTTFieldRenameCmd.MarkFlagRequired("new-id")
+	s.dcTTFieldRenameEnumCmd.Flags().StringVar(&s.flagDCTTFieldEnumRename, "new-display-name", "",
 		"New display name for the enum value (required)")
-	_ = dcTTFieldRenameEnumCmd.MarkFlagRequired("new-display-name")
+	_ = s.dcTTFieldRenameEnumCmd.MarkFlagRequired("new-display-name")
 
-	dcTTFieldsCmd.AddCommand(all...)
+	s.dcTTFieldsCmd.AddCommand(all...)
 }
 
-func dcTTFieldName(template, field string) (string, error) {
-	parent, err := dcTTName(template)
+func (s *dataCatalogCmds) dcTTFieldName(template, field string) (string, error) {
+	parent, err := s.dcTTName(template)
 	if err != nil {
 		return "", err
 	}
 	return dcChild("fields", field, parent), nil
 }
 
-func runDCTTFieldCreate(cmd *cobra.Command, args []string) error {
+func (s *dataCatalogCmds) runDCTTFieldCreate(cmd *cobra.Command, args []string) error {
 	// args[0] = FIELD id; require --template as flag
-	template, err := requireTemplate()
+	template, err := s.requireTemplate()
 	if err != nil {
 		return err
 	}
-	parent, err := dcTTName(template)
+	parent, err := s.dcTTName(template)
 	if err != nil {
 		return err
 	}
 	body := &datacatalog.GoogleCloudDatacatalogV1TagTemplateField{}
-	if err := loadYAMLOrJSONInto(flagDCTTFieldConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDCTTFieldConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -386,50 +300,50 @@ func runDCTTFieldCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating tag template field: %w", err)
 	}
-	fmt.Printf("Created field [%s].\n", args[0])
-	return emitFormatted(got, flagDCTTFormat)
+	fmt.Fprintf(s.inv.stdout, "Created field [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCTTFormat)
 }
 
-func runDCTTFieldDelete(cmd *cobra.Command, args []string) error {
-	template, err := requireTemplate()
+func (s *dataCatalogCmds) runDCTTFieldDelete(cmd *cobra.Command, args []string) error {
+	template, err := s.requireTemplate()
 	if err != nil {
 		return err
 	}
-	name, err := dcTTFieldName(template, args[0])
+	name, err := s.dcTTFieldName(template, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.TagTemplates.Fields.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting field: %w", err)
 	}
-	fmt.Printf("Deleted field [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted field [%s].\n", args[0])
 	return nil
 }
 
-func runDCTTFieldUpdate(cmd *cobra.Command, args []string) error {
-	template, err := requireTemplate()
+func (s *dataCatalogCmds) runDCTTFieldUpdate(cmd *cobra.Command, args []string) error {
+	template, err := s.requireTemplate()
 	if err != nil {
 		return err
 	}
-	name, err := dcTTFieldName(template, args[0])
+	name, err := s.dcTTFieldName(template, args[0])
 	if err != nil {
 		return err
 	}
 	body := &datacatalog.GoogleCloudDatacatalogV1TagTemplateField{}
-	if err := loadYAMLOrJSONInto(flagDCTTFieldConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDCTTFieldConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagDCTTFieldUpdateMask
+	mask := s.flagDCTTFieldUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
@@ -441,64 +355,62 @@ func runDCTTFieldUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating field: %w", err)
 	}
-	fmt.Printf("Updated field [%s].\n", args[0])
-	return emitFormatted(got, flagDCTTFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated field [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCTTFormat)
 }
 
-func runDCTTFieldRename(cmd *cobra.Command, args []string) error {
-	template, err := requireTemplate()
+func (s *dataCatalogCmds) runDCTTFieldRename(cmd *cobra.Command, args []string) error {
+	template, err := s.requireTemplate()
 	if err != nil {
 		return err
 	}
-	name, err := dcTTFieldName(template, args[0])
+	name, err := s.dcTTFieldName(template, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
 	got, err := svc.Projects.Locations.TagTemplates.Fields.Rename(name, &datacatalog.GoogleCloudDatacatalogV1RenameTagTemplateFieldRequest{
-		NewTagTemplateFieldId: flagDCTTFieldNewID,
+		NewTagTemplateFieldId: s.flagDCTTFieldNewID,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("renaming field: %w", err)
 	}
-	fmt.Printf("Renamed field [%s] to [%s].\n", args[0], flagDCTTFieldNewID)
-	return emitFormatted(got, flagDCTTFormat)
+	fmt.Fprintf(s.inv.stdout, "Renamed field [%s] to [%s].\n", args[0], s.flagDCTTFieldNewID)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCTTFormat)
 }
 
-func runDCTTFieldRenameEnum(cmd *cobra.Command, args []string) error {
-	template, err := requireTemplate()
+func (s *dataCatalogCmds) runDCTTFieldRenameEnum(cmd *cobra.Command, args []string) error {
+	template, err := s.requireTemplate()
 	if err != nil {
 		return err
 	}
-	field, err := dcTTFieldName(template, args[0])
+	field, err := s.dcTTFieldName(template, args[0])
 	if err != nil {
 		return err
 	}
 	enumName := dcChild("enumValues", args[1], field)
-	ctx := context.Background()
-	svc, err := gcp.DataCatalogService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataCatalog(ctx)
 	if err != nil {
 		return err
 	}
 	got, err := svc.Projects.Locations.TagTemplates.Fields.EnumValues.Rename(enumName, &datacatalog.GoogleCloudDatacatalogV1RenameTagTemplateFieldEnumValueRequest{
-		NewEnumValueDisplayName: flagDCTTFieldEnumRename,
+		NewEnumValueDisplayName: s.flagDCTTFieldEnumRename,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("renaming enum value: %w", err)
 	}
-	fmt.Printf("Renamed enum [%s] to [%s].\n", args[1], flagDCTTFieldEnumRename)
-	return emitFormatted(got, flagDCTTFormat)
+	fmt.Fprintf(s.inv.stdout, "Renamed enum [%s] to [%s].\n", args[1], s.flagDCTTFieldEnumRename)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDCTTFormat)
 }
 
-var flagDCTTFieldTemplate string
-
-func requireTemplate() (string, error) {
-	if flagDCTTFieldTemplate == "" {
+func (s *dataCatalogCmds) requireTemplate() (string, error) {
+	if s.flagDCTTFieldTemplate == "" {
 		return "", fmt.Errorf("--template is required")
 	}
-	return flagDCTTFieldTemplate, nil
+	return s.flagDCTTFieldTemplate, nil
 }

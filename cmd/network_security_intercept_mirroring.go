@@ -10,21 +10,22 @@ import (
 // registerNSInterceptMirroring wires up all 8 intercept-* and mirroring-*
 // subgroups (issues #826-#831 minus mirroring-endpoints which is not in the
 // v0.279.0 Go SDK, and #845/#846 for the endpoint-group-associations).
-func registerNSInterceptMirroring(root *cobra.Command) {
-	registerNSInterceptDeploymentGroups(root)
-	registerNSInterceptDeployments(root)
-	registerNSInterceptEndpointGroups(root)
-	registerNSInterceptEndpointGroupAssociations(root)
-	registerNSMirroringDeploymentGroups(root)
-	registerNSMirroringDeployments(root)
-	registerNSMirroringEndpointGroups(root)
-	registerNSMirroringEndpointGroupAssociations(root)
+func (s *networkSecurityCmds) registerNSInterceptMirroring(root *cobra.Command) {
+	s.registerNSInterceptDeploymentGroups(root)
+	s.registerNSInterceptDeployments(root)
+	s.registerNSInterceptEndpointGroups(root)
+	s.registerNSInterceptEndpointGroupAssociations(root)
+	s.registerNSMirroringDeploymentGroups(root)
+	s.registerNSMirroringDeployments(root)
+	s.registerNSMirroringEndpointGroups(root)
+	s.registerNSMirroringEndpointGroupAssociations(root)
 }
 
-func registerNSInterceptDeploymentGroups(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSInterceptDeploymentGroups(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.InterceptDeploymentGroup]{
+		s:     s,
 		group: "intercept-deployment-groups", singular: "intercept deployment group", collection: "interceptDeploymentGroups",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.InterceptDeploymentGroup, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.InterceptDeploymentGroups.Create(parent, body).InterceptDeploymentGroupId(id).Context(ctx)
 			if requestID != "" {
@@ -67,13 +68,14 @@ func registerNSInterceptDeploymentGroups(root *cobra.Command) {
 		secondaryCol:    func(g *networksecurity.InterceptDeploymentGroup) string { return g.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "intercept-deployment-groups", "Manage intercept deployment groups", addNSLocationFlag)
+	crud.build(root, "intercept-deployment-groups", "Manage intercept deployment groups", s.addNSLocationFlag)
 }
 
-func registerNSInterceptDeployments(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSInterceptDeployments(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.InterceptDeployment]{
+		s:     s,
 		group: "intercept-deployments", singular: "intercept deployment", collection: "interceptDeployments",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.InterceptDeployment, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.InterceptDeployments.Create(parent, body).InterceptDeploymentId(id).Context(ctx)
 			if requestID != "" {
@@ -116,13 +118,14 @@ func registerNSInterceptDeployments(root *cobra.Command) {
 		secondaryCol:    func(d *networksecurity.InterceptDeployment) string { return d.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "intercept-deployments", "Manage intercept deployments", addNSLocationFlag)
+	crud.build(root, "intercept-deployments", "Manage intercept deployments", s.addNSLocationFlag)
 }
 
-func registerNSInterceptEndpointGroups(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSInterceptEndpointGroups(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.InterceptEndpointGroup]{
+		s:     s,
 		group: "intercept-endpoint-groups", singular: "intercept endpoint group", collection: "interceptEndpointGroups",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.InterceptEndpointGroup, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.InterceptEndpointGroups.Create(parent, body).InterceptEndpointGroupId(id).Context(ctx)
 			if requestID != "" {
@@ -165,13 +168,14 @@ func registerNSInterceptEndpointGroups(root *cobra.Command) {
 		secondaryCol:    func(g *networksecurity.InterceptEndpointGroup) string { return g.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "intercept-endpoint-groups", "Manage intercept endpoint groups", addNSLocationFlag)
+	crud.build(root, "intercept-endpoint-groups", "Manage intercept endpoint groups", s.addNSLocationFlag)
 }
 
-func registerNSInterceptEndpointGroupAssociations(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSInterceptEndpointGroupAssociations(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.InterceptEndpointGroupAssociation]{
+		s:     s,
 		group: "intercept-endpoint-group-associations", singular: "intercept endpoint group association", collection: "interceptEndpointGroupAssociations",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.InterceptEndpointGroupAssociation, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.InterceptEndpointGroupAssociations.Create(parent, body).InterceptEndpointGroupAssociationId(id).Context(ctx)
 			if requestID != "" {
@@ -214,13 +218,14 @@ func registerNSInterceptEndpointGroupAssociations(root *cobra.Command) {
 		secondaryCol:    func(a *networksecurity.InterceptEndpointGroupAssociation) string { return a.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "intercept-endpoint-group-associations", "Manage intercept endpoint group associations", addNSLocationFlag)
+	crud.build(root, "intercept-endpoint-group-associations", "Manage intercept endpoint group associations", s.addNSLocationFlag)
 }
 
-func registerNSMirroringDeploymentGroups(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSMirroringDeploymentGroups(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.MirroringDeploymentGroup]{
+		s:     s,
 		group: "mirroring-deployment-groups", singular: "mirroring deployment group", collection: "mirroringDeploymentGroups",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.MirroringDeploymentGroup, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.MirroringDeploymentGroups.Create(parent, body).MirroringDeploymentGroupId(id).Context(ctx)
 			if requestID != "" {
@@ -263,13 +268,14 @@ func registerNSMirroringDeploymentGroups(root *cobra.Command) {
 		secondaryCol:    func(g *networksecurity.MirroringDeploymentGroup) string { return g.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "mirroring-deployment-groups", "Manage mirroring deployment groups", addNSLocationFlag)
+	crud.build(root, "mirroring-deployment-groups", "Manage mirroring deployment groups", s.addNSLocationFlag)
 }
 
-func registerNSMirroringDeployments(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSMirroringDeployments(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.MirroringDeployment]{
+		s:     s,
 		group: "mirroring-deployments", singular: "mirroring deployment", collection: "mirroringDeployments",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.MirroringDeployment, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.MirroringDeployments.Create(parent, body).MirroringDeploymentId(id).Context(ctx)
 			if requestID != "" {
@@ -312,13 +318,14 @@ func registerNSMirroringDeployments(root *cobra.Command) {
 		secondaryCol:    func(d *networksecurity.MirroringDeployment) string { return d.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "mirroring-deployments", "Manage mirroring deployments", addNSLocationFlag)
+	crud.build(root, "mirroring-deployments", "Manage mirroring deployments", s.addNSLocationFlag)
 }
 
-func registerNSMirroringEndpointGroups(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSMirroringEndpointGroups(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.MirroringEndpointGroup]{
+		s:     s,
 		group: "mirroring-endpoint-groups", singular: "mirroring endpoint group", collection: "mirroringEndpointGroups",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.MirroringEndpointGroup, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.MirroringEndpointGroups.Create(parent, body).MirroringEndpointGroupId(id).Context(ctx)
 			if requestID != "" {
@@ -361,13 +368,14 @@ func registerNSMirroringEndpointGroups(root *cobra.Command) {
 		secondaryCol:    func(g *networksecurity.MirroringEndpointGroup) string { return g.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "mirroring-endpoint-groups", "Manage mirroring endpoint groups", addNSLocationFlag)
+	crud.build(root, "mirroring-endpoint-groups", "Manage mirroring endpoint groups", s.addNSLocationFlag)
 }
 
-func registerNSMirroringEndpointGroupAssociations(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSMirroringEndpointGroupAssociations(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.MirroringEndpointGroupAssociation]{
+		s:     s,
 		group: "mirroring-endpoint-group-associations", singular: "mirroring endpoint group association", collection: "mirroringEndpointGroupAssociations",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.MirroringEndpointGroupAssociation, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.MirroringEndpointGroupAssociations.Create(parent, body).MirroringEndpointGroupAssociationId(id).Context(ctx)
 			if requestID != "" {
@@ -410,5 +418,5 @@ func registerNSMirroringEndpointGroupAssociations(root *cobra.Command) {
 		secondaryCol:    func(a *networksecurity.MirroringEndpointGroupAssociation) string { return a.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "mirroring-endpoint-group-associations", "Manage mirroring endpoint group associations", addNSLocationFlag)
+	crud.build(root, "mirroring-endpoint-group-associations", "Manage mirroring endpoint group associations", s.addNSLocationFlag)
 }

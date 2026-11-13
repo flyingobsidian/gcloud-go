@@ -3,7 +3,7 @@ package cmd
 import "testing"
 
 func TestInitCommandRegistered(t *testing.T) {
-	for _, c := range rootCmd.Commands() {
+	for _, c := range newRootCmd(legacyTestInvocation(), true).Commands() {
 		if c.Name() == "init" {
 			for _, name := range []string{"no-browser", "console-only", "no-launch-browser", "skip-diagnostics"} {
 				if c.Flags().Lookup(name) == nil {
@@ -17,10 +17,11 @@ func TestInitCommandRegistered(t *testing.T) {
 }
 
 func TestInitQuietRejects(t *testing.T) {
-	prev := flagQuiet
-	flagQuiet = true
-	t.Cleanup(func() { flagQuiet = prev })
-	if err := runInit(initCmd, nil); err == nil {
+	grp := newInitCmds(legacyTestInvocation())
+	prev := grp.inv.flags.quiet
+	grp.inv.flags.quiet = true
+	t.Cleanup(func() { grp.inv.flags.quiet = prev })
+	if err := grp.runInit(grp.initCmd, nil); err == nil {
 		t.Fatal("expected --quiet to reject the interactive init flow")
 	}
 }

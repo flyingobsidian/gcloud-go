@@ -7,7 +7,8 @@ import (
 )
 
 func redisSubgroup(name string) *cobra.Command {
-	for _, c := range redisCmd.Commands() {
+	grp := newRedisCmds(legacyTestInvocation())
+	for _, c := range grp.redisCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -71,7 +72,8 @@ func TestRedisZonesSubcommands(t *testing.T) {
 }
 
 func TestRedisInstancesCreateHasTags(t *testing.T) {
-	if redisInstancesCreateCmd.Flags().Lookup("tags") == nil {
+	grp := newRedisCmds(legacyTestInvocation())
+	if grp.redisInstancesCreateCmd.Flags().Lookup("tags") == nil {
 		t.Error("--tags missing on redis instances create")
 	}
 }

@@ -6,130 +6,22 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	spanner "google.golang.org/api/spanner/v1"
 )
 
 // --- gcloud spanner databases (#1207) ---
 
-var spannerDatabasesCmd = &cobra.Command{Use: "databases", Short: "Manage Cloud Spanner databases"}
-var spannerDbDdlCmd = &cobra.Command{Use: "ddl", Short: "Manage database DDL"}
-var spannerDbRolesCmd = &cobra.Command{Use: "roles", Short: "Manage database roles"}
-var spannerDbSessionsCmd = &cobra.Command{Use: "sessions", Short: "Manage database sessions"}
-var spannerDbSplitsCmd = &cobra.Command{Use: "splits", Short: "Manage database split points"}
-
-var (
-	flagSpDbInstance        string
-	flagSpDbFormat          string
-	flagSpDbConfigFile      string
-	flagSpDbUpdateMask      string
-	flagSpDbExtraStatements []string
-	flagSpDbFilter          string
-	flagSpDbPageSize        int64
-	flagSpDbStatements      []string
-	flagSpDbDdlFile         string
-	flagSpDbSQL             string
-	flagSpDbSourceBackup    string
-	flagSpDbIamMember       string
-	flagSpDbIamRole         string
-	flagSpDbIamCondExpr     string
-	flagSpDbIamCondT        string
-	flagSpDbIamCondD        string
-	flagSpDbIamAllCond      bool
-)
-
-var (
-	spannerDbCreateCmd = &cobra.Command{
-		Use: "create DATABASE", Short: "Create a Cloud Spanner database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbCreate,
-	}
-	spannerDbDeleteCmd = &cobra.Command{
-		Use: "delete DATABASE", Short: "Drop a Cloud Spanner database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbDelete,
-	}
-	spannerDbDescribeCmd = &cobra.Command{
-		Use: "describe DATABASE", Short: "Describe a Cloud Spanner database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbDescribe,
-	}
-	spannerDbListCmd = &cobra.Command{
-		Use: "list", Short: "List databases in an instance",
-		Args: cobra.NoArgs, RunE: runSpDbList,
-	}
-	spannerDbUpdateCmd = &cobra.Command{
-		Use: "update DATABASE", Short: "Update database metadata",
-		Args: cobra.ExactArgs(1), RunE: runSpDbUpdate,
-	}
-	spannerDbChangeQuorumCmd = &cobra.Command{
-		Use: "change-quorum DATABASE", Short: "Change the quorum of a Cloud Spanner database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbChangeQuorum,
-	}
-	spannerDbDdlDescribeCmd = &cobra.Command{
-		Use: "describe DATABASE", Short: "Show the DDL statements for a database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbDdlDescribe,
-	}
-	spannerDbDdlUpdateCmd = &cobra.Command{
-		Use: "update DATABASE", Short: "Apply DDL statements to a database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbDdlUpdate,
-	}
-	spannerDbExecuteSQLCmd = &cobra.Command{
-		Use: "execute-sql DATABASE", Short: "Execute a SQL statement against a database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbExecuteSQL,
-	}
-	spannerDbRestoreCmd = &cobra.Command{
-		Use: "restore DATABASE", Short: "Restore a database from a backup",
-		Args: cobra.ExactArgs(1), RunE: runSpDbRestore,
-	}
-	spannerDbGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy DATABASE", Short: "Get the IAM policy for a database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbGetIam,
-	}
-	spannerDbSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy DATABASE POLICY_FILE", Short: "Set the IAM policy for a database",
-		Args: cobra.ExactArgs(2), RunE: runSpDbSetIam,
-	}
-	spannerDbAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding DATABASE", Short: "Add an IAM policy binding on a database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbAddIam,
-	}
-	spannerDbRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding DATABASE", Short: "Remove an IAM policy binding from a database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbRemoveIam,
-	}
-	spannerDbRolesListCmd = &cobra.Command{
-		Use: "list", Short: "List roles defined in a database",
-		Args: cobra.NoArgs, RunE: runSpDbRolesList,
-	}
-	spannerDbSessionsListCmd = &cobra.Command{
-		Use: "list", Short: "List sessions for a database",
-		Args: cobra.NoArgs, RunE: runSpDbSessionsList,
-	}
-	spannerDbSessionsDeleteCmd = &cobra.Command{
-		Use: "delete SESSION", Short: "Delete a session",
-		Args: cobra.ExactArgs(1), RunE: runSpDbSessionsDelete,
-	}
-	spannerDbSplitsAddCmd = &cobra.Command{
-		Use: "add DATABASE", Short: "Add split points to a database",
-		Args: cobra.ExactArgs(1), RunE: runSpDbSplitsAdd,
-	}
-)
-
-// databases-level flags (need --database on some sub-groups)
-var (
-	flagSpDbRolesDatabase    string
-	flagSpDbSessionsDatabase string
-)
-
-func init() {
+func (s *spannerCmds) initSpannerDatabases() {
 	main := []*cobra.Command{
-		spannerDbCreateCmd, spannerDbDeleteCmd, spannerDbDescribeCmd, spannerDbListCmd,
-		spannerDbUpdateCmd, spannerDbChangeQuorumCmd, spannerDbExecuteSQLCmd, spannerDbRestoreCmd,
-		spannerDbGetIamCmd, spannerDbSetIamCmd, spannerDbAddIamCmd, spannerDbRemoveIamCmd,
+		s.spannerDbCreateCmd, s.spannerDbDeleteCmd, s.spannerDbDescribeCmd, s.spannerDbListCmd,
+		s.spannerDbUpdateCmd, s.spannerDbChangeQuorumCmd, s.spannerDbExecuteSQLCmd, s.spannerDbRestoreCmd,
+		s.spannerDbGetIamCmd, s.spannerDbSetIamCmd, s.spannerDbAddIamCmd, s.spannerDbRemoveIamCmd,
 	}
-	ddl := []*cobra.Command{spannerDbDdlDescribeCmd, spannerDbDdlUpdateCmd}
-	roles := []*cobra.Command{spannerDbRolesListCmd}
-	sessions := []*cobra.Command{spannerDbSessionsListCmd, spannerDbSessionsDeleteCmd}
-	splits := []*cobra.Command{spannerDbSplitsAddCmd}
+	ddl := []*cobra.Command{s.spannerDbDdlDescribeCmd, s.spannerDbDdlUpdateCmd}
+	roles := []*cobra.Command{s.spannerDbRolesListCmd}
+	sessions := []*cobra.Command{s.spannerDbSessionsListCmd, s.spannerDbSessionsDeleteCmd}
+	splits := []*cobra.Command{s.spannerDbSplitsAddCmd}
 
 	all := append([]*cobra.Command{}, main...)
 	all = append(all, ddl...)
@@ -138,85 +30,85 @@ func init() {
 	all = append(all, splits...)
 
 	for _, c := range all {
-		c.Flags().StringVar(&flagSpDbInstance, "instance", "", "Spanner instance (required)")
+		c.Flags().StringVar(&s.flagSpDbInstance, "instance", "", "Spanner instance (required)")
 		_ = c.MarkFlagRequired("instance")
-		c.Flags().StringVar(&flagSpDbFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSpDbFormat, "format", "", "Output format")
 	}
 
-	spannerDbCreateCmd.Flags().StringSliceVar(&flagSpDbExtraStatements, "extra-statements", nil,
+	s.spannerDbCreateCmd.Flags().StringSliceVar(&s.flagSpDbExtraStatements, "extra-statements", nil,
 		"Additional DDL statements to run inside the newly created database (repeatable or comma-separated)")
 
-	spannerDbUpdateCmd.Flags().StringVar(&flagSpDbConfigFile, "config-file", "", "YAML/JSON file with the Database body (required)")
-	_ = spannerDbUpdateCmd.MarkFlagRequired("config-file")
-	spannerDbUpdateCmd.Flags().StringVar(&flagSpDbUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.spannerDbUpdateCmd.Flags().StringVar(&s.flagSpDbConfigFile, "config-file", "", "YAML/JSON file with the Database body (required)")
+	_ = s.spannerDbUpdateCmd.MarkFlagRequired("config-file")
+	s.spannerDbUpdateCmd.Flags().StringVar(&s.flagSpDbUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 
-	spannerDbChangeQuorumCmd.Flags().StringVar(&flagSpDbConfigFile, "config-file", "", "YAML/JSON file with the ChangeQuorumRequest body (required)")
-	_ = spannerDbChangeQuorumCmd.MarkFlagRequired("config-file")
+	s.spannerDbChangeQuorumCmd.Flags().StringVar(&s.flagSpDbConfigFile, "config-file", "", "YAML/JSON file with the ChangeQuorumRequest body (required)")
+	_ = s.spannerDbChangeQuorumCmd.MarkFlagRequired("config-file")
 
-	spannerDbListCmd.Flags().Int64Var(&flagSpDbPageSize, "page-size", 0, "Maximum results per page")
+	s.spannerDbListCmd.Flags().Int64Var(&s.flagSpDbPageSize, "page-size", 0, "Maximum results per page")
 
-	spannerDbDdlUpdateCmd.Flags().StringSliceVar(&flagSpDbStatements, "statement", nil,
+	s.spannerDbDdlUpdateCmd.Flags().StringSliceVar(&s.flagSpDbStatements, "statement", nil,
 		"DDL statement to apply (repeatable). Mutually exclusive with --ddl-file")
-	spannerDbDdlUpdateCmd.Flags().StringVar(&flagSpDbDdlFile, "ddl-file", "",
+	s.spannerDbDdlUpdateCmd.Flags().StringVar(&s.flagSpDbDdlFile, "ddl-file", "",
 		"Path to a file with DDL statements, one per line. Mutually exclusive with --statement")
 
-	spannerDbExecuteSQLCmd.Flags().StringVar(&flagSpDbSQL, "sql", "", "SQL statement to execute (required)")
-	_ = spannerDbExecuteSQLCmd.MarkFlagRequired("sql")
+	s.spannerDbExecuteSQLCmd.Flags().StringVar(&s.flagSpDbSQL, "sql", "", "SQL statement to execute (required)")
+	_ = s.spannerDbExecuteSQLCmd.MarkFlagRequired("sql")
 
-	spannerDbRestoreCmd.Flags().StringVar(&flagSpDbSourceBackup, "source-backup", "",
+	s.spannerDbRestoreCmd.Flags().StringVar(&s.flagSpDbSourceBackup, "source-backup", "",
 		"Backup to restore from; ID or fully qualified name (required)")
-	_ = spannerDbRestoreCmd.MarkFlagRequired("source-backup")
+	_ = s.spannerDbRestoreCmd.MarkFlagRequired("source-backup")
 
-	spannerDbSplitsAddCmd.Flags().StringVar(&flagSpDbConfigFile, "config-file", "",
+	s.spannerDbSplitsAddCmd.Flags().StringVar(&s.flagSpDbConfigFile, "config-file", "",
 		"YAML/JSON file with the AddSplitPointsRequest body (required)")
-	_ = spannerDbSplitsAddCmd.MarkFlagRequired("config-file")
+	_ = s.spannerDbSplitsAddCmd.MarkFlagRequired("config-file")
 
-	for _, c := range []*cobra.Command{spannerDbAddIamCmd, spannerDbRemoveIamCmd} {
-		spIamMemberFlags(c, &flagSpDbIamMember, &flagSpDbIamRole,
-			&flagSpDbIamCondExpr, &flagSpDbIamCondT, &flagSpDbIamCondD)
+	for _, c := range []*cobra.Command{s.spannerDbAddIamCmd, s.spannerDbRemoveIamCmd} {
+		spIamMemberFlags(c, &s.flagSpDbIamMember, &s.flagSpDbIamRole,
+			&s.flagSpDbIamCondExpr, &s.flagSpDbIamCondT, &s.flagSpDbIamCondD)
 	}
-	spannerDbRemoveIamCmd.Flags().BoolVar(&flagSpDbIamAllCond, "all", false,
+	s.spannerDbRemoveIamCmd.Flags().BoolVar(&s.flagSpDbIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
 	// roles: --database
 	for _, c := range roles {
-		c.Flags().StringVar(&flagSpDbRolesDatabase, "database", "", "Database (required)")
+		c.Flags().StringVar(&s.flagSpDbRolesDatabase, "database", "", "Database (required)")
 		_ = c.MarkFlagRequired("database")
 	}
-	spannerDbRolesListCmd.Flags().Int64Var(&flagSpDbPageSize, "page-size", 0, "Maximum results per page")
+	s.spannerDbRolesListCmd.Flags().Int64Var(&s.flagSpDbPageSize, "page-size", 0, "Maximum results per page")
 
 	// sessions: --database
 	for _, c := range sessions {
-		c.Flags().StringVar(&flagSpDbSessionsDatabase, "database", "", "Database (required)")
+		c.Flags().StringVar(&s.flagSpDbSessionsDatabase, "database", "", "Database (required)")
 		_ = c.MarkFlagRequired("database")
 	}
-	spannerDbSessionsListCmd.Flags().StringVar(&flagSpDbFilter, "filter", "", "Server-side filter expression")
-	spannerDbSessionsListCmd.Flags().Int64Var(&flagSpDbPageSize, "page-size", 0, "Maximum results per page")
+	s.spannerDbSessionsListCmd.Flags().StringVar(&s.flagSpDbFilter, "filter", "", "Server-side filter expression")
+	s.spannerDbSessionsListCmd.Flags().Int64Var(&s.flagSpDbPageSize, "page-size", 0, "Maximum results per page")
 
-	spannerDbCmd := spannerDatabasesCmd
+	spannerDbCmd := s.spannerDatabasesCmd
 	spannerDbCmd.AddCommand(main...)
-	spannerDbDdlCmd.AddCommand(ddl...)
-	spannerDbCmd.AddCommand(spannerDbDdlCmd)
-	spannerDbRolesCmd.AddCommand(roles...)
-	spannerDbCmd.AddCommand(spannerDbRolesCmd)
-	spannerDbSessionsCmd.AddCommand(sessions...)
-	spannerDbCmd.AddCommand(spannerDbSessionsCmd)
-	spannerDbSplitsCmd.AddCommand(splits...)
-	spannerDbCmd.AddCommand(spannerDbSplitsCmd)
-	spannerCmd.AddCommand(spannerDbCmd)
+	s.spannerDbDdlCmd.AddCommand(ddl...)
+	spannerDbCmd.AddCommand(s.spannerDbDdlCmd)
+	s.spannerDbRolesCmd.AddCommand(roles...)
+	spannerDbCmd.AddCommand(s.spannerDbRolesCmd)
+	s.spannerDbSessionsCmd.AddCommand(sessions...)
+	spannerDbCmd.AddCommand(s.spannerDbSessionsCmd)
+	s.spannerDbSplitsCmd.AddCommand(splits...)
+	spannerDbCmd.AddCommand(s.spannerDbSplitsCmd)
+	s.spannerCmd.AddCommand(spannerDbCmd)
 }
 
-func runSpDbCreate(cmd *cobra.Command, args []string) error {
-	parent, err := spannerInstance(flagSpDbInstance)
+func (s *spannerCmds) runSpDbCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerInstance(s.flagSpDbInstance)
 	if err != nil {
 		return err
 	}
 	body := &spanner.CreateDatabaseRequest{
 		CreateStatement: fmt.Sprintf("CREATE DATABASE `%s`", args[0]),
-		ExtraStatements: flagSpDbExtraStatements,
+		ExtraStatements: s.flagSpDbExtraStatements,
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -224,34 +116,34 @@ func runSpDbCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating database: %w", err)
 	}
-	fmt.Printf("Create database [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSpDbFormat)
+	fmt.Fprintf(s.inv.stdout, "Create database [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpDbFormat)
 }
 
-func runSpDbDelete(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.Databases.DropDatabase(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("dropping database: %w", err)
 	}
-	fmt.Printf("Dropped database [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Dropped database [%s].\n", args[0])
 	return nil
 }
 
-func runSpDbDescribe(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -259,16 +151,16 @@ func runSpDbDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing database: %w", err)
 	}
-	return emitFormatted(got, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSpDbFormat)
 }
 
-func runSpDbList(cmd *cobra.Command, args []string) error {
-	parent, err := spannerInstance(flagSpDbInstance)
+func (s *spannerCmds) runSpDbList(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerInstance(s.flagSpDbInstance)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -276,8 +168,8 @@ func runSpDbList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.Databases.List(parent).Context(ctx)
-		if flagSpDbPageSize > 0 {
-			call = call.PageSize(flagSpDbPageSize)
+		if s.flagSpDbPageSize > 0 {
+			call = call.PageSize(s.flagSpDbPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -292,25 +184,25 @@ func runSpDbList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSpDbFormat)
 }
 
-func runSpDbUpdate(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
 	body := &spanner.Database{}
-	if err := loadYAMLOrJSONInto(flagSpDbConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSpDbConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagSpDbUpdateMask
+	mask := s.flagSpDbUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -322,23 +214,23 @@ func runSpDbUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating database: %w", err)
 	}
-	return emitFormatted(op, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpDbFormat)
 }
 
-func runSpDbChangeQuorum(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbChangeQuorum(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
 	body := &spanner.ChangeQuorumRequest{}
-	if err := loadYAMLOrJSONInto(flagSpDbConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSpDbConfigFile, body); err != nil {
 		return err
 	}
 	if body.Name == "" {
 		body.Name = name
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -346,16 +238,16 @@ func runSpDbChangeQuorum(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("changing quorum: %w", err)
 	}
-	return emitFormatted(op, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpDbFormat)
 }
 
-func runSpDbDdlDescribe(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbDdlDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -363,17 +255,17 @@ func runSpDbDdlDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting DDL: %w", err)
 	}
-	return emitFormatted(got, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSpDbFormat)
 }
 
-func runSpDbDdlUpdate(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbDdlUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
-	statements := flagSpDbStatements
-	if flagSpDbDdlFile != "" {
-		data, err := os.ReadFile(flagSpDbDdlFile)
+	statements := s.flagSpDbStatements
+	if s.flagSpDbDdlFile != "" {
+		data, err := os.ReadFile(s.flagSpDbDdlFile)
 		if err != nil {
 			return fmt.Errorf("reading DDL file: %w", err)
 		}
@@ -389,8 +281,8 @@ func runSpDbDdlUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("at least one --statement or a non-empty --ddl-file is required")
 	}
 	body := &spanner.UpdateDatabaseDdlRequest{Statements: statements}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -398,7 +290,7 @@ func runSpDbDdlUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating DDL: %w", err)
 	}
-	return emitFormatted(op, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpDbFormat)
 }
 
 // spDbRunSingleUseSQL creates a session, runs an ExecuteSql with SingleUse
@@ -430,33 +322,33 @@ func spDbRunSingleUseSQL(ctx context.Context, svc *spanner.Service, database, sq
 	return rs, nil
 }
 
-func runSpDbExecuteSQL(cmd *cobra.Command, args []string) error {
-	database, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbExecuteSQL(cmd *cobra.Command, args []string) error {
+	database, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
 	// Detect DML vs. read-only.
-	trimmed := strings.ToUpper(strings.TrimSpace(flagSpDbSQL))
+	trimmed := strings.ToUpper(strings.TrimSpace(s.flagSpDbSQL))
 	rw := strings.HasPrefix(trimmed, "INSERT") || strings.HasPrefix(trimmed, "UPDATE") ||
 		strings.HasPrefix(trimmed, "DELETE") || strings.HasPrefix(trimmed, "MERGE")
-	rs, err := spDbRunSingleUseSQL(ctx, svc, database, flagSpDbSQL, rw)
+	rs, err := spDbRunSingleUseSQL(ctx, svc, database, s.flagSpDbSQL, rw)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(rs, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, rs, s.flagSpDbFormat)
 }
 
-func runSpDbRestore(cmd *cobra.Command, args []string) error {
-	parent, err := spannerInstance(flagSpDbInstance)
+func (s *spannerCmds) runSpDbRestore(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerInstance(s.flagSpDbInstance)
 	if err != nil {
 		return err
 	}
-	backup, err := spannerBackup(flagSpDbInstance, flagSpDbSourceBackup)
+	backup, err := s.spannerBackup(s.flagSpDbInstance, s.flagSpDbSourceBackup)
 	if err != nil {
 		return err
 	}
@@ -464,8 +356,8 @@ func runSpDbRestore(cmd *cobra.Command, args []string) error {
 		DatabaseId: args[0],
 		Backup:     backup,
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -473,17 +365,17 @@ func runSpDbRestore(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("restoring database: %w", err)
 	}
-	fmt.Printf("Restore database [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSpDbFormat)
+	fmt.Fprintf(s.inv.stdout, "Restore database [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSpDbFormat)
 }
 
-func runSpDbGetIam(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -493,11 +385,11 @@ func runSpDbGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagSpDbFormat)
 }
 
-func runSpDbSetIam(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
@@ -506,8 +398,8 @@ func runSpDbSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -515,17 +407,17 @@ func runSpDbSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	spUpdatedIam(fmt.Sprintf("database [%s]", args[0]))
-	return emitFormatted(updated, flagSpDbFormat)
+	s.spUpdatedIam(fmt.Sprintf("database [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagSpDbFormat)
 }
 
-func runSpDbAddIam(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -535,24 +427,24 @@ func runSpDbAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	spIamAddBinding(policy, flagSpDbIamRole, flagSpDbIamMember,
-		spIamBuildCondition(flagSpDbIamCondExpr, flagSpDbIamCondT, flagSpDbIamCondD))
+	spIamAddBinding(policy, s.flagSpDbIamRole, s.flagSpDbIamMember,
+		spIamBuildCondition(s.flagSpDbIamCondExpr, s.flagSpDbIamCondT, s.flagSpDbIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Instances.Databases.SetIamPolicy(name, &spanner.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	spUpdatedIam(fmt.Sprintf("database [%s]", args[0]))
-	return emitFormatted(updated, flagSpDbFormat)
+	s.spUpdatedIam(fmt.Sprintf("database [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagSpDbFormat)
 }
 
-func runSpDbRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -562,25 +454,25 @@ func runSpDbRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !spIamRemoveBinding(policy, flagSpDbIamRole, flagSpDbIamMember,
-		spIamBuildCondition(flagSpDbIamCondExpr, flagSpDbIamCondT, flagSpDbIamCondD), flagSpDbIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagSpDbIamRole, flagSpDbIamMember)
+	if !spIamRemoveBinding(policy, s.flagSpDbIamRole, s.flagSpDbIamMember,
+		spIamBuildCondition(s.flagSpDbIamCondExpr, s.flagSpDbIamCondT, s.flagSpDbIamCondD), s.flagSpDbIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagSpDbIamRole, s.flagSpDbIamMember)
 	}
 	updated, err := svc.Projects.Instances.Databases.SetIamPolicy(name, &spanner.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	spUpdatedIam(fmt.Sprintf("database [%s]", args[0]))
-	return emitFormatted(updated, flagSpDbFormat)
+	s.spUpdatedIam(fmt.Sprintf("database [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagSpDbFormat)
 }
 
-func runSpDbRolesList(cmd *cobra.Command, args []string) error {
-	parent, err := spannerDatabase(flagSpDbInstance, flagSpDbRolesDatabase)
+func (s *spannerCmds) runSpDbRolesList(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerDatabase(s.flagSpDbInstance, s.flagSpDbRolesDatabase)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -588,8 +480,8 @@ func runSpDbRolesList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.Databases.DatabaseRoles.List(parent).Context(ctx)
-		if flagSpDbPageSize > 0 {
-			call = call.PageSize(flagSpDbPageSize)
+		if s.flagSpDbPageSize > 0 {
+			call = call.PageSize(s.flagSpDbPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -604,16 +496,16 @@ func runSpDbRolesList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSpDbFormat)
 }
 
-func runSpDbSessionsList(cmd *cobra.Command, args []string) error {
-	parent, err := spannerDatabase(flagSpDbInstance, flagSpDbSessionsDatabase)
+func (s *spannerCmds) runSpDbSessionsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.spannerDatabase(s.flagSpDbInstance, s.flagSpDbSessionsDatabase)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -621,11 +513,11 @@ func runSpDbSessionsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Instances.Databases.Sessions.List(parent).Context(ctx)
-		if flagSpDbFilter != "" {
-			call = call.Filter(flagSpDbFilter)
+		if s.flagSpDbFilter != "" {
+			call = call.Filter(s.flagSpDbFilter)
 		}
-		if flagSpDbPageSize > 0 {
-			call = call.PageSize(flagSpDbPageSize)
+		if s.flagSpDbPageSize > 0 {
+			call = call.PageSize(s.flagSpDbPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -640,41 +532,41 @@ func runSpDbSessionsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSpDbFormat)
 }
 
-func runSpDbSessionsDelete(cmd *cobra.Command, args []string) error {
+func (s *spannerCmds) runSpDbSessionsDelete(cmd *cobra.Command, args []string) error {
 	sessionName := args[0]
 	if !strings.HasPrefix(sessionName, "projects/") {
-		db, err := spannerDatabase(flagSpDbInstance, flagSpDbSessionsDatabase)
+		db, err := s.spannerDatabase(s.flagSpDbInstance, s.flagSpDbSessionsDatabase)
 		if err != nil {
 			return err
 		}
 		sessionName = fmt.Sprintf("%s/sessions/%s", db, sessionName)
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Instances.Databases.Sessions.Delete(sessionName).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting session: %w", err)
 	}
-	fmt.Printf("Deleted session [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted session [%s].\n", args[0])
 	return nil
 }
 
-func runSpDbSplitsAdd(cmd *cobra.Command, args []string) error {
-	name, err := spannerDatabase(flagSpDbInstance, args[0])
+func (s *spannerCmds) runSpDbSplitsAdd(cmd *cobra.Command, args []string) error {
+	name, err := s.spannerDatabase(s.flagSpDbInstance, args[0])
 	if err != nil {
 		return err
 	}
 	body := &spanner.AddSplitPointsRequest{}
-	if err := loadYAMLOrJSONInto(flagSpDbConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSpDbConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SpannerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Spanner(ctx)
 	if err != nil {
 		return err
 	}
@@ -682,5 +574,5 @@ func runSpDbSplitsAdd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("adding split points: %w", err)
 	}
-	return emitFormatted(resp, flagSpDbFormat)
+	return emitFormattedTo(s.inv.stdout, resp, s.flagSpDbFormat)
 }

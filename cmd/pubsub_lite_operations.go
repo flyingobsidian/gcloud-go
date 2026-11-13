@@ -1,67 +1,36 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	pubsublite "google.golang.org/api/pubsublite/v1"
 )
 
 // --- gcloud pubsub lite-operations (#1171) ---
 
-var pubsubLiteOperationsCmd = &cobra.Command{
-	Use:   "lite-operations",
-	Short: "Manage Pub/Sub Lite operations",
-}
-
-var (
-	flagPSLOpLocation     string
-	flagPSLOpFormat       string
-	flagPSLOpFilter       string
-	flagPSLOpSubscription string
-	flagPSLOpPageSize     int64
-)
-
-var (
-	flagPSLOpDone    bool
-	flagPSLOpDoneSet bool
-)
-
-var (
-	pubsubLiteOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Pub/Sub Lite operation",
-		Args: cobra.ExactArgs(1), RunE: runPSLOpDescribe,
-	}
-	pubsubLiteOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Pub/Sub Lite operations in a location",
-		Args: cobra.NoArgs, RunE: runPSLOpList,
-	}
-)
-
-func init() {
-	for _, c := range []*cobra.Command{pubsubLiteOpDescribeCmd, pubsubLiteOpListCmd} {
-		c.Flags().StringVar(&flagPSLOpLocation, "location", "",
+func (g *pubsubCmds) initPubsubLiteOperations() {
+	for _, c := range []*cobra.Command{g.pubsubLiteOpDescribeCmd, g.pubsubLiteOpListCmd} {
+		c.Flags().StringVar(&g.flagPSLOpLocation, "location", "",
 			"Zonal location containing the operation, e.g. us-central1-a (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagPSLOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagPSLOpFormat, "format", "", "Output format")
 	}
-	pubsubLiteOpListCmd.Flags().StringVar(&flagPSLOpFilter, "filter", "",
+	g.pubsubLiteOpListCmd.Flags().StringVar(&g.flagPSLOpFilter, "filter", "",
 		"Server-side filter expression (overrides --done/--subscription)")
-	pubsubLiteOpListCmd.Flags().StringVar(&flagPSLOpSubscription, "subscription", "",
+	g.pubsubLiteOpListCmd.Flags().StringVar(&g.flagPSLOpSubscription, "subscription", "",
 		"Filter operations to those targeting this Lite subscription")
-	pubsubLiteOpListCmd.Flags().BoolVar(&flagPSLOpDone, "done", false,
+	g.pubsubLiteOpListCmd.Flags().BoolVar(&g.flagPSLOpDone, "done", false,
 		"Filter operations by whether they are done")
-	pubsubLiteOpListCmd.Flags().Int64Var(&flagPSLOpPageSize, "page-size", 0,
+	g.pubsubLiteOpListCmd.Flags().Int64Var(&g.flagPSLOpPageSize, "page-size", 0,
 		"Maximum number of results per page")
-	pubsubLiteOpListCmd.PreRun = func(cmd *cobra.Command, args []string) {
-		flagPSLOpDoneSet = cmd.Flags().Changed("done")
+	g.pubsubLiteOpListCmd.PreRun = func(cmd *cobra.Command, args []string) {
+		g.flagPSLOpDoneSet = cmd.Flags().Changed("done")
 	}
 
-	pubsubLiteOperationsCmd.AddCommand(pubsubLiteOpDescribeCmd, pubsubLiteOpListCmd)
-	pubsubCmd.AddCommand(pubsubLiteOperationsCmd)
+	g.pubsubLiteOperationsCmd.AddCommand(g.pubsubLiteOpDescribeCmd, g.pubsubLiteOpListCmd)
+	g.pubsubCmd.AddCommand(g.pubsubLiteOperationsCmd)
 }
 
 func pslOpName(id, project, location string) string {
@@ -75,59 +44,59 @@ func pslOpName(id, project, location string) string {
 // --subscription. This mirrors gcloud-python's UpdateListOperationsFilter hook,
 // which composes an AND-joined filter unless the user supplied an explicit
 // --filter.
-func pslOpBuildFilter(project string) string {
-	if flagPSLOpFilter != "" {
-		return flagPSLOpFilter
+func (g *pubsubCmds) pslOpBuildFilter(project string) string {
+	if g.flagPSLOpFilter != "" {
+		return g.flagPSLOpFilter
 	}
 	var parts []string
-	if flagPSLOpDoneSet {
-		parts = append(parts, fmt.Sprintf("done=%t", flagPSLOpDone))
+	if g.flagPSLOpDoneSet {
+		parts = append(parts, fmt.Sprintf("done=%t", g.flagPSLOpDone))
 	}
-	if flagPSLOpSubscription != "" {
-		sub := pubsubLiteChild("subscriptions", flagPSLOpSubscription,
-			pubsubLiteLocationParent(project, flagPSLOpLocation))
+	if g.flagPSLOpSubscription != "" {
+		sub := pubsubLiteChild("subscriptions", g.flagPSLOpSubscription,
+			pubsubLiteLocationParent(project, g.flagPSLOpLocation))
 		parts = append(parts, fmt.Sprintf("metadata.target=%s", sub))
 	}
 	return strings.Join(parts, " AND ")
 }
 
-func runPSLOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSLOpDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	region, err := pubsubLiteRegion(flagPSLOpLocation)
+	region, err := pubsubLiteRegion(g.flagPSLOpLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubLiteService(ctx, flagAccount, region)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSubLite(ctx, region)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Admin.Projects.Locations.Operations.Get(pslOpName(args[0], project, flagPSLOpLocation)).Context(ctx).Do()
+	op, err := svc.Admin.Projects.Locations.Operations.Get(pslOpName(args[0], project, g.flagPSLOpLocation)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagPSLOpFormat)
+	return emitFormattedTo(g.inv.stdout, op, g.flagPSLOpFormat)
 }
 
-func runPSLOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSLOpList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	region, err := pubsubLiteRegion(flagPSLOpLocation)
+	region, err := pubsubLiteRegion(g.flagPSLOpLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubLiteService(ctx, flagAccount, region)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSubLite(ctx, region)
 	if err != nil {
 		return err
 	}
-	filter := pslOpBuildFilter(project)
-	parent := pubsubLiteLocationParent(project, flagPSLOpLocation)
+	filter := g.pslOpBuildFilter(project)
+	parent := pubsubLiteLocationParent(project, g.flagPSLOpLocation)
 	var all []*pubsublite.Operation
 	pageToken := ""
 	for {
@@ -135,8 +104,8 @@ func runPSLOpList(cmd *cobra.Command, args []string) error {
 		if filter != "" {
 			call = call.Filter(filter)
 		}
-		if flagPSLOpPageSize > 0 {
-			call = call.PageSize(flagPSLOpPageSize)
+		if g.flagPSLOpPageSize > 0 {
+			call = call.PageSize(g.flagPSLOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -151,5 +120,5 @@ func runPSLOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagPSLOpFormat)
+	return emitFormattedTo(g.inv.stdout, all, g.flagPSLOpFormat)
 }

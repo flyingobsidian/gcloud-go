@@ -7,7 +7,8 @@ import (
 )
 
 func netmgmtSubgroup(name string) *cobra.Command {
-	for _, c := range networkManagementCmd.Commands() {
+	grp := newNetworkManagementCmds(legacyTestInvocation())
+	for _, c := range grp.networkManagementCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -51,15 +52,16 @@ func TestNetmgmtVpcFlowLogsConfigsSubcommands(t *testing.T) {
 }
 
 func TestNMQualify(t *testing.T) {
-	flagNMLocation = "global"
-	defer func() { flagNMLocation = "" }()
-	got := nmQualify("test1", "my-proj", "connectivityTests")
+	grp := newNetworkManagementCmds(legacyTestInvocation())
+	grp.flagNMLocation = "global"
+	defer func() { grp.flagNMLocation = "" }()
+	got := grp.nmQualify("test1", "my-proj", "connectivityTests")
 	want := "projects/my-proj/locations/global/connectivityTests/test1"
 	if got != want {
 		t.Errorf("nmQualify = %q, want %q", got, want)
 	}
 	pass := "projects/x/locations/global/connectivityTests/full"
-	if nmQualify(pass, "ignored", "connectivityTests") != pass {
+	if grp.nmQualify(pass, "ignored", "connectivityTests") != pass {
 		t.Errorf("nmQualify should pass through fully-qualified names")
 	}
 }

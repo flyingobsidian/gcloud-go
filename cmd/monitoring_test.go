@@ -10,7 +10,8 @@ import (
 // Ensures `monitoring snoozes create` accepts --format (both `--format x` and
 // `--format=x` are handled by cobra once the flag is registered).
 func TestMonitoringSnoozesCreateHasFormatFlag(t *testing.T) {
-	if monitoringSnoozesCreateCmd.Flags().Lookup("format") == nil {
+	grp := newMonitoringCmds(legacyTestInvocation())
+	if grp.monitoringSnoozesCreateCmd.Flags().Lookup("format") == nil {
 		t.Error("monitoring snoozes create is missing the --format flag")
 	}
 }
@@ -23,8 +24,9 @@ func sampleSnoozes() []*monitoring.Snooze {
 }
 
 func TestFormatSnoozesListDefaultsToYAML(t *testing.T) {
+	grp := newMonitoringCmds(legacyTestInvocation())
 	out := captureStdout(t, func() {
-		if err := formatSnoozesList(sampleSnoozes(), ""); err != nil {
+		if err := grp.formatSnoozesList(sampleSnoozes(), ""); err != nil {
 			t.Fatalf("formatSnoozesList: %v", err)
 		}
 	})
@@ -40,8 +42,9 @@ func TestFormatSnoozesListDefaultsToYAML(t *testing.T) {
 }
 
 func TestFormatSnoozesListCSVWithHeadings(t *testing.T) {
+	grp := newMonitoringCmds(legacyTestInvocation())
 	out := captureStdout(t, func() {
-		if err := formatSnoozesList(sampleSnoozes(), "csv(NAME,DISPLAY_NAME)"); err != nil {
+		if err := grp.formatSnoozesList(sampleSnoozes(), "csv(NAME,DISPLAY_NAME)"); err != nil {
 			t.Fatalf("formatSnoozesList: %v", err)
 		}
 	})
@@ -79,9 +82,10 @@ func TestSnoozeNameAcceptsFullResource(t *testing.T) {
 }
 
 func TestFormatSnoozeDefaultsToYAML(t *testing.T) {
+	grp := newMonitoringCmds(legacyTestInvocation())
 	s := &monitoring.Snooze{Name: "projects/P/snoozes/1234", DisplayName: "SnoozeName1"}
 	out := captureStdout(t, func() {
-		if err := formatSnooze(s, ""); err != nil {
+		if err := grp.formatSnooze(s, ""); err != nil {
 			t.Fatalf("formatSnooze: %v", err)
 		}
 	})
@@ -97,9 +101,10 @@ func TestFormatSnoozeDefaultsToYAML(t *testing.T) {
 }
 
 func TestFormatSnoozeTableAligned(t *testing.T) {
+	grp := newMonitoringCmds(legacyTestInvocation())
 	s := &monitoring.Snooze{Name: "projects/P/snoozes/1234", DisplayName: "SnoozeName1"}
 	out := captureStdout(t, func() {
-		if err := formatSnooze(s, "table(name,display_name)"); err != nil {
+		if err := grp.formatSnooze(s, "table(name,display_name)"); err != nil {
 			t.Fatalf("formatSnooze: %v", err)
 		}
 	})
@@ -121,6 +126,7 @@ func TestFormatSnoozeTableAligned(t *testing.T) {
 }
 
 func TestFormatPoliciesListDefaultsToYAML(t *testing.T) {
+	grp := newMonitoringCmds(legacyTestInvocation())
 	policies := []*monitoring.AlertPolicy{
 		{
 			Name:        "projects/P/alertPolicies/123",
@@ -129,7 +135,7 @@ func TestFormatPoliciesListDefaultsToYAML(t *testing.T) {
 		},
 	}
 	out := captureStdout(t, func() {
-		if err := formatPoliciesList(policies, ""); err != nil {
+		if err := grp.formatPoliciesList(policies, ""); err != nil {
 			t.Fatalf("formatPoliciesList: %v", err)
 		}
 	})
@@ -148,6 +154,7 @@ func TestFormatPoliciesListDefaultsToYAML(t *testing.T) {
 }
 
 func TestFormatPoliciesListJSONDoesNotHTMLEscape(t *testing.T) {
+	grp := newMonitoringCmds(legacyTestInvocation())
 	policies := []*monitoring.AlertPolicy{
 		{
 			Name:        "projects/P/alertPolicies/123",
@@ -155,7 +162,7 @@ func TestFormatPoliciesListJSONDoesNotHTMLEscape(t *testing.T) {
 		},
 	}
 	out := captureStdout(t, func() {
-		if err := formatPoliciesList(policies, "json"); err != nil {
+		if err := grp.formatPoliciesList(policies, "json"); err != nil {
 			t.Fatalf("formatPoliciesList: %v", err)
 		}
 	})

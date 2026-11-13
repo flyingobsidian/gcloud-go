@@ -8,7 +8,8 @@ import (
 
 // dmSubgroup returns the named subcommand of `database-migration`, or nil.
 func dmSubgroup(name string) *cobra.Command {
-	for _, c := range databaseMigrationCmd.Commands() {
+	grp := newDatabaseMigrationCmds(legacyTestInvocation())
+	for _, c := range grp.databaseMigrationCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -138,20 +139,21 @@ func TestDMCWAutoCommitDefaults(t *testing.T) {
 }
 
 func TestDMCWAutoCommitHelper(t *testing.T) {
+	grp := newDatabaseMigrationCmds(legacyTestInvocation())
 	// --no-auto-commit wins even if --auto-commit is set.
-	flagDMCWAutoCommit = true
-	flagDMCWNoAutoCommit = true
-	if dmCWAutoCommit() {
+	grp.flagDMCWAutoCommit = true
+	grp.flagDMCWNoAutoCommit = true
+	if grp.dmCWAutoCommit() {
 		t.Error("dmCWAutoCommit should return false when --no-auto-commit is set")
 	}
-	flagDMCWAutoCommit = true
-	flagDMCWNoAutoCommit = false
-	if !dmCWAutoCommit() {
+	grp.flagDMCWAutoCommit = true
+	grp.flagDMCWNoAutoCommit = false
+	if !grp.dmCWAutoCommit() {
 		t.Error("dmCWAutoCommit should return true when only --auto-commit is set")
 	}
-	flagDMCWAutoCommit = false
-	flagDMCWNoAutoCommit = false
-	if dmCWAutoCommit() {
+	grp.flagDMCWAutoCommit = false
+	grp.flagDMCWNoAutoCommit = false
+	if grp.dmCWAutoCommit() {
 		t.Error("dmCWAutoCommit should return false when neither flag is set")
 	}
 }

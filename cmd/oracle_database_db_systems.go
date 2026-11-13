@@ -1,82 +1,48 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database db-systems (#1284, dupe #1564) ---
 
-var oracleDbSystemsCmd = &cobra.Command{
-	Use:   "db-systems",
-	Short: "Manage Oracle DB systems",
-}
-
-var (
-	flagOdbDbsLocation   string
-	flagOdbDbsFormat     string
-	flagOdbDbsConfigFile string
-	flagOdbDbsPageSize   int64
-	flagOdbDbsFilter     string
-)
-
-var (
-	oracleDbsCreateCmd = &cobra.Command{
-		Use: "create DB_SYSTEM", Short: "Create an Oracle DB system",
-		Args: cobra.ExactArgs(1), RunE: runOracleDbsCreate,
-	}
-	oracleDbsDeleteCmd = &cobra.Command{
-		Use: "delete DB_SYSTEM", Short: "Delete an Oracle DB system",
-		Args: cobra.ExactArgs(1), RunE: runOracleDbsDelete,
-	}
-	oracleDbsDescribeCmd = &cobra.Command{
-		Use: "describe DB_SYSTEM", Short: "Describe an Oracle DB system",
-		Args: cobra.ExactArgs(1), RunE: runOracleDbsDescribe,
-	}
-	oracleDbsListCmd = &cobra.Command{
-		Use: "list", Short: "List Oracle DB systems in a location",
-		Args: cobra.NoArgs, RunE: runOracleDbsList,
-	}
-)
-
-func init() {
+func (s *oracleDatabaseCmds) initOracleDatabaseDbSystems() {
 	all := []*cobra.Command{
-		oracleDbsCreateCmd, oracleDbsDeleteCmd,
-		oracleDbsDescribeCmd, oracleDbsListCmd,
+		s.oracleDbsCreateCmd, s.oracleDbsDeleteCmd,
+		s.oracleDbsDescribeCmd, s.oracleDbsListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbDbsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbDbsLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbDbsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbDbsFormat, "format", "", "Output format")
 	}
-	oracleDbsCreateCmd.Flags().StringVar(&flagOdbDbsConfigFile, "config-file", "", "YAML/JSON file with DB system body (required)")
-	_ = oracleDbsCreateCmd.MarkFlagRequired("config-file")
-	oracleDbsListCmd.Flags().Int64Var(&flagOdbDbsPageSize, "page-size", 0, "Maximum results per page")
-	oracleDbsListCmd.Flags().StringVar(&flagOdbDbsFilter, "filter", "", "Server-side filter expression")
+	s.oracleDbsCreateCmd.Flags().StringVar(&s.flagOdbDbsConfigFile, "config-file", "", "YAML/JSON file with DB system body (required)")
+	_ = s.oracleDbsCreateCmd.MarkFlagRequired("config-file")
+	s.oracleDbsListCmd.Flags().Int64Var(&s.flagOdbDbsPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleDbsListCmd.Flags().StringVar(&s.flagOdbDbsFilter, "filter", "", "Server-side filter expression")
 
-	oracleDbSystemsCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleDbSystemsCmd)
+	s.oracleDbSystemsCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleDbSystemsCmd)
 }
 
-func oracleDbsName(id string) (string, error) {
-	return odbResource(flagOdbDbsLocation, "dbSystems", id)
+func (s *oracleDatabaseCmds) oracleDbsName(id string) (string, error) {
+	return s.odbResource(s.flagOdbDbsLocation, "dbSystems", id)
 }
 
-func runOracleDbsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbDbsLocation)
+func (s *oracleDatabaseCmds) runOracleDbsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbDbsLocation)
 	if err != nil {
 		return err
 	}
 	body := &oracledatabase.DbSystem{}
-	if err := loadYAMLOrJSONInto(flagOdbDbsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagOdbDbsConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -84,17 +50,17 @@ func runOracleDbsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating DB system: %w", err)
 	}
-	fmt.Printf("Create DB system [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbDbsFormat)
+	fmt.Fprintf(s.inv.stdout, "Create DB system [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbDbsFormat)
 }
 
-func runOracleDbsDelete(cmd *cobra.Command, args []string) error {
-	name, err := oracleDbsName(args[0])
+func (s *oracleDatabaseCmds) runOracleDbsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleDbsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -102,17 +68,17 @@ func runOracleDbsDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting DB system: %w", err)
 	}
-	fmt.Printf("Delete DB system [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagOdbDbsFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete DB system [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagOdbDbsFormat)
 }
 
-func runOracleDbsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := oracleDbsName(args[0])
+func (s *oracleDatabaseCmds) runOracleDbsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.oracleDbsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,16 +86,16 @@ func runOracleDbsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing DB system: %w", err)
 	}
-	return emitFormatted(got, flagOdbDbsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagOdbDbsFormat)
 }
 
-func runOracleDbsList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbDbsLocation)
+func (s *oracleDatabaseCmds) runOracleDbsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbDbsLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -137,11 +103,11 @@ func runOracleDbsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DbSystems.List(parent).Context(ctx)
-		if flagOdbDbsPageSize > 0 {
-			call = call.PageSize(flagOdbDbsPageSize)
+		if s.flagOdbDbsPageSize > 0 {
+			call = call.PageSize(s.flagOdbDbsPageSize)
 		}
-		if flagOdbDbsFilter != "" {
-			call = call.Filter(flagOdbDbsFilter)
+		if s.flagOdbDbsFilter != "" {
+			call = call.Filter(s.flagOdbDbsFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -156,5 +122,5 @@ func runOracleDbsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbDbsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbDbsFormat)
 }

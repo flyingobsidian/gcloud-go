@@ -7,7 +7,8 @@ import (
 )
 
 func imSubgroup(name string) *cobra.Command {
-	for _, c := range infraManagerCmd.Commands() {
+	grp := newInfraManagerCmds(legacyTestInvocation())
+	for _, c := range grp.infraManagerCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

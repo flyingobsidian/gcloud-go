@@ -7,7 +7,8 @@ import (
 )
 
 func identitySubgroup(names ...string) *cobra.Command {
-	var cur *cobra.Command = identityCmd
+	grp := newIdentityCmds(legacyTestInvocation())
+	var cur *cobra.Command = grp.identityCmd
 	for _, n := range names {
 		next := findSub(cur, n)
 		if next == nil {

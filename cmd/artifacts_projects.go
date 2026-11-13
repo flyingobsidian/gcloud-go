@@ -1,60 +1,33 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
 
 // --- gcloud artifacts projects (#1078) ---
 
-var artifactsProjectsCmd = &cobra.Command{
-	Use:   "projects",
-	Short: "Manage per-project Artifact Registry settings",
+func (s *artifactsCmds) initArtifactsProjects() {
+	s.artifactsProjectsDescribeCmd.Flags().StringVar(&s.flagArtProjectsFormat, "format", "", "Output format")
+
+	s.artifactsProjectsUpdateCmd.Flags().StringVar(&s.flagArtProjectsFormat, "format", "", "Output format")
+	s.artifactsProjectsUpdateCmd.Flags().StringVar(&s.flagArtProjectsConfigFile, "config-file", "", "YAML/JSON file with ProjectSettings body")
+	s.artifactsProjectsUpdateCmd.Flags().StringVar(&s.flagArtProjectsMask, "update-mask", "", "Fields to update (comma-separated)")
+
+	s.artifactsProjectsCmd.AddCommand(s.artifactsProjectsDescribeCmd)
+	s.artifactsProjectsCmd.AddCommand(s.artifactsProjectsUpdateCmd)
+	s.artifactsCmd.AddCommand(s.artifactsProjectsCmd)
 }
 
-var (
-	flagArtProjectsFormat     string
-	flagArtProjectsConfigFile string
-	flagArtProjectsMask       string
-)
-
-var artifactsProjectsDescribeCmd = &cobra.Command{
-	Use:   "describe",
-	Short: "Describe the Artifact Registry project settings",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsProjectsDescribe,
-}
-
-var artifactsProjectsUpdateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update the Artifact Registry project settings",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsProjectsUpdate,
-}
-
-func init() {
-	artifactsProjectsDescribeCmd.Flags().StringVar(&flagArtProjectsFormat, "format", "", "Output format")
-
-	artifactsProjectsUpdateCmd.Flags().StringVar(&flagArtProjectsFormat, "format", "", "Output format")
-	artifactsProjectsUpdateCmd.Flags().StringVar(&flagArtProjectsConfigFile, "config-file", "", "YAML/JSON file with ProjectSettings body")
-	artifactsProjectsUpdateCmd.Flags().StringVar(&flagArtProjectsMask, "update-mask", "", "Fields to update (comma-separated)")
-
-	artifactsProjectsCmd.AddCommand(artifactsProjectsDescribeCmd)
-	artifactsProjectsCmd.AddCommand(artifactsProjectsUpdateCmd)
-	artifactsCmd.AddCommand(artifactsProjectsCmd)
-}
-
-func runArtifactsProjectsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsProjectsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
@@ -62,27 +35,27 @@ func runArtifactsProjectsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing project settings: %w", err)
 	}
-	return emitFormatted(settings, flagArtProjectsFormat)
+	return emitFormattedTo(s.inv.stdout, settings, s.flagArtProjectsFormat)
 }
 
-func runArtifactsProjectsUpdate(cmd *cobra.Command, args []string) error {
-	if flagArtProjectsConfigFile == "" {
+func (s *artifactsCmds) runArtifactsProjectsUpdate(cmd *cobra.Command, args []string) error {
+	if s.flagArtProjectsConfigFile == "" {
 		return fmt.Errorf("--config-file is required")
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &artifactregistry.ProjectSettings{}
-	if err := loadYAMLOrJSONInto(flagArtProjectsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagArtProjectsConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagArtProjectsMask
+	mask := s.flagArtProjectsMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
@@ -95,5 +68,5 @@ func runArtifactsProjectsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating project settings: %w", err)
 	}
-	return emitFormatted(out, flagArtProjectsFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtProjectsFormat)
 }

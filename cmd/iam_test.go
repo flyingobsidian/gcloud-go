@@ -7,21 +7,22 @@ import (
 )
 
 func TestRunCreateCredConfig(t *testing.T) {
+	grp := newIamCmds(legacyTestInvocation())
 	outFile := t.TempDir() + "/cred-config.json"
 
 	// Simulate the command.
-	flagOutputFile = outFile
-	flagServiceAccount = "sa@project.iam.gserviceaccount.com"
-	flagCredentialSourceFile = "/var/run/token"
-	flagCredentialSourceType = "text"
-	flagCredentialSourceFieldName = ""
-	flagSubjectTokenType = "urn:ietf:params:oauth:token-type:jwt"
-	flagServiceAccountTokenLifetime = 3600
-	flagAws = false
-	flagCredentialSourceURL = ""
-	flagExecutableCommand = ""
+	grp.flagOutputFile = outFile
+	grp.flagServiceAccount = "sa@project.iam.gserviceaccount.com"
+	grp.flagCredentialSourceFile = "/var/run/token"
+	grp.flagCredentialSourceType = "text"
+	grp.flagCredentialSourceFieldName = ""
+	grp.flagSubjectTokenType = "urn:ietf:params:oauth:token-type:jwt"
+	grp.flagServiceAccountTokenLifetime = 3600
+	grp.flagAws = false
+	grp.flagCredentialSourceURL = ""
+	grp.flagExecutableCommand = ""
 
-	err := runCreateCredConfig(nil, []string{
+	err := grp.runCreateCredConfig(nil, []string{
 		"//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/pool/providers/prov",
 	})
 	if err != nil {
@@ -58,41 +59,43 @@ func TestRunCreateCredConfig(t *testing.T) {
 }
 
 func TestResolveSubjectTokenType(t *testing.T) {
+	grp := newIamCmds(legacyTestInvocation())
 	// Reset flags.
-	flagSubjectTokenType = ""
-	flagAws = false
+	grp.flagSubjectTokenType = ""
+	grp.flagAws = false
 
-	got := resolveSubjectTokenType()
+	got := grp.resolveSubjectTokenType()
 	if got != "urn:ietf:params:oauth:token-type:jwt" {
 		t.Errorf("default = %q", got)
 	}
 
-	flagAws = true
-	got = resolveSubjectTokenType()
+	grp.flagAws = true
+	got = grp.resolveSubjectTokenType()
 	if got != "urn:ietf:params:aws:token-type:aws4_request" {
 		t.Errorf("aws = %q", got)
 	}
 
-	flagSubjectTokenType = "custom"
-	got = resolveSubjectTokenType()
+	grp.flagSubjectTokenType = "custom"
+	got = grp.resolveSubjectTokenType()
 	if got != "custom" {
 		t.Errorf("custom = %q", got)
 	}
 
 	// Reset.
-	flagSubjectTokenType = ""
-	flagAws = false
+	grp.flagSubjectTokenType = ""
+	grp.flagAws = false
 }
 
 func TestBuildCredentialSourceFile(t *testing.T) {
-	flagCredentialSourceFile = "/path/to/token"
-	flagCredentialSourceURL = ""
-	flagExecutableCommand = ""
-	flagAws = false
-	flagCredentialSourceType = "json"
-	flagCredentialSourceFieldName = "access_token"
+	grp := newIamCmds(legacyTestInvocation())
+	grp.flagCredentialSourceFile = "/path/to/token"
+	grp.flagCredentialSourceURL = ""
+	grp.flagExecutableCommand = ""
+	grp.flagAws = false
+	grp.flagCredentialSourceType = "json"
+	grp.flagCredentialSourceFieldName = "access_token"
 
-	src, err := buildCredentialSource()
+	src, err := grp.buildCredentialSource()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,18 +115,19 @@ func TestBuildCredentialSourceFile(t *testing.T) {
 	}
 
 	// Reset.
-	flagCredentialSourceFile = ""
-	flagCredentialSourceType = ""
-	flagCredentialSourceFieldName = ""
+	grp.flagCredentialSourceFile = ""
+	grp.flagCredentialSourceType = ""
+	grp.flagCredentialSourceFieldName = ""
 }
 
 func TestBuildCredentialSourceNone(t *testing.T) {
-	flagCredentialSourceFile = ""
-	flagCredentialSourceURL = ""
-	flagExecutableCommand = ""
-	flagAws = false
+	grp := newIamCmds(legacyTestInvocation())
+	grp.flagCredentialSourceFile = ""
+	grp.flagCredentialSourceURL = ""
+	grp.flagExecutableCommand = ""
+	grp.flagAws = false
 
-	_, err := buildCredentialSource()
+	_, err := grp.buildCredentialSource()
 	if err == nil {
 		t.Error("expected error when no source specified")
 	}

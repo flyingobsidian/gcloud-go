@@ -7,7 +7,8 @@ import (
 )
 
 func sdSubgroup(name string) *cobra.Command {
-	for _, c := range serviceDirectoryCmd.Commands() {
+	grp := newServiceDirectoryCmds(legacyTestInvocation())
+	for _, c := range grp.serviceDirectoryCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

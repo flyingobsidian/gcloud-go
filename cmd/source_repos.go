@@ -1,93 +1,50 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	sourcerepo "google.golang.org/api/sourcerepo/v1"
 )
 
 // --- gcloud source repos (#1154) ---
 
-var sourceReposCmd = &cobra.Command{Use: "repos", Short: "Manage Cloud Source Repositories"}
-
-var (
-	flagSourceRepoFormat     string
-	flagSourceRepoConfigFile string
-	flagSourceRepoUpdateMask string
-	flagSourceRepoPageSize   int64
-)
-
-var (
-	sourceRepoCreateCmd = &cobra.Command{
-		Use: "create REPO", Short: "Create a source repository",
-		Args: cobra.ExactArgs(1), RunE: runSourceRepoCreate,
-	}
-	sourceRepoDeleteCmd = &cobra.Command{
-		Use: "delete REPO", Short: "Delete a source repository",
-		Args: cobra.ExactArgs(1), RunE: runSourceRepoDelete,
-	}
-	sourceRepoDescribeCmd = &cobra.Command{
-		Use: "describe REPO", Short: "Describe a source repository",
-		Args: cobra.ExactArgs(1), RunE: runSourceRepoDescribe,
-	}
-	sourceRepoListCmd = &cobra.Command{
-		Use: "list", Short: "List source repositories in the current project",
-		Args: cobra.NoArgs, RunE: runSourceRepoList,
-	}
-	sourceRepoUpdateCmd = &cobra.Command{
-		Use: "update REPO", Short: "Update a source repository",
-		Args: cobra.ExactArgs(1), RunE: runSourceRepoUpdate,
-	}
-	sourceRepoGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy REPO", Short: "Get the IAM policy for a source repository",
-		Args: cobra.ExactArgs(1), RunE: runSourceRepoGetIam,
-	}
-	sourceRepoSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy REPO POLICY_FILE", Short: "Set the IAM policy for a source repository",
-		Args: cobra.ExactArgs(2), RunE: runSourceRepoSetIam,
-	}
-)
-
-func init() {
+func (s *sourceCmds) initSourceRepos() {
 	all := []*cobra.Command{
-		sourceRepoCreateCmd, sourceRepoDeleteCmd, sourceRepoDescribeCmd,
-		sourceRepoListCmd, sourceRepoUpdateCmd, sourceRepoGetIamCmd, sourceRepoSetIamCmd,
+		s.sourceRepoCreateCmd, s.sourceRepoDeleteCmd, s.sourceRepoDescribeCmd,
+		s.sourceRepoListCmd, s.sourceRepoUpdateCmd, s.sourceRepoGetIamCmd, s.sourceRepoSetIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSourceRepoFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSourceRepoFormat, "format", "", "Output format")
 	}
-	sourceRepoCreateCmd.Flags().StringVar(&flagSourceRepoConfigFile, "config-file", "", "YAML/JSON file with the Repo body (optional; a minimal repo is created if omitted)")
-	sourceRepoListCmd.Flags().Int64Var(&flagSourceRepoPageSize, "page-size", 0, "Maximum results per page")
-	sourceRepoUpdateCmd.Flags().StringVar(&flagSourceRepoConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
-	_ = sourceRepoUpdateCmd.MarkFlagRequired("config-file")
-	sourceRepoUpdateCmd.Flags().StringVar(&flagSourceRepoUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.sourceRepoCreateCmd.Flags().StringVar(&s.flagSourceRepoConfigFile, "config-file", "", "YAML/JSON file with the Repo body (optional; a minimal repo is created if omitted)")
+	s.sourceRepoListCmd.Flags().Int64Var(&s.flagSourceRepoPageSize, "page-size", 0, "Maximum results per page")
+	s.sourceRepoUpdateCmd.Flags().StringVar(&s.flagSourceRepoConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
+	_ = s.sourceRepoUpdateCmd.MarkFlagRequired("config-file")
+	s.sourceRepoUpdateCmd.Flags().StringVar(&s.flagSourceRepoUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 
-	sourceReposCmd.AddCommand(all...)
-	sourceCmd.AddCommand(sourceReposCmd)
+	s.sourceReposCmd.AddCommand(all...)
+	s.sourceCmd.AddCommand(s.sourceReposCmd)
 }
 
-func runSourceRepoCreate(cmd *cobra.Command, args []string) error {
-	parent, err := sourceProjectName()
+func (s *sourceCmds) runSourceRepoCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.sourceProjectName()
 	if err != nil {
 		return err
 	}
-	name, err := sourceRepoName(args[0])
+	name, err := s.sourceRepoName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &sourcerepo.Repo{}
-	if flagSourceRepoConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagSourceRepoConfigFile, body); err != nil {
+	if s.flagSourceRepoConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagSourceRepoConfigFile, body); err != nil {
 			return err
 		}
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.SourceRepoService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SourceRepo(ctx)
 	if err != nil {
 		return err
 	}
@@ -95,34 +52,34 @@ func runSourceRepoCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating repo: %w", err)
 	}
-	fmt.Printf("Created repo [%s].\n", args[0])
-	return emitFormatted(got, flagSourceRepoFormat)
+	fmt.Fprintf(s.inv.stdout, "Created repo [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagSourceRepoFormat)
 }
 
-func runSourceRepoDelete(cmd *cobra.Command, args []string) error {
-	name, err := sourceRepoName(args[0])
+func (s *sourceCmds) runSourceRepoDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.sourceRepoName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SourceRepoService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SourceRepo(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Repos.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting repo: %w", err)
 	}
-	fmt.Printf("Deleted repo [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted repo [%s].\n", args[0])
 	return nil
 }
 
-func runSourceRepoDescribe(cmd *cobra.Command, args []string) error {
-	name, err := sourceRepoName(args[0])
+func (s *sourceCmds) runSourceRepoDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.sourceRepoName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SourceRepoService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SourceRepo(ctx)
 	if err != nil {
 		return err
 	}
@@ -130,16 +87,16 @@ func runSourceRepoDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing repo: %w", err)
 	}
-	return emitFormatted(got, flagSourceRepoFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSourceRepoFormat)
 }
 
-func runSourceRepoList(cmd *cobra.Command, args []string) error {
-	parent, err := sourceProjectName()
+func (s *sourceCmds) runSourceRepoList(cmd *cobra.Command, args []string) error {
+	parent, err := s.sourceProjectName()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SourceRepoService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SourceRepo(ctx)
 	if err != nil {
 		return err
 	}
@@ -147,8 +104,8 @@ func runSourceRepoList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Repos.List(parent).Context(ctx)
-		if flagSourceRepoPageSize > 0 {
-			call = call.PageSize(flagSourceRepoPageSize)
+		if s.flagSourceRepoPageSize > 0 {
+			call = call.PageSize(s.flagSourceRepoPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -163,25 +120,25 @@ func runSourceRepoList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSourceRepoFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSourceRepoFormat)
 }
 
-func runSourceRepoUpdate(cmd *cobra.Command, args []string) error {
-	name, err := sourceRepoName(args[0])
+func (s *sourceCmds) runSourceRepoUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.sourceRepoName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &sourcerepo.Repo{}
-	if err := loadYAMLOrJSONInto(flagSourceRepoConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSourceRepoConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagSourceRepoUpdateMask
+	mask := s.flagSourceRepoUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.SourceRepoService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SourceRepo(ctx)
 	if err != nil {
 		return err
 	}
@@ -192,17 +149,17 @@ func runSourceRepoUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating repo: %w", err)
 	}
-	fmt.Printf("Updated repo [%s].\n", args[0])
-	return emitFormatted(got, flagSourceRepoFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated repo [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagSourceRepoFormat)
 }
 
-func runSourceRepoGetIam(cmd *cobra.Command, args []string) error {
-	name, err := sourceRepoName(args[0])
+func (s *sourceCmds) runSourceRepoGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.sourceRepoName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.SourceRepoService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SourceRepo(ctx)
 	if err != nil {
 		return err
 	}
@@ -210,11 +167,11 @@ func runSourceRepoGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagSourceRepoFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagSourceRepoFormat)
 }
 
-func runSourceRepoSetIam(cmd *cobra.Command, args []string) error {
-	name, err := sourceRepoName(args[0])
+func (s *sourceCmds) runSourceRepoSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.sourceRepoName(args[0])
 	if err != nil {
 		return err
 	}
@@ -223,8 +180,8 @@ func runSourceRepoSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.SourceRepoService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().SourceRepo(ctx)
 	if err != nil {
 		return err
 	}
@@ -232,6 +189,6 @@ func runSourceRepoSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for repo [%s].\n", args[0])
-	return emitFormatted(updated, flagSourceRepoFormat)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for repo [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, updated, s.flagSourceRepoFormat)
 }

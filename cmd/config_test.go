@@ -12,8 +12,9 @@ import (
 // TestConfigGetAndGetValueRegistered ensures both the canonical `get` and
 // the deprecated `get-value` alias are present, matching gcloud-python (#536).
 func TestConfigGetAndGetValueRegistered(t *testing.T) {
+	grp := newConfigCmds(legacyTestInvocation())
 	want := map[string]bool{"get": false, "get-value": false}
-	for _, c := range configCmd.Commands() {
+	for _, c := range grp.configCmd.Commands() {
 		if _, ok := want[c.Name()]; ok {
 			want[c.Name()] = true
 		}
@@ -24,7 +25,7 @@ func TestConfigGetAndGetValueRegistered(t *testing.T) {
 		}
 	}
 	// The deprecated alias must be flagged as such.
-	for _, c := range configCmd.Commands() {
+	for _, c := range grp.configCmd.Commands() {
 		if c.Name() == "get-value" && c.Deprecated == "" {
 			t.Errorf("get-value should carry a deprecation notice")
 		}
@@ -35,6 +36,7 @@ func TestConfigGetAndGetValueRegistered(t *testing.T) {
 // core/project` must not drop [workflows] location, and arbitrary
 // section/key properties can be set and unset.
 func TestConfigSetPreservesOtherSections(t *testing.T) {
+	grp := newConfigCmds(legacyTestInvocation())
 	dir := t.TempDir()
 	t.Setenv("CLOUDSDK_CONFIG", dir)
 	t.Setenv("CLOUDSDK_ACTIVE_CONFIG_NAME", "")
@@ -46,16 +48,16 @@ func TestConfigSetPreservesOtherSections(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := runConfigSet(configSetCmd, []string{"core/project", "x"}); err != nil {
+	if err := grp.runConfigSet(grp.configSetCmd, []string{"core/project", "x"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := runConfigSet(configSetCmd, []string{"builds/region", "us-east1"}); err != nil {
+	if err := grp.runConfigSet(grp.configSetCmd, []string{"builds/region", "us-east1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := runConfigUnset(configUnsetCmd, []string{"builds/region"}); err != nil {
+	if err := grp.runConfigUnset(grp.configUnsetCmd, []string{"builds/region"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := runConfigSet(configSetCmd, []string{"core/a/b", "x"}); err == nil {
+	if err := grp.runConfigSet(grp.configSetCmd, []string{"core/a/b", "x"}); err == nil {
 		t.Error("config set core/a/b succeeded, want error")
 	}
 
@@ -73,6 +75,7 @@ func TestConfigSetPreservesOtherSections(t *testing.T) {
 // and `config list` must report the actual active configuration, not
 // always [default]. `config get` stays silent for the default config.
 func TestConfigReportsActiveConfigName(t *testing.T) {
+	grp := newConfigCmds(legacyTestInvocation())
 	t.Setenv("CLOUDSDK_CONFIG", t.TempDir())
 
 	tests := []struct {
@@ -82,10 +85,10 @@ func TestConfigReportsActiveConfigName(t *testing.T) {
 		args     []string
 		wantErrs string
 	}{
-		{"get named", "work", runConfigGet, []string{"core/project"}, "Your active configuration is: [work]\n"},
-		{"get default", "", runConfigGet, []string{"core/project"}, ""},
-		{"list named", "work", runConfigList, nil, "\nYour active configuration is: [work]\n"},
-		{"list default", "", runConfigList, nil, "\nYour active configuration is: [default]\n"},
+		{"get named", "work", grp.runConfigGet, []string{"core/project"}, "Your active configuration is: [work]\n"},
+		{"get default", "", grp.runConfigGet, []string{"core/project"}, ""},
+		{"list named", "work", grp.runConfigList, nil, "\nYour active configuration is: [work]\n"},
+		{"list default", "", grp.runConfigList, nil, "\nYour active configuration is: [default]\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

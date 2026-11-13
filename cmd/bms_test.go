@@ -7,7 +7,8 @@ import (
 )
 
 func bmsSubgroup(name string) *cobra.Command {
-	for _, c := range bmsCmd.Commands() {
+	grp := newBmsCmds(legacyTestInvocation())
+	for _, c := range grp.bmsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

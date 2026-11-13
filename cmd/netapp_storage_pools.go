@@ -1,157 +1,93 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	netapp "google.golang.org/api/netapp/v1"
 )
 
 // --- gcloud netapp storage-pools (#1204) ---
 
-var netappSPCmd = &cobra.Command{Use: "storage-pools", Short: "Manage NetApp storage pools"}
-
-var (
-	flagNetAppSPLocation   string
-	flagNetAppSPConfigFile string
-	flagNetAppSPUpdateMask string
-	flagNetAppSPFormat     string
-	flagNetAppSPFilter     string
-	flagNetAppSPPageSize   int64
-
-	// update-backup-config
-	flagNetAppSPBackupCfgVolumeUUID string
-	flagNetAppSPBackupCfgVault      string
-	flagNetAppSPBackupCfgPolicies   []string
-	flagNetAppSPBackupCfgSchedule   string
-
-	// restore-volume
-	flagNetAppSPRestoreBackup      string
-	flagNetAppSPRestoreVolumeUUID  string
-	flagNetAppSPRestoreDestPath    string
-	flagNetAppSPRestoreFileList    []string
-)
-
-var (
-	netappSPCreateCmd = &cobra.Command{
-		Use: "create STORAGE_POOL", Short: "Create a storage pool",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSPCreate,
-	}
-	netappSPDeleteCmd = &cobra.Command{
-		Use: "delete STORAGE_POOL", Short: "Delete a storage pool",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSPDelete,
-	}
-	netappSPDescribeCmd = &cobra.Command{
-		Use: "describe STORAGE_POOL", Short: "Describe a storage pool",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSPDescribe,
-	}
-	netappSPListCmd = &cobra.Command{
-		Use: "list", Short: "List storage pools",
-		Args: cobra.NoArgs, RunE: runNetAppSPList,
-	}
-	netappSPUpdateCmd = &cobra.Command{
-		Use: "update STORAGE_POOL", Short: "Update a storage pool",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSPUpdate,
-	}
-	netappSPSwitchCmd = &cobra.Command{
-		Use: "switch STORAGE_POOL", Short: "Switch the active zone of a Regional Flex storage pool",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSPSwitch,
-	}
-	netappSPUpdateBackupCfgCmd = &cobra.Command{
-		Use: "update-backup-config STORAGE_POOL", Short: "Update the backup configuration for a volume in an ONTAP-mode storage pool",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSPUpdateBackupConfig,
-	}
-	netappSPListBackupCfgsCmd = &cobra.Command{
-		Use: "list-backup-configs STORAGE_POOL", Short: "List backup configurations for all volumes in an ONTAP-mode storage pool",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSPListBackupConfigs,
-	}
-	netappSPRestoreVolumeCmd = &cobra.Command{
-		Use: "restore-volume STORAGE_POOL", Short: "Restore a backup to a volume in an ONTAP-mode storage pool",
-		Args: cobra.ExactArgs(1), RunE: runNetAppSPRestoreVolume,
-	}
-)
-
-func init() {
+func (s *netappCmds) initNetappStoragePools() {
 	all := []*cobra.Command{
-		netappSPCreateCmd, netappSPDeleteCmd, netappSPDescribeCmd,
-		netappSPListCmd, netappSPUpdateCmd, netappSPSwitchCmd,
-		netappSPUpdateBackupCfgCmd, netappSPListBackupCfgsCmd, netappSPRestoreVolumeCmd,
+		s.netappSPCreateCmd, s.netappSPDeleteCmd, s.netappSPDescribeCmd,
+		s.netappSPListCmd, s.netappSPUpdateCmd, s.netappSPSwitchCmd,
+		s.netappSPUpdateBackupCfgCmd, s.netappSPListBackupCfgsCmd, s.netappSPRestoreVolumeCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNetAppSPLocation, "location", "", "Location for the storage pool (required)")
+		c.Flags().StringVar(&s.flagNetAppSPLocation, "location", "", "Location for the storage pool (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNetAppSPFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNetAppSPFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{netappSPCreateCmd, netappSPUpdateCmd} {
-		c.Flags().StringVar(&flagNetAppSPConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.netappSPCreateCmd, s.netappSPUpdateCmd} {
+		c.Flags().StringVar(&s.flagNetAppSPConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the StoragePool body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	netappSPUpdateCmd.Flags().StringVar(&flagNetAppSPUpdateMask, "update-mask", "",
+	s.netappSPUpdateCmd.Flags().StringVar(&s.flagNetAppSPUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	netappSPListCmd.Flags().StringVar(&flagNetAppSPFilter, "filter", "", "Server-side filter expression")
-	netappSPListCmd.Flags().Int64Var(&flagNetAppSPPageSize, "page-size", 0, "Maximum number of results per page")
+	s.netappSPListCmd.Flags().StringVar(&s.flagNetAppSPFilter, "filter", "", "Server-side filter expression")
+	s.netappSPListCmd.Flags().Int64Var(&s.flagNetAppSPPageSize, "page-size", 0, "Maximum number of results per page")
 
 	// update-backup-config flags
-	netappSPUpdateBackupCfgCmd.Flags().StringVar(&flagNetAppSPBackupCfgVolumeUUID, "volume-uuid", "",
+	s.netappSPUpdateBackupCfgCmd.Flags().StringVar(&s.flagNetAppSPBackupCfgVolumeUUID, "volume-uuid", "",
 		"UUID of the ONTAP-mode volume to update backup config for (required)")
-	_ = netappSPUpdateBackupCfgCmd.MarkFlagRequired("volume-uuid")
-	netappSPUpdateBackupCfgCmd.Flags().StringVar(&flagNetAppSPBackupCfgVault, "backup-vault", "",
+	_ = s.netappSPUpdateBackupCfgCmd.MarkFlagRequired("volume-uuid")
+	s.netappSPUpdateBackupCfgCmd.Flags().StringVar(&s.flagNetAppSPBackupCfgVault, "backup-vault", "",
 		"Backup vault resource name")
-	netappSPUpdateBackupCfgCmd.Flags().StringSliceVar(&flagNetAppSPBackupCfgPolicies, "backup-policies", nil,
+	s.netappSPUpdateBackupCfgCmd.Flags().StringSliceVar(&s.flagNetAppSPBackupCfgPolicies, "backup-policies", nil,
 		"Comma-separated list of backup policy resource names")
-	netappSPUpdateBackupCfgCmd.Flags().StringVar(&flagNetAppSPBackupCfgSchedule, "enable-scheduled-backups", "",
+	s.netappSPUpdateBackupCfgCmd.Flags().StringVar(&s.flagNetAppSPBackupCfgSchedule, "enable-scheduled-backups", "",
 		"Whether scheduled backups are enabled on the volume (true|false)")
-	netappSPUpdateBackupCfgCmd.Flags().StringVar(&flagNetAppSPUpdateMask, "update-mask", "",
+	s.netappSPUpdateBackupCfgCmd.Flags().StringVar(&s.flagNetAppSPUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every specified field)")
 
 	// restore-volume flags
-	netappSPRestoreVolumeCmd.Flags().StringVar(&flagNetAppSPRestoreBackup, "backup", "",
+	s.netappSPRestoreVolumeCmd.Flags().StringVar(&s.flagNetAppSPRestoreBackup, "backup", "",
 		"Full resource name of the backup to restore from (required)")
-	_ = netappSPRestoreVolumeCmd.MarkFlagRequired("backup")
-	netappSPRestoreVolumeCmd.Flags().StringVar(&flagNetAppSPRestoreVolumeUUID, "volume-uuid", "",
+	_ = s.netappSPRestoreVolumeCmd.MarkFlagRequired("backup")
+	s.netappSPRestoreVolumeCmd.Flags().StringVar(&s.flagNetAppSPRestoreVolumeUUID, "volume-uuid", "",
 		"UUID of the ONTAP-mode volume to restore to (required)")
-	_ = netappSPRestoreVolumeCmd.MarkFlagRequired("volume-uuid")
-	netappSPRestoreVolumeCmd.Flags().StringVar(&flagNetAppSPRestoreDestPath, "restore-destination-path", "",
+	_ = s.netappSPRestoreVolumeCmd.MarkFlagRequired("volume-uuid")
+	s.netappSPRestoreVolumeCmd.Flags().StringVar(&s.flagNetAppSPRestoreDestPath, "restore-destination-path", "",
 		"Absolute directory path in the destination volume for selective file restore")
-	netappSPRestoreVolumeCmd.Flags().StringSliceVar(&flagNetAppSPRestoreFileList, "file-list", nil,
+	s.netappSPRestoreVolumeCmd.Flags().StringSliceVar(&s.flagNetAppSPRestoreFileList, "file-list", nil,
 		"Comma-separated list of absolute file paths to restore (for selective file restore)")
 
-	netappSPCmd.AddCommand(all...)
-	netappCmd.AddCommand(netappSPCmd)
+	s.netappSPCmd.AddCommand(all...)
+	s.netappCmd.AddCommand(s.netappSPCmd)
 }
 
-func netappSPParent() (string, error) {
-	project, err := resolveProject()
+func (s *netappCmds) netappSPParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return netappLocationParent(project, flagNetAppSPLocation), nil
+	return netappLocationParent(project, s.flagNetAppSPLocation), nil
 }
 
-func netappSPName(id string) (string, error) {
-	parent, err := netappSPParent()
+func (s *netappCmds) netappSPName(id string) (string, error) {
+	parent, err := s.netappSPParent()
 	if err != nil {
 		return "", err
 	}
 	return netappChild("storagePools", id, parent), nil
 }
 
-func runNetAppSPCreate(cmd *cobra.Command, args []string) error {
-	parent, err := netappSPParent()
+func (s *netappCmds) runNetAppSPCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappSPParent()
 	if err != nil {
 		return err
 	}
 	body := &netapp.StoragePool{}
-	if err := loadYAMLOrJSONInto(flagNetAppSPConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppSPConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -159,17 +95,17 @@ func runNetAppSPCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating storage pool: %w", err)
 	}
-	fmt.Printf("Create request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppSPFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppSPFormat)
 }
 
-func runNetAppSPDelete(cmd *cobra.Command, args []string) error {
-	name, err := netappSPName(args[0])
+func (s *netappCmds) runNetAppSPDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.netappSPName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -177,17 +113,17 @@ func runNetAppSPDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting storage pool: %w", err)
 	}
-	fmt.Printf("Delete request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppSPFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppSPFormat)
 }
 
-func runNetAppSPDescribe(cmd *cobra.Command, args []string) error {
-	name, err := netappSPName(args[0])
+func (s *netappCmds) runNetAppSPDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.netappSPName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -195,16 +131,16 @@ func runNetAppSPDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing storage pool: %w", err)
 	}
-	return emitFormatted(got, flagNetAppSPFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNetAppSPFormat)
 }
 
-func runNetAppSPList(cmd *cobra.Command, args []string) error {
-	parent, err := netappSPParent()
+func (s *netappCmds) runNetAppSPList(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappSPParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -212,11 +148,11 @@ func runNetAppSPList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.StoragePools.List(parent).Context(ctx)
-		if flagNetAppSPFilter != "" {
-			call = call.Filter(flagNetAppSPFilter)
+		if s.flagNetAppSPFilter != "" {
+			call = call.Filter(s.flagNetAppSPFilter)
 		}
-		if flagNetAppSPPageSize > 0 {
-			call = call.PageSize(flagNetAppSPPageSize)
+		if s.flagNetAppSPPageSize > 0 {
+			call = call.PageSize(s.flagNetAppSPPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -231,24 +167,24 @@ func runNetAppSPList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNetAppSPFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNetAppSPFormat)
 }
 
-func runNetAppSPUpdate(cmd *cobra.Command, args []string) error {
-	name, err := netappSPName(args[0])
+func (s *netappCmds) runNetAppSPUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.netappSPName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &netapp.StoragePool{}
-	if err := loadYAMLOrJSONInto(flagNetAppSPConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNetAppSPConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagNetAppSPUpdateMask
+	mask := s.flagNetAppSPUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -260,8 +196,8 @@ func runNetAppSPUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating storage pool: %w", err)
 	}
-	fmt.Printf("Update request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppSPFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppSPFormat)
 }
 
 func parseBoolFlag(v string) (bool, error) {
@@ -272,23 +208,23 @@ func parseBoolFlag(v string) (bool, error) {
 	return b, nil
 }
 
-func runNetAppSPUpdateBackupConfig(cmd *cobra.Command, args []string) error {
-	name, err := netappSPName(args[0])
+func (s *netappCmds) runNetAppSPUpdateBackupConfig(cmd *cobra.Command, args []string) error {
+	name, err := s.netappSPName(args[0])
 	if err != nil {
 		return err
 	}
 	cfg := &netapp.BackupConfig{}
 	var fields []string
-	if flagNetAppSPBackupCfgVault != "" {
-		cfg.BackupVault = flagNetAppSPBackupCfgVault
+	if s.flagNetAppSPBackupCfgVault != "" {
+		cfg.BackupVault = s.flagNetAppSPBackupCfgVault
 		fields = append(fields, "backup_config.backup_vault")
 	}
-	if len(flagNetAppSPBackupCfgPolicies) > 0 {
-		cfg.BackupPolicies = flagNetAppSPBackupCfgPolicies
+	if len(s.flagNetAppSPBackupCfgPolicies) > 0 {
+		cfg.BackupPolicies = s.flagNetAppSPBackupCfgPolicies
 		fields = append(fields, "backup_config.backup_policies")
 	}
-	if flagNetAppSPBackupCfgSchedule != "" {
-		enable, perr := parseBoolFlag(flagNetAppSPBackupCfgSchedule)
+	if s.flagNetAppSPBackupCfgSchedule != "" {
+		enable, perr := parseBoolFlag(s.flagNetAppSPBackupCfgSchedule)
 		if perr != nil {
 			return fmt.Errorf("--enable-scheduled-backups: %w", perr)
 		}
@@ -296,17 +232,17 @@ func runNetAppSPUpdateBackupConfig(cmd *cobra.Command, args []string) error {
 		cfg.ForceSendFields = append(cfg.ForceSendFields, "ScheduledBackupEnabled")
 		fields = append(fields, "backup_config.scheduled_backup_enabled")
 	}
-	mask := flagNetAppSPUpdateMask
+	mask := s.flagNetAppSPUpdateMask
 	if mask == "" {
 		mask = joinMask(fields)
 	}
 	req := &netapp.UpdateBackupConfigRequest{
 		BackupConfig: cfg,
-		VolumeUuid:   flagNetAppSPBackupCfgVolumeUUID,
+		VolumeUuid:   s.flagNetAppSPBackupCfgVolumeUUID,
 		UpdateMask:   mask,
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -314,17 +250,17 @@ func runNetAppSPUpdateBackupConfig(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating backup config: %w", err)
 	}
-	fmt.Printf("Update-backup-config request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppSPFormat)
+	fmt.Fprintf(s.inv.stdout, "Update-backup-config request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppSPFormat)
 }
 
-func runNetAppSPListBackupConfigs(cmd *cobra.Command, args []string) error {
-	parent, err := netappSPName(args[0])
+func (s *netappCmds) runNetAppSPListBackupConfigs(cmd *cobra.Command, args []string) error {
+	parent, err := s.netappSPName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -332,11 +268,11 @@ func runNetAppSPListBackupConfigs(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.StoragePools.BackupConfigs.List(parent).Context(ctx)
-		if flagNetAppSPFilter != "" {
-			call = call.Filter(flagNetAppSPFilter)
+		if s.flagNetAppSPFilter != "" {
+			call = call.Filter(s.flagNetAppSPFilter)
 		}
-		if flagNetAppSPPageSize > 0 {
-			call = call.PageSize(flagNetAppSPPageSize)
+		if s.flagNetAppSPPageSize > 0 {
+			call = call.PageSize(s.flagNetAppSPPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -351,26 +287,26 @@ func runNetAppSPListBackupConfigs(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagNetAppSPFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagNetAppSPFormat)
 }
 
-func runNetAppSPRestoreVolume(cmd *cobra.Command, args []string) error {
-	name, err := netappSPName(args[0])
+func (s *netappCmds) runNetAppSPRestoreVolume(cmd *cobra.Command, args []string) error {
+	name, err := s.netappSPName(args[0])
 	if err != nil {
 		return err
 	}
 	req := &netapp.RestoreVolumeRequest{
 		BackupSource: &netapp.BackupSource{
-			Backup:   flagNetAppSPRestoreBackup,
-			FileList: flagNetAppSPRestoreFileList,
+			Backup:   s.flagNetAppSPRestoreBackup,
+			FileList: s.flagNetAppSPRestoreFileList,
 		},
 		OntapVolumeTarget: &netapp.OntapVolumeTarget{
-			VolumeUuid:             flagNetAppSPRestoreVolumeUUID,
-			RestoreDestinationPath: flagNetAppSPRestoreDestPath,
+			VolumeUuid:             s.flagNetAppSPRestoreVolumeUUID,
+			RestoreDestinationPath: s.flagNetAppSPRestoreDestPath,
 		},
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -378,17 +314,17 @@ func runNetAppSPRestoreVolume(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("restoring volume in storage pool: %w", err)
 	}
-	fmt.Printf("Restore-volume request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppSPFormat)
+	fmt.Fprintf(s.inv.stdout, "Restore-volume request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppSPFormat)
 }
 
-func runNetAppSPSwitch(cmd *cobra.Command, args []string) error {
-	name, err := netappSPName(args[0])
+func (s *netappCmds) runNetAppSPSwitch(cmd *cobra.Command, args []string) error {
+	name, err := s.netappSPName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetAppService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetApp(ctx)
 	if err != nil {
 		return err
 	}
@@ -396,6 +332,6 @@ func runNetAppSPSwitch(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("switching storage pool zone: %w", err)
 	}
-	fmt.Printf("Switch request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagNetAppSPFormat)
+	fmt.Fprintf(s.inv.stdout, "Switch request issued for storage pool [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagNetAppSPFormat)
 }

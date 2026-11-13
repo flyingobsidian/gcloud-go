@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -25,103 +24,52 @@ import (
 // restClient. Locations default to "global" for domains and resources-graph,
 // matching gcloud-python's DefaultToGlobal fallthrough.
 
-var appTopologyCmd = &cobra.Command{
-	Use:   "app-topology",
-	Short: "Manage App Topology resources and query topology graphs",
-}
-
-var (
-	appTopologyDomainsCmd = &cobra.Command{Use: "domains", Short: "View App Topology domains"}
-	appTopologySchemaCmd  = &cobra.Command{Use: "schema", Short: "View App Topology domain schemas"}
-	appTopologyLocCmd     = &cobra.Command{Use: "locations", Short: "View App Topology locations"}
-	appTopologyGraphCmd   = &cobra.Command{Use: "resources-graph", Short: "Query App Topology resource graphs"}
-)
-
 var appTopologyRest = newRESTClient("https://apptopology.googleapis.com/v1")
 
-var (
-	flagATLocation    string
-	flagATFormat      string
-	flagATLimit       int64
-	flagATPageSize    int64
-	flagATSortBy      []string
-	flagATURI         bool
-	flagATDomains     []string
-	flagATPattern     string
-	flagATPatternFile string
-)
-
-var (
-	appTopologyDomainsListCmd = &cobra.Command{
-		Use: "list", Short: "List App Topology domains",
-		Args: cobra.NoArgs, RunE: runAppTopologyDomainsList,
+func (s *appTopologyCmds) initAppTopology() {
+	for _, c := range []*cobra.Command{s.appTopologyDomainsListCmd, s.appTopologyDomainsDescribeCmd,
+		s.appTopologySchemaDescribeCmd, s.appTopologyGraphGenerateCmd} {
+		c.Flags().StringVar(&s.flagATLocation, "location", "", `Location of the resource. Defaults to "global".`)
 	}
-	appTopologyDomainsDescribeCmd = &cobra.Command{
-		Use: "describe DOMAIN", Short: "Describe an App Topology domain",
-		Args: cobra.ExactArgs(1), RunE: runAppTopologyDomainsDescribe,
+	for _, c := range []*cobra.Command{s.appTopologyDomainsListCmd, s.appTopologyDomainsDescribeCmd,
+		s.appTopologySchemaDescribeCmd, s.appTopologyLocListCmd, s.appTopologyLocDescribeCmd, s.appTopologyGraphGenerateCmd} {
+		c.Flags().StringVar(&s.flagATFormat, "format", "", "Output format")
 	}
-	appTopologySchemaDescribeCmd = &cobra.Command{
-		Use: "describe DOMAIN", Short: "Describe the schema for an App Topology domain",
-		Args: cobra.ExactArgs(1), RunE: runAppTopologySchemaDescribe,
-	}
-	appTopologyLocListCmd = &cobra.Command{
-		Use: "list", Short: "List App Topology locations",
-		Args: cobra.NoArgs, RunE: runAppTopologyLocList,
-	}
-	appTopologyLocDescribeCmd = &cobra.Command{
-		Use: "describe LOCATION", Short: "Describe an App Topology location",
-		Args: cobra.ExactArgs(1), RunE: runAppTopologyLocDescribe,
-	}
-	appTopologyGraphGenerateCmd = &cobra.Command{
-		Use: "generate", Short: "Generate a resource topology graph",
-		Args: cobra.NoArgs, RunE: runAppTopologyGraphGenerate,
-	}
-)
-
-func init() {
-	for _, c := range []*cobra.Command{appTopologyDomainsListCmd, appTopologyDomainsDescribeCmd,
-		appTopologySchemaDescribeCmd, appTopologyGraphGenerateCmd} {
-		c.Flags().StringVar(&flagATLocation, "location", "", `Location of the resource. Defaults to "global".`)
-	}
-	for _, c := range []*cobra.Command{appTopologyDomainsListCmd, appTopologyDomainsDescribeCmd,
-		appTopologySchemaDescribeCmd, appTopologyLocListCmd, appTopologyLocDescribeCmd, appTopologyGraphGenerateCmd} {
-		c.Flags().StringVar(&flagATFormat, "format", "", "Output format")
-	}
-	for _, c := range []*cobra.Command{appTopologyDomainsListCmd, appTopologyLocListCmd} {
-		c.Flags().Int64Var(&flagATLimit, "limit", 0, "Maximum number of resources to list")
-		c.Flags().Int64Var(&flagATPageSize, "page-size", 0, "Number of resources to fetch per page")
-		c.Flags().StringSliceVar(&flagATSortBy, "sort-by", nil,
+	for _, c := range []*cobra.Command{s.appTopologyDomainsListCmd, s.appTopologyLocListCmd} {
+		c.Flags().Int64Var(&s.flagATLimit, "limit", 0, "Maximum number of resources to list")
+		c.Flags().Int64Var(&s.flagATPageSize, "page-size", 0, "Number of resources to fetch per page")
+		c.Flags().StringSliceVar(&s.flagATSortBy, "sort-by", nil,
 			"Comma-separated list of resource field keys to sort by (prefix with ~ to reverse)")
-		c.Flags().BoolVar(&flagATURI, "uri", false, "Print a list of resource URIs instead of the default output")
+		c.Flags().BoolVar(&s.flagATURI, "uri", false, "Print a list of resource URIs instead of the default output")
 	}
-	f := appTopologyGraphGenerateCmd.Flags()
-	f.StringSliceVar(&flagATDomains, "domains", nil,
+	f := s.appTopologyGraphGenerateCmd.Flags()
+	f.StringSliceVar(&s.flagATDomains, "domains", nil,
 		"List of App Topology domains to include in the topology query (e.g., SRE, DEVOPS, SECURITY)")
-	_ = appTopologyGraphGenerateCmd.MarkFlagRequired("domains")
-	f.StringVar(&flagATPattern, "pattern", "",
+	_ = s.appTopologyGraphGenerateCmd.MarkFlagRequired("domains")
+	f.StringVar(&s.flagATPattern, "pattern", "",
 		"A GraphPattern query filter definition in proto3 YAML/JSON string format")
-	f.StringVar(&flagATPatternFile, "pattern-file", "",
+	f.StringVar(&s.flagATPatternFile, "pattern-file", "",
 		`Path to a YAML or JSON file (or "-" for standard input) containing the GraphPattern query filter definition`)
-	appTopologyGraphGenerateCmd.MarkFlagsMutuallyExclusive("pattern", "pattern-file")
+	s.appTopologyGraphGenerateCmd.MarkFlagsMutuallyExclusive("pattern", "pattern-file")
 
-	appTopologySchemaCmd.AddCommand(appTopologySchemaDescribeCmd)
-	appTopologyDomainsCmd.AddCommand(appTopologyDomainsListCmd, appTopologyDomainsDescribeCmd, appTopologySchemaCmd)
-	appTopologyLocCmd.AddCommand(appTopologyLocListCmd, appTopologyLocDescribeCmd)
-	appTopologyGraphCmd.AddCommand(appTopologyGraphGenerateCmd)
-	appTopologyCmd.AddCommand(appTopologyDomainsCmd, appTopologyLocCmd, appTopologyGraphCmd)
-	rootCmd.AddCommand(appTopologyCmd)
+	s.appTopologySchemaCmd.AddCommand(s.appTopologySchemaDescribeCmd)
+	s.appTopologyDomainsCmd.AddCommand(s.appTopologyDomainsListCmd, s.appTopologyDomainsDescribeCmd, s.appTopologySchemaCmd)
+	s.appTopologyLocCmd.AddCommand(s.appTopologyLocListCmd, s.appTopologyLocDescribeCmd)
+	s.appTopologyGraphCmd.AddCommand(s.appTopologyGraphGenerateCmd)
+	s.appTopologyCmd.AddCommand(s.appTopologyDomainsCmd, s.appTopologyLocCmd, s.appTopologyGraphCmd)
+
 }
 
 // appTopologyLocationName resolves projects/P/locations/L from a location
 // value, defaulting to "global" when empty.
-func appTopologyLocationName(location string) (string, error) {
+func (s *appTopologyCmds) appTopologyLocationName(location string) (string, error) {
 	if strings.HasPrefix(location, "projects/") {
 		return location, nil
 	}
 	if location == "" {
 		location = "global"
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
@@ -129,27 +77,27 @@ func appTopologyLocationName(location string) (string, error) {
 }
 
 // appTopologyDomainName resolves projects/P/locations/L/domains/D.
-func appTopologyDomainName(domain string) (string, error) {
+func (s *appTopologyCmds) appTopologyDomainName(domain string) (string, error) {
 	if strings.HasPrefix(domain, "projects/") {
 		return domain, nil
 	}
-	loc, err := appTopologyLocationName(flagATLocation)
+	loc, err := s.appTopologyLocationName(s.flagATLocation)
 	if err != nil {
 		return "", err
 	}
 	return loc + "/domains/" + domain, nil
 }
 
-func runAppTopologyDomainsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := appTopologyDomainName(args[0])
+func (s *appTopologyCmds) runAppTopologyDomainsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.appTopologyDomainName(args[0])
 	if err != nil {
 		return err
 	}
 	var got map[string]any
-	if err := appTopologyRest.do(context.Background(), http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(appTopologyRest).do(cmd.Context(), http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing domain: %w", err)
 	}
-	return emitFormatted(got, flagATFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagATFormat)
 }
 
 // appTopologySchemaName appends "/schema" to a domain resource name unless
@@ -163,40 +111,40 @@ func appTopologySchemaName(domain string) string {
 	return base
 }
 
-func runAppTopologySchemaDescribe(cmd *cobra.Command, args []string) error {
-	name, err := appTopologyDomainName(args[0])
+func (s *appTopologyCmds) runAppTopologySchemaDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.appTopologyDomainName(args[0])
 	if err != nil {
 		return err
 	}
 	var got map[string]any
-	if err := appTopologyRest.do(context.Background(), http.MethodGet, "/"+appTopologySchemaName(name), nil, nil, &got); err != nil {
+	if err := s.inv.rest(appTopologyRest).do(cmd.Context(), http.MethodGet, "/"+appTopologySchemaName(name), nil, nil, &got); err != nil {
 		return fmt.Errorf("describing domain schema: %w", err)
 	}
-	return emitFormatted(got, flagATFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagATFormat)
 }
 
-func runAppTopologyLocDescribe(cmd *cobra.Command, args []string) error {
-	name, err := appTopologyLocationName(args[0])
+func (s *appTopologyCmds) runAppTopologyLocDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.appTopologyLocationName(args[0])
 	if err != nil {
 		return err
 	}
 	var got map[string]any
-	if err := appTopologyRest.do(context.Background(), http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(appTopologyRest).do(cmd.Context(), http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing location: %w", err)
 	}
-	return emitFormatted(got, flagATFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagATFormat)
 }
 
-func runAppTopologyDomainsList(cmd *cobra.Command, args []string) error {
-	parent, err := appTopologyLocationName(flagATLocation)
+func (s *appTopologyCmds) runAppTopologyDomainsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.appTopologyLocationName(s.flagATLocation)
 	if err != nil {
 		return err
 	}
-	all, err := appTopologyRest.paginate(context.Background(), "/"+parent+"/domains", nil, "domains", flagATPageSize)
+	all, err := s.inv.rest(appTopologyRest).paginate(cmd.Context(), "/"+parent+"/domains", nil, "domains", s.flagATPageSize)
 	if err != nil {
 		return fmt.Errorf("listing domains: %w", err)
 	}
-	return emitAppTopologyList(os.Stdout, os.Stderr, all, "table(name)", func(r map[string]any) map[string]any {
+	return s.emitAppTopologyList(s.inv.stdout, s.inv.stderr, all, "table(name)", func(r map[string]any) map[string]any {
 		// name.scope("domains"): the part of the name after ".../domains/".
 		name, _ := r["name"].(string)
 		if i := strings.LastIndex(name, "/domains/"); i >= 0 {
@@ -206,8 +154,8 @@ func runAppTopologyDomainsList(cmd *cobra.Command, args []string) error {
 	})
 }
 
-func runAppTopologyLocList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *appTopologyCmds) runAppTopologyLocList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
@@ -215,19 +163,19 @@ func runAppTopologyLocList(cmd *cobra.Command, args []string) error {
 	if !strings.HasPrefix(parent, "projects/") {
 		parent = "projects/" + parent
 	}
-	all, err := appTopologyRest.paginate(context.Background(), "/"+parent+"/locations", nil, "locations", flagATPageSize)
+	all, err := s.inv.rest(appTopologyRest).paginate(cmd.Context(), "/"+parent+"/locations", nil, "locations", s.flagATPageSize)
 	if err != nil {
 		return fmt.Errorf("listing locations: %w", err)
 	}
-	return emitAppTopologyList(os.Stdout, os.Stderr, all, "table(locationId,name)", nil)
+	return s.emitAppTopologyList(s.inv.stdout, s.inv.stderr, all, "table(locationId,name)", nil)
 }
 
 // emitAppTopologyList applies the gcloud list pipeline (--filter, --sort-by,
 // --limit, then --uri or --format) to records. defaultTable is used when no
 // --format is given, after mapping each record through tableRow if non-nil.
-func emitAppTopologyList(w, errW io.Writer, records []map[string]any, defaultTable string, tableRow func(map[string]any) map[string]any) error {
-	if flagFilter != "" {
-		filter, err := gfilter.Compile(flagFilter)
+func (s *appTopologyCmds) emitAppTopologyList(w, errW io.Writer, records []map[string]any, defaultTable string, tableRow func(map[string]any) map[string]any) error {
+	if s.inv.flags.filter != "" {
+		filter, err := gfilter.Compile(s.inv.flags.filter)
 		if err != nil {
 			return fmt.Errorf("invalid --filter expression: %w", err)
 		}
@@ -239,20 +187,20 @@ func emitAppTopologyList(w, errW io.Writer, records []map[string]any, defaultTab
 		}
 		records = kept
 	}
-	sortRecordsBy(records, flagATSortBy)
-	if flagATLimit > 0 && int64(len(records)) > flagATLimit {
-		records = records[:flagATLimit]
+	sortRecordsBy(records, s.flagATSortBy)
+	if s.flagATLimit > 0 && int64(len(records)) > s.flagATLimit {
+		records = records[:s.flagATLimit]
 	}
-	if flagATURI {
+	if s.flagATURI {
 		for _, r := range records {
 			name, _ := r["name"].(string)
 			fmt.Fprintln(w, "https://apptopology.googleapis.com/v1/"+name)
 		}
 		return nil
 	}
-	format := flagATFormat
+	format := s.flagATFormat
 	if format == "" {
-		format = flagFormat
+		format = s.inv.flags.format
 	}
 	if format == "" {
 		if len(records) == 0 {
@@ -421,16 +369,16 @@ func appTopologyParsePattern(pattern, patternFile string, stdin io.Reader) (map[
 	return appTopologyNormalizePattern(m).(map[string]any), nil
 }
 
-func runAppTopologyGraphGenerate(cmd *cobra.Command, args []string) error {
-	location, err := appTopologyLocationName(flagATLocation)
+func (s *appTopologyCmds) runAppTopologyGraphGenerate(cmd *cobra.Command, args []string) error {
+	location, err := s.appTopologyLocationName(s.flagATLocation)
 	if err != nil {
 		return err
 	}
-	domains := appTopologyNormalizeDomains(flagATDomains, location)
+	domains := appTopologyNormalizeDomains(s.flagATDomains, location)
 	if len(domains) == 0 {
 		return errors.New("Invalid value for [--domains]: At least one non-empty domain name must be specified.")
 	}
-	filter, err := appTopologyParsePattern(flagATPattern, flagATPatternFile, os.Stdin)
+	filter, err := appTopologyParsePattern(s.flagATPattern, s.flagATPatternFile, s.inv.stdin)
 	if err != nil {
 		return err
 	}
@@ -440,12 +388,83 @@ func runAppTopologyGraphGenerate(cmd *cobra.Command, args []string) error {
 	}
 	var resp map[string]any
 	path := "/" + location + "/discoveredResourcesTopology:generate"
-	if err := appTopologyRest.do(context.Background(), http.MethodPost, path, url.Values{}, body, &resp); err != nil {
+	if err := s.inv.rest(appTopologyRest).do(cmd.Context(), http.MethodPost, path, url.Values{}, body, &resp); err != nil {
 		return fmt.Errorf("generating resource topology: %w", err)
 	}
 	graph := resp["graph"]
 	if graph == nil {
 		return nil
 	}
-	return emitFormatted(graph, flagATFormat)
+	return emitFormattedTo(s.inv.stdout, graph, s.flagATFormat)
+}
+
+// appTopologyCmds holds the commands and flag values of one invocation's "appTopology"
+// command group, so invocations don't share state (#2070).
+type appTopologyCmds struct {
+	inv *invocation
+
+	appTopologyCmd                *cobra.Command
+	appTopologyDomainsCmd         *cobra.Command
+	appTopologySchemaCmd          *cobra.Command
+	appTopologyLocCmd             *cobra.Command
+	appTopologyGraphCmd           *cobra.Command
+	flagATLocation                string
+	flagATFormat                  string
+	flagATLimit                   int64
+	flagATPageSize                int64
+	flagATSortBy                  []string
+	flagATURI                     bool
+	flagATDomains                 []string
+	flagATPattern                 string
+	flagATPatternFile             string
+	appTopologyDomainsListCmd     *cobra.Command
+	appTopologyDomainsDescribeCmd *cobra.Command
+	appTopologySchemaDescribeCmd  *cobra.Command
+	appTopologyLocListCmd         *cobra.Command
+	appTopologyLocDescribeCmd     *cobra.Command
+	appTopologyGraphGenerateCmd   *cobra.Command
+}
+
+// newAppTopologyCmd returns the "appTopology" command group for inv.
+func newAppTopologyCmd(inv *invocation) *cobra.Command {
+	return newAppTopologyCmds(inv).appTopologyCmd
+}
+
+// newAppTopologyCmds builds the "appTopology" command group for inv and returns its state.
+func newAppTopologyCmds(inv *invocation) *appTopologyCmds {
+	s := &appTopologyCmds{inv: inv}
+	s.appTopologyCmd = &cobra.Command{
+		Use:   "app-topology",
+		Short: "Manage App Topology resources and query topology graphs",
+	}
+	s.appTopologyDomainsCmd = &cobra.Command{Use: "domains", Short: "View App Topology domains"}
+	s.appTopologySchemaCmd = &cobra.Command{Use: "schema", Short: "View App Topology domain schemas"}
+	s.appTopologyLocCmd = &cobra.Command{Use: "locations", Short: "View App Topology locations"}
+	s.appTopologyGraphCmd = &cobra.Command{Use: "resources-graph", Short: "Query App Topology resource graphs"}
+	s.appTopologyDomainsListCmd = &cobra.Command{
+		Use: "list", Short: "List App Topology domains",
+		Args: cobra.NoArgs, RunE: s.runAppTopologyDomainsList,
+	}
+	s.appTopologyDomainsDescribeCmd = &cobra.Command{
+		Use: "describe DOMAIN", Short: "Describe an App Topology domain",
+		Args: cobra.ExactArgs(1), RunE: s.runAppTopologyDomainsDescribe,
+	}
+	s.appTopologySchemaDescribeCmd = &cobra.Command{
+		Use: "describe DOMAIN", Short: "Describe the schema for an App Topology domain",
+		Args: cobra.ExactArgs(1), RunE: s.runAppTopologySchemaDescribe,
+	}
+	s.appTopologyLocListCmd = &cobra.Command{
+		Use: "list", Short: "List App Topology locations",
+		Args: cobra.NoArgs, RunE: s.runAppTopologyLocList,
+	}
+	s.appTopologyLocDescribeCmd = &cobra.Command{
+		Use: "describe LOCATION", Short: "Describe an App Topology location",
+		Args: cobra.ExactArgs(1), RunE: s.runAppTopologyLocDescribe,
+	}
+	s.appTopologyGraphGenerateCmd = &cobra.Command{
+		Use: "generate", Short: "Generate a resource topology graph",
+		Args: cobra.NoArgs, RunE: s.runAppTopologyGraphGenerate,
+	}
+	s.initAppTopology()
+	return s
 }

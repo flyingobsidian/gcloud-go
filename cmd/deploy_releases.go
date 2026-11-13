@@ -1,153 +1,114 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	clouddeploy "google.golang.org/api/clouddeploy/v1"
 )
 
 // --- gcloud deploy releases (#1530) ---
 
-var deployRelCmd = &cobra.Command{Use: "releases", Short: "Manage Cloud Deploy releases"}
-
-var (
-	flagDeployRelRegion       string
-	flagDeployRelPipeline     string
-	flagDeployRelFormat       string
-	flagDeployRelConfigFile   string
-	flagDeployRelPageSize     int64
-	flagDeployRelOverride     []string
-	flagDeployRelValidateOnly bool
-	flagDeployRelPromoteTgt   string
-	flagDeployRelPromoteID    string
-)
-
-var (
-	deployRelAbandonCmd = &cobra.Command{
-		Use: "abandon RELEASE", Short: "Abandon a release",
-		Args: cobra.ExactArgs(1), RunE: runDeployRelAbandon,
-	}
-	deployRelCreateCmd = &cobra.Command{
-		Use: "create RELEASE", Short: "Create a release (body from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runDeployRelCreate,
-	}
-	deployRelDescribeCmd = &cobra.Command{
-		Use: "describe RELEASE", Short: "Describe a release",
-		Args: cobra.ExactArgs(1), RunE: runDeployRelDescribe,
-	}
-	deployRelListCmd = &cobra.Command{
-		Use: "list", Short: "List releases",
-		Args: cobra.NoArgs, RunE: runDeployRelList,
-	}
-	deployRelPromoteCmd = &cobra.Command{
-		Use: "promote RELEASE", Short: "Promote a release (create a rollout targeting a new target)",
-		Args: cobra.ExactArgs(1), RunE: runDeployRelPromote,
-	}
-)
-
-func init() {
+func (s *deployCmds) initDeployReleases() {
 	all := []*cobra.Command{
-		deployRelAbandonCmd, deployRelCreateCmd, deployRelDescribeCmd, deployRelListCmd, deployRelPromoteCmd,
+		s.deployRelAbandonCmd, s.deployRelCreateCmd, s.deployRelDescribeCmd, s.deployRelListCmd, s.deployRelPromoteCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDeployRelRegion, "region", "", "Cloud Deploy region (required)")
+		c.Flags().StringVar(&s.flagDeployRelRegion, "region", "", "Cloud Deploy region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDeployRelPipeline, "delivery-pipeline", "",
+		c.Flags().StringVar(&s.flagDeployRelPipeline, "delivery-pipeline", "",
 			"Delivery pipeline that owns the release (required)")
 		_ = c.MarkFlagRequired("delivery-pipeline")
-		c.Flags().StringVar(&flagDeployRelFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDeployRelFormat, "format", "", "Output format")
 	}
-	deployRelCreateCmd.Flags().StringVar(&flagDeployRelConfigFile, "config-file", "",
+	s.deployRelCreateCmd.Flags().StringVar(&s.flagDeployRelConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the Release body (required)")
-	_ = deployRelCreateCmd.MarkFlagRequired("config-file")
-	deployRelCreateCmd.Flags().StringSliceVar(&flagDeployRelOverride, "override-deploy-policies", nil,
+	_ = s.deployRelCreateCmd.MarkFlagRequired("config-file")
+	s.deployRelCreateCmd.Flags().StringSliceVar(&s.flagDeployRelOverride, "override-deploy-policies", nil,
 		"Deploy policies to override (repeatable)")
-	deployRelCreateCmd.Flags().BoolVar(&flagDeployRelValidateOnly, "validate-only", false,
+	s.deployRelCreateCmd.Flags().BoolVar(&s.flagDeployRelValidateOnly, "validate-only", false,
 		"Only validate the request; do not create the release")
-	deployRelListCmd.Flags().Int64Var(&flagDeployRelPageSize, "page-size", 0, "Maximum results per page")
-	deployRelPromoteCmd.Flags().StringVar(&flagDeployRelPromoteTgt, "to-target", "",
+	s.deployRelListCmd.Flags().Int64Var(&s.flagDeployRelPageSize, "page-size", 0, "Maximum results per page")
+	s.deployRelPromoteCmd.Flags().StringVar(&s.flagDeployRelPromoteTgt, "to-target", "",
 		"Target ID to promote the release to (required)")
-	_ = deployRelPromoteCmd.MarkFlagRequired("to-target")
-	deployRelPromoteCmd.Flags().StringVar(&flagDeployRelPromoteID, "rollout-id", "",
+	_ = s.deployRelPromoteCmd.MarkFlagRequired("to-target")
+	s.deployRelPromoteCmd.Flags().StringVar(&s.flagDeployRelPromoteID, "rollout-id", "",
 		"Rollout ID to assign to the new rollout (required)")
-	_ = deployRelPromoteCmd.MarkFlagRequired("rollout-id")
+	_ = s.deployRelPromoteCmd.MarkFlagRequired("rollout-id")
 
-	deployRelCmd.AddCommand(all...)
-	deployCmd.AddCommand(deployRelCmd)
+	s.deployRelCmd.AddCommand(all...)
+	s.deployCmd.AddCommand(s.deployRelCmd)
 }
 
-func deployRelParent() (string, error) {
-	project, err := resolveProject()
+func (s *deployCmds) deployRelParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return deployChild("deliveryPipelines", flagDeployRelPipeline, deployLocationParent(project, flagDeployRelRegion)), nil
+	return deployChild("deliveryPipelines", s.flagDeployRelPipeline, deployLocationParent(project, s.flagDeployRelRegion)), nil
 }
 
-func deployRelName(id string) (string, error) {
-	parent, err := deployRelParent()
+func (s *deployCmds) deployRelName(id string) (string, error) {
+	parent, err := s.deployRelParent()
 	if err != nil {
 		return "", err
 	}
 	return deployChild("releases", id, parent), nil
 }
 
-func runDeployRelAbandon(cmd *cobra.Command, args []string) error {
-	name, err := deployRelName(args[0])
+func (s *deployCmds) runDeployRelAbandon(cmd *cobra.Command, args []string) error {
+	name, err := s.deployRelName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.DeliveryPipelines.Releases.Abandon(name, &clouddeploy.AbandonReleaseRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("abandoning release: %w", err)
 	}
-	fmt.Printf("Abandoned release [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Abandoned release [%s].\n", args[0])
 	return nil
 }
 
-func runDeployRelCreate(cmd *cobra.Command, args []string) error {
-	parent, err := deployRelParent()
+func (s *deployCmds) runDeployRelCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.deployRelParent()
 	if err != nil {
 		return err
 	}
 	body := &clouddeploy.Release{}
-	if err := loadYAMLOrJSONInto(flagDeployRelConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDeployRelConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Projects.Locations.DeliveryPipelines.Releases.Create(parent, body).ReleaseId(args[0]).Context(ctx)
-	if len(flagDeployRelOverride) > 0 {
-		call = call.OverrideDeployPolicy(flagDeployRelOverride...)
+	if len(s.flagDeployRelOverride) > 0 {
+		call = call.OverrideDeployPolicy(s.flagDeployRelOverride...)
 	}
-	if flagDeployRelValidateOnly {
+	if s.flagDeployRelValidateOnly {
 		call = call.ValidateOnly(true)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("creating release: %w", err)
 	}
-	fmt.Printf("Create request issued for release [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDeployRelFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for release [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDeployRelFormat)
 }
 
-func runDeployRelDescribe(cmd *cobra.Command, args []string) error {
-	name, err := deployRelName(args[0])
+func (s *deployCmds) runDeployRelDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.deployRelName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -155,16 +116,16 @@ func runDeployRelDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing release: %w", err)
 	}
-	return emitFormatted(got, flagDeployRelFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDeployRelFormat)
 }
 
-func runDeployRelList(cmd *cobra.Command, args []string) error {
-	parent, err := deployRelParent()
+func (s *deployCmds) runDeployRelList(cmd *cobra.Command, args []string) error {
+	parent, err := s.deployRelParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -172,8 +133,8 @@ func runDeployRelList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.DeliveryPipelines.Releases.List(parent).Context(ctx)
-		if flagDeployRelPageSize > 0 {
-			call = call.PageSize(flagDeployRelPageSize)
+		if s.flagDeployRelPageSize > 0 {
+			call = call.PageSize(s.flagDeployRelPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -188,28 +149,28 @@ func runDeployRelList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDeployRelFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDeployRelFormat)
 }
 
-func runDeployRelPromote(cmd *cobra.Command, args []string) error {
-	release, err := deployRelName(args[0])
+func (s *deployCmds) runDeployRelPromote(cmd *cobra.Command, args []string) error {
+	release, err := s.deployRelName(args[0])
 	if err != nil {
 		return err
 	}
 	rollout := &clouddeploy.Rollout{
-		TargetId: flagDeployRelPromoteTgt,
+		TargetId: s.flagDeployRelPromoteTgt,
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.DeliveryPipelines.Releases.Rollouts.Create(release, rollout).
-		RolloutId(flagDeployRelPromoteID).Context(ctx).Do()
+		RolloutId(s.flagDeployRelPromoteID).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("promoting release: %w", err)
 	}
-	fmt.Printf("Promote issued for release [%s] to target [%s] (operation: %s).\n",
-		args[0], flagDeployRelPromoteTgt, op.Name)
-	return emitFormatted(op, flagDeployRelFormat)
+	fmt.Fprintf(s.inv.stdout, "Promote issued for release [%s] to target [%s] (operation: %s).\n",
+		args[0], s.flagDeployRelPromoteTgt, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDeployRelFormat)
 }

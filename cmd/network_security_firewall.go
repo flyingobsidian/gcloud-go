@@ -9,16 +9,17 @@ import (
 
 // registerNSFirewall wires up firewall-endpoints (organization scope) and
 // firewall-endpoint-associations (project scope).
-func registerNSFirewall(root *cobra.Command) {
-	registerNSFirewallEndpoints(root)
-	registerNSFirewallEndpointAssociations(root)
+func (s *networkSecurityCmds) registerNSFirewall(root *cobra.Command) {
+	s.registerNSFirewallEndpoints(root)
+	s.registerNSFirewallEndpointAssociations(root)
 }
 
 // firewall-endpoints are organization-scoped (issue #824).
-func registerNSFirewallEndpoints(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSFirewallEndpoints(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.FirewallEndpoint]{
+		s:     s,
 		group: "firewall-endpoints", singular: "firewall endpoint", collection: "firewallEndpoints",
-		parentFn: nsOrgParent,
+		parentFn: s.nsOrgParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.FirewallEndpoint, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Organizations.Locations.FirewallEndpoints.Create(parent, body).FirewallEndpointId(id).Context(ctx)
 			if requestID != "" {
@@ -58,14 +59,15 @@ func registerNSFirewallEndpoints(root *cobra.Command) {
 		secondaryCol:    func(f *networksecurity.FirewallEndpoint) string { return f.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "firewall-endpoints", "Manage firewall endpoints", addNSOrgFlags)
+	crud.build(root, "firewall-endpoints", "Manage firewall endpoints", s.addNSOrgFlags)
 }
 
 // firewall-endpoint-associations are project-scoped (issue #823).
-func registerNSFirewallEndpointAssociations(root *cobra.Command) {
+func (s *networkSecurityCmds) registerNSFirewallEndpointAssociations(root *cobra.Command) {
 	crud := &nsCRUD[networksecurity.FirewallEndpointAssociation]{
+		s:     s,
 		group: "firewall-endpoint-associations", singular: "firewall endpoint association", collection: "firewallEndpointAssociations",
-		parentFn: nsProjectParent,
+		parentFn: s.nsProjectParent,
 		createFn: func(ctx context.Context, svc *networksecurity.Service, parent, id string, body *networksecurity.FirewallEndpointAssociation, requestID string) (*networksecurity.Operation, error) {
 			c := svc.Projects.Locations.FirewallEndpointAssociations.Create(parent, body).FirewallEndpointAssociationId(id).Context(ctx)
 			if requestID != "" {
@@ -108,5 +110,5 @@ func registerNSFirewallEndpointAssociations(root *cobra.Command) {
 		secondaryCol:    func(a *networksecurity.FirewallEndpointAssociation) string { return a.State },
 		secondaryHeader: "STATE",
 	}
-	crud.build(root, "firewall-endpoint-associations", "Manage firewall endpoint associations", addNSLocationFlag)
+	crud.build(root, "firewall-endpoint-associations", "Manage firewall endpoint associations", s.addNSLocationFlag)
 }

@@ -1,85 +1,50 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	vmwareengine "google.golang.org/api/vmwareengine/v1"
 )
 
 // --- gcloud vmware datastores (#1115) ---
 
-var vmwareDatastoresCmd = &cobra.Command{Use: "datastores", Short: "Manage VMware Engine datastores"}
-
-var (
-	flagVmwareDsLocation   string
-	flagVmwareDsFormat     string
-	flagVmwareDsConfigFile string
-	flagVmwareDsUpdateMask string
-	flagVmwareDsPageSize   int64
-)
-
-var (
-	vmwareDsCreateCmd = &cobra.Command{
-		Use: "create DATASTORE", Short: "Create a VMware Engine datastore",
-		Args: cobra.ExactArgs(1), RunE: runVmwareDsCreate,
-	}
-	vmwareDsDeleteCmd = &cobra.Command{
-		Use: "delete DATASTORE", Short: "Delete a VMware Engine datastore",
-		Args: cobra.ExactArgs(1), RunE: runVmwareDsDelete,
-	}
-	vmwareDsDescribeCmd = &cobra.Command{
-		Use: "describe DATASTORE", Short: "Describe a VMware Engine datastore",
-		Args: cobra.ExactArgs(1), RunE: runVmwareDsDescribe,
-	}
-	vmwareDsListCmd = &cobra.Command{
-		Use: "list", Short: "List VMware Engine datastores in a location",
-		Args: cobra.NoArgs, RunE: runVmwareDsList,
-	}
-	vmwareDsUpdateCmd = &cobra.Command{
-		Use: "update DATASTORE", Short: "Update a VMware Engine datastore",
-		Args: cobra.ExactArgs(1), RunE: runVmwareDsUpdate,
-	}
-)
-
-func init() {
+func (s *vmwareCmds) initVmwareDatastores() {
 	all := []*cobra.Command{
-		vmwareDsCreateCmd, vmwareDsDeleteCmd, vmwareDsDescribeCmd,
-		vmwareDsListCmd, vmwareDsUpdateCmd,
+		s.vmwareDsCreateCmd, s.vmwareDsDeleteCmd, s.vmwareDsDescribeCmd,
+		s.vmwareDsListCmd, s.vmwareDsUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagVmwareDsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagVmwareDsLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagVmwareDsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagVmwareDsFormat, "format", "", "Output format")
 	}
-	vmwareDsCreateCmd.Flags().StringVar(&flagVmwareDsConfigFile, "config-file", "", "YAML/JSON file with datastore body (required)")
-	_ = vmwareDsCreateCmd.MarkFlagRequired("config-file")
-	vmwareDsUpdateCmd.Flags().StringVar(&flagVmwareDsConfigFile, "config-file", "", "YAML/JSON file with datastore body (required)")
-	_ = vmwareDsUpdateCmd.MarkFlagRequired("config-file")
-	vmwareDsUpdateCmd.Flags().StringVar(&flagVmwareDsUpdateMask, "update-mask", "", "Update mask (comma-separated field paths)")
-	vmwareDsListCmd.Flags().Int64Var(&flagVmwareDsPageSize, "page-size", 0, "Maximum results per page")
+	s.vmwareDsCreateCmd.Flags().StringVar(&s.flagVmwareDsConfigFile, "config-file", "", "YAML/JSON file with datastore body (required)")
+	_ = s.vmwareDsCreateCmd.MarkFlagRequired("config-file")
+	s.vmwareDsUpdateCmd.Flags().StringVar(&s.flagVmwareDsConfigFile, "config-file", "", "YAML/JSON file with datastore body (required)")
+	_ = s.vmwareDsUpdateCmd.MarkFlagRequired("config-file")
+	s.vmwareDsUpdateCmd.Flags().StringVar(&s.flagVmwareDsUpdateMask, "update-mask", "", "Update mask (comma-separated field paths)")
+	s.vmwareDsListCmd.Flags().Int64Var(&s.flagVmwareDsPageSize, "page-size", 0, "Maximum results per page")
 
-	vmwareDatastoresCmd.AddCommand(all...)
-	vmwareCmd.AddCommand(vmwareDatastoresCmd)
+	s.vmwareDatastoresCmd.AddCommand(all...)
+	s.vmwareCmd.AddCommand(s.vmwareDatastoresCmd)
 }
 
-func vmwareDsName(id string) (string, error) {
-	return vmwareResource(flagVmwareDsLocation, "datastores", id)
+func (s *vmwareCmds) vmwareDsName(id string) (string, error) {
+	return s.vmwareResource(s.flagVmwareDsLocation, "datastores", id)
 }
 
-func runVmwareDsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwareDsLocation)
+func (s *vmwareCmds) runVmwareDsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwareDsLocation)
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.Datastore{}
-	if err := loadYAMLOrJSONInto(flagVmwareDsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwareDsConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -87,17 +52,17 @@ func runVmwareDsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating datastore: %w", err)
 	}
-	fmt.Printf("Create datastore [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwareDsFormat)
+	fmt.Fprintf(s.inv.stdout, "Create datastore [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareDsFormat)
 }
 
-func runVmwareDsDelete(cmd *cobra.Command, args []string) error {
-	name, err := vmwareDsName(args[0])
+func (s *vmwareCmds) runVmwareDsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareDsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -105,17 +70,17 @@ func runVmwareDsDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting datastore: %w", err)
 	}
-	fmt.Printf("Delete datastore [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwareDsFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete datastore [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareDsFormat)
 }
 
-func runVmwareDsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := vmwareDsName(args[0])
+func (s *vmwareCmds) runVmwareDsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareDsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -123,16 +88,16 @@ func runVmwareDsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing datastore: %w", err)
 	}
-	return emitFormatted(got, flagVmwareDsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagVmwareDsFormat)
 }
 
-func runVmwareDsList(cmd *cobra.Command, args []string) error {
-	parent, err := vmwareLocationParent(flagVmwareDsLocation)
+func (s *vmwareCmds) runVmwareDsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.vmwareLocationParent(s.flagVmwareDsLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,8 +105,8 @@ func runVmwareDsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Datastores.List(parent).Context(ctx)
-		if flagVmwareDsPageSize > 0 {
-			call = call.PageSize(flagVmwareDsPageSize)
+		if s.flagVmwareDsPageSize > 0 {
+			call = call.PageSize(s.flagVmwareDsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -156,25 +121,25 @@ func runVmwareDsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagVmwareDsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagVmwareDsFormat)
 }
 
-func runVmwareDsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := vmwareDsName(args[0])
+func (s *vmwareCmds) runVmwareDsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.vmwareDsName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &vmwareengine.Datastore{}
-	if err := loadYAMLOrJSONInto(flagVmwareDsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagVmwareDsConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagVmwareDsUpdateMask
+	mask := s.flagVmwareDsUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.VmwareEngineService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().VmwareEngine(ctx)
 	if err != nil {
 		return err
 	}
@@ -182,6 +147,6 @@ func runVmwareDsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating datastore: %w", err)
 	}
-	fmt.Printf("Update datastore [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagVmwareDsFormat)
+	fmt.Fprintf(s.inv.stdout, "Update datastore [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagVmwareDsFormat)
 }

@@ -7,7 +7,8 @@ import (
 )
 
 func firestoreSubgroup(name string) *cobra.Command {
-	for _, c := range firestoreCmd.Commands() {
+	grp := newFirestoreCmds(legacyTestInvocation())
+	for _, c := range grp.firestoreCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

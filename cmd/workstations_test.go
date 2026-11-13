@@ -7,7 +7,8 @@ import (
 )
 
 func workstationsSubgroup(name string) *cobra.Command {
-	for _, c := range workstationsCmd.Commands() {
+	grp := newWorkstationsCmds(legacyTestInvocation())
+	for _, c := range grp.workstationsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

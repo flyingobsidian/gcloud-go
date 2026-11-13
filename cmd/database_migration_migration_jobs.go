@@ -3,150 +3,70 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	datamigration "google.golang.org/api/datamigration/v1"
 )
 
-var dmMJCmd = &cobra.Command{
-	Use:   "migration-jobs",
-	Short: "Manage Database Migration Service migration jobs",
-}
-
 var (
-	dmMJCreateCmd = &cobra.Command{
-		Use: "create JOB", Short: "Create a migration job from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runDMMJCreate,
-	}
-	dmMJDeleteCmd = &cobra.Command{
-		Use: "delete JOB", Short: "Delete a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJDelete,
-	}
-	dmMJDescribeCmd = &cobra.Command{
-		Use: "describe JOB", Short: "Show details about a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJDescribe,
-	}
-	dmMJUpdateCmd = &cobra.Command{
-		Use: "update JOB", Short: "Update a migration job from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runDMMJUpdate,
-	}
-	dmMJListCmd = &cobra.Command{
-		Use: "list", Short: "List migration jobs in a region",
-		Args: cobra.NoArgs, RunE: runDMMJList,
-	}
-	dmMJStartCmd = &cobra.Command{
-		Use: "start JOB", Short: "Start a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJStart,
-	}
-	dmMJStopCmd = &cobra.Command{
-		Use: "stop JOB", Short: "Stop a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJStop,
-	}
-	dmMJResumeCmd = &cobra.Command{
-		Use: "resume JOB", Short: "Resume a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJResume,
-	}
-	dmMJRestartCmd = &cobra.Command{
-		Use: "restart JOB", Short: "Restart a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJRestart,
-	}
-	dmMJPromoteCmd = &cobra.Command{
-		Use: "promote JOB", Short: "Promote a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJPromote,
-	}
-	dmMJVerifyCmd = &cobra.Command{
-		Use: "verify JOB", Short: "Verify a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJVerify,
-	}
-	dmMJDemoteDestCmd = &cobra.Command{
-		Use: "demote-destination JOB", Short: "Demote the destination of a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJDemoteDestination,
-	}
-	dmMJGenerateSSHCmd = &cobra.Command{
-		Use: "generate-ssh-script JOB", Short: "Generate the SSH script for a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJGenerateSSHScript,
-	}
-	dmMJFetchObjectsCmd = &cobra.Command{
-		Use: "fetch-source-objects JOB", Short: "Fetch the source database objects of a migration job",
-		Args: cobra.ExactArgs(1), RunE: runDMMJFetchSourceObjects,
-	}
-)
-
-var (
-	flagDMMJRegion         string
-	flagDMMJFormat         string
-	flagDMMJConfigFile     string
-	flagDMMJUpdateMask     string
-	flagDMMJListPageSize   int64
-	flagDMMJListLimit      int64
-	flagDMMJListFilter     string
-	flagDMMJListURI        bool
-	flagDMMJAsync          bool
-	flagDMMJSkipValidate   bool
-	flagDMMJRestartFailed  bool
 	flagDMMJRestartSkipVal bool
-	flagDMMJDryRun         bool
-	flagDMMJSSHVM          string
-	flagDMMJSSHVMPort      int64
 )
 
-func init() {
+func (s *databaseMigrationCmds) initDatabaseMigrationMigrationJobs() {
 	all := []*cobra.Command{
-		dmMJCreateCmd, dmMJDeleteCmd, dmMJDescribeCmd, dmMJUpdateCmd, dmMJListCmd,
-		dmMJStartCmd, dmMJStopCmd, dmMJResumeCmd, dmMJRestartCmd, dmMJPromoteCmd,
-		dmMJVerifyCmd, dmMJDemoteDestCmd, dmMJGenerateSSHCmd, dmMJFetchObjectsCmd,
+		s.dmMJCreateCmd, s.dmMJDeleteCmd, s.dmMJDescribeCmd, s.dmMJUpdateCmd, s.dmMJListCmd,
+		s.dmMJStartCmd, s.dmMJStopCmd, s.dmMJResumeCmd, s.dmMJRestartCmd, s.dmMJPromoteCmd,
+		s.dmMJVerifyCmd, s.dmMJDemoteDestCmd, s.dmMJGenerateSSHCmd, s.dmMJFetchObjectsCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDMMJRegion, "region", "", "Region containing the migration job (required)")
+		c.Flags().StringVar(&s.flagDMMJRegion, "region", "", "Region containing the migration job (required)")
 		_ = c.MarkFlagRequired("region")
 	}
 
 	// --config-file for create/update; --update-mask for update.
-	for _, c := range []*cobra.Command{dmMJCreateCmd, dmMJUpdateCmd} {
-		c.Flags().StringVar(&flagDMMJConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dmMJCreateCmd, s.dmMJUpdateCmd} {
+		c.Flags().StringVar(&s.flagDMMJConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the MigrationJob message body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dmMJUpdateCmd.Flags().StringVar(&flagDMMJUpdateMask, "update-mask", "",
+	s.dmMJUpdateCmd.Flags().StringVar(&s.flagDMMJUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 
 	// --async on operations that return an LRO.
 	for _, c := range []*cobra.Command{
-		dmMJCreateCmd, dmMJDeleteCmd, dmMJUpdateCmd, dmMJStartCmd, dmMJStopCmd,
-		dmMJResumeCmd, dmMJRestartCmd, dmMJPromoteCmd, dmMJVerifyCmd, dmMJDemoteDestCmd,
+		s.dmMJCreateCmd, s.dmMJDeleteCmd, s.dmMJUpdateCmd, s.dmMJStartCmd, s.dmMJStopCmd,
+		s.dmMJResumeCmd, s.dmMJRestartCmd, s.dmMJPromoteCmd, s.dmMJVerifyCmd, s.dmMJDemoteDestCmd,
 	} {
-		c.Flags().BoolVar(&flagDMMJAsync, "async", false, "Return the long-running operation without waiting")
+		c.Flags().BoolVar(&s.flagDMMJAsync, "async", false, "Return the long-running operation without waiting")
 	}
 
-	for _, c := range []*cobra.Command{dmMJStartCmd, dmMJResumeCmd, dmMJRestartCmd} {
-		c.Flags().BoolVar(&flagDMMJSkipValidate, "skip-validation", false,
+	for _, c := range []*cobra.Command{s.dmMJStartCmd, s.dmMJResumeCmd, s.dmMJRestartCmd} {
+		c.Flags().BoolVar(&s.flagDMMJSkipValidate, "skip-validation", false,
 			"Skip pre-flight validation before performing the action")
 	}
-	dmMJRestartCmd.Flags().BoolVar(&flagDMMJRestartFailed, "restart-failed-objects", false,
+	s.dmMJRestartCmd.Flags().BoolVar(&s.flagDMMJRestartFailed, "restart-failed-objects", false,
 		"Only restart failed objects")
 
-	dmMJVerifyCmd.Flags().BoolVar(&flagDMMJDryRun, "dry-run", false,
+	s.dmMJVerifyCmd.Flags().BoolVar(&s.flagDMMJDryRun, "dry-run", false,
 		"Verify only; do not persist changes")
 
-	dmMJGenerateSSHCmd.Flags().StringVar(&flagDMMJSSHVM, "vm", "",
+	s.dmMJGenerateSSHCmd.Flags().StringVar(&s.flagDMMJSSHVM, "vm", "",
 		"Name of the bastion VM to use or create (required)")
-	dmMJGenerateSSHCmd.Flags().Int64Var(&flagDMMJSSHVMPort, "vm-port", 22,
+	s.dmMJGenerateSSHCmd.Flags().Int64Var(&s.flagDMMJSSHVMPort, "vm-port", 22,
 		"SSH port to open on the bastion VM")
-	_ = dmMJGenerateSSHCmd.MarkFlagRequired("vm")
+	_ = s.dmMJGenerateSSHCmd.MarkFlagRequired("vm")
 
-	dmMJDescribeCmd.Flags().StringVar(&flagDMMJFormat, "format", "", "Output format")
-	dmMJListCmd.Flags().StringVar(&flagDMMJFormat, "format", "", "Output format")
-	dmMJListCmd.Flags().Int64Var(&flagDMMJListPageSize, "page-size", 0, "Page size for API pagination")
-	dmMJListCmd.Flags().Int64Var(&flagDMMJListLimit, "limit", 0, "Cap total results (0 = no cap)")
-	dmMJListCmd.Flags().StringVar(&flagDMMJListFilter, "filter", "", "Server-side filter expression")
-	dmMJListCmd.Flags().BoolVar(&flagDMMJListURI, "uri", false, "Print resource names only")
+	s.dmMJDescribeCmd.Flags().StringVar(&s.flagDMMJFormat, "format", "", "Output format")
+	s.dmMJListCmd.Flags().StringVar(&s.flagDMMJFormat, "format", "", "Output format")
+	s.dmMJListCmd.Flags().Int64Var(&s.flagDMMJListPageSize, "page-size", 0, "Page size for API pagination")
+	s.dmMJListCmd.Flags().Int64Var(&s.flagDMMJListLimit, "limit", 0, "Cap total results (0 = no cap)")
+	s.dmMJListCmd.Flags().StringVar(&s.flagDMMJListFilter, "filter", "", "Server-side filter expression")
+	s.dmMJListCmd.Flags().BoolVar(&s.flagDMMJListURI, "uri", false, "Print resource names only")
 
-	dmMJCmd.AddCommand(all...)
-	databaseMigrationCmd.AddCommand(dmMJCmd)
+	s.dmMJCmd.AddCommand(all...)
+	s.databaseMigrationCmd.AddCommand(s.dmMJCmd)
 }
 
 func dmMJResourceName(name, project, region string) string {
@@ -156,43 +76,43 @@ func dmMJResourceName(name, project, region string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/migrationJobs/%s", project, region, name)
 }
 
-func runDMMJDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMMJDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	mj, err := svc.Projects.Locations.MigrationJobs.Get(dmMJResourceName(args[0], project, flagDMMJRegion)).Context(ctx).Do()
+	mj, err := svc.Projects.Locations.MigrationJobs.Get(dmMJResourceName(args[0], project, s.flagDMMJRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing migration job: %w", err)
 	}
-	return emitFormatted(mj, flagDMMJFormat)
+	return emitFormattedTo(s.inv.stdout, mj, s.flagDMMJFormat)
 }
 
-func runDMMJList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMMJList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	parent := dmParent(project, flagDMMJRegion)
+	parent := dmParent(project, s.flagDMMJRegion)
 	var all []*datamigration.MigrationJob
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.MigrationJobs.List(parent).Context(ctx)
-		if flagDMMJListFilter != "" {
-			call = call.Filter(flagDMMJListFilter)
+		if s.flagDMMJListFilter != "" {
+			call = call.Filter(s.flagDMMJListFilter)
 		}
-		if flagDMMJListPageSize > 0 {
-			call = call.PageSize(flagDMMJListPageSize)
+		if s.flagDMMJListPageSize > 0 {
+			call = call.PageSize(s.flagDMMJListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -202,8 +122,8 @@ func runDMMJList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing migration jobs: %w", err)
 		}
 		all = append(all, resp.MigrationJobs...)
-		if flagDMMJListLimit > 0 && int64(len(all)) >= flagDMMJListLimit {
-			all = all[:flagDMMJListLimit]
+		if s.flagDMMJListLimit > 0 && int64(len(all)) >= s.flagDMMJListLimit {
+			all = all[:s.flagDMMJListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -211,216 +131,216 @@ func runDMMJList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDMMJListURI {
+	if s.flagDMMJListURI {
 		for _, m := range all {
-			fmt.Println(m.Name)
+			fmt.Fprintln(s.inv.stdout, m.Name)
 		}
 		return nil
 	}
-	if flagDMMJFormat != "" {
-		return emitFormatted(all, flagDMMJFormat)
+	if s.flagDMMJFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDMMJFormat)
 	}
-	printTableHeading(len(all), "%-40s %-15s %s\n", "NAME", "STATE", "TYPE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-15s %s\n", "NAME", "STATE", "TYPE")
 	for _, m := range all {
-		fmt.Printf("%-40s %-15s %s\n", path.Base(m.Name), m.State, m.Type)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-15s %s\n", path.Base(m.Name), m.State, m.Type)
 	}
 	return nil
 }
 
-func runDMMJCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMMJCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	mj := &datamigration.MigrationJob{}
-	if err := loadYAMLOrJSONInto(flagDMMJConfigFile, mj); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDMMJConfigFile, mj); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.MigrationJobs.Create(dmParent(project, flagDMMJRegion), mj).
+	op, err := svc.Projects.Locations.MigrationJobs.Create(dmParent(project, s.flagDMMJRegion), mj).
 		MigrationJobId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating migration job: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Create", args[0], flagDMMJAsync)
+	return s.dmFinishOp(ctx, svc, op, "Create", args[0], s.flagDMMJAsync)
 }
 
-func runDMMJDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMMJDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.MigrationJobs.Delete(dmMJResourceName(args[0], project, flagDMMJRegion)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.MigrationJobs.Delete(dmMJResourceName(args[0], project, s.flagDMMJRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting migration job: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Delete", args[0], flagDMMJAsync)
+	return s.dmFinishOp(ctx, svc, op, "Delete", args[0], s.flagDMMJAsync)
 }
 
-func runDMMJUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMMJUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	mj := &datamigration.MigrationJob{}
-	if err := loadYAMLOrJSONInto(flagDMMJConfigFile, mj); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDMMJConfigFile, mj); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	mask := flagDMMJUpdateMask
+	mask := s.flagDMMJUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(mj))
 	}
-	op, err := svc.Projects.Locations.MigrationJobs.Patch(dmMJResourceName(args[0], project, flagDMMJRegion), mj).
+	op, err := svc.Projects.Locations.MigrationJobs.Patch(dmMJResourceName(args[0], project, s.flagDMMJRegion), mj).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating migration job: %w", err)
 	}
-	return dmFinishOp(ctx, svc, op, "Update", args[0], flagDMMJAsync)
+	return s.dmFinishOp(ctx, svc, op, "Update", args[0], s.flagDMMJAsync)
 }
 
-func runDMMJStart(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Start", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
-		req := &datamigration.StartMigrationJobRequest{SkipValidation: flagDMMJSkipValidate}
+func (s *databaseMigrationCmds) runDMMJStart(cmd *cobra.Command, args []string) error {
+	return s.dmMJInvokeAction(args[0], "Start", s.flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
+		req := &datamigration.StartMigrationJobRequest{SkipValidation: s.flagDMMJSkipValidate}
 		return svc.Projects.Locations.MigrationJobs.Start(name, req).Context(ctx).Do()
 	})
 }
 
-func runDMMJStop(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Stop", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
+func (s *databaseMigrationCmds) runDMMJStop(cmd *cobra.Command, args []string) error {
+	return s.dmMJInvokeAction(args[0], "Stop", s.flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		return svc.Projects.Locations.MigrationJobs.Stop(name, &datamigration.StopMigrationJobRequest{}).Context(ctx).Do()
 	})
 }
 
-func runDMMJResume(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Resume", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
-		req := &datamigration.ResumeMigrationJobRequest{SkipValidation: flagDMMJSkipValidate}
+func (s *databaseMigrationCmds) runDMMJResume(cmd *cobra.Command, args []string) error {
+	return s.dmMJInvokeAction(args[0], "Resume", s.flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
+		req := &datamigration.ResumeMigrationJobRequest{SkipValidation: s.flagDMMJSkipValidate}
 		return svc.Projects.Locations.MigrationJobs.Resume(name, req).Context(ctx).Do()
 	})
 }
 
-func runDMMJRestart(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Restart", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
+func (s *databaseMigrationCmds) runDMMJRestart(cmd *cobra.Command, args []string) error {
+	return s.dmMJInvokeAction(args[0], "Restart", s.flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		req := &datamigration.RestartMigrationJobRequest{
-			SkipValidation:       flagDMMJSkipValidate,
-			RestartFailedObjects: flagDMMJRestartFailed,
+			SkipValidation:       s.flagDMMJSkipValidate,
+			RestartFailedObjects: s.flagDMMJRestartFailed,
 		}
 		return svc.Projects.Locations.MigrationJobs.Restart(name, req).Context(ctx).Do()
 	})
 }
 
-func runDMMJPromote(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Promote", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
+func (s *databaseMigrationCmds) runDMMJPromote(cmd *cobra.Command, args []string) error {
+	return s.dmMJInvokeAction(args[0], "Promote", s.flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		return svc.Projects.Locations.MigrationJobs.Promote(name, &datamigration.PromoteMigrationJobRequest{}).Context(ctx).Do()
 	})
 }
 
-func runDMMJVerify(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Verify", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
+func (s *databaseMigrationCmds) runDMMJVerify(cmd *cobra.Command, args []string) error {
+	return s.dmMJInvokeAction(args[0], "Verify", s.flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		return svc.Projects.Locations.MigrationJobs.Verify(name, &datamigration.VerifyMigrationJobRequest{}).Context(ctx).Do()
 	})
 }
 
-func runDMMJDemoteDestination(cmd *cobra.Command, args []string) error {
-	return dmMJInvokeAction(args[0], "Demote destination", flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
+func (s *databaseMigrationCmds) runDMMJDemoteDestination(cmd *cobra.Command, args []string) error {
+	return s.dmMJInvokeAction(args[0], "Demote destination", s.flagDMMJAsync, func(ctx context.Context, svc *datamigration.Service, name string) (*datamigration.Operation, error) {
 		return svc.Projects.Locations.MigrationJobs.DemoteDestination(name, &datamigration.DemoteDestinationRequest{}).Context(ctx).Do()
 	})
 }
 
-func runDMMJGenerateSSHScript(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMMJGenerateSSHScript(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
 	req := &datamigration.GenerateSshScriptRequest{
-		Vm:     flagDMMJSSHVM,
-		VmPort: flagDMMJSSHVMPort,
+		Vm:     s.flagDMMJSSHVM,
+		VmPort: s.flagDMMJSSHVMPort,
 	}
-	resp, err := svc.Projects.Locations.MigrationJobs.GenerateSshScript(dmMJResourceName(args[0], project, flagDMMJRegion), req).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.MigrationJobs.GenerateSshScript(dmMJResourceName(args[0], project, s.flagDMMJRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("generating SSH script: %w", err)
 	}
-	fmt.Println(resp.Script)
+	fmt.Fprintln(s.inv.stdout, resp.Script)
 	return nil
 }
 
-func runDMMJFetchSourceObjects(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) runDMMJFetchSourceObjects(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.MigrationJobs.FetchSourceObjects(dmMJResourceName(args[0], project, flagDMMJRegion)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.MigrationJobs.FetchSourceObjects(dmMJResourceName(args[0], project, s.flagDMMJRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("fetching source objects: %w", err)
 	}
-	if flagDMMJAsync {
-		fmt.Fprintf(os.Stderr, "Fetch in progress (operation: %s).\n", op.Name)
-		return emitFormatted(op, "")
+	if s.flagDMMJAsync {
+		fmt.Fprintf(s.inv.stderr, "Fetch in progress (operation: %s).\n", op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	op, err = waitForDMOperation(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(op.Response, "")
+	return emitFormattedTo(s.inv.stdout, op.Response, "")
 }
 
 // dmMJInvokeAction wraps the common "resolve project → build service → run
 // action call that returns an Operation → optionally wait" pattern used by
 // start/stop/resume/restart/promote/verify/demote actions.
-func dmMJInvokeAction(name, verb string, async bool, action func(ctx context.Context, svc *datamigration.Service, resourceName string) (*datamigration.Operation, error)) error {
-	project, err := resolveProject()
+func (s *databaseMigrationCmds) dmMJInvokeAction(name, verb string, async bool, action func(ctx context.Context, svc *datamigration.Service, resourceName string) (*datamigration.Operation, error)) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataMigrationService(ctx, flagAccount)
+	ctx := s.inv.context()
+	svc, err := s.inv.clients().DataMigration(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := action(ctx, svc, dmMJResourceName(name, project, flagDMMJRegion))
+	op, err := action(ctx, svc, dmMJResourceName(name, project, s.flagDMMJRegion))
 	if err != nil {
 		return fmt.Errorf("%s migration job: %w", strings.ToLower(verb), err)
 	}
-	return dmFinishOp(ctx, svc, op, verb, name, async)
+	return s.dmFinishOp(ctx, svc, op, verb, name, async)
 }
 
 // dmFinishOp either prints the operation name (when async) or blocks until it
 // completes, then prints a short success message on stderr.
-func dmFinishOp(ctx context.Context, svc *datamigration.Service, op *datamigration.Operation, verb, name string, async bool) error {
+func (s *databaseMigrationCmds) dmFinishOp(ctx context.Context, svc *datamigration.Service, op *datamigration.Operation, verb, name string, async bool) error {
 	if async {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, "")
+		fmt.Fprintf(s.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	op, err := waitForDMOperation(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s migration job [%s] completed.\n", verb, name)
+	fmt.Fprintf(s.inv.stderr, "%s migration job [%s] completed.\n", verb, name)
 	if op.Response != nil {
-		return emitFormatted(op.Response, "")
+		return emitFormattedTo(s.inv.stdout, op.Response, "")
 	}
 	return nil
 }

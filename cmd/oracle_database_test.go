@@ -7,7 +7,8 @@ import (
 )
 
 func oracleSubgroup(name string) *cobra.Command {
-	for _, c := range oracleDatabaseCmd.Commands() {
+	grp := newOracleDatabaseCmds(legacyTestInvocation())
+	for _, c := range grp.oracleDatabaseCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

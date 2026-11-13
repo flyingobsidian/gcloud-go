@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,39 +9,25 @@ import (
 
 // --- gcloud apigee deployments (#1378) ---
 
-var apigeeDeploymentsCmd = &cobra.Command{Use: "deployments", Short: "Manage Apigee deployments"}
-
-var (
-	flagApigeeDeployOrganization string
-	flagApigeeDeployFormat       string
-)
-
-var (
-	apigeeDeployListCmd = &cobra.Command{
-		Use: "list", Short: "List deployments in an organization",
-		Args: cobra.NoArgs, RunE: runApigeeDeployList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{apigeeDeployListCmd}
+func (s *apigeeCmds) initApigeeDeployments() {
+	all := []*cobra.Command{s.apigeeDeployListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApigeeDeployOrganization, "organization", "", "Apigee organization (required)")
+		c.Flags().StringVar(&s.flagApigeeDeployOrganization, "organization", "", "Apigee organization (required)")
 		_ = c.MarkFlagRequired("organization")
-		c.Flags().StringVar(&flagApigeeDeployFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagApigeeDeployFormat, "format", "", "Output format")
 	}
 
-	apigeeDeploymentsCmd.AddCommand(all...)
-	apigeeCmd.AddCommand(apigeeDeploymentsCmd)
+	s.apigeeDeploymentsCmd.AddCommand(all...)
+	s.apigeeCmd.AddCommand(s.apigeeDeploymentsCmd)
 }
 
-func runApigeeDeployList(cmd *cobra.Command, args []string) error {
-	parent, err := apigeeOrgName(flagApigeeDeployOrganization)
+func (s *apigeeCmds) runApigeeDeployList(cmd *cobra.Command, args []string) error {
+	parent, err := apigeeOrgName(s.flagApigeeDeployOrganization)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, parent)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -52,5 +37,5 @@ func runApigeeDeployList(cmd *cobra.Command, args []string) error {
 	}
 	var all []*apigee.GoogleCloudApigeeV1Deployment
 	all = append(all, resp.Deployments...)
-	return emitFormatted(all, flagApigeeDeployFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagApigeeDeployFormat)
 }

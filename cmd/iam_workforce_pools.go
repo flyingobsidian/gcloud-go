@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudiam "google.golang.org/api/iam/v1"
 )
@@ -18,158 +16,92 @@ import (
 // iam_workforce_pools_subjects.go. The operations sub-subgroups are not yet
 // ported.
 
-var iamWorkforcePoolsCmd = &cobra.Command{Use: "workforce-pools", Short: "Manage Workforce Identity Federation pools"}
-var iamWorkforcePoolsProvidersCmd = &cobra.Command{Use: "providers", Short: "Manage workforce-pool providers"}
-
-var (
-	flagIamWpLocation     string
-	flagIamWpOrganization string
-	flagIamWpFormat       string
-	flagIamWpConfigFile   string
-	flagIamWpUpdateMask   string
-	flagIamWpPageSize     int64
-)
-
-var (
-	iamWpCreateCmd = &cobra.Command{
-		Use: "create POOL", Short: "Create a workforce pool",
-		Args: cobra.ExactArgs(1), RunE: runIamWpCreate,
-	}
-	iamWpDeleteCmd = &cobra.Command{
-		Use: "delete POOL", Short: "Delete a workforce pool",
-		Args: cobra.ExactArgs(1), RunE: runIamWpDelete,
-	}
-	iamWpDescribeCmd = &cobra.Command{
-		Use: "describe POOL", Short: "Describe a workforce pool",
-		Args: cobra.ExactArgs(1), RunE: runIamWpDescribe,
-	}
-	iamWpListCmd = &cobra.Command{
-		Use: "list", Short: "List workforce pools in an organization's location",
-		Args: cobra.NoArgs, RunE: runIamWpList,
-	}
-	iamWpUpdateCmd = &cobra.Command{
-		Use: "update POOL", Short: "Update a workforce pool",
-		Args: cobra.ExactArgs(1), RunE: runIamWpUpdate,
-	}
-	iamWpUndeleteCmd = &cobra.Command{
-		Use: "undelete POOL", Short: "Undelete a workforce pool",
-		Args: cobra.ExactArgs(1), RunE: runIamWpUndelete,
-	}
-
-	iamWpProvCreateCmd = &cobra.Command{
-		Use: "create PROVIDER", Short: "Create a workforce-pool provider",
-		Args: cobra.ExactArgs(1), RunE: runIamWpProvCreate,
-	}
-	iamWpProvDeleteCmd = &cobra.Command{
-		Use: "delete PROVIDER", Short: "Delete a workforce-pool provider",
-		Args: cobra.ExactArgs(1), RunE: runIamWpProvDelete,
-	}
-	iamWpProvDescribeCmd = &cobra.Command{
-		Use: "describe PROVIDER", Short: "Describe a workforce-pool provider",
-		Args: cobra.ExactArgs(1), RunE: runIamWpProvDescribe,
-	}
-	iamWpProvListCmd = &cobra.Command{
-		Use: "list", Short: "List workforce-pool providers",
-		Args: cobra.NoArgs, RunE: runIamWpProvList,
-	}
-	iamWpProvUpdateCmd = &cobra.Command{
-		Use: "update PROVIDER", Short: "Update a workforce-pool provider",
-		Args: cobra.ExactArgs(1), RunE: runIamWpProvUpdate,
-	}
-	iamWpProvUndeleteCmd = &cobra.Command{
-		Use: "undelete PROVIDER", Short: "Undelete a workforce-pool provider",
-		Args: cobra.ExactArgs(1), RunE: runIamWpProvUndelete,
-	}
-)
-
-var flagIamWpPool string
-
-func init() {
+func (s *iamCmds) initIamWorkforcePools() {
 	pools := []*cobra.Command{
-		iamWpCreateCmd, iamWpDeleteCmd, iamWpDescribeCmd,
-		iamWpListCmd, iamWpUpdateCmd, iamWpUndeleteCmd,
+		s.iamWpCreateCmd, s.iamWpDeleteCmd, s.iamWpDescribeCmd,
+		s.iamWpListCmd, s.iamWpUpdateCmd, s.iamWpUndeleteCmd,
 	}
 	providers := []*cobra.Command{
-		iamWpProvCreateCmd, iamWpProvDeleteCmd, iamWpProvDescribeCmd,
-		iamWpProvListCmd, iamWpProvUpdateCmd, iamWpProvUndeleteCmd,
+		s.iamWpProvCreateCmd, s.iamWpProvDeleteCmd, s.iamWpProvDescribeCmd,
+		s.iamWpProvListCmd, s.iamWpProvUpdateCmd, s.iamWpProvUndeleteCmd,
 	}
 	all := append(append([]*cobra.Command{}, pools...), providers...)
 	for _, c := range all {
-		c.Flags().StringVar(&flagIamWpOrganization, "organization", "", "Owning organization ID (required)")
+		c.Flags().StringVar(&s.flagIamWpOrganization, "organization", "", "Owning organization ID (required)")
 		_ = c.MarkFlagRequired("organization")
-		c.Flags().StringVar(&flagIamWpLocation, "location", "global", "Location (defaults to global)")
-		c.Flags().StringVar(&flagIamWpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagIamWpLocation, "location", "global", "Location (defaults to global)")
+		c.Flags().StringVar(&s.flagIamWpFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{iamWpCreateCmd, iamWpUpdateCmd, iamWpProvCreateCmd, iamWpProvUpdateCmd} {
-		c.Flags().StringVar(&flagIamWpConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
+	for _, c := range []*cobra.Command{s.iamWpCreateCmd, s.iamWpUpdateCmd, s.iamWpProvCreateCmd, s.iamWpProvUpdateCmd} {
+		c.Flags().StringVar(&s.flagIamWpConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	for _, c := range []*cobra.Command{iamWpUpdateCmd, iamWpProvUpdateCmd} {
-		c.Flags().StringVar(&flagIamWpUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	for _, c := range []*cobra.Command{s.iamWpUpdateCmd, s.iamWpProvUpdateCmd} {
+		c.Flags().StringVar(&s.flagIamWpUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 	}
-	for _, c := range []*cobra.Command{iamWpListCmd, iamWpProvListCmd} {
-		c.Flags().Int64Var(&flagIamWpPageSize, "page-size", 0, "Maximum results per page")
+	for _, c := range []*cobra.Command{s.iamWpListCmd, s.iamWpProvListCmd} {
+		c.Flags().Int64Var(&s.flagIamWpPageSize, "page-size", 0, "Maximum results per page")
 	}
 	for _, c := range providers {
-		c.Flags().StringVar(&flagIamWpPool, "workforce-pool", "", "Owning workforce pool (required)")
+		c.Flags().StringVar(&s.flagIamWpPool, "workforce-pool", "", "Owning workforce pool (required)")
 		_ = c.MarkFlagRequired("workforce-pool")
 	}
 
-	iamWorkforcePoolsProvidersCmd.AddCommand(providers...)
-	iamWorkforcePoolsCmd.AddCommand(pools...)
-	iamWorkforcePoolsCmd.AddCommand(iamWorkforcePoolsProvidersCmd)
-	iamCmd.AddCommand(iamWorkforcePoolsCmd)
+	s.iamWorkforcePoolsProvidersCmd.AddCommand(providers...)
+	s.iamWorkforcePoolsCmd.AddCommand(pools...)
+	s.iamWorkforcePoolsCmd.AddCommand(s.iamWorkforcePoolsProvidersCmd)
+	s.iamCmd.AddCommand(s.iamWorkforcePoolsCmd)
 }
 
-func iamWpLocationParent() (string, error) {
-	if flagIamWpOrganization == "" {
+func (s *iamCmds) iamWpLocationParent() (string, error) {
+	if s.flagIamWpOrganization == "" {
 		return "", fmt.Errorf("--organization is required")
 	}
-	loc := flagIamWpLocation
+	loc := s.flagIamWpLocation
 	if loc == "" {
 		loc = "global"
 	}
 	return fmt.Sprintf("locations/%s", loc), nil
 }
 
-func iamWpPoolName(id string) (string, error) {
+func (s *iamCmds) iamWpPoolName(id string) (string, error) {
 	if strings.HasPrefix(id, "locations/") {
 		return id, nil
 	}
-	parent, err := iamWpLocationParent()
+	parent, err := s.iamWpLocationParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/workforcePools/%s", parent, id), nil
 }
 
-func iamWpProviderName(id string) (string, error) {
+func (s *iamCmds) iamWpProviderName(id string) (string, error) {
 	if strings.HasPrefix(id, "locations/") {
 		return id, nil
 	}
-	if flagIamWpPool == "" {
+	if s.flagIamWpPool == "" {
 		return "", fmt.Errorf("--workforce-pool is required")
 	}
-	parent, err := iamWpLocationParent()
+	parent, err := s.iamWpLocationParent()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s/workforcePools/%s/providers/%s", parent, flagIamWpPool, id), nil
+	return fmt.Sprintf("%s/workforcePools/%s/providers/%s", parent, s.flagIamWpPool, id), nil
 }
 
 // pools
 
-func runIamWpCreate(cmd *cobra.Command, args []string) error {
-	parent, err := iamWpLocationParent()
+func (s *iamCmds) runIamWpCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.iamWpLocationParent()
 	if err != nil {
 		return err
 	}
 	body := &cloudiam.WorkforcePool{}
-	if err := loadYAMLOrJSONInto(flagIamWpConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagIamWpConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -177,17 +109,17 @@ func runIamWpCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating workforce pool: %w", err)
 	}
-	fmt.Printf("Create workforce pool [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagIamWpFormat)
+	fmt.Fprintf(s.inv.stdout, "Create workforce pool [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIamWpFormat)
 }
 
-func runIamWpDelete(cmd *cobra.Command, args []string) error {
-	name, err := iamWpPoolName(args[0])
+func (s *iamCmds) runIamWpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.iamWpPoolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -195,17 +127,17 @@ func runIamWpDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting workforce pool: %w", err)
 	}
-	fmt.Printf("Delete workforce pool [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagIamWpFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete workforce pool [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIamWpFormat)
 }
 
-func runIamWpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := iamWpPoolName(args[0])
+func (s *iamCmds) runIamWpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.iamWpPoolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -213,25 +145,25 @@ func runIamWpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing workforce pool: %w", err)
 	}
-	return emitFormatted(got, flagIamWpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIamWpFormat)
 }
 
-func runIamWpList(cmd *cobra.Command, args []string) error {
-	parent, err := iamWpLocationParent()
+func (s *iamCmds) runIamWpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.iamWpLocationParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*cloudiam.WorkforcePool
 	pageToken := ""
 	for {
-		call := svc.Locations.WorkforcePools.List(parent).Parent("organizations/" + flagIamWpOrganization).Context(ctx)
-		if flagIamWpPageSize > 0 {
-			call = call.PageSize(flagIamWpPageSize)
+		call := svc.Locations.WorkforcePools.List(parent).Parent("organizations/" + s.flagIamWpOrganization).Context(ctx)
+		if s.flagIamWpPageSize > 0 {
+			call = call.PageSize(s.flagIamWpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -246,25 +178,25 @@ func runIamWpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagIamWpFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagIamWpFormat)
 }
 
-func runIamWpUpdate(cmd *cobra.Command, args []string) error {
-	name, err := iamWpPoolName(args[0])
+func (s *iamCmds) runIamWpUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.iamWpPoolName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &cloudiam.WorkforcePool{}
-	if err := loadYAMLOrJSONInto(flagIamWpConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagIamWpConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagIamWpUpdateMask
+	mask := s.flagIamWpUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -276,17 +208,17 @@ func runIamWpUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating workforce pool: %w", err)
 	}
-	fmt.Printf("Update workforce pool [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagIamWpFormat)
+	fmt.Fprintf(s.inv.stdout, "Update workforce pool [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIamWpFormat)
 }
 
-func runIamWpUndelete(cmd *cobra.Command, args []string) error {
-	name, err := iamWpPoolName(args[0])
+func (s *iamCmds) runIamWpUndelete(cmd *cobra.Command, args []string) error {
+	name, err := s.iamWpPoolName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -294,24 +226,24 @@ func runIamWpUndelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("undeleting workforce pool: %w", err)
 	}
-	fmt.Printf("Undelete workforce pool [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagIamWpFormat)
+	fmt.Fprintf(s.inv.stdout, "Undelete workforce pool [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIamWpFormat)
 }
 
 // providers
 
-func runIamWpProvCreate(cmd *cobra.Command, args []string) error {
-	parent, err := iamWpLocationParent()
+func (s *iamCmds) runIamWpProvCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.iamWpLocationParent()
 	if err != nil {
 		return err
 	}
-	poolParent := fmt.Sprintf("%s/workforcePools/%s", parent, flagIamWpPool)
+	poolParent := fmt.Sprintf("%s/workforcePools/%s", parent, s.flagIamWpPool)
 	body := &cloudiam.WorkforcePoolProvider{}
-	if err := loadYAMLOrJSONInto(flagIamWpConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagIamWpConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -319,17 +251,17 @@ func runIamWpProvCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating provider: %w", err)
 	}
-	fmt.Printf("Create workforce-pool provider [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagIamWpFormat)
+	fmt.Fprintf(s.inv.stdout, "Create workforce-pool provider [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIamWpFormat)
 }
 
-func runIamWpProvDelete(cmd *cobra.Command, args []string) error {
-	name, err := iamWpProviderName(args[0])
+func (s *iamCmds) runIamWpProvDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.iamWpProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -337,17 +269,17 @@ func runIamWpProvDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting provider: %w", err)
 	}
-	fmt.Printf("Delete workforce-pool provider [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagIamWpFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete workforce-pool provider [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIamWpFormat)
 }
 
-func runIamWpProvDescribe(cmd *cobra.Command, args []string) error {
-	name, err := iamWpProviderName(args[0])
+func (s *iamCmds) runIamWpProvDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.iamWpProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -355,17 +287,17 @@ func runIamWpProvDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing provider: %w", err)
 	}
-	return emitFormatted(got, flagIamWpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIamWpFormat)
 }
 
-func runIamWpProvList(cmd *cobra.Command, args []string) error {
-	parent, err := iamWpLocationParent()
+func (s *iamCmds) runIamWpProvList(cmd *cobra.Command, args []string) error {
+	parent, err := s.iamWpLocationParent()
 	if err != nil {
 		return err
 	}
-	poolParent := fmt.Sprintf("%s/workforcePools/%s", parent, flagIamWpPool)
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	poolParent := fmt.Sprintf("%s/workforcePools/%s", parent, s.flagIamWpPool)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -373,8 +305,8 @@ func runIamWpProvList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Locations.WorkforcePools.Providers.List(poolParent).Context(ctx)
-		if flagIamWpPageSize > 0 {
-			call = call.PageSize(flagIamWpPageSize)
+		if s.flagIamWpPageSize > 0 {
+			call = call.PageSize(s.flagIamWpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -389,25 +321,25 @@ func runIamWpProvList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagIamWpFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagIamWpFormat)
 }
 
-func runIamWpProvUpdate(cmd *cobra.Command, args []string) error {
-	name, err := iamWpProviderName(args[0])
+func (s *iamCmds) runIamWpProvUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.iamWpProviderName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &cloudiam.WorkforcePoolProvider{}
-	if err := loadYAMLOrJSONInto(flagIamWpConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagIamWpConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagIamWpUpdateMask
+	mask := s.flagIamWpUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -419,17 +351,17 @@ func runIamWpProvUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating provider: %w", err)
 	}
-	fmt.Printf("Update workforce-pool provider [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagIamWpFormat)
+	fmt.Fprintf(s.inv.stdout, "Update workforce-pool provider [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIamWpFormat)
 }
 
-func runIamWpProvUndelete(cmd *cobra.Command, args []string) error {
-	name, err := iamWpProviderName(args[0])
+func (s *iamCmds) runIamWpProvUndelete(cmd *cobra.Command, args []string) error {
+	name, err := s.iamWpProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.IAMService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().IAM(ctx)
 	if err != nil {
 		return err
 	}
@@ -437,6 +369,6 @@ func runIamWpProvUndelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("undeleting provider: %w", err)
 	}
-	fmt.Printf("Undelete workforce-pool provider [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagIamWpFormat)
+	fmt.Fprintf(s.inv.stdout, "Undelete workforce-pool provider [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIamWpFormat)
 }

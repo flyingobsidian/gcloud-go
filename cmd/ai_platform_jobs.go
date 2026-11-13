@@ -1,87 +1,45 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	ml "google.golang.org/api/ml/v1"
 )
 
 // --- gcloud ai-platform jobs (#982) ---
 
-var aiPlatformJobsCmd = &cobra.Command{Use: "jobs", Short: "Manage AI Platform jobs"}
-
-var (
-	flagAIPlatformJobsFormat     string
-	flagAIPlatformJobsConfigFile string
-	flagAIPlatformJobsPageSize   int64
-	flagAIPlatformJobsFilter     string
-	flagAIPlatformJobsUpdateMask string
-	flagAIPlatformJobsJobID      string
-	flagAIPlatformJobsPollEvery  time.Duration
-	flagAIPlatformJobsTimeout    time.Duration
-)
-
-var (
-	aiPlatformJobsCancelCmd = &cobra.Command{
-		Use: "cancel JOB", Short: "Cancel a running AI Platform job",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformJobsCancel,
-	}
-	aiPlatformJobsDescribeCmd = &cobra.Command{
-		Use: "describe JOB", Short: "Describe an AI Platform job",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformJobsDescribe,
-	}
-	aiPlatformJobsListCmd = &cobra.Command{
-		Use: "list", Short: "List AI Platform jobs",
-		Args: cobra.NoArgs, RunE: runAIPlatformJobsList,
-	}
-	aiPlatformJobsStreamCmd = &cobra.Command{
-		Use: "stream-logs JOB", Short: "Poll an AI Platform job's state until it reaches a terminal state",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformJobsStream,
-	}
-	aiPlatformJobsSubmitCmd = &cobra.Command{
-		Use: "submit", Short: "Submit an AI Platform training or prediction job",
-		Args: cobra.NoArgs, RunE: runAIPlatformJobsSubmit,
-	}
-	aiPlatformJobsUpdateCmd = &cobra.Command{
-		Use: "update JOB", Short: "Update an AI Platform job",
-		Args: cobra.ExactArgs(1), RunE: runAIPlatformJobsUpdate,
-	}
-)
-
-func init() {
+func (s *aiPlatformCmds) initAiPlatformJobs() {
 	all := []*cobra.Command{
-		aiPlatformJobsCancelCmd, aiPlatformJobsDescribeCmd, aiPlatformJobsListCmd,
-		aiPlatformJobsStreamCmd, aiPlatformJobsSubmitCmd, aiPlatformJobsUpdateCmd,
+		s.aiPlatformJobsCancelCmd, s.aiPlatformJobsDescribeCmd, s.aiPlatformJobsListCmd,
+		s.aiPlatformJobsStreamCmd, s.aiPlatformJobsSubmitCmd, s.aiPlatformJobsUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAIPlatformJobsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAIPlatformJobsFormat, "format", "", "Output format")
 	}
-	aiPlatformJobsListCmd.Flags().Int64Var(&flagAIPlatformJobsPageSize, "page-size", 0, "Maximum results per page")
-	aiPlatformJobsListCmd.Flags().StringVar(&flagAIPlatformJobsFilter, "filter", "", "List filter expression")
+	s.aiPlatformJobsListCmd.Flags().Int64Var(&s.flagAIPlatformJobsPageSize, "page-size", 0, "Maximum results per page")
+	s.aiPlatformJobsListCmd.Flags().StringVar(&s.flagAIPlatformJobsFilter, "filter", "", "List filter expression")
 
-	aiPlatformJobsStreamCmd.Flags().DurationVar(&flagAIPlatformJobsPollEvery, "poll-interval", 5*time.Second,
+	s.aiPlatformJobsStreamCmd.Flags().DurationVar(&s.flagAIPlatformJobsPollEvery, "poll-interval", 5*time.Second,
 		"Interval between job state polls")
-	aiPlatformJobsStreamCmd.Flags().DurationVar(&flagAIPlatformJobsTimeout, "timeout", 30*time.Minute,
+	s.aiPlatformJobsStreamCmd.Flags().DurationVar(&s.flagAIPlatformJobsTimeout, "timeout", 30*time.Minute,
 		"Maximum time to wait for the job to reach a terminal state")
 
-	aiPlatformJobsSubmitCmd.Flags().StringVar(&flagAIPlatformJobsJobID, "job-id", "", "User-specified job id (required)")
-	aiPlatformJobsSubmitCmd.Flags().StringVar(&flagAIPlatformJobsConfigFile, "config-file", "",
+	s.aiPlatformJobsSubmitCmd.Flags().StringVar(&s.flagAIPlatformJobsJobID, "job-id", "", "User-specified job id (required)")
+	s.aiPlatformJobsSubmitCmd.Flags().StringVar(&s.flagAIPlatformJobsConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the Job body (required)")
-	_ = aiPlatformJobsSubmitCmd.MarkFlagRequired("job-id")
-	_ = aiPlatformJobsSubmitCmd.MarkFlagRequired("config-file")
+	_ = s.aiPlatformJobsSubmitCmd.MarkFlagRequired("job-id")
+	_ = s.aiPlatformJobsSubmitCmd.MarkFlagRequired("config-file")
 
-	aiPlatformJobsUpdateCmd.Flags().StringVar(&flagAIPlatformJobsConfigFile, "config-file", "",
+	s.aiPlatformJobsUpdateCmd.Flags().StringVar(&s.flagAIPlatformJobsConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the Job patch body (required)")
-	aiPlatformJobsUpdateCmd.Flags().StringVar(&flagAIPlatformJobsUpdateMask, "update-mask", "",
+	s.aiPlatformJobsUpdateCmd.Flags().StringVar(&s.flagAIPlatformJobsUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update; defaults to the populated top-level fields in --config-file")
-	_ = aiPlatformJobsUpdateCmd.MarkFlagRequired("config-file")
+	_ = s.aiPlatformJobsUpdateCmd.MarkFlagRequired("config-file")
 
-	aiPlatformJobsCmd.AddCommand(all...)
-	aiPlatformCmd.AddCommand(aiPlatformJobsCmd)
+	s.aiPlatformJobsCmd.AddCommand(all...)
+	s.aiPlatformCmd.AddCommand(s.aiPlatformJobsCmd)
 }
 
 // mlJobIsTerminal reports whether the given ml Job state is one that will not
@@ -94,30 +52,30 @@ func mlJobIsTerminal(state string) bool {
 	return false
 }
 
-func runAIPlatformJobsCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformJobsCancel(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Jobs.Cancel(mlJobName(project, args[0]), &ml.GoogleCloudMlV1__CancelJobRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling job: %w", err)
 	}
-	fmt.Printf("Cancelled job [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled job [%s].\n", args[0])
 	return nil
 }
 
-func runAIPlatformJobsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformJobsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -125,16 +83,16 @@ func runAIPlatformJobsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing job: %w", err)
 	}
-	return emitFormatted(got, flagAIPlatformJobsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIPlatformJobsFormat)
 }
 
-func runAIPlatformJobsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformJobsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -142,11 +100,11 @@ func runAIPlatformJobsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Jobs.List(mlProjectPath(project)).Context(ctx)
-		if flagAIPlatformJobsPageSize > 0 {
-			call = call.PageSize(flagAIPlatformJobsPageSize)
+		if s.flagAIPlatformJobsPageSize > 0 {
+			call = call.PageSize(s.flagAIPlatformJobsPageSize)
 		}
-		if flagAIPlatformJobsFilter != "" {
-			call = call.Filter(flagAIPlatformJobsFilter)
+		if s.flagAIPlatformJobsFilter != "" {
+			call = call.Filter(s.flagAIPlatformJobsFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -161,21 +119,21 @@ func runAIPlatformJobsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAIPlatformJobsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAIPlatformJobsFormat)
 }
 
-func runAIPlatformJobsStream(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformJobsStream(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
 	name := mlJobName(project, args[0])
-	deadline := time.Now().Add(flagAIPlatformJobsTimeout)
+	deadline := time.Now().Add(s.flagAIPlatformJobsTimeout)
 	lastState := ""
 	for {
 		job, err := svc.Projects.Jobs.Get(name).Context(ctx).Do()
@@ -183,7 +141,7 @@ func runAIPlatformJobsStream(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("polling job: %w", err)
 		}
 		if job.State != lastState {
-			fmt.Printf("Job [%s] state: %s\n", args[0], job.State)
+			fmt.Fprintf(s.inv.stdout, "Job [%s] state: %s\n", args[0], job.State)
 			lastState = job.State
 		}
 		if mlJobIsTerminal(job.State) {
@@ -193,28 +151,28 @@ func runAIPlatformJobsStream(cmd *cobra.Command, args []string) error {
 				}
 				return fmt.Errorf("job %s terminated in state %s", args[0], job.State)
 			}
-			return emitFormatted(job, flagAIPlatformJobsFormat)
+			return emitFormattedTo(s.inv.stdout, job, s.flagAIPlatformJobsFormat)
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timed out after %s waiting for job [%s] to reach a terminal state (last state: %s)",
-				flagAIPlatformJobsTimeout, args[0], job.State)
+				s.flagAIPlatformJobsTimeout, args[0], job.State)
 		}
-		time.Sleep(flagAIPlatformJobsPollEvery)
+		time.Sleep(s.flagAIPlatformJobsPollEvery)
 	}
 }
 
-func runAIPlatformJobsSubmit(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformJobsSubmit(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &ml.GoogleCloudMlV1__Job{}
-	if err := loadYAMLOrJSONInto(flagAIPlatformJobsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIPlatformJobsConfigFile, body); err != nil {
 		return err
 	}
-	body.JobId = flagAIPlatformJobsJobID
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	body.JobId = s.flagAIPlatformJobsJobID
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -222,25 +180,25 @@ func runAIPlatformJobsSubmit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("submitting job: %w", err)
 	}
-	fmt.Printf("Submitted job [%s].\n", flagAIPlatformJobsJobID)
-	return emitFormatted(got, flagAIPlatformJobsFormat)
+	fmt.Fprintf(s.inv.stdout, "Submitted job [%s].\n", s.flagAIPlatformJobsJobID)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIPlatformJobsFormat)
 }
 
-func runAIPlatformJobsUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *aiPlatformCmds) runAIPlatformJobsUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &ml.GoogleCloudMlV1__Job{}
-	if err := loadYAMLOrJSONInto(flagAIPlatformJobsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAIPlatformJobsConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagAIPlatformJobsUpdateMask
+	mask := s.flagAIPlatformJobsUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.MLService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ML(ctx)
 	if err != nil {
 		return err
 	}
@@ -252,6 +210,6 @@ func runAIPlatformJobsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating job: %w", err)
 	}
-	fmt.Printf("Updated job [%s].\n", args[0])
-	return emitFormatted(got, flagAIPlatformJobsFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated job [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagAIPlatformJobsFormat)
 }

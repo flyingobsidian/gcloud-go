@@ -7,7 +7,8 @@ import (
 )
 
 func eventarcSubgroup(name string) *cobra.Command {
-	for _, c := range eventarcCmd.Commands() {
+	grp := newEventarcCmds(legacyTestInvocation())
+	for _, c := range grp.eventarcCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

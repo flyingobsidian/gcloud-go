@@ -1,106 +1,58 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
 
 // --- gcloud ai custom-jobs (#1451) ---
 
-var aiCustomJobsCmd = &cobra.Command{Use: "custom-jobs", Short: "Manage Vertex AI custom training jobs"}
-
-var (
-	flagAICJRegion     string
-	flagAICJFormat     string
-	flagAICJConfigFile string
-	flagAICJFilter     string
-	flagAICJOrderBy    string
-	flagAICJPageSize   int64
-	flagAICJReadMask   string
-	flagAICJTimeout    time.Duration
-)
-
-var (
-	aiCJCancelCmd = &cobra.Command{
-		Use: "cancel CUSTOM_JOB", Short: "Cancel a custom training job",
-		Args: cobra.ExactArgs(1), RunE: runAICJCancel,
-	}
-	aiCJCreateCmd = &cobra.Command{
-		Use: "create", Short: "Submit a custom training job",
-		Args: cobra.NoArgs, RunE: runAICJCreate,
-	}
-	aiCJDescribeCmd = &cobra.Command{
-		Use: "describe CUSTOM_JOB", Short: "Describe a custom training job",
-		Args: cobra.ExactArgs(1), RunE: runAICJDescribe,
-	}
-	aiCJListCmd = &cobra.Command{
-		Use: "list", Short: "List custom training jobs",
-		Args: cobra.NoArgs, RunE: runAICJList,
-	}
-	aiCJLocalRunCmd = &cobra.Command{
-		Use:   "local-run",
-		Short: "Not supported: run a training job locally (requires Docker)",
-		Long: "local-run requires Docker and is not supported by gcloud-go; " +
-			"use `gcloud ai custom-jobs create` to submit the job to Vertex AI instead.",
-		Args: cobra.ArbitraryArgs, RunE: runAICJLocalRun,
-	}
-	aiCJStreamLogsCmd = &cobra.Command{
-		Use: "stream-logs CUSTOM_JOB",
-		Short: "Poll a custom job until it reaches a terminal state, " +
-			"printing its state each interval",
-		Args: cobra.ExactArgs(1), RunE: runAICJStreamLogs,
-	}
-)
-
-func init() {
+func (s *aiCmds) initAiCustomJobs() {
 	all := []*cobra.Command{
-		aiCJCancelCmd, aiCJCreateCmd, aiCJDescribeCmd, aiCJListCmd,
-		aiCJStreamLogsCmd,
+		s.aiCJCancelCmd, s.aiCJCreateCmd, s.aiCJDescribeCmd, s.aiCJListCmd,
+		s.aiCJStreamLogsCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagAICJRegion, "region", "", "Region where the custom job lives (required)")
+		c.Flags().StringVar(&s.flagAICJRegion, "region", "", "Region where the custom job lives (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagAICJFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagAICJFormat, "format", "", "Output format")
 	}
-	aiCJCreateCmd.Flags().StringVar(&flagAICJConfigFile, "config-file", "",
+	s.aiCJCreateCmd.Flags().StringVar(&s.flagAICJConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the CustomJob body (required)")
-	_ = aiCJCreateCmd.MarkFlagRequired("config-file")
-	aiCJListCmd.Flags().StringVar(&flagAICJFilter, "filter", "", "Server-side filter expression")
-	aiCJListCmd.Flags().StringVar(&flagAICJOrderBy, "order-by", "", "Order-by expression")
-	aiCJListCmd.Flags().Int64Var(&flagAICJPageSize, "page-size", 0, "Maximum results per page")
-	aiCJListCmd.Flags().StringVar(&flagAICJReadMask, "read-mask", "", "Field mask for reads")
-	aiCJStreamLogsCmd.Flags().DurationVar(&flagAICJTimeout, "timeout", 30*time.Minute,
+	_ = s.aiCJCreateCmd.MarkFlagRequired("config-file")
+	s.aiCJListCmd.Flags().StringVar(&s.flagAICJFilter, "filter", "", "Server-side filter expression")
+	s.aiCJListCmd.Flags().StringVar(&s.flagAICJOrderBy, "order-by", "", "Order-by expression")
+	s.aiCJListCmd.Flags().Int64Var(&s.flagAICJPageSize, "page-size", 0, "Maximum results per page")
+	s.aiCJListCmd.Flags().StringVar(&s.flagAICJReadMask, "read-mask", "", "Field mask for reads")
+	s.aiCJStreamLogsCmd.Flags().DurationVar(&s.flagAICJTimeout, "timeout", 30*time.Minute,
 		"Maximum time to wait for the job to reach a terminal state")
 
-	aiCustomJobsCmd.AddCommand(all...)
-	aiCustomJobsCmd.AddCommand(aiCJLocalRunCmd)
-	aiCmd.AddCommand(aiCustomJobsCmd)
+	s.aiCustomJobsCmd.AddCommand(all...)
+	s.aiCustomJobsCmd.AddCommand(s.aiCJLocalRunCmd)
+	s.aiCmd.AddCommand(s.aiCustomJobsCmd)
 }
 
-func aiCJParent() (string, error) { return aiParent(flagAICJRegion) }
+func (s *aiCmds) aiCJParent() (string, error) { return s.aiParent(s.flagAICJRegion) }
 
-func aiCJName(id string) (string, error) {
-	parent, err := aiCJParent()
+func (s *aiCmds) aiCJName(id string) (string, error) {
+	parent, err := s.aiCJParent()
 	if err != nil {
 		return "", err
 	}
 	return aiChild("customJobs", id, parent), nil
 }
 
-func runAICJCancel(cmd *cobra.Command, args []string) error {
-	name, err := aiCJName(args[0])
+func (s *aiCmds) runAICJCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.aiCJName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAICJRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAICJRegion)
 	if err != nil {
 		return err
 	}
@@ -108,21 +60,21 @@ func runAICJCancel(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("cancelling custom job: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Cancel request issued for custom job [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stderr, "Cancel request issued for custom job [%s].\n", args[0])
 	return nil
 }
 
-func runAICJCreate(cmd *cobra.Command, args []string) error {
-	parent, err := aiCJParent()
+func (s *aiCmds) runAICJCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiCJParent()
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1CustomJob{}
-	if err := loadYAMLOrJSONInto(flagAICJConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagAICJConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAICJRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAICJRegion)
 	if err != nil {
 		return err
 	}
@@ -130,17 +82,17 @@ func runAICJCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating custom job: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Created custom job [%s].\n", got.Name)
-	return emitFormatted(got, flagAICJFormat)
+	fmt.Fprintf(s.inv.stderr, "Created custom job [%s].\n", got.Name)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAICJFormat)
 }
 
-func runAICJDescribe(cmd *cobra.Command, args []string) error {
-	name, err := aiCJName(args[0])
+func (s *aiCmds) runAICJDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.aiCJName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAICJRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAICJRegion)
 	if err != nil {
 		return err
 	}
@@ -148,16 +100,16 @@ func runAICJDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing custom job: %w", err)
 	}
-	return emitFormatted(got, flagAICJFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagAICJFormat)
 }
 
-func runAICJList(cmd *cobra.Command, args []string) error {
-	parent, err := aiCJParent()
+func (s *aiCmds) runAICJList(cmd *cobra.Command, args []string) error {
+	parent, err := s.aiCJParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAICJRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAICJRegion)
 	if err != nil {
 		return err
 	}
@@ -165,14 +117,14 @@ func runAICJList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.CustomJobs.List(parent).Context(ctx)
-		if flagAICJFilter != "" {
-			call = call.Filter(flagAICJFilter)
+		if s.flagAICJFilter != "" {
+			call = call.Filter(s.flagAICJFilter)
 		}
-		if flagAICJPageSize > 0 {
-			call = call.PageSize(flagAICJPageSize)
+		if s.flagAICJPageSize > 0 {
+			call = call.PageSize(s.flagAICJPageSize)
 		}
-		if flagAICJReadMask != "" {
-			call = call.ReadMask(flagAICJReadMask)
+		if s.flagAICJReadMask != "" {
+			call = call.ReadMask(s.flagAICJReadMask)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -187,7 +139,7 @@ func runAICJList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagAICJFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagAICJFormat)
 }
 
 func runAICJLocalRun(cmd *cobra.Command, args []string) error {
@@ -199,30 +151,30 @@ func runAICJLocalRun(cmd *cobra.Command, args []string) error {
 // JOB_STATE_EXPIRED / JOB_STATE_PARTIALLY_SUCCEEDED) or --timeout expires.
 // The aiplatform REST surface does not expose training-container log entries;
 // callers wanting the full log stream should use `gcloud logging tail`.
-func runAICJStreamLogs(cmd *cobra.Command, args []string) error {
-	name, err := aiCJName(args[0])
+func (s *aiCmds) runAICJStreamLogs(cmd *cobra.Command, args []string) error {
+	name, err := s.aiCJName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagAICJRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagAICJRegion)
 	if err != nil {
 		return err
 	}
-	deadline := time.Now().Add(flagAICJTimeout)
+	deadline := time.Now().Add(s.flagAICJTimeout)
 	for {
 		got, err := svc.Projects.Locations.CustomJobs.Get(name).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("polling custom job: %w", err)
 		}
-		fmt.Fprintf(os.Stderr, "[%s] %s state=%s\n",
+		fmt.Fprintf(s.inv.stderr, "[%s] %s state=%s\n",
 			time.Now().Format(time.RFC3339), got.Name, got.State)
 		if aiJobStateTerminal(got.State) {
-			return emitFormatted(got, flagAICJFormat)
+			return emitFormattedTo(s.inv.stdout, got, s.flagAICJFormat)
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timed out after %s waiting for custom job [%s] to reach terminal state (last state=%s)",
-				flagAICJTimeout, args[0], got.State)
+				s.flagAICJTimeout, args[0], got.State)
 		}
 		time.Sleep(5 * time.Second)
 	}

@@ -1,111 +1,59 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	clouddeploy "google.golang.org/api/clouddeploy/v1"
 )
 
 // --- gcloud deploy custom-target-types (#1526) ---
 
-var deployCTTCmd = &cobra.Command{Use: "custom-target-types", Short: "Manage Cloud Deploy custom target types"}
-
-var (
-	flagDeployCTTRegion   string
-	flagDeployCTTFormat   string
-	flagDeployCTTPageSize int64
-
-	flagDeployCTTIamMember   string
-	flagDeployCTTIamRole     string
-	flagDeployCTTIamCondExpr string
-	flagDeployCTTIamCondT    string
-	flagDeployCTTIamCondD    string
-	flagDeployCTTIamAllCond  bool
-)
-
-var (
-	deployCTTDeleteCmd = &cobra.Command{
-		Use: "delete CUSTOM_TARGET_TYPE", Short: "Delete a custom target type",
-		Args: cobra.ExactArgs(1), RunE: runDeployCTTDelete,
-	}
-	deployCTTDescribeCmd = &cobra.Command{
-		Use: "describe CUSTOM_TARGET_TYPE", Short: "Describe a custom target type",
-		Args: cobra.ExactArgs(1), RunE: runDeployCTTDescribe,
-	}
-	deployCTTExportCmd = &cobra.Command{
-		Use: "export CUSTOM_TARGET_TYPE", Short: "Export a custom target type",
-		Args: cobra.ExactArgs(1), RunE: runDeployCTTExport,
-	}
-	deployCTTListCmd = &cobra.Command{
-		Use: "list", Short: "List custom target types",
-		Args: cobra.NoArgs, RunE: runDeployCTTList,
-	}
-	deployCTTGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy CUSTOM_TARGET_TYPE", Short: "Get the IAM policy",
-		Args: cobra.ExactArgs(1), RunE: runDeployCTTGetIam,
-	}
-	deployCTTSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy CUSTOM_TARGET_TYPE POLICY_FILE", Short: "Set the IAM policy",
-		Args: cobra.ExactArgs(2), RunE: runDeployCTTSetIam,
-	}
-	deployCTTAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding CUSTOM_TARGET_TYPE", Short: "Add an IAM policy binding",
-		Args: cobra.ExactArgs(1), RunE: runDeployCTTAddIam,
-	}
-	deployCTTRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding CUSTOM_TARGET_TYPE", Short: "Remove an IAM policy binding",
-		Args: cobra.ExactArgs(1), RunE: runDeployCTTRemoveIam,
-	}
-)
-
-func init() {
+func (s *deployCmds) initDeployCustomTargetTypes() {
 	all := []*cobra.Command{
-		deployCTTDeleteCmd, deployCTTDescribeCmd, deployCTTExportCmd, deployCTTListCmd,
-		deployCTTGetIamCmd, deployCTTSetIamCmd, deployCTTAddIamCmd, deployCTTRemoveIamCmd,
+		s.deployCTTDeleteCmd, s.deployCTTDescribeCmd, s.deployCTTExportCmd, s.deployCTTListCmd,
+		s.deployCTTGetIamCmd, s.deployCTTSetIamCmd, s.deployCTTAddIamCmd, s.deployCTTRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDeployCTTRegion, "region", "", "Cloud Deploy region (required)")
+		c.Flags().StringVar(&s.flagDeployCTTRegion, "region", "", "Cloud Deploy region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDeployCTTFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDeployCTTFormat, "format", "", "Output format")
 	}
-	deployCTTListCmd.Flags().Int64Var(&flagDeployCTTPageSize, "page-size", 0, "Maximum results per page")
-	for _, c := range []*cobra.Command{deployCTTAddIamCmd, deployCTTRemoveIamCmd} {
-		deployIamMemberFlags(c, &flagDeployCTTIamMember, &flagDeployCTTIamRole,
-			&flagDeployCTTIamCondExpr, &flagDeployCTTIamCondT, &flagDeployCTTIamCondD)
+	s.deployCTTListCmd.Flags().Int64Var(&s.flagDeployCTTPageSize, "page-size", 0, "Maximum results per page")
+	for _, c := range []*cobra.Command{s.deployCTTAddIamCmd, s.deployCTTRemoveIamCmd} {
+		deployIamMemberFlags(c, &s.flagDeployCTTIamMember, &s.flagDeployCTTIamRole,
+			&s.flagDeployCTTIamCondExpr, &s.flagDeployCTTIamCondT, &s.flagDeployCTTIamCondD)
 	}
-	deployCTTRemoveIamCmd.Flags().BoolVar(&flagDeployCTTIamAllCond, "all", false,
+	s.deployCTTRemoveIamCmd.Flags().BoolVar(&s.flagDeployCTTIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	deployCTTCmd.AddCommand(all...)
-	deployCmd.AddCommand(deployCTTCmd)
+	s.deployCTTCmd.AddCommand(all...)
+	s.deployCmd.AddCommand(s.deployCTTCmd)
 }
 
-func deployCTTParent() (string, error) {
-	project, err := resolveProject()
+func (s *deployCmds) deployCTTParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return deployLocationParent(project, flagDeployCTTRegion), nil
+	return deployLocationParent(project, s.flagDeployCTTRegion), nil
 }
 
-func deployCTTName(id string) (string, error) {
-	parent, err := deployCTTParent()
+func (s *deployCmds) deployCTTName(id string) (string, error) {
+	parent, err := s.deployCTTParent()
 	if err != nil {
 		return "", err
 	}
 	return deployChild("customTargetTypes", id, parent), nil
 }
 
-func runDeployCTTDelete(cmd *cobra.Command, args []string) error {
-	name, err := deployCTTName(args[0])
+func (s *deployCmds) runDeployCTTDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.deployCTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -113,17 +61,17 @@ func runDeployCTTDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting custom target type: %w", err)
 	}
-	fmt.Printf("Delete request issued for custom target type [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDeployCTTFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for custom target type [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDeployCTTFormat)
 }
 
-func runDeployCTTDescribe(cmd *cobra.Command, args []string) error {
-	name, err := deployCTTName(args[0])
+func (s *deployCmds) runDeployCTTDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.deployCTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -131,16 +79,16 @@ func runDeployCTTDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing custom target type: %w", err)
 	}
-	return emitFormatted(got, flagDeployCTTFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDeployCTTFormat)
 }
 
-func runDeployCTTExport(cmd *cobra.Command, args []string) error {
-	name, err := deployCTTName(args[0])
+func (s *deployCmds) runDeployCTTExport(cmd *cobra.Command, args []string) error {
+	name, err := s.deployCTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -148,20 +96,20 @@ func runDeployCTTExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting custom target type: %w", err)
 	}
-	format := flagDeployCTTFormat
+	format := s.flagDeployCTTFormat
 	if format == "" {
 		format = "yaml"
 	}
-	return emitFormatted(got, format)
+	return emitFormattedTo(s.inv.stdout, got, format)
 }
 
-func runDeployCTTList(cmd *cobra.Command, args []string) error {
-	parent, err := deployCTTParent()
+func (s *deployCmds) runDeployCTTList(cmd *cobra.Command, args []string) error {
+	parent, err := s.deployCTTParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -169,8 +117,8 @@ func runDeployCTTList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.CustomTargetTypes.List(parent).Context(ctx)
-		if flagDeployCTTPageSize > 0 {
-			call = call.PageSize(flagDeployCTTPageSize)
+		if s.flagDeployCTTPageSize > 0 {
+			call = call.PageSize(s.flagDeployCTTPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -185,16 +133,16 @@ func runDeployCTTList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDeployCTTFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDeployCTTFormat)
 }
 
-func runDeployCTTGetIam(cmd *cobra.Command, args []string) error {
-	name, err := deployCTTName(args[0])
+func (s *deployCmds) runDeployCTTGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployCTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -202,11 +150,11 @@ func runDeployCTTGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagDeployCTTFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagDeployCTTFormat)
 }
 
-func runDeployCTTSetIam(cmd *cobra.Command, args []string) error {
-	name, err := deployCTTName(args[0])
+func (s *deployCmds) runDeployCTTSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployCTTName(args[0])
 	if err != nil {
 		return err
 	}
@@ -215,8 +163,8 @@ func runDeployCTTSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -224,17 +172,17 @@ func runDeployCTTSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	deployUpdatedIam(fmt.Sprintf("custom target type [%s]", args[0]))
-	return emitFormatted(updated, flagDeployCTTFormat)
+	s.deployUpdatedIam(fmt.Sprintf("custom target type [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDeployCTTFormat)
 }
 
-func runDeployCTTAddIam(cmd *cobra.Command, args []string) error {
-	name, err := deployCTTName(args[0])
+func (s *deployCmds) runDeployCTTAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployCTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -242,24 +190,24 @@ func runDeployCTTAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	deployAddBinding(policy, flagDeployCTTIamRole, flagDeployCTTIamMember,
-		deployBuildCondition(flagDeployCTTIamCondExpr, flagDeployCTTIamCondT, flagDeployCTTIamCondD))
+	deployAddBinding(policy, s.flagDeployCTTIamRole, s.flagDeployCTTIamMember,
+		deployBuildCondition(s.flagDeployCTTIamCondExpr, s.flagDeployCTTIamCondT, s.flagDeployCTTIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Locations.CustomTargetTypes.SetIamPolicy(name, &clouddeploy.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	deployUpdatedIam(fmt.Sprintf("custom target type [%s]", args[0]))
-	return emitFormatted(updated, flagDeployCTTFormat)
+	s.deployUpdatedIam(fmt.Sprintf("custom target type [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDeployCTTFormat)
 }
 
-func runDeployCTTRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := deployCTTName(args[0])
+func (s *deployCmds) runDeployCTTRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.deployCTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudDeployService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudDeploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -267,14 +215,14 @@ func runDeployCTTRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !deployRemoveBinding(policy, flagDeployCTTIamRole, flagDeployCTTIamMember,
-		deployBuildCondition(flagDeployCTTIamCondExpr, flagDeployCTTIamCondT, flagDeployCTTIamCondD), flagDeployCTTIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagDeployCTTIamRole, flagDeployCTTIamMember)
+	if !deployRemoveBinding(policy, s.flagDeployCTTIamRole, s.flagDeployCTTIamMember,
+		deployBuildCondition(s.flagDeployCTTIamCondExpr, s.flagDeployCTTIamCondT, s.flagDeployCTTIamCondD), s.flagDeployCTTIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagDeployCTTIamRole, s.flagDeployCTTIamMember)
 	}
 	updated, err := svc.Projects.Locations.CustomTargetTypes.SetIamPolicy(name, &clouddeploy.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	deployUpdatedIam(fmt.Sprintf("custom target type [%s]", args[0]))
-	return emitFormatted(updated, flagDeployCTTFormat)
+	s.deployUpdatedIam(fmt.Sprintf("custom target type [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDeployCTTFormat)
 }

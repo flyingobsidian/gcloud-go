@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	gkeonprem "google.golang.org/api/gkeonprem/v1"
 )
@@ -14,95 +12,61 @@ import (
 //
 // Manages Anthos-on-VMware user clusters via the gkeonprem v1 client.
 
-var containerVmwareCmd = &cobra.Command{Use: "vmware", Short: "Manage Anthos on VMware"}
-var containerVmwareClustersCmd = &cobra.Command{Use: "clusters", Short: "Manage VMware user clusters"}
-
-var (
-	flagCvmLocation   string
-	flagCvmFormat     string
-	flagCvmConfigFile string
-	flagCvmUpdateMask string
-	flagCvmPageSize   int64
-)
-
-var (
-	containerVmClCreateCmd = &cobra.Command{
-		Use: "create CLUSTER", Short: "Create a VMware user cluster (loads body from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runCvmClCreate,
-	}
-	containerVmClDeleteCmd = &cobra.Command{
-		Use: "delete CLUSTER", Short: "Delete a VMware user cluster",
-		Args: cobra.ExactArgs(1), RunE: runCvmClDelete,
-	}
-	containerVmClDescribeCmd = &cobra.Command{
-		Use: "describe CLUSTER", Short: "Describe a VMware user cluster",
-		Args: cobra.ExactArgs(1), RunE: runCvmClDescribe,
-	}
-	containerVmClListCmd = &cobra.Command{
-		Use: "list", Short: "List VMware user clusters in a location",
-		Args: cobra.NoArgs, RunE: runCvmClList,
-	}
-	containerVmClUpdateCmd = &cobra.Command{
-		Use: "update CLUSTER", Short: "Update a VMware user cluster (loads body from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runCvmClUpdate,
-	}
-)
-
-func init() {
+func (s *containerCmds) initContainerVmware() {
 	all := []*cobra.Command{
-		containerVmClCreateCmd, containerVmClDeleteCmd, containerVmClDescribeCmd,
-		containerVmClListCmd, containerVmClUpdateCmd,
+		s.containerVmClCreateCmd, s.containerVmClDeleteCmd, s.containerVmClDescribeCmd,
+		s.containerVmClListCmd, s.containerVmClUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagCvmLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagCvmLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagCvmFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagCvmFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{containerVmClCreateCmd, containerVmClUpdateCmd} {
-		c.Flags().StringVar(&flagCvmConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
+	for _, c := range []*cobra.Command{s.containerVmClCreateCmd, s.containerVmClUpdateCmd} {
+		c.Flags().StringVar(&s.flagCvmConfigFile, "config-file", "", "YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	containerVmClUpdateCmd.Flags().StringVar(&flagCvmUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
-	containerVmClListCmd.Flags().Int64Var(&flagCvmPageSize, "page-size", 0, "Maximum results per page")
+	s.containerVmClUpdateCmd.Flags().StringVar(&s.flagCvmUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.containerVmClListCmd.Flags().Int64Var(&s.flagCvmPageSize, "page-size", 0, "Maximum results per page")
 
-	containerVmwareClustersCmd.AddCommand(all...)
-	containerVmwareCmd.AddCommand(containerVmwareClustersCmd)
-	containerCmd.AddCommand(containerVmwareCmd)
+	s.containerVmwareClustersCmd.AddCommand(all...)
+	s.containerVmwareCmd.AddCommand(s.containerVmwareClustersCmd)
+	s.containerCmd.AddCommand(s.containerVmwareCmd)
 }
 
-func cvmLocationParent() (string, error) {
-	project, err := resolveProject()
+func (s *containerCmds) cvmLocationParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	if flagCvmLocation == "" {
+	if s.flagCvmLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagCvmLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagCvmLocation), nil
 }
 
-func cvmClusterName(id string) (string, error) {
+func (s *containerCmds) cvmClusterName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := cvmLocationParent()
+	parent, err := s.cvmLocationParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/vmwareClusters/%s", parent, id), nil
 }
 
-func runCvmClCreate(cmd *cobra.Command, args []string) error {
-	parent, err := cvmLocationParent()
+func (s *containerCmds) runCvmClCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.cvmLocationParent()
 	if err != nil {
 		return err
 	}
 	body := &gkeonprem.VmwareCluster{}
-	if err := loadYAMLOrJSONInto(flagCvmConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCvmConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -110,17 +74,17 @@ func runCvmClCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating VMware cluster: %w", err)
 	}
-	fmt.Printf("Create VMware cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCvmFormat)
+	fmt.Fprintf(s.inv.stdout, "Create VMware cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCvmFormat)
 }
 
-func runCvmClDelete(cmd *cobra.Command, args []string) error {
-	name, err := cvmClusterName(args[0])
+func (s *containerCmds) runCvmClDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.cvmClusterName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -128,17 +92,17 @@ func runCvmClDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting VMware cluster: %w", err)
 	}
-	fmt.Printf("Delete VMware cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCvmFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete VMware cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCvmFormat)
 }
 
-func runCvmClDescribe(cmd *cobra.Command, args []string) error {
-	name, err := cvmClusterName(args[0])
+func (s *containerCmds) runCvmClDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.cvmClusterName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -146,16 +110,16 @@ func runCvmClDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing VMware cluster: %w", err)
 	}
-	return emitFormatted(got, flagCvmFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagCvmFormat)
 }
 
-func runCvmClList(cmd *cobra.Command, args []string) error {
-	parent, err := cvmLocationParent()
+func (s *containerCmds) runCvmClList(cmd *cobra.Command, args []string) error {
+	parent, err := s.cvmLocationParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -163,8 +127,8 @@ func runCvmClList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.VmwareClusters.List(parent).Context(ctx)
-		if flagCvmPageSize > 0 {
-			call = call.PageSize(flagCvmPageSize)
+		if s.flagCvmPageSize > 0 {
+			call = call.PageSize(s.flagCvmPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -179,25 +143,25 @@ func runCvmClList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagCvmFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagCvmFormat)
 }
 
-func runCvmClUpdate(cmd *cobra.Command, args []string) error {
-	name, err := cvmClusterName(args[0])
+func (s *containerCmds) runCvmClUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.cvmClusterName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &gkeonprem.VmwareCluster{}
-	if err := loadYAMLOrJSONInto(flagCvmConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCvmConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagCvmUpdateMask
+	mask := s.flagCvmUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.GKEOnPremService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().GKEOnPrem(ctx)
 	if err != nil {
 		return err
 	}
@@ -209,6 +173,6 @@ func runCvmClUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating VMware cluster: %w", err)
 	}
-	fmt.Printf("Update VMware cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCvmFormat)
+	fmt.Fprintf(s.inv.stdout, "Update VMware cluster [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCvmFormat)
 }

@@ -1,54 +1,35 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	oracledatabase "google.golang.org/api/oracledatabase/v1"
 )
 
 // --- gcloud oracle-database gi-versions (#1268) ---
 
-var oracleGiVersionsCmd = &cobra.Command{
-	Use:   "gi-versions",
-	Short: "Manage Oracle GI versions",
-}
-
-var (
-	flagOdbGiLocation string
-	flagOdbGiFormat   string
-	flagOdbGiFilter   string
-	flagOdbGiPageSize int64
-)
-
-var oracleGiListCmd = &cobra.Command{
-	Use: "list", Short: "List Oracle GI versions in a location",
-	Args: cobra.NoArgs, RunE: runOracleGiList,
-}
-
-func init() {
-	all := []*cobra.Command{oracleGiListCmd}
+func (s *oracleDatabaseCmds) initOracleDatabaseGiVersions() {
+	all := []*cobra.Command{s.oracleGiListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagOdbGiLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagOdbGiLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagOdbGiFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagOdbGiFormat, "format", "", "Output format")
 	}
-	oracleGiListCmd.Flags().StringVar(&flagOdbGiFilter, "filter", "", "Server-side filter expression")
-	oracleGiListCmd.Flags().Int64Var(&flagOdbGiPageSize, "page-size", 0, "Maximum results per page")
+	s.oracleGiListCmd.Flags().StringVar(&s.flagOdbGiFilter, "filter", "", "Server-side filter expression")
+	s.oracleGiListCmd.Flags().Int64Var(&s.flagOdbGiPageSize, "page-size", 0, "Maximum results per page")
 
-	oracleGiVersionsCmd.AddCommand(all...)
-	oracleDatabaseCmd.AddCommand(oracleGiVersionsCmd)
+	s.oracleGiVersionsCmd.AddCommand(all...)
+	s.oracleDatabaseCmd.AddCommand(s.oracleGiVersionsCmd)
 }
 
-func runOracleGiList(cmd *cobra.Command, args []string) error {
-	parent, err := odbLocationParent(flagOdbGiLocation)
+func (s *oracleDatabaseCmds) runOracleGiList(cmd *cobra.Command, args []string) error {
+	parent, err := s.odbLocationParent(s.flagOdbGiLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.OracleDatabaseService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OracleDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -56,11 +37,11 @@ func runOracleGiList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.GiVersions.List(parent).Context(ctx)
-		if flagOdbGiFilter != "" {
-			call = call.Filter(flagOdbGiFilter)
+		if s.flagOdbGiFilter != "" {
+			call = call.Filter(s.flagOdbGiFilter)
 		}
-		if flagOdbGiPageSize > 0 {
-			call = call.PageSize(flagOdbGiPageSize)
+		if s.flagOdbGiPageSize > 0 {
+			call = call.PageSize(s.flagOdbGiPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -75,5 +56,5 @@ func runOracleGiList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagOdbGiFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagOdbGiFormat)
 }

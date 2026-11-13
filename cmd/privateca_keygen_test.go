@@ -78,9 +78,10 @@ func TestValidatePCAKeyAlgorithm(t *testing.T) {
 }
 
 func TestApplyPCAGeneratedKey(t *testing.T) {
+	grp := newPrivatecaCmds(legacyTestInvocation())
 	out := filepath.Join(t.TempDir(), "key.pem")
 	cert := &privateca.Certificate{}
-	if err := applyPCAGeneratedKey(cert, "ec-p256", out); err != nil {
+	if err := grp.applyPCAGeneratedKey(cert, "ec-p256", out); err != nil {
 		t.Fatal(err)
 	}
 	if cert.Config == nil || cert.Config.PublicKey == nil || cert.Config.PublicKey.Format != "PEM" {
@@ -101,33 +102,34 @@ func TestApplyPCAGeneratedKey(t *testing.T) {
 		t.Errorf("key file mode = %v, want 0400", st.Mode().Perm())
 	}
 	// A second export overwrites the read-only file.
-	if err := applyPCAGeneratedKey(&privateca.Certificate{}, "rsa-2048", out); err != nil {
+	if err := grp.applyPCAGeneratedKey(&privateca.Certificate{}, "rsa-2048", out); err != nil {
 		t.Errorf("re-export: %v", err)
 	}
-	if err := applyPCAGeneratedKey(&privateca.Certificate{PemCsr: "x"}, "rsa-2048", out); err == nil {
+	if err := grp.applyPCAGeneratedKey(&privateca.Certificate{PemCsr: "x"}, "rsa-2048", out); err == nil {
 		t.Error("expected error when body has pemCsr")
 	}
 }
 
 func TestValidatePCACertKeyFlags(t *testing.T) {
+	grp := newPrivatecaCmds(legacyTestInvocation())
 	defer func() {
-		flagPCACertGenerateKey = false
-		flagPCACertKeyOutputFile = ""
-		flagPCACertKeyAlgorithm = "rsa-2048"
+		grp.flagPCACertGenerateKey = false
+		grp.flagPCACertKeyOutputFile = ""
+		grp.flagPCACertKeyAlgorithm = "rsa-2048"
 	}()
-	flagPCACertKeyAlgorithm = "rsa-2048"
-	flagPCACertGenerateKey = true
-	flagPCACertKeyOutputFile = ""
-	if err := validatePCACertKeyFlags(pcaCertCreateCmd); err == nil {
+	grp.flagPCACertKeyAlgorithm = "rsa-2048"
+	grp.flagPCACertGenerateKey = true
+	grp.flagPCACertKeyOutputFile = ""
+	if err := grp.validatePCACertKeyFlags(grp.pcaCertCreateCmd); err == nil {
 		t.Error("expected error for --generate-key without --key-output-file")
 	}
-	flagPCACertKeyOutputFile = "k.pem"
-	if err := validatePCACertKeyFlags(pcaCertCreateCmd); err != nil {
+	grp.flagPCACertKeyOutputFile = "k.pem"
+	if err := grp.validatePCACertKeyFlags(grp.pcaCertCreateCmd); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	flagPCACertGenerateKey = false
-	flagPCACertKeyOutputFile = ""
-	if err := validatePCACertKeyFlags(pcaCertCreateCmd); err != nil {
+	grp.flagPCACertGenerateKey = false
+	grp.flagPCACertKeyOutputFile = ""
+	if err := grp.validatePCACertKeyFlags(grp.pcaCertCreateCmd); err != nil {
 		t.Errorf("no key flags: %v", err)
 	}
 }

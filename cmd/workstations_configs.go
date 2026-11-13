@@ -1,95 +1,50 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	workstations "google.golang.org/api/workstations/v1"
 )
 
 // --- gcloud workstations configs (#1260) ---
 
-var workstationsConfigsCmd = &cobra.Command{Use: "configs", Short: "Manage workstation configurations"}
-
-var (
-	flagWsCfgLocation   string
-	flagWsCfgCluster    string
-	flagWsCfgFormat     string
-	flagWsCfgConfigFile string
-	flagWsCfgUpdateMask string
-	flagWsCfgPageSize   int64
-)
-
-var (
-	workstationsCfgCreateCmd = &cobra.Command{
-		Use: "create CONFIG", Short: "Create a workstation configuration",
-		Args: cobra.ExactArgs(1), RunE: runWsCfgCreate,
-	}
-	workstationsCfgDeleteCmd = &cobra.Command{
-		Use: "delete CONFIG", Short: "Delete a workstation configuration",
-		Args: cobra.ExactArgs(1), RunE: runWsCfgDelete,
-	}
-	workstationsCfgDescribeCmd = &cobra.Command{
-		Use: "describe CONFIG", Short: "Describe a workstation configuration",
-		Args: cobra.ExactArgs(1), RunE: runWsCfgDescribe,
-	}
-	workstationsCfgListCmd = &cobra.Command{
-		Use: "list", Short: "List workstation configurations in a cluster",
-		Args: cobra.NoArgs, RunE: runWsCfgList,
-	}
-	workstationsCfgUpdateCmd = &cobra.Command{
-		Use: "update CONFIG", Short: "Update a workstation configuration",
-		Args: cobra.ExactArgs(1), RunE: runWsCfgUpdate,
-	}
-	workstationsCfgGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy CONFIG", Short: "Get the IAM policy for a workstation configuration",
-		Args: cobra.ExactArgs(1), RunE: runWsCfgGetIam,
-	}
-	workstationsCfgSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy CONFIG POLICY_FILE", Short: "Set the IAM policy for a workstation configuration",
-		Args: cobra.ExactArgs(2), RunE: runWsCfgSetIam,
-	}
-)
-
-func init() {
+func (s *workstationsCmds) initWorkstationsConfigs() {
 	all := []*cobra.Command{
-		workstationsCfgCreateCmd, workstationsCfgDeleteCmd,
-		workstationsCfgDescribeCmd, workstationsCfgListCmd,
-		workstationsCfgUpdateCmd, workstationsCfgGetIamCmd,
-		workstationsCfgSetIamCmd,
+		s.workstationsCfgCreateCmd, s.workstationsCfgDeleteCmd,
+		s.workstationsCfgDescribeCmd, s.workstationsCfgListCmd,
+		s.workstationsCfgUpdateCmd, s.workstationsCfgGetIamCmd,
+		s.workstationsCfgSetIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagWsCfgLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagWsCfgLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagWsCfgCluster, "cluster", "", "Workstation cluster (required)")
+		c.Flags().StringVar(&s.flagWsCfgCluster, "cluster", "", "Workstation cluster (required)")
 		_ = c.MarkFlagRequired("cluster")
-		c.Flags().StringVar(&flagWsCfgFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagWsCfgFormat, "format", "", "Output format")
 	}
-	workstationsCfgCreateCmd.Flags().StringVar(&flagWsCfgConfigFile, "config-file", "", "YAML/JSON file with the WorkstationConfig body (required)")
-	_ = workstationsCfgCreateCmd.MarkFlagRequired("config-file")
-	workstationsCfgListCmd.Flags().Int64Var(&flagWsCfgPageSize, "page-size", 0, "Maximum results per page")
-	workstationsCfgUpdateCmd.Flags().StringVar(&flagWsCfgConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
-	_ = workstationsCfgUpdateCmd.MarkFlagRequired("config-file")
-	workstationsCfgUpdateCmd.Flags().StringVar(&flagWsCfgUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.workstationsCfgCreateCmd.Flags().StringVar(&s.flagWsCfgConfigFile, "config-file", "", "YAML/JSON file with the WorkstationConfig body (required)")
+	_ = s.workstationsCfgCreateCmd.MarkFlagRequired("config-file")
+	s.workstationsCfgListCmd.Flags().Int64Var(&s.flagWsCfgPageSize, "page-size", 0, "Maximum results per page")
+	s.workstationsCfgUpdateCmd.Flags().StringVar(&s.flagWsCfgConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
+	_ = s.workstationsCfgUpdateCmd.MarkFlagRequired("config-file")
+	s.workstationsCfgUpdateCmd.Flags().StringVar(&s.flagWsCfgUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 
-	workstationsConfigsCmd.AddCommand(all...)
-	workstationsCmd.AddCommand(workstationsConfigsCmd)
+	s.workstationsConfigsCmd.AddCommand(all...)
+	s.workstationsCmd.AddCommand(s.workstationsConfigsCmd)
 }
 
-func runWsCfgCreate(cmd *cobra.Command, args []string) error {
-	parent, err := wsClusterName(flagWsCfgLocation, flagWsCfgCluster)
+func (s *workstationsCmds) runWsCfgCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.wsClusterName(s.flagWsCfgLocation, s.flagWsCfgCluster)
 	if err != nil {
 		return err
 	}
 	body := &workstations.WorkstationConfig{}
-	if err := loadYAMLOrJSONInto(flagWsCfgConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagWsCfgConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.WorkstationsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Workstations(ctx)
 	if err != nil {
 		return err
 	}
@@ -97,17 +52,17 @@ func runWsCfgCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating workstation configuration: %w", err)
 	}
-	fmt.Printf("Create workstation configuration [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagWsCfgFormat)
+	fmt.Fprintf(s.inv.stdout, "Create workstation configuration [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagWsCfgFormat)
 }
 
-func runWsCfgDelete(cmd *cobra.Command, args []string) error {
-	name, err := wsConfigName(flagWsCfgLocation, flagWsCfgCluster, args[0])
+func (s *workstationsCmds) runWsCfgDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.wsConfigName(s.flagWsCfgLocation, s.flagWsCfgCluster, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.WorkstationsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Workstations(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,17 +70,17 @@ func runWsCfgDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting workstation configuration: %w", err)
 	}
-	fmt.Printf("Delete workstation configuration [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagWsCfgFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete workstation configuration [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagWsCfgFormat)
 }
 
-func runWsCfgDescribe(cmd *cobra.Command, args []string) error {
-	name, err := wsConfigName(flagWsCfgLocation, flagWsCfgCluster, args[0])
+func (s *workstationsCmds) runWsCfgDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.wsConfigName(s.flagWsCfgLocation, s.flagWsCfgCluster, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.WorkstationsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Workstations(ctx)
 	if err != nil {
 		return err
 	}
@@ -133,16 +88,16 @@ func runWsCfgDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing workstation configuration: %w", err)
 	}
-	return emitFormatted(got, flagWsCfgFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagWsCfgFormat)
 }
 
-func runWsCfgList(cmd *cobra.Command, args []string) error {
-	parent, err := wsClusterName(flagWsCfgLocation, flagWsCfgCluster)
+func (s *workstationsCmds) runWsCfgList(cmd *cobra.Command, args []string) error {
+	parent, err := s.wsClusterName(s.flagWsCfgLocation, s.flagWsCfgCluster)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.WorkstationsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Workstations(ctx)
 	if err != nil {
 		return err
 	}
@@ -150,8 +105,8 @@ func runWsCfgList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.WorkstationClusters.WorkstationConfigs.List(parent).Context(ctx)
-		if flagWsCfgPageSize > 0 {
-			call = call.PageSize(flagWsCfgPageSize)
+		if s.flagWsCfgPageSize > 0 {
+			call = call.PageSize(s.flagWsCfgPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -166,25 +121,25 @@ func runWsCfgList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagWsCfgFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagWsCfgFormat)
 }
 
-func runWsCfgUpdate(cmd *cobra.Command, args []string) error {
-	name, err := wsConfigName(flagWsCfgLocation, flagWsCfgCluster, args[0])
+func (s *workstationsCmds) runWsCfgUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.wsConfigName(s.flagWsCfgLocation, s.flagWsCfgCluster, args[0])
 	if err != nil {
 		return err
 	}
 	body := &workstations.WorkstationConfig{}
-	if err := loadYAMLOrJSONInto(flagWsCfgConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagWsCfgConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagWsCfgUpdateMask
+	mask := s.flagWsCfgUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.WorkstationsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Workstations(ctx)
 	if err != nil {
 		return err
 	}
@@ -196,17 +151,17 @@ func runWsCfgUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating workstation configuration: %w", err)
 	}
-	fmt.Printf("Update workstation configuration [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagWsCfgFormat)
+	fmt.Fprintf(s.inv.stdout, "Update workstation configuration [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagWsCfgFormat)
 }
 
-func runWsCfgGetIam(cmd *cobra.Command, args []string) error {
-	name, err := wsConfigName(flagWsCfgLocation, flagWsCfgCluster, args[0])
+func (s *workstationsCmds) runWsCfgGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.wsConfigName(s.flagWsCfgLocation, s.flagWsCfgCluster, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.WorkstationsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Workstations(ctx)
 	if err != nil {
 		return err
 	}
@@ -214,11 +169,11 @@ func runWsCfgGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagWsCfgFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagWsCfgFormat)
 }
 
-func runWsCfgSetIam(cmd *cobra.Command, args []string) error {
-	name, err := wsConfigName(flagWsCfgLocation, flagWsCfgCluster, args[0])
+func (s *workstationsCmds) runWsCfgSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.wsConfigName(s.flagWsCfgLocation, s.flagWsCfgCluster, args[0])
 	if err != nil {
 		return err
 	}
@@ -227,8 +182,8 @@ func runWsCfgSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.WorkstationsService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Workstations(ctx)
 	if err != nil {
 		return err
 	}
@@ -236,6 +191,6 @@ func runWsCfgSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for workstation configuration [%s].\n", args[0])
-	return emitFormatted(updated, flagWsCfgFormat)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for workstation configuration [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, updated, s.flagWsCfgFormat)
 }

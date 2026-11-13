@@ -3,10 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	deploymentmanager "google.golang.org/api/deploymentmanager/v2"
 	deploymentmanagerbeta "google.golang.org/api/deploymentmanager/v2beta"
@@ -14,30 +12,14 @@ import (
 
 // --- gcloud deployment-manager (#328, #855-#859) ---
 
-var deploymentManagerCmd = &cobra.Command{Use: "deployment-manager", Short: "Manage Deployment Manager"}
-
-var (
-	flagDPMFormat        string
-	flagDPMFilter        string
-	flagDPMConfigFile    string
-	flagDPMDeployment    string
-	flagDPMDescription   string
-	flagDPMPreview       bool
-	flagDPMFingerprint   string
-	flagDPMCreatePolicy  string
-	flagDPMDeletePolicy  string
-	flagDPMAsync         bool
-	flagDPMPollIntervalS int
-)
-
 const dpmDefaultPollSeconds = 5
 
-func dpmResolveProject() (string, error) {
-	return resolveProject()
+func (s *deploymentManagerCmds) dpmResolveProject() (string, error) {
+	return s.inv.project()
 }
 
-func dpmWaitOp(ctx context.Context, svc *deploymentmanager.Service, project string, op *deploymentmanager.Operation) (*deploymentmanager.Operation, error) {
-	interval := time.Duration(flagDPMPollIntervalS) * time.Second
+func (s *deploymentManagerCmds) dpmWaitOp(ctx context.Context, svc *deploymentmanager.Service, project string, op *deploymentmanager.Operation) (*deploymentmanager.Operation, error) {
+	interval := time.Duration(s.flagDPMPollIntervalS) * time.Second
 	if interval <= 0 {
 		interval = dpmDefaultPollSeconds * time.Second
 	}
@@ -55,261 +37,171 @@ func dpmWaitOp(ctx context.Context, svc *deploymentmanager.Service, project stri
 	return op, nil
 }
 
-func dpmFinishOp(ctx context.Context, svc *deploymentmanager.Service, project string, op *deploymentmanager.Operation, verb, name string) error {
-	if flagDPMAsync {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, flagDPMFormat)
+func (s *deploymentManagerCmds) dpmFinishOp(ctx context.Context, svc *deploymentmanager.Service, project string, op *deploymentmanager.Operation, verb, name string) error {
+	if s.flagDPMAsync {
+		fmt.Fprintf(s.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagDPMFormat)
 	}
-	final, err := dpmWaitOp(ctx, svc, project, op)
+	final, err := s.dpmWaitOp(ctx, svc, project, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
-	return emitFormatted(final, flagDPMFormat)
+	fmt.Fprintf(s.inv.stderr, "%s [%s] completed.\n", verb, name)
+	return emitFormattedTo(s.inv.stdout, final, s.flagDPMFormat)
 }
 
 // --- deployments ---
 
-var deploymentManagerDeploymentsCmd = &cobra.Command{Use: "deployments", Short: "Manage deployments"}
-
-var (
-	dpmDepCreateCmd = &cobra.Command{
-		Use: "create DEPLOYMENT", Short: "Create a deployment from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runDPMDepCreate,
-	}
-	dpmDepDeleteCmd = &cobra.Command{
-		Use: "delete DEPLOYMENT", Short: "Delete a deployment",
-		Args: cobra.ExactArgs(1), RunE: runDPMDepDelete,
-	}
-	dpmDepDescribeCmd = &cobra.Command{
-		Use: "describe DEPLOYMENT", Short: "Describe a deployment",
-		Args: cobra.ExactArgs(1), RunE: runDPMDepDescribe,
-	}
-	dpmDepListCmd = &cobra.Command{
-		Use: "list", Short: "List deployments in the current project",
-		Args: cobra.NoArgs, RunE: runDPMDepList,
-	}
-	dpmDepUpdateCmd = &cobra.Command{
-		Use: "update DEPLOYMENT", Short: "Update a deployment from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runDPMDepUpdate,
-	}
-	dpmDepStopCmd = &cobra.Command{
-		Use: "stop DEPLOYMENT", Short: "Stop a deployment update",
-		Args: cobra.ExactArgs(1), RunE: runDPMDepStop,
-	}
-	dpmDepCancelPreviewCmd = &cobra.Command{
-		Use: "cancel-preview DEPLOYMENT", Short: "Cancel a preview of a deployment update",
-		Args: cobra.ExactArgs(1), RunE: runDPMDepCancelPreview,
-	}
-)
-
 // --- manifests ---
-
-var deploymentManagerManifestsCmd = &cobra.Command{Use: "manifests", Short: "Manage manifests"}
-
-var (
-	dpmManifestDescribeCmd = &cobra.Command{
-		Use: "describe MANIFEST", Short: "Describe a manifest for a deployment",
-		Args: cobra.ExactArgs(1), RunE: runDPMManifestDescribe,
-	}
-	dpmManifestListCmd = &cobra.Command{
-		Use: "list", Short: "List manifests for a deployment",
-		Args: cobra.NoArgs, RunE: runDPMManifestList,
-	}
-)
 
 // --- operations ---
 
-var deploymentManagerOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage operations"}
-
-var (
-	dpmOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an operation",
-		Args: cobra.ExactArgs(1), RunE: runDPMOpDescribe,
-	}
-	dpmOpListCmd = &cobra.Command{
-		Use: "list", Short: "List operations in the current project",
-		Args: cobra.NoArgs, RunE: runDPMOpList,
-	}
-	dpmOpWaitCmd = &cobra.Command{
-		Use: "wait OPERATION", Short: "Wait for an operation to complete",
-		Args: cobra.ExactArgs(1), RunE: runDPMOpWait,
-	}
-)
-
 // --- resources ---
-
-var deploymentManagerResourcesCmd = &cobra.Command{Use: "resources", Short: "Manage resources"}
-
-var (
-	dpmResDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe a resource for a deployment",
-		Args: cobra.ExactArgs(1), RunE: runDPMResourceDescribe,
-	}
-	dpmResListCmd = &cobra.Command{
-		Use: "list", Short: "List resources for a deployment",
-		Args: cobra.NoArgs, RunE: runDPMResourceList,
-	}
-)
 
 // --- types ---
 
-var deploymentManagerTypesCmd = &cobra.Command{Use: "types", Short: "Manage types"}
-
-var (
-	dpmTypeListCmd = &cobra.Command{
-		Use: "list", Short: "List types in the current project",
-		Args: cobra.NoArgs, RunE: runDPMTypeList,
-	}
-	dpmTypeProvidersCmd = &cobra.Command{
-		Use: "providers", Short: "List type providers in the current project (v2beta)",
-		Args: cobra.NoArgs, RunE: runDPMTypeProviders,
-	}
-)
-
-func init() {
+func (s *deploymentManagerCmds) initDeploymentManager() {
 	addDPMFormat := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagDPMFormat, "format", "", "Output format")
+			c.Flags().StringVar(&s.flagDPMFormat, "format", "", "Output format")
 		}
 	}
 	addDPMFilter := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagDPMFilter, "filter", "", "Server-side list filter")
+			c.Flags().StringVar(&s.flagDPMFilter, "filter", "", "Server-side list filter")
 		}
 	}
 	addDPMAsync := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().BoolVar(&flagDPMAsync, "async", false, "Do not wait for the operation to complete")
-			c.Flags().IntVar(&flagDPMPollIntervalS, "poll-interval", dpmDefaultPollSeconds, "Poll interval in seconds while waiting for operations")
+			c.Flags().BoolVar(&s.flagDPMAsync, "async", false, "Do not wait for the operation to complete")
+			c.Flags().IntVar(&s.flagDPMPollIntervalS, "poll-interval", dpmDefaultPollSeconds, "Poll interval in seconds while waiting for operations")
 		}
 	}
 	addDPMDeployment := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagDPMDeployment, "deployment", "", "Parent deployment (required)")
+			c.Flags().StringVar(&s.flagDPMDeployment, "deployment", "", "Parent deployment (required)")
 			_ = c.MarkFlagRequired("deployment")
 		}
 	}
 
 	// deployments
-	dpmDepCreateCmd.Flags().StringVar(&flagDPMConfigFile, "config-file", "", "Path to a JSON/YAML file with the Deployment body (required)")
-	_ = dpmDepCreateCmd.MarkFlagRequired("config-file")
-	dpmDepCreateCmd.Flags().StringVar(&flagDPMDescription, "description", "", "Optional deployment description (overrides body)")
-	dpmDepCreateCmd.Flags().BoolVar(&flagDPMPreview, "preview", false, "Create the deployment in preview mode")
-	dpmDepCreateCmd.Flags().StringVar(&flagDPMCreatePolicy, "create-policy", "", "Create policy (CREATE_OR_ACQUIRE|ACQUIRE)")
+	s.dpmDepCreateCmd.Flags().StringVar(&s.flagDPMConfigFile, "config-file", "", "Path to a JSON/YAML file with the Deployment body (required)")
+	_ = s.dpmDepCreateCmd.MarkFlagRequired("config-file")
+	s.dpmDepCreateCmd.Flags().StringVar(&s.flagDPMDescription, "description", "", "Optional deployment description (overrides body)")
+	s.dpmDepCreateCmd.Flags().BoolVar(&s.flagDPMPreview, "preview", false, "Create the deployment in preview mode")
+	s.dpmDepCreateCmd.Flags().StringVar(&s.flagDPMCreatePolicy, "create-policy", "", "Create policy (CREATE_OR_ACQUIRE|ACQUIRE)")
 
-	dpmDepUpdateCmd.Flags().StringVar(&flagDPMConfigFile, "config-file", "", "Path to a JSON/YAML file with the Deployment body (required)")
-	_ = dpmDepUpdateCmd.MarkFlagRequired("config-file")
-	dpmDepUpdateCmd.Flags().StringVar(&flagDPMDescription, "description", "", "Optional deployment description (overrides body)")
-	dpmDepUpdateCmd.Flags().BoolVar(&flagDPMPreview, "preview", false, "Update the deployment in preview mode")
-	dpmDepUpdateCmd.Flags().StringVar(&flagDPMCreatePolicy, "create-policy", "", "Create policy (CREATE_OR_ACQUIRE|ACQUIRE)")
-	dpmDepUpdateCmd.Flags().StringVar(&flagDPMDeletePolicy, "delete-policy", "", "Delete policy (DELETE|ABANDON)")
+	s.dpmDepUpdateCmd.Flags().StringVar(&s.flagDPMConfigFile, "config-file", "", "Path to a JSON/YAML file with the Deployment body (required)")
+	_ = s.dpmDepUpdateCmd.MarkFlagRequired("config-file")
+	s.dpmDepUpdateCmd.Flags().StringVar(&s.flagDPMDescription, "description", "", "Optional deployment description (overrides body)")
+	s.dpmDepUpdateCmd.Flags().BoolVar(&s.flagDPMPreview, "preview", false, "Update the deployment in preview mode")
+	s.dpmDepUpdateCmd.Flags().StringVar(&s.flagDPMCreatePolicy, "create-policy", "", "Create policy (CREATE_OR_ACQUIRE|ACQUIRE)")
+	s.dpmDepUpdateCmd.Flags().StringVar(&s.flagDPMDeletePolicy, "delete-policy", "", "Delete policy (DELETE|ABANDON)")
 
-	dpmDepDeleteCmd.Flags().StringVar(&flagDPMDeletePolicy, "delete-policy", "", "Delete policy (DELETE|ABANDON)")
+	s.dpmDepDeleteCmd.Flags().StringVar(&s.flagDPMDeletePolicy, "delete-policy", "", "Delete policy (DELETE|ABANDON)")
 
-	dpmDepStopCmd.Flags().StringVar(&flagDPMFingerprint, "fingerprint", "", "Optional fingerprint of the deployment (fetched if empty)")
-	dpmDepCancelPreviewCmd.Flags().StringVar(&flagDPMFingerprint, "fingerprint", "", "Optional fingerprint of the deployment (fetched if empty)")
+	s.dpmDepStopCmd.Flags().StringVar(&s.flagDPMFingerprint, "fingerprint", "", "Optional fingerprint of the deployment (fetched if empty)")
+	s.dpmDepCancelPreviewCmd.Flags().StringVar(&s.flagDPMFingerprint, "fingerprint", "", "Optional fingerprint of the deployment (fetched if empty)")
 
-	addDPMFormat(dpmDepCreateCmd, dpmDepDeleteCmd, dpmDepDescribeCmd, dpmDepListCmd, dpmDepUpdateCmd, dpmDepStopCmd, dpmDepCancelPreviewCmd)
-	addDPMFilter(dpmDepListCmd)
-	addDPMAsync(dpmDepCreateCmd, dpmDepDeleteCmd, dpmDepUpdateCmd, dpmDepStopCmd, dpmDepCancelPreviewCmd)
-	deploymentManagerDeploymentsCmd.AddCommand(
-		dpmDepCreateCmd, dpmDepDeleteCmd, dpmDepDescribeCmd, dpmDepListCmd,
-		dpmDepUpdateCmd, dpmDepStopCmd, dpmDepCancelPreviewCmd)
-	deploymentManagerCmd.AddCommand(deploymentManagerDeploymentsCmd)
+	addDPMFormat(s.dpmDepCreateCmd, s.dpmDepDeleteCmd, s.dpmDepDescribeCmd, s.dpmDepListCmd, s.dpmDepUpdateCmd, s.dpmDepStopCmd, s.dpmDepCancelPreviewCmd)
+	addDPMFilter(s.dpmDepListCmd)
+	addDPMAsync(s.dpmDepCreateCmd, s.dpmDepDeleteCmd, s.dpmDepUpdateCmd, s.dpmDepStopCmd, s.dpmDepCancelPreviewCmd)
+	s.deploymentManagerDeploymentsCmd.AddCommand(
+		s.dpmDepCreateCmd, s.dpmDepDeleteCmd, s.dpmDepDescribeCmd, s.dpmDepListCmd,
+		s.dpmDepUpdateCmd, s.dpmDepStopCmd, s.dpmDepCancelPreviewCmd)
+	s.deploymentManagerCmd.AddCommand(s.deploymentManagerDeploymentsCmd)
 
 	// manifests
-	addDPMFormat(dpmManifestDescribeCmd, dpmManifestListCmd)
-	addDPMFilter(dpmManifestListCmd)
-	addDPMDeployment(dpmManifestDescribeCmd, dpmManifestListCmd)
-	deploymentManagerManifestsCmd.AddCommand(dpmManifestDescribeCmd, dpmManifestListCmd)
-	deploymentManagerCmd.AddCommand(deploymentManagerManifestsCmd)
+	addDPMFormat(s.dpmManifestDescribeCmd, s.dpmManifestListCmd)
+	addDPMFilter(s.dpmManifestListCmd)
+	addDPMDeployment(s.dpmManifestDescribeCmd, s.dpmManifestListCmd)
+	s.deploymentManagerManifestsCmd.AddCommand(s.dpmManifestDescribeCmd, s.dpmManifestListCmd)
+	s.deploymentManagerCmd.AddCommand(s.deploymentManagerManifestsCmd)
 
 	// operations
-	addDPMFormat(dpmOpDescribeCmd, dpmOpListCmd, dpmOpWaitCmd)
-	addDPMFilter(dpmOpListCmd)
-	dpmOpWaitCmd.Flags().IntVar(&flagDPMPollIntervalS, "poll-interval", dpmDefaultPollSeconds, "Poll interval in seconds while waiting for the operation")
-	deploymentManagerOperationsCmd.AddCommand(dpmOpDescribeCmd, dpmOpListCmd, dpmOpWaitCmd)
-	deploymentManagerCmd.AddCommand(deploymentManagerOperationsCmd)
+	addDPMFormat(s.dpmOpDescribeCmd, s.dpmOpListCmd, s.dpmOpWaitCmd)
+	addDPMFilter(s.dpmOpListCmd)
+	s.dpmOpWaitCmd.Flags().IntVar(&s.flagDPMPollIntervalS, "poll-interval", dpmDefaultPollSeconds, "Poll interval in seconds while waiting for the operation")
+	s.deploymentManagerOperationsCmd.AddCommand(s.dpmOpDescribeCmd, s.dpmOpListCmd, s.dpmOpWaitCmd)
+	s.deploymentManagerCmd.AddCommand(s.deploymentManagerOperationsCmd)
 
 	// resources
-	addDPMFormat(dpmResDescribeCmd, dpmResListCmd)
-	addDPMFilter(dpmResListCmd)
-	addDPMDeployment(dpmResDescribeCmd, dpmResListCmd)
-	deploymentManagerResourcesCmd.AddCommand(dpmResDescribeCmd, dpmResListCmd)
-	deploymentManagerCmd.AddCommand(deploymentManagerResourcesCmd)
+	addDPMFormat(s.dpmResDescribeCmd, s.dpmResListCmd)
+	addDPMFilter(s.dpmResListCmd)
+	addDPMDeployment(s.dpmResDescribeCmd, s.dpmResListCmd)
+	s.deploymentManagerResourcesCmd.AddCommand(s.dpmResDescribeCmd, s.dpmResListCmd)
+	s.deploymentManagerCmd.AddCommand(s.deploymentManagerResourcesCmd)
 
 	// types
-	addDPMFormat(dpmTypeListCmd, dpmTypeProvidersCmd)
-	addDPMFilter(dpmTypeListCmd, dpmTypeProvidersCmd)
-	deploymentManagerTypesCmd.AddCommand(dpmTypeListCmd, dpmTypeProvidersCmd)
-	deploymentManagerCmd.AddCommand(deploymentManagerTypesCmd)
+	addDPMFormat(s.dpmTypeListCmd, s.dpmTypeProvidersCmd)
+	addDPMFilter(s.dpmTypeListCmd, s.dpmTypeProvidersCmd)
+	s.deploymentManagerTypesCmd.AddCommand(s.dpmTypeListCmd, s.dpmTypeProvidersCmd)
+	s.deploymentManagerCmd.AddCommand(s.deploymentManagerTypesCmd)
 
-	rootCmd.AddCommand(deploymentManagerCmd)
 }
 
 // --- deployments impl ---
 
-func runDPMDepCreate(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMDepCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
 	body := &deploymentmanager.Deployment{}
-	if err := loadYAMLOrJSONInto(flagDPMConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDPMConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = args[0]
-	if flagDPMDescription != "" {
-		body.Description = flagDPMDescription
+	if s.flagDPMDescription != "" {
+		body.Description = s.flagDPMDescription
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Deployments.Insert(project, body).Context(ctx)
-	if flagDPMPreview {
+	if s.flagDPMPreview {
 		call = call.Preview(true)
 	}
-	if flagDPMCreatePolicy != "" {
-		call = call.CreatePolicy(flagDPMCreatePolicy)
+	if s.flagDPMCreatePolicy != "" {
+		call = call.CreatePolicy(s.flagDPMCreatePolicy)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("creating deployment: %w", err)
 	}
-	return dpmFinishOp(ctx, svc, project, op, "Create deployment", args[0])
+	return s.dpmFinishOp(ctx, svc, project, op, "Create deployment", args[0])
 }
 
-func runDPMDepDelete(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMDepDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Deployments.Delete(project, args[0]).Context(ctx)
-	if flagDPMDeletePolicy != "" {
-		call = call.DeletePolicy(flagDPMDeletePolicy)
+	if s.flagDPMDeletePolicy != "" {
+		call = call.DeletePolicy(s.flagDPMDeletePolicy)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("deleting deployment: %w", err)
 	}
-	return dpmFinishOp(ctx, svc, project, op, "Delete deployment", args[0])
+	return s.dpmFinishOp(ctx, svc, project, op, "Delete deployment", args[0])
 }
 
-func runDPMDepDescribe(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMDepDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -317,16 +209,16 @@ func runDPMDepDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing deployment: %w", err)
 	}
-	return emitFormatted(got, flagDPMFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPMFormat)
 }
 
-func runDPMDepList(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMDepList(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -334,8 +226,8 @@ func runDPMDepList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Deployments.List(project).Context(ctx)
-		if flagDPMFilter != "" {
-			call = call.Filter(flagDPMFilter)
+		if s.flagDPMFilter != "" {
+			call = call.Filter(s.flagDPMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -350,31 +242,31 @@ func runDPMDepList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDPMFormat != "" {
-		return emitFormatted(all, flagDPMFormat)
+	if s.flagDPMFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDPMFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DESCRIPTION")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "DESCRIPTION")
 	for _, d := range all {
-		fmt.Printf("%-40s %s\n", d.Name, d.Description)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", d.Name, d.Description)
 	}
 	return nil
 }
 
-func runDPMDepUpdate(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMDepUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
 	body := &deploymentmanager.Deployment{}
-	if err := loadYAMLOrJSONInto(flagDPMConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDPMConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = args[0]
-	if flagDPMDescription != "" {
-		body.Description = flagDPMDescription
+	if s.flagDPMDescription != "" {
+		body.Description = s.flagDPMDescription
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -386,33 +278,33 @@ func runDPMDepUpdate(cmd *cobra.Command, args []string) error {
 		body.Fingerprint = existing.Fingerprint
 	}
 	call := svc.Deployments.Update(project, args[0], body).Context(ctx)
-	if flagDPMPreview {
+	if s.flagDPMPreview {
 		call = call.Preview(true)
 	}
-	if flagDPMCreatePolicy != "" {
-		call = call.CreatePolicy(flagDPMCreatePolicy)
+	if s.flagDPMCreatePolicy != "" {
+		call = call.CreatePolicy(s.flagDPMCreatePolicy)
 	}
-	if flagDPMDeletePolicy != "" {
-		call = call.DeletePolicy(flagDPMDeletePolicy)
+	if s.flagDPMDeletePolicy != "" {
+		call = call.DeletePolicy(s.flagDPMDeletePolicy)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("updating deployment: %w", err)
 	}
-	return dpmFinishOp(ctx, svc, project, op, "Update deployment", args[0])
+	return s.dpmFinishOp(ctx, svc, project, op, "Update deployment", args[0])
 }
 
-func runDPMDepStop(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMDepStop(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
-	fingerprint := flagDPMFingerprint
+	fingerprint := s.flagDPMFingerprint
 	if fingerprint == "" {
 		existing, err := svc.Deployments.Get(project, args[0]).Context(ctx).Do()
 		if err != nil {
@@ -424,20 +316,20 @@ func runDPMDepStop(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("stopping deployment: %w", err)
 	}
-	return dpmFinishOp(ctx, svc, project, op, "Stop deployment", args[0])
+	return s.dpmFinishOp(ctx, svc, project, op, "Stop deployment", args[0])
 }
 
-func runDPMDepCancelPreview(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMDepCancelPreview(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
-	fingerprint := flagDPMFingerprint
+	fingerprint := s.flagDPMFingerprint
 	if fingerprint == "" {
 		existing, err := svc.Deployments.Get(project, args[0]).Context(ctx).Do()
 		if err != nil {
@@ -449,44 +341,44 @@ func runDPMDepCancelPreview(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("cancelling deployment preview: %w", err)
 	}
-	return dpmFinishOp(ctx, svc, project, op, "Cancel preview", args[0])
+	return s.dpmFinishOp(ctx, svc, project, op, "Cancel preview", args[0])
 }
 
 // --- manifests impl ---
 
-func runDPMManifestDescribe(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMManifestDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Manifests.Get(project, flagDPMDeployment, args[0]).Context(ctx).Do()
+	got, err := svc.Manifests.Get(project, s.flagDPMDeployment, args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing manifest: %w", err)
 	}
-	return emitFormatted(got, flagDPMFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPMFormat)
 }
 
-func runDPMManifestList(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMManifestList(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*deploymentmanager.Manifest
 	pageToken := ""
 	for {
-		call := svc.Manifests.List(project, flagDPMDeployment).Context(ctx)
-		if flagDPMFilter != "" {
-			call = call.Filter(flagDPMFilter)
+		call := svc.Manifests.List(project, s.flagDPMDeployment).Context(ctx)
+		if s.flagDPMFilter != "" {
+			call = call.Filter(s.flagDPMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -501,25 +393,25 @@ func runDPMManifestList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDPMFormat != "" {
-		return emitFormatted(all, flagDPMFormat)
+	if s.flagDPMFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDPMFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "SELF_LINK")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "SELF_LINK")
 	for _, m := range all {
-		fmt.Printf("%-40s %s\n", m.Name, m.SelfLink)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", m.Name, m.SelfLink)
 	}
 	return nil
 }
 
 // --- operations impl ---
 
-func runDPMOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMOpDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -527,16 +419,16 @@ func runDPMOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagDPMFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPMFormat)
 }
 
-func runDPMOpList(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMOpList(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -544,8 +436,8 @@ func runDPMOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Operations.List(project).Context(ctx)
-		if flagDPMFilter != "" {
-			call = call.Filter(flagDPMFilter)
+		if s.flagDPMFilter != "" {
+			call = call.Filter(s.flagDPMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -560,23 +452,23 @@ func runDPMOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDPMFormat != "" {
-		return emitFormatted(all, flagDPMFormat)
+	if s.flagDPMFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDPMFormat)
 	}
-	printTableHeading(len(all), "%-40s %-15s %s\n", "NAME", "TYPE", "STATUS")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-15s %s\n", "NAME", "TYPE", "STATUS")
 	for _, o := range all {
-		fmt.Printf("%-40s %-15s %s\n", o.Name, o.OperationType, o.Status)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-15s %s\n", o.Name, o.OperationType, o.Status)
 	}
 	return nil
 }
 
-func runDPMOpWait(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMOpWait(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -584,48 +476,48 @@ func runDPMOpWait(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting operation: %w", err)
 	}
-	final, err := dpmWaitOp(ctx, svc, project, op)
+	final, err := s.dpmWaitOp(ctx, svc, project, op)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(final, flagDPMFormat)
+	return emitFormattedTo(s.inv.stdout, final, s.flagDPMFormat)
 }
 
 // --- resources impl ---
 
-func runDPMResourceDescribe(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMResourceDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Resources.Get(project, flagDPMDeployment, args[0]).Context(ctx).Do()
+	got, err := svc.Resources.Get(project, s.flagDPMDeployment, args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing resource: %w", err)
 	}
-	return emitFormatted(got, flagDPMFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPMFormat)
 }
 
-func runDPMResourceList(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMResourceList(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*deploymentmanager.Resource
 	pageToken := ""
 	for {
-		call := svc.Resources.List(project, flagDPMDeployment).Context(ctx)
-		if flagDPMFilter != "" {
-			call = call.Filter(flagDPMFilter)
+		call := svc.Resources.List(project, s.flagDPMDeployment).Context(ctx)
+		if s.flagDPMFilter != "" {
+			call = call.Filter(s.flagDPMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -640,29 +532,29 @@ func runDPMResourceList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDPMFormat != "" {
-		return emitFormatted(all, flagDPMFormat)
+	if s.flagDPMFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDPMFormat)
 	}
-	printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "TYPE", "STATE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-30s %s\n", "NAME", "TYPE", "STATE")
 	for _, r := range all {
 		state := ""
 		if r.Update != nil {
 			state = r.Update.State
 		}
-		fmt.Printf("%-40s %-30s %s\n", r.Name, r.Type, state)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-30s %s\n", r.Name, r.Type, state)
 	}
 	return nil
 }
 
 // --- types impl ---
 
-func runDPMTypeList(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMTypeList(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -670,8 +562,8 @@ func runDPMTypeList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Types.List(project).Context(ctx)
-		if flagDPMFilter != "" {
-			call = call.Filter(flagDPMFilter)
+		if s.flagDPMFilter != "" {
+			call = call.Filter(s.flagDPMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -686,23 +578,23 @@ func runDPMTypeList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDPMFormat != "" {
-		return emitFormatted(all, flagDPMFormat)
+	if s.flagDPMFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDPMFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "SELF_LINK")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "SELF_LINK")
 	for _, t := range all {
-		fmt.Printf("%-40s %s\n", t.Name, t.SelfLink)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", t.Name, t.SelfLink)
 	}
 	return nil
 }
 
-func runDPMTypeProviders(cmd *cobra.Command, args []string) error {
-	project, err := dpmResolveProject()
+func (s *deploymentManagerCmds) runDPMTypeProviders(cmd *cobra.Command, args []string) error {
+	project, err := s.dpmResolveProject()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeploymentManagerBetaService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeploymentManagerBeta(ctx)
 	if err != nil {
 		return err
 	}
@@ -710,8 +602,8 @@ func runDPMTypeProviders(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.TypeProviders.List(project).Context(ctx)
-		if flagDPMFilter != "" {
-			call = call.Filter(flagDPMFilter)
+		if s.flagDPMFilter != "" {
+			call = call.Filter(s.flagDPMFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -726,12 +618,134 @@ func runDPMTypeProviders(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDPMFormat != "" {
-		return emitFormatted(all, flagDPMFormat)
+	if s.flagDPMFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDPMFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DESCRIPTION")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %s\n", "NAME", "DESCRIPTION")
 	for _, tp := range all {
-		fmt.Printf("%-40s %s\n", tp.Name, tp.Description)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", tp.Name, tp.Description)
 	}
 	return nil
+}
+
+// deploymentManagerCmds holds the commands and flag values of one invocation's "deploymentManager"
+// command group, so invocations don't share state (#2070).
+type deploymentManagerCmds struct {
+	inv *invocation
+
+	deploymentManagerCmd            *cobra.Command
+	flagDPMFormat                   string
+	flagDPMFilter                   string
+	flagDPMConfigFile               string
+	flagDPMDeployment               string
+	flagDPMDescription              string
+	flagDPMPreview                  bool
+	flagDPMFingerprint              string
+	flagDPMCreatePolicy             string
+	flagDPMDeletePolicy             string
+	flagDPMAsync                    bool
+	flagDPMPollIntervalS            int
+	deploymentManagerDeploymentsCmd *cobra.Command
+	dpmDepCreateCmd                 *cobra.Command
+	dpmDepDeleteCmd                 *cobra.Command
+	dpmDepDescribeCmd               *cobra.Command
+	dpmDepListCmd                   *cobra.Command
+	dpmDepUpdateCmd                 *cobra.Command
+	dpmDepStopCmd                   *cobra.Command
+	dpmDepCancelPreviewCmd          *cobra.Command
+	deploymentManagerManifestsCmd   *cobra.Command
+	dpmManifestDescribeCmd          *cobra.Command
+	dpmManifestListCmd              *cobra.Command
+	deploymentManagerOperationsCmd  *cobra.Command
+	dpmOpDescribeCmd                *cobra.Command
+	dpmOpListCmd                    *cobra.Command
+	dpmOpWaitCmd                    *cobra.Command
+	deploymentManagerResourcesCmd   *cobra.Command
+	dpmResDescribeCmd               *cobra.Command
+	dpmResListCmd                   *cobra.Command
+	deploymentManagerTypesCmd       *cobra.Command
+	dpmTypeListCmd                  *cobra.Command
+	dpmTypeProvidersCmd             *cobra.Command
+}
+
+// newDeploymentManagerCmd returns the "deploymentManager" command group for inv.
+func newDeploymentManagerCmd(inv *invocation) *cobra.Command {
+	return newDeploymentManagerCmds(inv).deploymentManagerCmd
+}
+
+// newDeploymentManagerCmds builds the "deploymentManager" command group for inv and returns its state.
+func newDeploymentManagerCmds(inv *invocation) *deploymentManagerCmds {
+	s := &deploymentManagerCmds{inv: inv}
+	s.deploymentManagerCmd = &cobra.Command{Use: "deployment-manager", Short: "Manage Deployment Manager"}
+	s.deploymentManagerDeploymentsCmd = &cobra.Command{Use: "deployments", Short: "Manage deployments"}
+	s.dpmDepCreateCmd = &cobra.Command{
+		Use: "create DEPLOYMENT", Short: "Create a deployment from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMDepCreate,
+	}
+	s.dpmDepDeleteCmd = &cobra.Command{
+		Use: "delete DEPLOYMENT", Short: "Delete a deployment",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMDepDelete,
+	}
+	s.dpmDepDescribeCmd = &cobra.Command{
+		Use: "describe DEPLOYMENT", Short: "Describe a deployment",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMDepDescribe,
+	}
+	s.dpmDepListCmd = &cobra.Command{
+		Use: "list", Short: "List deployments in the current project",
+		Args: cobra.NoArgs, RunE: s.runDPMDepList,
+	}
+	s.dpmDepUpdateCmd = &cobra.Command{
+		Use: "update DEPLOYMENT", Short: "Update a deployment from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMDepUpdate,
+	}
+	s.dpmDepStopCmd = &cobra.Command{
+		Use: "stop DEPLOYMENT", Short: "Stop a deployment update",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMDepStop,
+	}
+	s.dpmDepCancelPreviewCmd = &cobra.Command{
+		Use: "cancel-preview DEPLOYMENT", Short: "Cancel a preview of a deployment update",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMDepCancelPreview,
+	}
+	s.deploymentManagerManifestsCmd = &cobra.Command{Use: "manifests", Short: "Manage manifests"}
+	s.dpmManifestDescribeCmd = &cobra.Command{
+		Use: "describe MANIFEST", Short: "Describe a manifest for a deployment",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMManifestDescribe,
+	}
+	s.dpmManifestListCmd = &cobra.Command{
+		Use: "list", Short: "List manifests for a deployment",
+		Args: cobra.NoArgs, RunE: s.runDPMManifestList,
+	}
+	s.deploymentManagerOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage operations"}
+	s.dpmOpDescribeCmd = &cobra.Command{
+		Use: "describe OPERATION", Short: "Describe an operation",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMOpDescribe,
+	}
+	s.dpmOpListCmd = &cobra.Command{
+		Use: "list", Short: "List operations in the current project",
+		Args: cobra.NoArgs, RunE: s.runDPMOpList,
+	}
+	s.dpmOpWaitCmd = &cobra.Command{
+		Use: "wait OPERATION", Short: "Wait for an operation to complete",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMOpWait,
+	}
+	s.deploymentManagerResourcesCmd = &cobra.Command{Use: "resources", Short: "Manage resources"}
+	s.dpmResDescribeCmd = &cobra.Command{
+		Use: "describe RESOURCE", Short: "Describe a resource for a deployment",
+		Args: cobra.ExactArgs(1), RunE: s.runDPMResourceDescribe,
+	}
+	s.dpmResListCmd = &cobra.Command{
+		Use: "list", Short: "List resources for a deployment",
+		Args: cobra.NoArgs, RunE: s.runDPMResourceList,
+	}
+	s.deploymentManagerTypesCmd = &cobra.Command{Use: "types", Short: "Manage types"}
+	s.dpmTypeListCmd = &cobra.Command{
+		Use: "list", Short: "List types in the current project",
+		Args: cobra.NoArgs, RunE: s.runDPMTypeList,
+	}
+	s.dpmTypeProvidersCmd = &cobra.Command{
+		Use: "providers", Short: "List type providers in the current project (v2beta)",
+		Args: cobra.NoArgs, RunE: s.runDPMTypeProviders,
+	}
+	s.initDeploymentManager()
+	return s
 }

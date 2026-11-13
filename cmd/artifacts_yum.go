@@ -8,69 +8,41 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/config"
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
 
-var artifactsYumCmd = &cobra.Command{
-	Use:   "yum",
-	Short: "Manage Artifact Registry RPM packages",
-}
-
-var artifactsYumImportCmd = &cobra.Command{
-	Use:   "import [REPOSITORY]",
-	Short: "Import one or more RPM packages into an artifact repository",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runArtifactsYumImport,
-}
-
-var artifactsYumUploadCmd = &cobra.Command{
-	Use:   "upload [REPOSITORY]",
-	Short: "Upload an RPM package to an artifact repository",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runArtifactsYumUpload,
-}
-
-var (
-	flagArtYumLocation string
-	flagArtYumGcsSrc   []string
-	flagArtYumSource   string
-	flagArtYumAsync    bool
-)
-
-func init() {
-	artifactsYumImportCmd.Flags().StringVar(&flagArtYumLocation, "location", "", "Location of the repository")
-	artifactsYumImportCmd.Flags().StringSliceVar(&flagArtYumGcsSrc, "gcs-source", nil,
+func (s *artifactsCmds) initArtifactsYum() {
+	s.artifactsYumImportCmd.Flags().StringVar(&s.flagArtYumLocation, "location", "", "Location of the repository")
+	s.artifactsYumImportCmd.Flags().StringSliceVar(&s.flagArtYumGcsSrc, "gcs-source", nil,
 		"Google Cloud Storage location(s) of packages to import; use trailing wildcards to import multiple packages (required)")
-	artifactsYumImportCmd.Flags().BoolVar(&flagArtYumAsync, "async", false,
+	s.artifactsYumImportCmd.Flags().BoolVar(&s.flagArtYumAsync, "async", false,
 		"Return immediately without waiting for the operation to complete")
-	_ = artifactsYumImportCmd.MarkFlagRequired("gcs-source")
+	_ = s.artifactsYumImportCmd.MarkFlagRequired("gcs-source")
 
-	artifactsYumUploadCmd.Flags().StringVar(&flagArtYumLocation, "location", "", "Location of the repository")
-	artifactsYumUploadCmd.Flags().StringVar(&flagArtYumSource, "source", "", "Path of the RPM package to upload (required)")
-	artifactsYumUploadCmd.Flags().BoolVar(&flagArtYumAsync, "async", false,
+	s.artifactsYumUploadCmd.Flags().StringVar(&s.flagArtYumLocation, "location", "", "Location of the repository")
+	s.artifactsYumUploadCmd.Flags().StringVar(&s.flagArtYumSource, "source", "", "Path of the RPM package to upload (required)")
+	s.artifactsYumUploadCmd.Flags().BoolVar(&s.flagArtYumAsync, "async", false,
 		"Return immediately without waiting for the operation to complete")
-	_ = artifactsYumUploadCmd.MarkFlagRequired("source")
+	_ = s.artifactsYumUploadCmd.MarkFlagRequired("source")
 
-	artifactsYumCmd.AddCommand(artifactsYumImportCmd, artifactsYumUploadCmd)
-	artifactsCmd.AddCommand(artifactsYumCmd)
+	s.artifactsYumCmd.AddCommand(s.artifactsYumImportCmd, s.artifactsYumUploadCmd)
+	s.artifactsCmd.AddCommand(s.artifactsYumCmd)
 }
 
 // resolveYumRepository returns (project, location, repository) using positional
 // arg (if given), --location, and --project flags/config.
-func resolveYumRepository(args []string) (string, string, string, error) {
-	project, err := resolveProject()
+func (s *artifactsCmds) resolveYumRepository(args []string) (string, string, string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", "", "", err
 	}
-	location := config.Resolve(flagArtYumLocation, "CLOUDSDK_ARTIFACTS_LOCATION", "")
+	location := s.inv.resolve(s.flagArtYumLocation, "CLOUDSDK_ARTIFACTS_LOCATION", "")
 	var repository string
 	if len(args) == 1 {
 		repository = args[0]
 	}
-	repository = config.Resolve(repository, "CLOUDSDK_ARTIFACTS_REPOSITORY", "")
+	repository = s.inv.resolve(repository, "CLOUDSDK_ARTIFACTS_REPOSITORY", "")
 	if repository == "" {
 		return "", "", "", fmt.Errorf("Failed to find attribute [repository]. " +
 			"The attribute can be set in the following ways:\n" +
@@ -86,22 +58,22 @@ func resolveYumRepository(args []string) (string, string, string, error) {
 	return project, location, repository, nil
 }
 
-func runArtifactsYumImport(cmd *cobra.Command, args []string) error {
-	project, location, repository, err := resolveYumRepository(args)
+func (s *artifactsCmds) runArtifactsYumImport(cmd *cobra.Command, args []string) error {
+	project, location, repository, err := s.resolveYumRepository(args)
 	if err != nil {
 		return err
 	}
-	if len(flagArtYumGcsSrc) == 0 {
+	if len(s.flagArtYumGcsSrc) == 0 {
 		return fmt.Errorf("--gcs-source is required")
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
 
-	uris, useWildcards := expandYumGcsSources(flagArtYumGcsSrc)
+	uris, useWildcards := expandYumGcsSources(s.flagArtYumGcsSrc)
 	parent := fmt.Sprintf("projects/%s/locations/%s/repositories/%s", project, location, repository)
 	req := &artifactregistry.ImportYumArtifactsRequest{
 		GcsSource: &artifactregistry.ImportYumArtifactsGcsSource{
@@ -114,33 +86,33 @@ func runArtifactsYumImport(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("starting import: %w", err)
 	}
 
-	if flagArtYumAsync {
-		fmt.Printf("Import started. Operation: %s\n", op.Name)
+	if s.flagArtYumAsync {
+		fmt.Fprintf(s.inv.stdout, "Import started. Operation: %s\n", op.Name)
 		return nil
 	}
 	op, err = waitForArtifactRegistryOperation(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(op, flagFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.inv.flags.format)
 }
 
-func runArtifactsYumUpload(cmd *cobra.Command, args []string) error {
-	project, location, repository, err := resolveYumRepository(args)
+func (s *artifactsCmds) runArtifactsYumUpload(cmd *cobra.Command, args []string) error {
+	project, location, repository, err := s.resolveYumRepository(args)
 	if err != nil {
 		return err
 	}
-	if flagArtYumSource == "" {
+	if s.flagArtYumSource == "" {
 		return fmt.Errorf("--source is required")
 	}
-	f, err := os.Open(flagArtYumSource)
+	f, err := os.Open(s.flagArtYumSource)
 	if err != nil {
-		return fmt.Errorf("opening source file %s: %w", flagArtYumSource, err)
+		return fmt.Errorf("opening source file %s: %w", s.flagArtYumSource, err)
 	}
 	defer f.Close()
 
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
@@ -152,14 +124,14 @@ func runArtifactsYumUpload(cmd *cobra.Command, args []string) error {
 		Context(ctx).
 		Do()
 	if err != nil {
-		return fmt.Errorf("uploading %s: %w", filepath.Base(flagArtYumSource), err)
+		return fmt.Errorf("uploading %s: %w", filepath.Base(s.flagArtYumSource), err)
 	}
 
-	if flagArtYumAsync || resp.Operation == nil {
+	if s.flagArtYumAsync || resp.Operation == nil {
 		if resp.Operation != nil {
-			fmt.Printf("Upload started. Operation: %s\n", resp.Operation.Name)
+			fmt.Fprintf(s.inv.stdout, "Upload started. Operation: %s\n", resp.Operation.Name)
 		} else {
-			fmt.Printf("Uploaded %s to %s\n", filepath.Base(flagArtYumSource), parent)
+			fmt.Fprintf(s.inv.stdout, "Uploaded %s to %s\n", filepath.Base(s.flagArtYumSource), parent)
 		}
 		return nil
 	}
@@ -167,7 +139,7 @@ func runArtifactsYumUpload(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(op, flagFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.inv.flags.format)
 }
 
 // expandYumGcsSources splits --gcs-source values, which may themselves be

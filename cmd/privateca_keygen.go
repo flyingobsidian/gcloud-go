@@ -86,7 +86,7 @@ func validatePCAKeyAlgorithm(algorithm string) error {
 
 // exportPCAPrivateKey writes the private key owner-read-only and prints
 // gcloud-python's KEY_OUTPUT_WARNING to stderr.
-func exportPCAPrivateKey(path string, privPEM []byte) error {
+func (s *privatecaCmds) exportPCAPrivateKey(path string, privPEM []byte) error {
 	_ = os.Remove(path) // a previous 0400 export would block O_TRUNC
 	if err := os.WriteFile(path, privPEM, 0o600); err != nil {
 		return fmt.Errorf("Error writing to private key output file named '%s'", path)
@@ -94,14 +94,14 @@ func exportPCAPrivateKey(path string, privPEM []byte) error {
 	if err := os.Chmod(path, 0o400); err != nil {
 		return fmt.Errorf("Error writing to private key output file named '%s'", path)
 	}
-	fmt.Fprintf(os.Stderr, "WARNING: "+pcaKeyOutputWarning+"\n", path)
+	fmt.Fprintf(s.inv.stderr, "WARNING: "+pcaKeyOutputWarning+"\n", path)
 	return nil
 }
 
 // applyPCAGeneratedKey generates a key pair, exports the private key to
 // keyOutputFile, and sets cert.config.publicKey to the PEM public key, as
 // gcloud-python does for `certificates create --generate-key`.
-func applyPCAGeneratedKey(cert *privateca.Certificate, algorithm, keyOutputFile string) error {
+func (s *privatecaCmds) applyPCAGeneratedKey(cert *privateca.Certificate, algorithm, keyOutputFile string) error {
 	if cert.PemCsr != "" {
 		return fmt.Errorf("argument --generate-key: --generate-key cannot be used with a pemCsr in --config-file")
 	}
@@ -109,7 +109,7 @@ func applyPCAGeneratedKey(cert *privateca.Certificate, algorithm, keyOutputFile 
 	if err != nil {
 		return err
 	}
-	if err := exportPCAPrivateKey(keyOutputFile, privPEM); err != nil {
+	if err := s.exportPCAPrivateKey(keyOutputFile, privPEM); err != nil {
 		return err
 	}
 	if cert.Config == nil {

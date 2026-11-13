@@ -1,113 +1,47 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	datastore "google.golang.org/api/datastore/v1"
 )
 
 // --- gcloud datastore (#325, #969, #970) ---
 
-var datastoreCmd = &cobra.Command{Use: "datastore", Short: "Manage Cloud Datastore"}
-
-var (
-	flagDatastoreFile     string
-	flagDatastoreKind     string
-	flagDatastoreAncestor string
-	flagDatastoreProps    []string
-	flagDatastoreFilter   string
-	flagDatastorePageSize int64
-	flagDatastoreFormat   string
-)
-
 // --- indexes ---
-
-var datastoreIndexesCmd = &cobra.Command{Use: "indexes", Short: "Manage Datastore indexes"}
-
-var (
-	datastoreIndexesCreateCmd = &cobra.Command{
-		Use:   "create",
-		Short: "Create a Datastore index",
-		Args:  cobra.NoArgs,
-		RunE:  runDSIndexesCreate,
-	}
-	datastoreIndexesDescribeCmd = &cobra.Command{
-		Use:   "describe INDEX_ID",
-		Short: "Describe a Datastore index",
-		Args:  cobra.ExactArgs(1),
-		RunE:  runDSIndexesDescribe,
-	}
-	datastoreIndexesListCmd = &cobra.Command{
-		Use:   "list",
-		Short: "List Datastore indexes",
-		Args:  cobra.NoArgs,
-		RunE:  runDSIndexesList,
-	}
-	datastoreIndexesCleanupCmd = &cobra.Command{
-		Use:   "cleanup",
-		Short: "Delete unused Datastore indexes (indexes present in the project but not in the provided --file)",
-		Args:  cobra.NoArgs,
-		RunE:  runDSIndexesCleanup,
-	}
-)
 
 // --- operations ---
 
-var datastoreOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Datastore long-running operations"}
-
-var (
-	datastoreOperationsCancelCmd = &cobra.Command{
-		Use:   "cancel OPERATION",
-		Short: "Cancel a Datastore operation",
-		Args:  cobra.ExactArgs(1),
-		RunE:  runDSOperationsCancel,
-	}
-	datastoreOperationsDescribeCmd = &cobra.Command{
-		Use:   "describe OPERATION",
-		Short: "Describe a Datastore operation",
-		Args:  cobra.ExactArgs(1),
-		RunE:  runDSOperationsDescribe,
-	}
-	datastoreOperationsListCmd = &cobra.Command{
-		Use:   "list",
-		Short: "List Datastore operations",
-		Args:  cobra.NoArgs,
-		RunE:  runDSOperationsList,
-	}
-)
-
-func init() {
+func (s *datastoreCmds) initDatastore() {
 	// indexes flags
-	datastoreIndexesCreateCmd.Flags().StringVar(&flagDatastoreKind, "kind", "", "Entity kind (required unless --file provides indexes)")
-	datastoreIndexesCreateCmd.Flags().StringVar(&flagDatastoreAncestor, "ancestor", "NONE", "Ancestor mode: NONE or ALL_ANCESTORS")
-	datastoreIndexesCreateCmd.Flags().StringSliceVar(&flagDatastoreProps, "property", nil, "Indexed property in NAME:DIRECTION form (may be repeated). DIRECTION is ASCENDING or DESCENDING")
-	datastoreIndexesCreateCmd.Flags().StringVar(&flagDatastoreFile, "file", "", "Path to a YAML/JSON file containing one index or a list of indexes to create")
-	datastoreIndexesCleanupCmd.Flags().StringVar(&flagDatastoreFile, "file", "", "Path to a YAML/JSON file describing the indexes that should be kept (required)")
-	_ = datastoreIndexesCleanupCmd.MarkFlagRequired("file")
-	datastoreIndexesListCmd.Flags().StringVar(&flagDatastoreFilter, "filter", "", "Server-side filter expression")
-	datastoreIndexesListCmd.Flags().Int64Var(&flagDatastorePageSize, "page-size", 0, "Maximum number of results per page")
-	for _, c := range []*cobra.Command{datastoreIndexesDescribeCmd, datastoreIndexesListCmd, datastoreIndexesCreateCmd} {
-		c.Flags().StringVar(&flagDatastoreFormat, "format", "", "Output format")
+	s.datastoreIndexesCreateCmd.Flags().StringVar(&s.flagDatastoreKind, "kind", "", "Entity kind (required unless --file provides indexes)")
+	s.datastoreIndexesCreateCmd.Flags().StringVar(&s.flagDatastoreAncestor, "ancestor", "NONE", "Ancestor mode: NONE or ALL_ANCESTORS")
+	s.datastoreIndexesCreateCmd.Flags().StringSliceVar(&s.flagDatastoreProps, "property", nil, "Indexed property in NAME:DIRECTION form (may be repeated). DIRECTION is ASCENDING or DESCENDING")
+	s.datastoreIndexesCreateCmd.Flags().StringVar(&s.flagDatastoreFile, "file", "", "Path to a YAML/JSON file containing one index or a list of indexes to create")
+	s.datastoreIndexesCleanupCmd.Flags().StringVar(&s.flagDatastoreFile, "file", "", "Path to a YAML/JSON file describing the indexes that should be kept (required)")
+	_ = s.datastoreIndexesCleanupCmd.MarkFlagRequired("file")
+	s.datastoreIndexesListCmd.Flags().StringVar(&s.flagDatastoreFilter, "filter", "", "Server-side filter expression")
+	s.datastoreIndexesListCmd.Flags().Int64Var(&s.flagDatastorePageSize, "page-size", 0, "Maximum number of results per page")
+	for _, c := range []*cobra.Command{s.datastoreIndexesDescribeCmd, s.datastoreIndexesListCmd, s.datastoreIndexesCreateCmd} {
+		c.Flags().StringVar(&s.flagDatastoreFormat, "format", "", "Output format")
 	}
-	datastoreIndexesCmd.AddCommand(datastoreIndexesCreateCmd, datastoreIndexesDescribeCmd, datastoreIndexesListCmd, datastoreIndexesCleanupCmd)
+	s.datastoreIndexesCmd.AddCommand(s.datastoreIndexesCreateCmd, s.datastoreIndexesDescribeCmd, s.datastoreIndexesListCmd, s.datastoreIndexesCleanupCmd)
 
 	// operations flags
-	datastoreOperationsListCmd.Flags().StringVar(&flagDatastoreFilter, "filter", "", "Server-side filter expression")
-	datastoreOperationsListCmd.Flags().Int64Var(&flagDatastorePageSize, "page-size", 0, "Maximum number of results per page")
-	for _, c := range []*cobra.Command{datastoreOperationsDescribeCmd, datastoreOperationsListCmd} {
-		c.Flags().StringVar(&flagDatastoreFormat, "format", "", "Output format")
+	s.datastoreOperationsListCmd.Flags().StringVar(&s.flagDatastoreFilter, "filter", "", "Server-side filter expression")
+	s.datastoreOperationsListCmd.Flags().Int64Var(&s.flagDatastorePageSize, "page-size", 0, "Maximum number of results per page")
+	for _, c := range []*cobra.Command{s.datastoreOperationsDescribeCmd, s.datastoreOperationsListCmd} {
+		c.Flags().StringVar(&s.flagDatastoreFormat, "format", "", "Output format")
 	}
-	datastoreOperationsCmd.AddCommand(datastoreOperationsCancelCmd, datastoreOperationsDescribeCmd, datastoreOperationsListCmd)
+	s.datastoreOperationsCmd.AddCommand(s.datastoreOperationsCancelCmd, s.datastoreOperationsDescribeCmd, s.datastoreOperationsListCmd)
 
-	datastoreCmd.AddCommand(datastoreIndexesCmd, datastoreOperationsCmd)
+	s.datastoreCmd.AddCommand(s.datastoreIndexesCmd, s.datastoreOperationsCmd)
 	for _, name := range []string{"export", "import"} {
-		registerStubCommand(datastoreCmd, name, "Not yet implemented")
+		registerStubCommand(s.datastoreCmd, name, "Not yet implemented")
 	}
-	rootCmd.AddCommand(datastoreCmd)
+
 }
 
 // --- helpers ---
@@ -156,15 +90,15 @@ func dsIndexesFromFile(path string) ([]*datastore.GoogleDatastoreAdminV1Index, e
 	return out, nil
 }
 
-func dsIndexFromFlags() (*datastore.GoogleDatastoreAdminV1Index, error) {
-	if flagDatastoreKind == "" {
+func (s *datastoreCmds) dsIndexFromFlags() (*datastore.GoogleDatastoreAdminV1Index, error) {
+	if s.flagDatastoreKind == "" {
 		return nil, fmt.Errorf("--kind is required when --file is not provided")
 	}
 	idx := &datastore.GoogleDatastoreAdminV1Index{
-		Kind:     flagDatastoreKind,
-		Ancestor: strings.ToUpper(flagDatastoreAncestor),
+		Kind:     s.flagDatastoreKind,
+		Ancestor: strings.ToUpper(s.flagDatastoreAncestor),
 	}
-	for _, spec := range flagDatastoreProps {
+	for _, spec := range s.flagDatastoreProps {
 		name, dir, ok := strings.Cut(spec, ":")
 		if !ok {
 			return nil, fmt.Errorf("invalid --property %q (expected NAME:DIRECTION)", spec)
@@ -197,19 +131,19 @@ func dsOperationName(project, id string) string {
 
 // --- indexes impl ---
 
-func runDSIndexesCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *datastoreCmds) runDSIndexesCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	var indexes []*datastore.GoogleDatastoreAdminV1Index
-	if flagDatastoreFile != "" {
-		indexes, err = dsIndexesFromFile(flagDatastoreFile)
+	if s.flagDatastoreFile != "" {
+		indexes, err = dsIndexesFromFile(s.flagDatastoreFile)
 		if err != nil {
 			return err
 		}
 	} else {
-		one, err := dsIndexFromFlags()
+		one, err := s.dsIndexFromFlags()
 		if err != nil {
 			return err
 		}
@@ -218,8 +152,8 @@ func runDSIndexesCreate(cmd *cobra.Command, args []string) error {
 	if len(indexes) == 0 {
 		return fmt.Errorf("no indexes to create")
 	}
-	ctx := context.Background()
-	svc, err := gcp.DatastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Datastore(ctx)
 	if err != nil {
 		return err
 	}
@@ -229,19 +163,19 @@ func runDSIndexesCreate(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating index (kind=%q): %w", idx.Kind, err)
 		}
-		fmt.Printf("Create request issued for index (kind=%q, operation: %s).\n", idx.Kind, op.Name)
+		fmt.Fprintf(s.inv.stdout, "Create request issued for index (kind=%q, operation: %s).\n", idx.Kind, op.Name)
 		ops = append(ops, op)
 	}
-	return emitFormatted(ops, flagDatastoreFormat)
+	return emitFormattedTo(s.inv.stdout, ops, s.flagDatastoreFormat)
 }
 
-func runDSIndexesDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *datastoreCmds) runDSIndexesDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DatastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Datastore(ctx)
 	if err != nil {
 		return err
 	}
@@ -249,16 +183,16 @@ func runDSIndexesDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing index: %w", err)
 	}
-	return emitFormatted(idx, flagDatastoreFormat)
+	return emitFormattedTo(s.inv.stdout, idx, s.flagDatastoreFormat)
 }
 
-func runDSIndexesList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *datastoreCmds) runDSIndexesList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DatastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Datastore(ctx)
 	if err != nil {
 		return err
 	}
@@ -266,11 +200,11 @@ func runDSIndexesList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Indexes.List(project).Context(ctx)
-		if flagDatastoreFilter != "" {
-			call = call.Filter(flagDatastoreFilter)
+		if s.flagDatastoreFilter != "" {
+			call = call.Filter(s.flagDatastoreFilter)
 		}
-		if flagDatastorePageSize > 0 {
-			call = call.PageSize(flagDatastorePageSize)
+		if s.flagDatastorePageSize > 0 {
+			call = call.PageSize(s.flagDatastorePageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -285,15 +219,15 @@ func runDSIndexesList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDatastoreFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDatastoreFormat)
 }
 
-func runDSIndexesCleanup(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *datastoreCmds) runDSIndexesCleanup(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	wanted, err := dsIndexesFromFile(flagDatastoreFile)
+	wanted, err := dsIndexesFromFile(s.flagDatastoreFile)
 	if err != nil {
 		return err
 	}
@@ -301,8 +235,8 @@ func runDSIndexesCleanup(cmd *cobra.Command, args []string) error {
 	for _, idx := range wanted {
 		keep[dsIndexSignature(idx)] = struct{}{}
 	}
-	ctx := context.Background()
-	svc, err := gcp.DatastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Datastore(ctx)
 	if err != nil {
 		return err
 	}
@@ -332,39 +266,39 @@ func runDSIndexesCleanup(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("deleting index %s: %w", idx.IndexId, err)
 		}
-		fmt.Printf("Delete request issued for index [%s] (operation: %s).\n", idx.IndexId, op.Name)
+		fmt.Fprintf(s.inv.stdout, "Delete request issued for index [%s] (operation: %s).\n", idx.IndexId, op.Name)
 		deleted++
 	}
-	fmt.Printf("Cleanup complete: %d unused index(es) deleted.\n", deleted)
+	fmt.Fprintf(s.inv.stdout, "Cleanup complete: %d unused index(es) deleted.\n", deleted)
 	return nil
 }
 
 // --- operations impl ---
 
-func runDSOperationsCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *datastoreCmds) runDSOperationsCancel(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DatastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Datastore(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Operations.Cancel(dsOperationName(project, args[0])).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runDSOperationsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *datastoreCmds) runDSOperationsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DatastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Datastore(ctx)
 	if err != nil {
 		return err
 	}
@@ -372,16 +306,16 @@ func runDSOperationsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagDatastoreFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDatastoreFormat)
 }
 
-func runDSOperationsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *datastoreCmds) runDSOperationsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DatastoreService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Datastore(ctx)
 	if err != nil {
 		return err
 	}
@@ -390,11 +324,11 @@ func runDSOperationsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Operations.List(parent).Context(ctx)
-		if flagDatastoreFilter != "" {
-			call = call.Filter(flagDatastoreFilter)
+		if s.flagDatastoreFilter != "" {
+			call = call.Filter(s.flagDatastoreFilter)
 		}
-		if flagDatastorePageSize > 0 {
-			call = call.PageSize(flagDatastorePageSize)
+		if s.flagDatastorePageSize > 0 {
+			call = call.PageSize(s.flagDatastorePageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -409,5 +343,86 @@ func runDSOperationsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDatastoreFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDatastoreFormat)
+}
+
+// datastoreCmds holds the commands and flag values of one invocation's "datastore"
+// command group, so invocations don't share state (#2070).
+type datastoreCmds struct {
+	inv *invocation
+
+	datastoreCmd                   *cobra.Command
+	flagDatastoreFile              string
+	flagDatastoreKind              string
+	flagDatastoreAncestor          string
+	flagDatastoreProps             []string
+	flagDatastoreFilter            string
+	flagDatastorePageSize          int64
+	flagDatastoreFormat            string
+	datastoreIndexesCmd            *cobra.Command
+	datastoreIndexesCreateCmd      *cobra.Command
+	datastoreIndexesDescribeCmd    *cobra.Command
+	datastoreIndexesListCmd        *cobra.Command
+	datastoreIndexesCleanupCmd     *cobra.Command
+	datastoreOperationsCmd         *cobra.Command
+	datastoreOperationsCancelCmd   *cobra.Command
+	datastoreOperationsDescribeCmd *cobra.Command
+	datastoreOperationsListCmd     *cobra.Command
+}
+
+// newDatastoreCmd returns the "datastore" command group for inv.
+func newDatastoreCmd(inv *invocation) *cobra.Command {
+	return newDatastoreCmds(inv).datastoreCmd
+}
+
+// newDatastoreCmds builds the "datastore" command group for inv and returns its state.
+func newDatastoreCmds(inv *invocation) *datastoreCmds {
+	s := &datastoreCmds{inv: inv}
+	s.datastoreCmd = &cobra.Command{Use: "datastore", Short: "Manage Cloud Datastore"}
+	s.datastoreIndexesCmd = &cobra.Command{Use: "indexes", Short: "Manage Datastore indexes"}
+	s.datastoreIndexesCreateCmd = &cobra.Command{
+		Use:   "create",
+		Short: "Create a Datastore index",
+		Args:  cobra.NoArgs,
+		RunE:  s.runDSIndexesCreate,
+	}
+	s.datastoreIndexesDescribeCmd = &cobra.Command{
+		Use:   "describe INDEX_ID",
+		Short: "Describe a Datastore index",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runDSIndexesDescribe,
+	}
+	s.datastoreIndexesListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List Datastore indexes",
+		Args:  cobra.NoArgs,
+		RunE:  s.runDSIndexesList,
+	}
+	s.datastoreIndexesCleanupCmd = &cobra.Command{
+		Use:   "cleanup",
+		Short: "Delete unused Datastore indexes (indexes present in the project but not in the provided --file)",
+		Args:  cobra.NoArgs,
+		RunE:  s.runDSIndexesCleanup,
+	}
+	s.datastoreOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Datastore long-running operations"}
+	s.datastoreOperationsCancelCmd = &cobra.Command{
+		Use:   "cancel OPERATION",
+		Short: "Cancel a Datastore operation",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runDSOperationsCancel,
+	}
+	s.datastoreOperationsDescribeCmd = &cobra.Command{
+		Use:   "describe OPERATION",
+		Short: "Describe a Datastore operation",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runDSOperationsDescribe,
+	}
+	s.datastoreOperationsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List Datastore operations",
+		Args:  cobra.NoArgs,
+		RunE:  s.runDSOperationsList,
+	}
+	s.initDatastore()
+	return s
 }

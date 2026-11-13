@@ -7,7 +7,8 @@ import (
 )
 
 func developerConnectSubgroup(name string) *cobra.Command {
-	for _, c := range developerConnectCmd.Commands() {
+	grp := newDeveloperConnectCmds(legacyTestInvocation())
+	for _, c := range grp.developerConnectCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

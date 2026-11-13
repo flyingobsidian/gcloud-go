@@ -1,86 +1,51 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	developerconnect "google.golang.org/api/developerconnect/v1"
 )
 
 // --- gcloud developer-connect connections (#1023) ---
 
-var developerConnectConnectionsCmd = &cobra.Command{Use: "connections", Short: "Manage Developer Connect connections"}
-
-var (
-	flagDcConnLocation   string
-	flagDcConnFormat     string
-	flagDcConnConfigFile string
-	flagDcConnUpdateMask string
-	flagDcConnPageSize   int64
-)
-
-var (
-	developerConnectConnCreateCmd = &cobra.Command{
-		Use: "create CONNECTION", Short: "Create a Developer Connect connection",
-		Args: cobra.ExactArgs(1), RunE: runDcConnCreate,
-	}
-	developerConnectConnDeleteCmd = &cobra.Command{
-		Use: "delete CONNECTION", Short: "Delete a Developer Connect connection",
-		Args: cobra.ExactArgs(1), RunE: runDcConnDelete,
-	}
-	developerConnectConnDescribeCmd = &cobra.Command{
-		Use: "describe CONNECTION", Short: "Describe a Developer Connect connection",
-		Args: cobra.ExactArgs(1), RunE: runDcConnDescribe,
-	}
-	developerConnectConnListCmd = &cobra.Command{
-		Use: "list", Short: "List Developer Connect connections in a location",
-		Args: cobra.NoArgs, RunE: runDcConnList,
-	}
-	developerConnectConnUpdateCmd = &cobra.Command{
-		Use: "update CONNECTION", Short: "Update a Developer Connect connection",
-		Args: cobra.ExactArgs(1), RunE: runDcConnUpdate,
-	}
-)
-
-func init() {
+func (s *developerConnectCmds) initDeveloperConnectConnections() {
 	all := []*cobra.Command{
-		developerConnectConnCreateCmd, developerConnectConnDeleteCmd,
-		developerConnectConnDescribeCmd, developerConnectConnListCmd,
-		developerConnectConnUpdateCmd,
+		s.developerConnectConnCreateCmd, s.developerConnectConnDeleteCmd,
+		s.developerConnectConnDescribeCmd, s.developerConnectConnListCmd,
+		s.developerConnectConnUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDcConnLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagDcConnLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagDcConnFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDcConnFormat, "format", "", "Output format")
 	}
-	developerConnectConnCreateCmd.Flags().StringVar(&flagDcConnConfigFile, "config-file", "", "YAML/JSON file with the Connection body (required)")
-	_ = developerConnectConnCreateCmd.MarkFlagRequired("config-file")
-	developerConnectConnListCmd.Flags().Int64Var(&flagDcConnPageSize, "page-size", 0, "Maximum results per page")
-	developerConnectConnUpdateCmd.Flags().StringVar(&flagDcConnConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
-	_ = developerConnectConnUpdateCmd.MarkFlagRequired("config-file")
-	developerConnectConnUpdateCmd.Flags().StringVar(&flagDcConnUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.developerConnectConnCreateCmd.Flags().StringVar(&s.flagDcConnConfigFile, "config-file", "", "YAML/JSON file with the Connection body (required)")
+	_ = s.developerConnectConnCreateCmd.MarkFlagRequired("config-file")
+	s.developerConnectConnListCmd.Flags().Int64Var(&s.flagDcConnPageSize, "page-size", 0, "Maximum results per page")
+	s.developerConnectConnUpdateCmd.Flags().StringVar(&s.flagDcConnConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
+	_ = s.developerConnectConnUpdateCmd.MarkFlagRequired("config-file")
+	s.developerConnectConnUpdateCmd.Flags().StringVar(&s.flagDcConnUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
 
-	developerConnectConnectionsCmd.AddCommand(all...)
-	developerConnectCmd.AddCommand(developerConnectConnectionsCmd)
+	s.developerConnectConnectionsCmd.AddCommand(all...)
+	s.developerConnectCmd.AddCommand(s.developerConnectConnectionsCmd)
 }
 
-func dcConnName(id string) (string, error) {
-	return devConnResourceName(flagDcConnLocation, "connections", id)
+func (s *developerConnectCmds) dcConnName(id string) (string, error) {
+	return s.devConnResourceName(s.flagDcConnLocation, "connections", id)
 }
 
-func runDcConnCreate(cmd *cobra.Command, args []string) error {
-	parent, err := devConnLocationParent(flagDcConnLocation)
+func (s *developerConnectCmds) runDcConnCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.devConnLocationParent(s.flagDcConnLocation)
 	if err != nil {
 		return err
 	}
 	body := &developerconnect.Connection{}
-	if err := loadYAMLOrJSONInto(flagDcConnConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDcConnConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeveloperConnectService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeveloperConnect(ctx)
 	if err != nil {
 		return err
 	}
@@ -88,17 +53,17 @@ func runDcConnCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating connection: %w", err)
 	}
-	fmt.Printf("Create connection [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDcConnFormat)
+	fmt.Fprintf(s.inv.stdout, "Create connection [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDcConnFormat)
 }
 
-func runDcConnDelete(cmd *cobra.Command, args []string) error {
-	name, err := dcConnName(args[0])
+func (s *developerConnectCmds) runDcConnDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.dcConnName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeveloperConnectService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeveloperConnect(ctx)
 	if err != nil {
 		return err
 	}
@@ -106,17 +71,17 @@ func runDcConnDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting connection: %w", err)
 	}
-	fmt.Printf("Delete connection [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDcConnFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete connection [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDcConnFormat)
 }
 
-func runDcConnDescribe(cmd *cobra.Command, args []string) error {
-	name, err := dcConnName(args[0])
+func (s *developerConnectCmds) runDcConnDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.dcConnName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeveloperConnectService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeveloperConnect(ctx)
 	if err != nil {
 		return err
 	}
@@ -124,16 +89,16 @@ func runDcConnDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing connection: %w", err)
 	}
-	return emitFormatted(got, flagDcConnFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDcConnFormat)
 }
 
-func runDcConnList(cmd *cobra.Command, args []string) error {
-	parent, err := devConnLocationParent(flagDcConnLocation)
+func (s *developerConnectCmds) runDcConnList(cmd *cobra.Command, args []string) error {
+	parent, err := s.devConnLocationParent(s.flagDcConnLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeveloperConnectService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeveloperConnect(ctx)
 	if err != nil {
 		return err
 	}
@@ -141,8 +106,8 @@ func runDcConnList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Connections.List(parent).Context(ctx)
-		if flagDcConnPageSize > 0 {
-			call = call.PageSize(flagDcConnPageSize)
+		if s.flagDcConnPageSize > 0 {
+			call = call.PageSize(s.flagDcConnPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -157,25 +122,25 @@ func runDcConnList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDcConnFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDcConnFormat)
 }
 
-func runDcConnUpdate(cmd *cobra.Command, args []string) error {
-	name, err := dcConnName(args[0])
+func (s *developerConnectCmds) runDcConnUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.dcConnName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &developerconnect.Connection{}
-	if err := loadYAMLOrJSONInto(flagDcConnConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDcConnConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagDcConnUpdateMask
+	mask := s.flagDcConnUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.DeveloperConnectService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().DeveloperConnect(ctx)
 	if err != nil {
 		return err
 	}
@@ -187,6 +152,6 @@ func runDcConnUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating connection: %w", err)
 	}
-	fmt.Printf("Update connection [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDcConnFormat)
+	fmt.Fprintf(s.inv.stdout, "Update connection [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDcConnFormat)
 }

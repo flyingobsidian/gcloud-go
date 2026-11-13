@@ -1,98 +1,45 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	asset "google.golang.org/api/cloudasset/v1"
 	"gopkg.in/yaml.v3"
 )
 
-var assetSavedQueriesCmd = &cobra.Command{
-	Use:   "saved-queries",
-	Short: "Manage Cloud Asset Inventory saved queries",
-}
-
-var assetSavedQueryCreateCmd = &cobra.Command{
-	Use:   "create QUERY_ID",
-	Short: "Create a saved query",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAssetSavedQueryCreate,
-}
-
-var assetSavedQueryDeleteCmd = &cobra.Command{
-	Use:   "delete QUERY_ID",
-	Short: "Delete a saved query",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAssetSavedQueryDelete,
-}
-
-var assetSavedQueryDescribeCmd = &cobra.Command{
-	Use:   "describe QUERY_ID",
-	Short: "Describe a saved query",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAssetSavedQueryDescribe,
-}
-
-var assetSavedQueryListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List saved queries",
-	Args:  cobra.NoArgs,
-	RunE:  runAssetSavedQueryList,
-}
-
-var assetSavedQueryUpdateCmd = &cobra.Command{
-	Use:   "update QUERY_ID",
-	Short: "Update a saved query",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAssetSavedQueryUpdate,
-}
-
-var (
-	flagAssetSQProject     string
-	flagAssetSQFolder      string
-	flagAssetSQOrg         string
-	flagAssetSQDescription string
-	flagAssetSQQueryFile   string
-	flagAssetSQLabels      map[string]string
-	flagAssetSQListFilter  string
-	flagAssetSQListFormat  string
-)
-
-func init() {
+func (s *assetCmds) initAssetSavedQueries() {
 	for _, c := range []*cobra.Command{
-		assetSavedQueryCreateCmd, assetSavedQueryDeleteCmd, assetSavedQueryDescribeCmd,
-		assetSavedQueryListCmd, assetSavedQueryUpdateCmd,
+		s.assetSavedQueryCreateCmd, s.assetSavedQueryDeleteCmd, s.assetSavedQueryDescribeCmd,
+		s.assetSavedQueryListCmd, s.assetSavedQueryUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagAssetSQProject, "project", "", "Project ID (mutually exclusive with --folder and --organization)")
-		c.Flags().StringVar(&flagAssetSQFolder, "folder", "", "Folder ID (mutually exclusive with --project and --organization)")
-		c.Flags().StringVar(&flagAssetSQOrg, "organization", "", "Organization ID (mutually exclusive with --project and --folder)")
+		c.Flags().StringVar(&s.flagAssetSQProject, "project", "", "Project ID (mutually exclusive with --folder and --organization)")
+		c.Flags().StringVar(&s.flagAssetSQFolder, "folder", "", "Folder ID (mutually exclusive with --project and --organization)")
+		c.Flags().StringVar(&s.flagAssetSQOrg, "organization", "", "Organization ID (mutually exclusive with --project and --folder)")
 	}
 
-	for _, c := range []*cobra.Command{assetSavedQueryCreateCmd, assetSavedQueryUpdateCmd} {
-		c.Flags().StringVar(&flagAssetSQDescription, "description", "", "Description of the saved query")
-		c.Flags().StringVar(&flagAssetSQQueryFile, "query-file-path", "", "Path to a JSON or YAML file containing the saved query content")
-		c.Flags().StringToStringVar(&flagAssetSQLabels, "labels", nil, "Labels to attach to the saved query")
+	for _, c := range []*cobra.Command{s.assetSavedQueryCreateCmd, s.assetSavedQueryUpdateCmd} {
+		c.Flags().StringVar(&s.flagAssetSQDescription, "description", "", "Description of the saved query")
+		c.Flags().StringVar(&s.flagAssetSQQueryFile, "query-file-path", "", "Path to a JSON or YAML file containing the saved query content")
+		c.Flags().StringToStringVar(&s.flagAssetSQLabels, "labels", nil, "Labels to attach to the saved query")
 	}
-	assetSavedQueryCreateCmd.MarkFlagRequired("query-file-path")
+	s.assetSavedQueryCreateCmd.MarkFlagRequired("query-file-path")
 
-	assetSavedQueryListCmd.Flags().StringVar(&flagAssetSQListFilter, "filter", "", "Filter on saved queries")
-	assetSavedQueryListCmd.Flags().StringVar(&flagAssetSQListFormat, "format", "", "Output format (json, yaml, or table)")
+	s.assetSavedQueryListCmd.Flags().StringVar(&s.flagAssetSQListFilter, "filter", "", "Filter on saved queries")
+	s.assetSavedQueryListCmd.Flags().StringVar(&s.flagAssetSQListFormat, "format", "", "Output format (json, yaml, or table)")
 
-	assetSavedQueriesCmd.AddCommand(
-		assetSavedQueryCreateCmd, assetSavedQueryDeleteCmd, assetSavedQueryDescribeCmd,
-		assetSavedQueryListCmd, assetSavedQueryUpdateCmd,
+	s.assetSavedQueriesCmd.AddCommand(
+		s.assetSavedQueryCreateCmd, s.assetSavedQueryDeleteCmd, s.assetSavedQueryDescribeCmd,
+		s.assetSavedQueryListCmd, s.assetSavedQueryUpdateCmd,
 	)
-	assetCmd.AddCommand(assetSavedQueriesCmd)
+	s.assetCmd.AddCommand(s.assetSavedQueriesCmd)
 }
 
-func savedQueryParent() (string, error) {
-	return resolveAssetScope(flagAssetSQProject, flagAssetSQFolder, flagAssetSQOrg)
+func (s *assetCmds) savedQueryParent() (string, error) {
+	return resolveAssetScope(s.flagAssetSQProject, s.flagAssetSQFolder, s.flagAssetSQOrg)
 }
 
 func savedQueryName(parent, id string) string {
@@ -128,55 +75,55 @@ func yamlUnmarshalOrJSON(data []byte, out any) error {
 	return yaml.Unmarshal(data, out)
 }
 
-func runAssetSavedQueryCreate(cmd *cobra.Command, args []string) error {
-	parent, err := savedQueryParent()
+func (s *assetCmds) runAssetSavedQueryCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.savedQueryParent()
 	if err != nil {
 		return err
 	}
-	content, err := loadSavedQueryContent(flagAssetSQQueryFile)
+	content, err := loadSavedQueryContent(s.flagAssetSQQueryFile)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudAssetService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudAsset(ctx)
 	if err != nil {
 		return err
 	}
 	q, err := svc.SavedQueries.Create(parent, &asset.SavedQuery{
-		Description: flagAssetSQDescription,
+		Description: s.flagAssetSQDescription,
 		Content:     content,
-		Labels:      flagAssetSQLabels,
+		Labels:      s.flagAssetSQLabels,
 	}).SavedQueryId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating saved query: %w", err)
 	}
-	return yamlEncode(q)
+	return s.inv.yaml(q)
 }
 
-func runAssetSavedQueryDelete(cmd *cobra.Command, args []string) error {
-	parent, err := savedQueryParent()
+func (s *assetCmds) runAssetSavedQueryDelete(cmd *cobra.Command, args []string) error {
+	parent, err := s.savedQueryParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudAssetService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudAsset(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.SavedQueries.Delete(savedQueryName(parent, args[0])).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting saved query: %w", err)
 	}
-	fmt.Printf("Deleted saved query [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted saved query [%s].\n", args[0])
 	return nil
 }
 
-func runAssetSavedQueryDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := savedQueryParent()
+func (s *assetCmds) runAssetSavedQueryDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := s.savedQueryParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudAssetService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudAsset(ctx)
 	if err != nil {
 		return err
 	}
@@ -184,16 +131,16 @@ func runAssetSavedQueryDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing saved query: %w", err)
 	}
-	return yamlEncode(q)
+	return s.inv.yaml(q)
 }
 
-func runAssetSavedQueryList(cmd *cobra.Command, args []string) error {
-	parent, err := savedQueryParent()
+func (s *assetCmds) runAssetSavedQueryList(cmd *cobra.Command, args []string) error {
+	parent, err := s.savedQueryParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudAssetService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudAsset(ctx)
 	if err != nil {
 		return err
 	}
@@ -202,8 +149,8 @@ func runAssetSavedQueryList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.SavedQueries.List(parent).Context(ctx)
-		if flagAssetSQListFilter != "" {
-			call = call.Filter(flagAssetSQListFilter)
+		if s.flagAssetSQListFilter != "" {
+			call = call.Filter(s.flagAssetSQListFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -219,28 +166,28 @@ func runAssetSavedQueryList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	return printListResults(all, flagAssetSQListFormat, func() {
-		printTableHeading(len(all), "%-60s %s\n", "NAME", "DESCRIPTION")
+	return s.inv.printListResults(all, s.flagAssetSQListFormat, func() {
+		printTableHeadingTo(s.inv.stdout, len(all), "%-60s %s\n", "NAME", "DESCRIPTION")
 		for _, q := range all {
-			fmt.Printf("%-60s %s\n", q.Name, q.Description)
+			fmt.Fprintf(s.inv.stdout, "%-60s %s\n", q.Name, q.Description)
 		}
 	})
 }
 
-func runAssetSavedQueryUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := savedQueryParent()
+func (s *assetCmds) runAssetSavedQueryUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := s.savedQueryParent()
 	if err != nil {
 		return err
 	}
-	content, err := loadSavedQueryContent(flagAssetSQQueryFile)
+	content, err := loadSavedQueryContent(s.flagAssetSQQueryFile)
 	if err != nil {
 		return err
 	}
 	name := savedQueryName(parent, args[0])
 	q := &asset.SavedQuery{
 		Name:        name,
-		Description: flagAssetSQDescription,
-		Labels:      flagAssetSQLabels,
+		Description: s.flagAssetSQDescription,
+		Labels:      s.flagAssetSQLabels,
 		Content:     content,
 	}
 
@@ -258,8 +205,8 @@ func runAssetSavedQueryUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("at least one of --description, --labels, or --query-file-path must be provided")
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.CloudAssetService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudAsset(ctx)
 	if err != nil {
 		return err
 	}
@@ -267,5 +214,5 @@ func runAssetSavedQueryUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating saved query: %w", err)
 	}
-	return yamlEncode(updated)
+	return s.inv.yaml(updated)
 }
