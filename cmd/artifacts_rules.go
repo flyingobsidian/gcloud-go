@@ -1,164 +1,113 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
 
 // --- gcloud artifacts rules (#1080) ---
 
-var artifactsRulesCmd = &cobra.Command{
-	Use:   "rules",
-	Short: "Manage Artifact Registry cleanup rules",
-}
-
-var (
-	flagArtRuleLocation   string
-	flagArtRuleRepository string
-	flagArtRuleFormat     string
-	flagArtRuleFilter     string
-	flagArtRuleConfigFile string
-	flagArtRuleMask       string
-)
-
-var artifactsRulesCreateCmd = &cobra.Command{
-	Use:   "create RULE",
-	Short: "Create a cleanup rule",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsRulesCreate,
-}
-
-var artifactsRulesDeleteCmd = &cobra.Command{
-	Use:   "delete RULE",
-	Short: "Delete a cleanup rule",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsRulesDelete,
-}
-
-var artifactsRulesDescribeCmd = &cobra.Command{
-	Use:   "describe RULE",
-	Short: "Describe a cleanup rule",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsRulesDescribe,
-}
-
-var artifactsRulesListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List cleanup rules",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsRulesList,
-}
-
-var artifactsRulesUpdateCmd = &cobra.Command{
-	Use:   "update RULE",
-	Short: "Update a cleanup rule",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsRulesUpdate,
-}
-
-func init() {
+func (s *artifactsCmds) initArtifactsRules() {
 	for _, c := range []*cobra.Command{
-		artifactsRulesCreateCmd, artifactsRulesDeleteCmd,
-		artifactsRulesDescribeCmd, artifactsRulesListCmd, artifactsRulesUpdateCmd,
+		s.artifactsRulesCreateCmd, s.artifactsRulesDeleteCmd,
+		s.artifactsRulesDescribeCmd, s.artifactsRulesListCmd, s.artifactsRulesUpdateCmd,
 	} {
-		c.Flags().StringVar(&flagArtRuleLocation, "location", "", "Repository location (required)")
-		c.Flags().StringVar(&flagArtRuleRepository, "repository", "", "Repository name (required)")
-		c.Flags().StringVar(&flagArtRuleFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagArtRuleLocation, "location", "", "Repository location (required)")
+		c.Flags().StringVar(&s.flagArtRuleRepository, "repository", "", "Repository name (required)")
+		c.Flags().StringVar(&s.flagArtRuleFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("location")
 		_ = c.MarkFlagRequired("repository")
 	}
-	artifactsRulesCreateCmd.Flags().StringVar(&flagArtRuleConfigFile, "config-file", "", "YAML/JSON body for the Rule (required)")
-	_ = artifactsRulesCreateCmd.MarkFlagRequired("config-file")
-	artifactsRulesUpdateCmd.Flags().StringVar(&flagArtRuleConfigFile, "config-file", "", "YAML/JSON body for the Rule update (required)")
-	artifactsRulesUpdateCmd.Flags().StringVar(&flagArtRuleMask, "update-mask", "", "Fields to update")
-	_ = artifactsRulesUpdateCmd.MarkFlagRequired("config-file")
-	artifactsRulesListCmd.Flags().StringVar(&flagArtRuleFilter, "filter", "", "Filter expression")
+	s.artifactsRulesCreateCmd.Flags().StringVar(&s.flagArtRuleConfigFile, "config-file", "", "YAML/JSON body for the Rule (required)")
+	_ = s.artifactsRulesCreateCmd.MarkFlagRequired("config-file")
+	s.artifactsRulesUpdateCmd.Flags().StringVar(&s.flagArtRuleConfigFile, "config-file", "", "YAML/JSON body for the Rule update (required)")
+	s.artifactsRulesUpdateCmd.Flags().StringVar(&s.flagArtRuleMask, "update-mask", "", "Fields to update")
+	_ = s.artifactsRulesUpdateCmd.MarkFlagRequired("config-file")
+	s.artifactsRulesListCmd.Flags().StringVar(&s.flagArtRuleFilter, "filter", "", "Filter expression")
 
-	artifactsRulesCmd.AddCommand(
-		artifactsRulesCreateCmd, artifactsRulesDeleteCmd,
-		artifactsRulesDescribeCmd, artifactsRulesListCmd, artifactsRulesUpdateCmd,
+	s.artifactsRulesCmd.AddCommand(
+		s.artifactsRulesCreateCmd, s.artifactsRulesDeleteCmd,
+		s.artifactsRulesDescribeCmd, s.artifactsRulesListCmd, s.artifactsRulesUpdateCmd,
 	)
-	artifactsCmd.AddCommand(artifactsRulesCmd)
+	s.artifactsCmd.AddCommand(s.artifactsRulesCmd)
 }
 
 func artRuleName(project, location, repo, raw string) string {
 	return artFullName(artRepoParent(project, location, repo)+"/rules", raw)
 }
 
-func runArtifactsRulesCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsRulesCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
 	body := &artifactregistry.GoogleDevtoolsArtifactregistryV1Rule{}
-	if err := loadYAMLOrJSONInto(flagArtRuleConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagArtRuleConfigFile, body); err != nil {
 		return err
 	}
-	parent := artRepoParent(project, flagArtRuleLocation, flagArtRuleRepository)
+	parent := artRepoParent(project, s.flagArtRuleLocation, s.flagArtRuleRepository)
 	out, err := svc.Projects.Locations.Repositories.Rules.Create(parent, body).
 		RuleId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating rule: %w", err)
 	}
-	return emitFormatted(out, flagArtRuleFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtRuleFormat)
 }
 
-func runArtifactsRulesDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsRulesDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	name := artRuleName(project, flagArtRuleLocation, flagArtRuleRepository, args[0])
+	name := artRuleName(project, s.flagArtRuleLocation, s.flagArtRuleRepository, args[0])
 	out, err := svc.Projects.Locations.Repositories.Rules.Delete(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting rule: %w", err)
 	}
-	return emitFormatted(out, flagArtRuleFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtRuleFormat)
 }
 
-func runArtifactsRulesDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsRulesDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	name := artRuleName(project, flagArtRuleLocation, flagArtRuleRepository, args[0])
+	name := artRuleName(project, s.flagArtRuleLocation, s.flagArtRuleRepository, args[0])
 	r, err := svc.Projects.Locations.Repositories.Rules.Get(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing rule: %w", err)
 	}
-	return emitFormatted(r, flagArtRuleFormat)
+	return emitFormattedTo(s.inv.stdout, r, s.flagArtRuleFormat)
 }
 
-func runArtifactsRulesList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsRulesList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	parent := artRepoParent(project, flagArtRuleLocation, flagArtRuleRepository)
+	parent := artRepoParent(project, s.flagArtRuleLocation, s.flagArtRuleRepository)
 	var all []*artifactregistry.GoogleDevtoolsArtifactregistryV1Rule
 	token := ""
 	for {
@@ -176,28 +125,28 @@ func runArtifactsRulesList(cmd *cobra.Command, args []string) error {
 		}
 		token = resp.NextPageToken
 	}
-	return emitFormatted(all, flagArtRuleFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagArtRuleFormat)
 }
 
-func runArtifactsRulesUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsRulesUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
 	body := &artifactregistry.GoogleDevtoolsArtifactregistryV1Rule{}
-	if err := loadYAMLOrJSONInto(flagArtRuleConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagArtRuleConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagArtRuleMask
+	mask := s.flagArtRuleMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	name := artRuleName(project, flagArtRuleLocation, flagArtRuleRepository, args[0])
+	name := artRuleName(project, s.flagArtRuleLocation, s.flagArtRuleRepository, args[0])
 	call := svc.Projects.Locations.Repositories.Rules.Patch(name, body).Context(ctx)
 	if mask != "" {
 		call = call.UpdateMask(mask)
@@ -206,5 +155,5 @@ func runArtifactsRulesUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating rule: %w", err)
 	}
-	return emitFormatted(out, flagArtRuleFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtRuleFormat)
 }

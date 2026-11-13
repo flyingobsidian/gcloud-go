@@ -1,132 +1,102 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
 
 // --- gcloud artifacts apt (#1069) ---
 
-var artifactsAptCmd = &cobra.Command{
-	Use:   "apt",
-	Short: "Manage Artifact Registry Debian (APT) packages",
-}
-
-var (
-	flagArtAptLocation   string
-	flagArtAptRepository string
-	flagArtAptFormat     string
-	flagArtAptConfigFile string
-	flagArtAptSource     string
-	flagArtAptAsync      bool
-)
-
-var artifactsAptImportCmd = &cobra.Command{
-	Use:   "import",
-	Short: "Import one or more Debian (APT) packages into a repository",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsAptImport,
-}
-
-var artifactsAptUploadCmd = &cobra.Command{
-	Use:   "upload",
-	Short: "Upload a Debian (APT) package to a repository",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsAptUpload,
-}
-
-func init() {
-	for _, c := range []*cobra.Command{artifactsAptImportCmd, artifactsAptUploadCmd} {
-		c.Flags().StringVar(&flagArtAptLocation, "location", "", "Location of the repository (required)")
-		c.Flags().StringVar(&flagArtAptRepository, "repository", "", "Repository name (required)")
-		c.Flags().StringVar(&flagArtAptFormat, "format", "", "Output format")
-		c.Flags().BoolVar(&flagArtAptAsync, "async", false, "Return without waiting for the operation to complete")
+func (s *artifactsCmds) initArtifactsApt() {
+	for _, c := range []*cobra.Command{s.artifactsAptImportCmd, s.artifactsAptUploadCmd} {
+		c.Flags().StringVar(&s.flagArtAptLocation, "location", "", "Location of the repository (required)")
+		c.Flags().StringVar(&s.flagArtAptRepository, "repository", "", "Repository name (required)")
+		c.Flags().StringVar(&s.flagArtAptFormat, "format", "", "Output format")
+		c.Flags().BoolVar(&s.flagArtAptAsync, "async", false, "Return without waiting for the operation to complete")
 		_ = c.MarkFlagRequired("location")
 		_ = c.MarkFlagRequired("repository")
 	}
-	artifactsAptImportCmd.Flags().StringVar(&flagArtAptConfigFile, "config-file", "",
+	s.artifactsAptImportCmd.Flags().StringVar(&s.flagArtAptConfigFile, "config-file", "",
 		"YAML/JSON body for the ImportAptArtifactsRequest (usually a GcsSource with uris/useWildcards)")
-	_ = artifactsAptImportCmd.MarkFlagRequired("config-file")
+	_ = s.artifactsAptImportCmd.MarkFlagRequired("config-file")
 
-	artifactsAptUploadCmd.Flags().StringVar(&flagArtAptSource, "source", "", "Local .deb file to upload (required)")
-	_ = artifactsAptUploadCmd.MarkFlagRequired("source")
+	s.artifactsAptUploadCmd.Flags().StringVar(&s.flagArtAptSource, "source", "", "Local .deb file to upload (required)")
+	_ = s.artifactsAptUploadCmd.MarkFlagRequired("source")
 
-	artifactsAptCmd.AddCommand(artifactsAptImportCmd, artifactsAptUploadCmd)
-	artifactsCmd.AddCommand(artifactsAptCmd)
+	s.artifactsAptCmd.AddCommand(s.artifactsAptImportCmd, s.artifactsAptUploadCmd)
+	s.artifactsCmd.AddCommand(s.artifactsAptCmd)
 }
 
-func runArtifactsAptImport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsAptImport(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
 	body := &artifactregistry.ImportAptArtifactsRequest{}
-	if err := loadYAMLOrJSONInto(flagArtAptConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagArtAptConfigFile, body); err != nil {
 		return err
 	}
-	parent := artRepoParent(project, flagArtAptLocation, flagArtAptRepository)
+	parent := artRepoParent(project, s.flagArtAptLocation, s.flagArtAptRepository)
 	op, err := svc.Projects.Locations.Repositories.AptArtifacts.Import(parent, body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("starting apt import: %w", err)
 	}
-	if flagArtAptAsync {
-		fmt.Fprintf(os.Stderr, "Apt import started. Operation: %s\n", op.Name)
-		return emitFormatted(op, flagArtAptFormat)
+	if s.flagArtAptAsync {
+		fmt.Fprintf(s.inv.stderr, "Apt import started. Operation: %s\n", op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagArtAptFormat)
 	}
 	final, err := waitForArtifactRegistryOperation(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(final, flagArtAptFormat)
+	return emitFormattedTo(s.inv.stdout, final, s.flagArtAptFormat)
 }
 
-func runArtifactsAptUpload(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsAptUpload(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	f, err := os.Open(flagArtAptSource)
+	f, err := os.Open(s.flagArtAptSource)
 	if err != nil {
-		return fmt.Errorf("opening source file %s: %w", flagArtAptSource, err)
+		return fmt.Errorf("opening source file %s: %w", s.flagArtAptSource, err)
 	}
 	defer f.Close()
 
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	parent := artRepoParent(project, flagArtAptLocation, flagArtAptRepository)
+	parent := artRepoParent(project, s.flagArtAptLocation, s.flagArtAptRepository)
 	resp, err := svc.Projects.Locations.Repositories.AptArtifacts.
 		Upload(parent, &artifactregistry.UploadAptArtifactRequest{}).
 		Media(f).
 		Context(ctx).
 		Do()
 	if err != nil {
-		return fmt.Errorf("uploading %s: %w", filepath.Base(flagArtAptSource), err)
+		return fmt.Errorf("uploading %s: %w", filepath.Base(s.flagArtAptSource), err)
 	}
-	if flagArtAptAsync || resp.Operation == nil {
+	if s.flagArtAptAsync || resp.Operation == nil {
 		if resp.Operation != nil {
-			fmt.Fprintf(os.Stderr, "Apt upload started. Operation: %s\n", resp.Operation.Name)
+			fmt.Fprintf(s.inv.stderr, "Apt upload started. Operation: %s\n", resp.Operation.Name)
 		} else {
-			fmt.Fprintf(os.Stderr, "Uploaded %s to %s\n", filepath.Base(flagArtAptSource), parent)
+			fmt.Fprintf(s.inv.stderr, "Uploaded %s to %s\n", filepath.Base(s.flagArtAptSource), parent)
 		}
-		return emitFormatted(resp, flagArtAptFormat)
+		return emitFormattedTo(s.inv.stdout, resp, s.flagArtAptFormat)
 	}
 	final, err := waitForArtifactRegistryOperation(ctx, svc, resp.Operation)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(final, flagArtAptFormat)
+	return emitFormattedTo(s.inv.stdout, final, s.flagArtAptFormat)
 }

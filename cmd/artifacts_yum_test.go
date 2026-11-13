@@ -8,8 +8,9 @@ import (
 )
 
 func TestArtifactsYumSubcommandsRegistered(t *testing.T) {
+	grp := newArtifactsCmds(legacyTestInvocation())
 	var yum *cobra.Command
-	for _, c := range artifactsCmd.Commands() {
+	for _, c := range grp.artifactsCmd.Commands() {
 		if c.Name() == "yum" {
 			yum = c
 			break
@@ -57,9 +58,10 @@ func TestExpandYumGcsSources(t *testing.T) {
 }
 
 func TestArtifactsYumImportRequiresGcsSource(t *testing.T) {
+	grp := newArtifactsCmds(legacyTestInvocation())
 	// Cobra registers the required flag; verify the annotation is set so a bare
 	// `artifacts yum import` correctly errors out at parse time.
-	f := artifactsYumImportCmd.Flag("gcs-source")
+	f := grp.artifactsYumImportCmd.Flag("gcs-source")
 	if f == nil {
 		t.Fatal("--gcs-source flag not registered on artifacts yum import")
 	}
@@ -70,7 +72,8 @@ func TestArtifactsYumImportRequiresGcsSource(t *testing.T) {
 }
 
 func TestArtifactsYumUploadRequiresSource(t *testing.T) {
-	f := artifactsYumUploadCmd.Flag("source")
+	grp := newArtifactsCmds(legacyTestInvocation())
+	f := grp.artifactsYumUploadCmd.Flag("source")
 	if f == nil {
 		t.Fatal("--source flag not registered on artifacts yum upload")
 	}

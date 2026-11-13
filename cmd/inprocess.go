@@ -156,6 +156,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newOracleDatabaseCmd(inv),
 		newRunCmd(inv),
 		newSccCmd(inv),
+		newArtifactsCmd(inv),
 	}
 }
 

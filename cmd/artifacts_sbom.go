@@ -1,66 +1,30 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
 
 // --- gcloud artifacts sbom (#1081) ---
 
-var artifactsSbomCmd = &cobra.Command{
-	Use:   "sbom",
-	Short: "Manage Software Bills of Materials (SBOMs)",
-}
-
-var (
-	flagArtSbomLocation    string
-	flagArtSbomRepository  string
-	flagArtSbomFormat      string
-	flagArtSbomDestination string
-	flagArtSbomConfigFile  string
-)
-
-var artifactsSbomExportCmd = &cobra.Command{
-	Use:   "export IMAGE_URI",
-	Short: "Export the SBOM for a Docker image",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsSbomExport,
-}
-
-var artifactsSbomListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Docker images in a repository, noting SBOM availability",
-	Args:  cobra.NoArgs,
-	RunE:  runArtifactsSbomList,
-}
-
-var artifactsSbomLoadCmd = &cobra.Command{
-	Use:   "load IMAGE_URI",
-	Short: "Attach an SBOM statement to a Docker image",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsSbomLoad,
-}
-
-func init() {
-	for _, c := range []*cobra.Command{artifactsSbomExportCmd, artifactsSbomListCmd, artifactsSbomLoadCmd} {
-		c.Flags().StringVar(&flagArtSbomLocation, "location", "", "Repository location (required)")
-		c.Flags().StringVar(&flagArtSbomFormat, "format", "", "Output format")
+func (s *artifactsCmds) initArtifactsSbom() {
+	for _, c := range []*cobra.Command{s.artifactsSbomExportCmd, s.artifactsSbomListCmd, s.artifactsSbomLoadCmd} {
+		c.Flags().StringVar(&s.flagArtSbomLocation, "location", "", "Repository location (required)")
+		c.Flags().StringVar(&s.flagArtSbomFormat, "format", "", "Output format")
 		_ = c.MarkFlagRequired("location")
 	}
-	artifactsSbomListCmd.Flags().StringVar(&flagArtSbomRepository, "repository", "", "Repository name (required)")
-	_ = artifactsSbomListCmd.MarkFlagRequired("repository")
-	artifactsSbomExportCmd.Flags().StringVar(&flagArtSbomDestination, "destination", "", "Destination GCS URI (optional)")
-	artifactsSbomLoadCmd.Flags().StringVar(&flagArtSbomConfigFile, "config-file", "", "YAML/JSON body for the LoadSbom request (required)")
-	_ = artifactsSbomLoadCmd.MarkFlagRequired("config-file")
+	s.artifactsSbomListCmd.Flags().StringVar(&s.flagArtSbomRepository, "repository", "", "Repository name (required)")
+	_ = s.artifactsSbomListCmd.MarkFlagRequired("repository")
+	s.artifactsSbomExportCmd.Flags().StringVar(&s.flagArtSbomDestination, "destination", "", "Destination GCS URI (optional)")
+	s.artifactsSbomLoadCmd.Flags().StringVar(&s.flagArtSbomConfigFile, "config-file", "", "YAML/JSON body for the LoadSbom request (required)")
+	_ = s.artifactsSbomLoadCmd.MarkFlagRequired("config-file")
 
-	artifactsSbomCmd.AddCommand(artifactsSbomExportCmd, artifactsSbomListCmd, artifactsSbomLoadCmd)
-	artifactsCmd.AddCommand(artifactsSbomCmd)
+	s.artifactsSbomCmd.AddCommand(s.artifactsSbomExportCmd, s.artifactsSbomListCmd, s.artifactsSbomLoadCmd)
+	s.artifactsCmd.AddCommand(s.artifactsSbomCmd)
 }
 
 // sbomImageResourceName rewrites us-docker.pkg.dev/PROJ/REPO/IMG@sha256:...
@@ -73,9 +37,9 @@ func sbomImageResourceName(image string) (string, error) {
 	return parseArtifactImageName(image)
 }
 
-func runArtifactsSbomExport(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+func (s *artifactsCmds) runArtifactsSbomExport(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
@@ -86,28 +50,28 @@ func runArtifactsSbomExport(cmd *cobra.Command, args []string) error {
 	// The generated client doesn't expose ExportSbom on DockerImages in this
 	// version, so drive the REST endpoint directly.
 	body := map[string]any{}
-	if flagArtSbomDestination != "" {
-		body["destination"] = flagArtSbomDestination
+	if s.flagArtSbomDestination != "" {
+		body["destination"] = s.flagArtSbomDestination
 	}
 	var out map[string]any
-	if err := artifactsRest.do(ctx, http.MethodPost, "/"+name+":exportSbom", nil, body, &out); err != nil {
+	if err := s.inv.rest(artifactsRest).do(ctx, http.MethodPost, "/"+name+":exportSbom", nil, body, &out); err != nil {
 		return fmt.Errorf("exporting SBOM: %w", err)
 	}
 	_ = svc // reserved for future in-client method
-	return emitFormatted(out, flagArtSbomFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtSbomFormat)
 }
 
-func runArtifactsSbomList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *artifactsCmds) runArtifactsSbomList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	parent := artRepoParent(project, flagArtSbomLocation, flagArtSbomRepository)
+	parent := artRepoParent(project, s.flagArtSbomLocation, s.flagArtSbomRepository)
 	var all []*artifactregistry.DockerImage
 	token := ""
 	for {
@@ -169,22 +133,22 @@ func runArtifactsSbomList(cmd *cobra.Command, args []string) error {
 			Image: img.Name, Uri: img.Uri, Tags: img.Tags, HasSbomFile: hasSbom,
 		})
 	}
-	return emitFormatted(rows, flagArtSbomFormat)
+	return emitFormattedTo(s.inv.stdout, rows, s.flagArtSbomFormat)
 }
 
-func runArtifactsSbomLoad(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+func (s *artifactsCmds) runArtifactsSbomLoad(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	name, err := sbomImageResourceName(args[0])
 	if err != nil {
 		return err
 	}
 	var body map[string]any
-	if err := loadYAMLOrJSONInto(flagArtSbomConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagArtSbomConfigFile, &body); err != nil {
 		return err
 	}
 	var out map[string]any
-	if err := artifactsRest.do(ctx, http.MethodPost, "/"+name+":loadSbom", nil, body, &out); err != nil {
+	if err := s.inv.rest(artifactsRest).do(ctx, http.MethodPost, "/"+name+":loadSbom", nil, body, &out); err != nil {
 		return fmt.Errorf("loading SBOM: %w", err)
 	}
-	return emitFormatted(out, flagArtSbomFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagArtSbomFormat)
 }

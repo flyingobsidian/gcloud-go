@@ -5,12 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 	ondemandscanning "google.golang.org/api/ondemandscanning/v1"
@@ -18,27 +16,10 @@ import (
 
 // --- gcloud artifacts (root) ---
 
-var artifactsCmd = &cobra.Command{
-	Use:   "artifacts",
-	Short: "Manage Artifact Registry",
-}
-
 // artifactsRest is used for the handful of Artifact Registry surfaces that are
 // not (yet) exposed by the generated Go client, e.g. imageStreamingCaches,
 // per-location settings, SBOM export/load, and vulnerabilities.
 var artifactsRest = newRESTClient("https://artifactregistry.googleapis.com/v1")
-
-// artifactsDockerCmd and artifactsDockerImagesCmd are shared parents used by
-// the vulnerability-scan surface below.
-var artifactsDockerCmd = &cobra.Command{
-	Use:   "docker",
-	Short: "Manage Docker resources",
-}
-
-var artifactsDockerImagesCmd = &cobra.Command{
-	Use:   "images",
-	Short: "Manage Docker images",
-}
 
 // --- shared parent resolution helpers ---
 
@@ -139,8 +120,8 @@ func artIamRemoveBinding(policy *artifactregistry.Policy, role, member string, c
 }
 
 // artUpdatedIam prints the standard "Updated IAM policy for ..." message.
-func artUpdatedIam(who string) {
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for %s.\n", who)
+func (s *artifactsCmds) artUpdatedIam(who string) {
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for %s.\n", who)
 }
 
 // artIamMemberFlags binds the common --member/--role/--condition-* flags for a
@@ -157,107 +138,48 @@ func artIamMemberFlags(c *cobra.Command, member, role, condExpr, condTitle, cond
 
 // --- existing scan/list-vulnerabilities surface (docker images scan/etc.) ---
 
-var artifactsScanCmd = &cobra.Command{
-	Use:   "scan IMAGE",
-	Short: "Scan a Docker image for vulnerabilities",
-	Long: `Scan a container image for known vulnerabilities using On-Demand Scanning.
-Example:
-  gcloud artifacts docker images scan us-docker.pkg.dev/my-project/repo/image:tag --location=us`,
-	Args: cobra.ExactArgs(1),
-	RunE: runArtifactsScan,
-}
+func (s *artifactsCmds) initArtifacts() {
+	s.artifactsScanCmd.Flags().StringVar(&s.flagArtifactsScanLocation, "location", "", "Location for the scan (e.g. us, europe)")
+	s.artifactsScanCmd.Flags().StringVar(&s.flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
+	s.artifactsScanCmd.Flags().BoolVar(&s.flagArtifactsScanRemote, "remote", false, "Scan the image remotely in the registry (skip local extraction)")
+	s.artifactsScanCmd.Flags().BoolVar(&s.flagArtifactsScanAsync, "async", false, "Return immediately without waiting for scan to complete")
+	s.artifactsScanCmd.Flags().StringSliceVar(&s.flagArtifactsScanExtraTypes, "additional-package-types", nil, "Additional package types to scan (GO, MAVEN, PIP, NPM)")
+	s.artifactsListVulnerabilitiesCmd.Flags().StringVar(&s.flagArtifactsVulnFormat, "format", "", "Output format (e.g. json)")
 
-var artifactsListVulnerabilitiesCmd = &cobra.Command{
-	Use:   "list-vulnerabilities SCAN_RESOURCE",
-	Short: "List vulnerabilities from a scan",
-	Long: `List vulnerabilities found by an on-demand scan.
-Example:
-  gcloud artifacts docker images list-vulnerabilities projects/my-project/locations/us/scans/SCAN_ID`,
-	Args: cobra.ExactArgs(1),
-	RunE: runArtifactsListVulnerabilities,
-}
-
-var artifactsDockerImagesListCmd = &cobra.Command{
-	Use:   "list REPOSITORY",
-	Short: "List Docker images in a repository",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsDockerImagesList,
-}
-
-var (
-	flagArtImgListFormat      string
-	flagArtImgListIncludeTags bool
-	flagArtImgListURI         bool
-	flagArtImgListLimit       int64
-	flagArtImgListPageSize    int64
-)
-
-var artifactsDockerImagesDescribeCmd = &cobra.Command{
-	Use:   "describe IMAGE",
-	Short: "Describe a Docker image",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsDockerImagesDescribe,
-}
-
-var artifactsDockerImagesDeleteCmd = &cobra.Command{
-	Use:   "delete IMAGE",
-	Short: "Delete a Docker image",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runArtifactsDockerImagesDelete,
-}
-
-var (
-	flagArtifactsScanLocation   string
-	flagArtifactsScanFormat     string
-	flagArtifactsVulnFormat     string
-	flagArtifactsScanRemote     bool
-	flagArtifactsScanAsync      bool
-	flagArtifactsScanExtraTypes []string
-)
-
-func init() {
-	artifactsScanCmd.Flags().StringVar(&flagArtifactsScanLocation, "location", "", "Location for the scan (e.g. us, europe)")
-	artifactsScanCmd.Flags().StringVar(&flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
-	artifactsScanCmd.Flags().BoolVar(&flagArtifactsScanRemote, "remote", false, "Scan the image remotely in the registry (skip local extraction)")
-	artifactsScanCmd.Flags().BoolVar(&flagArtifactsScanAsync, "async", false, "Return immediately without waiting for scan to complete")
-	artifactsScanCmd.Flags().StringSliceVar(&flagArtifactsScanExtraTypes, "additional-package-types", nil, "Additional package types to scan (GO, MAVEN, PIP, NPM)")
-	artifactsListVulnerabilitiesCmd.Flags().StringVar(&flagArtifactsVulnFormat, "format", "", "Output format (e.g. json)")
-
-	artifactsDockerImagesListCmd.Flags().StringVar(&flagArtImgListFormat, "format", "", "Output format (e.g. json)")
-	artifactsDockerImagesListCmd.Flags().BoolVar(&flagArtImgListIncludeTags, "include-tags", false, "Include image tags")
-	artifactsDockerImagesListCmd.Flags().BoolVar(&flagArtImgListURI, "uri", false, "Print resource names")
-	artifactsDockerImagesListCmd.Flags().Int64Var(&flagArtImgListLimit, "limit", 0,
+	s.artifactsDockerImagesListCmd.Flags().StringVar(&s.flagArtImgListFormat, "format", "", "Output format (e.g. json)")
+	s.artifactsDockerImagesListCmd.Flags().BoolVar(&s.flagArtImgListIncludeTags, "include-tags", false, "Include image tags")
+	s.artifactsDockerImagesListCmd.Flags().BoolVar(&s.flagArtImgListURI, "uri", false, "Print resource names")
+	s.artifactsDockerImagesListCmd.Flags().Int64Var(&s.flagArtImgListLimit, "limit", 0,
 		"Maximum number of images to list. Bounding the fetch avoids the slow full-repo scan"+
 			" when a repository holds a large number of image versions (0 = no limit).")
-	artifactsDockerImagesListCmd.Flags().Int64Var(&flagArtImgListPageSize, "page-size", 0,
+	s.artifactsDockerImagesListCmd.Flags().Int64Var(&s.flagArtImgListPageSize, "page-size", 0,
 		"Page size for API pagination (0 = server default)")
-	artifactsDockerImagesDescribeCmd.Flags().StringVar(&flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
+	s.artifactsDockerImagesDescribeCmd.Flags().StringVar(&s.flagArtifactsScanFormat, "format", "", "Output format (e.g. json)")
 
-	artifactsDockerImagesCmd.AddCommand(artifactsScanCmd)
-	artifactsDockerImagesCmd.AddCommand(artifactsListVulnerabilitiesCmd)
-	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesListCmd)
-	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesDescribeCmd)
-	artifactsDockerImagesCmd.AddCommand(artifactsDockerImagesDeleteCmd)
-	artifactsDockerCmd.AddCommand(artifactsDockerImagesCmd)
-	artifactsCmd.AddCommand(artifactsDockerCmd)
+	s.artifactsDockerImagesCmd.AddCommand(s.artifactsScanCmd)
+	s.artifactsDockerImagesCmd.AddCommand(s.artifactsListVulnerabilitiesCmd)
+	s.artifactsDockerImagesCmd.AddCommand(s.artifactsDockerImagesListCmd)
+	s.artifactsDockerImagesCmd.AddCommand(s.artifactsDockerImagesDescribeCmd)
+	s.artifactsDockerImagesCmd.AddCommand(s.artifactsDockerImagesDeleteCmd)
+	s.artifactsDockerCmd.AddCommand(s.artifactsDockerImagesCmd)
+	s.artifactsCmd.AddCommand(s.artifactsDockerCmd)
 
-	rootCmd.AddCommand(artifactsCmd)
 }
 
-func runArtifactsScan(cmd *cobra.Command, args []string) error {
+func (s *artifactsCmds) runArtifactsScan(cmd *cobra.Command, args []string) error {
 	image := args[0]
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 
-	location := flagArtifactsScanLocation
+	location := s.flagArtifactsScanLocation
 	if location == "" {
 		return fmt.Errorf("--location is required")
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.OnDemandScanningService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OnDemandScanning(ctx)
 	if err != nil {
 		return err
 	}
@@ -267,14 +189,14 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 		ResourceUri: image,
 	}
 
-	if !flagArtifactsScanRemote {
-		fmt.Fprintf(os.Stderr, "Locally extracting packages from %s...\n", image)
-		pkgs, err := extractLocalPackages(ctx, image)
+	if !s.flagArtifactsScanRemote {
+		fmt.Fprintf(s.inv.stderr, "Locally extracting packages from %s...\n", image)
+		pkgs, err := s.extractLocalPackages(ctx, image)
 		if err != nil {
 			return fmt.Errorf("local extraction failed: %w\nConsider using --remote to scan the image in the registry", err)
 		}
 		req.Packages = pkgs
-		fmt.Fprintf(os.Stderr, "Extracted %d packages.\n", len(pkgs))
+		fmt.Fprintf(s.inv.stderr, "Extracted %d packages.\n", len(pkgs))
 	}
 
 	op, err := svc.Projects.Locations.Scans.AnalyzePackages(parent, req).Context(ctx).Do()
@@ -282,15 +204,15 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("starting scan: %w", err)
 	}
 
-	if flagArtifactsScanAsync {
-		if flagArtifactsScanFormat == "json" {
-			return printJSON(op)
+	if s.flagArtifactsScanAsync {
+		if s.flagArtifactsScanFormat == "json" {
+			return s.inv.printJSON(op)
 		}
-		fmt.Printf("Scan started. Operation: %s\n", op.Name)
+		fmt.Fprintf(s.inv.stdout, "Scan started. Operation: %s\n", op.Name)
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "Scanning %s...\n", image)
+	fmt.Fprintf(s.inv.stderr, "Scanning %s...\n", image)
 	for !op.Done {
 		time.Sleep(5 * time.Second)
 		op, err = svc.Projects.Locations.Operations.Get(op.Name).Context(ctx).Do()
@@ -303,20 +225,20 @@ func runArtifactsScan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("scan failed: %s", op.Error.Message)
 	}
 
-	if flagArtifactsScanFormat == "json" {
-		return printJSON(op.Response)
+	if s.flagArtifactsScanFormat == "json" {
+		return s.inv.printJSON(op.Response)
 	}
 
-	fmt.Printf("Scan completed. Operation: %s\n", op.Name)
-	fmt.Println("Use 'gcloud artifacts docker images list-vulnerabilities' with the scan resource to view results.")
+	fmt.Fprintf(s.inv.stdout, "Scan completed. Operation: %s\n", op.Name)
+	fmt.Fprintln(s.inv.stdout, "Use 'gcloud artifacts docker images list-vulnerabilities' with the scan resource to view results.")
 	return nil
 }
 
-func runArtifactsListVulnerabilities(cmd *cobra.Command, args []string) error {
+func (s *artifactsCmds) runArtifactsListVulnerabilities(cmd *cobra.Command, args []string) error {
 	scanResource := args[0]
 
-	ctx := context.Background()
-	svc, err := gcp.OnDemandScanningService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().OnDemandScanning(ctx)
 	if err != nil {
 		return err
 	}
@@ -339,19 +261,19 @@ func runArtifactsListVulnerabilities(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagArtifactsVulnFormat == "json" {
-		return printJSON(allOccurrences)
+	if s.flagArtifactsVulnFormat == "json" {
+		return s.inv.printJSON(allOccurrences)
 	}
 
 	if len(allOccurrences) == 0 {
-		fmt.Println("No vulnerabilities found.")
+		fmt.Fprintln(s.inv.stdout, "No vulnerabilities found.")
 		return nil
 	}
 
-	fmt.Printf("Found %d vulnerabilities:\n", len(allOccurrences))
+	fmt.Fprintf(s.inv.stdout, "Found %d vulnerabilities:\n", len(allOccurrences))
 	for _, occ := range allOccurrences {
 		if occ.Vulnerability != nil {
-			fmt.Printf("  Severity: %-10s Package: %s\n",
+			fmt.Fprintf(s.inv.stdout, "  Severity: %-10s Package: %s\n",
 				occ.Vulnerability.Severity,
 				occ.Vulnerability.ShortDescription)
 		}
@@ -359,9 +281,9 @@ func runArtifactsListVulnerabilities(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+func (s *artifactsCmds) runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
@@ -375,8 +297,8 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Repositories.DockerImages.List(strings.TrimSuffix(parent, "/packages/-")).Context(ctx)
-		if flagArtImgListPageSize > 0 {
-			call = call.PageSize(flagArtImgListPageSize)
+		if s.flagArtImgListPageSize > 0 {
+			call = call.PageSize(s.flagArtImgListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -386,8 +308,8 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing docker images: %w", err)
 		}
 		allImages = append(allImages, resp.DockerImages...)
-		if flagArtImgListLimit > 0 && int64(len(allImages)) >= flagArtImgListLimit {
-			allImages = allImages[:flagArtImgListLimit]
+		if s.flagArtImgListLimit > 0 && int64(len(allImages)) >= s.flagArtImgListLimit {
+			allImages = allImages[:s.flagArtImgListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -396,24 +318,24 @@ func runArtifactsDockerImagesList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	if flagArtImgListURI {
+	if s.flagArtImgListURI {
 		for _, img := range allImages {
-			fmt.Println(img.Name)
+			fmt.Fprintln(s.inv.stdout, img.Name)
 		}
 		return nil
 	}
 
-	if flagArtImgListFormat == "json" {
-		return printJSON(allImages)
+	if s.flagArtImgListFormat == "json" {
+		return s.inv.printJSON(allImages)
 	}
 
-	printTableHeading(len(allImages), "%-60s %-20s %s\n", "IMAGE", "DIGEST", "TAGS")
+	printTableHeadingTo(s.inv.stdout, len(allImages), "%-60s %-20s %s\n", "IMAGE", "DIGEST", "TAGS")
 	for _, img := range allImages {
 		tags := ""
-		if flagArtImgListIncludeTags && len(img.Tags) > 0 {
+		if s.flagArtImgListIncludeTags && len(img.Tags) > 0 {
 			tags = strings.Join(img.Tags, ",")
 		}
-		fmt.Printf("%-60s %-20s %s\n", img.Uri, truncateDigest(img.Uri), tags)
+		fmt.Fprintf(s.inv.stdout, "%-60s %-20s %s\n", img.Uri, truncateDigest(img.Uri), tags)
 	}
 	return nil
 }
@@ -429,9 +351,9 @@ func truncateDigest(uri string) string {
 	return ""
 }
 
-func runArtifactsDockerImagesDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+func (s *artifactsCmds) runArtifactsDockerImagesDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
@@ -447,7 +369,7 @@ func runArtifactsDockerImagesDescribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("describing docker image: %w", err)
 	}
 
-	return formatOutput(img, "")
+	return s.inv.formatOutput(img, "")
 }
 
 func parseArtifactImageName(image string) (string, error) {
@@ -493,21 +415,21 @@ func parseDockerPath(path string) (location, project, repo, image string, ok boo
 	return location, project, repo, image, true
 }
 
-func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
-	if !flagQuiet {
-		fmt.Printf("You are about to delete image [%s].\n", args[0])
-		fmt.Print("Do you want to continue (Y/n)? ")
+func (s *artifactsCmds) runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
+	if !s.inv.flags.quiet {
+		fmt.Fprintf(s.inv.stdout, "You are about to delete image [%s].\n", args[0])
+		fmt.Fprint(s.inv.stdout, "Do you want to continue (Y/n)? ")
 		var answer string
 		fmt.Scanln(&answer)
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "" && answer != "y" && answer != "yes" {
-			fmt.Println("Aborted.")
+			fmt.Fprintln(s.inv.stdout, "Aborted.")
 			return nil
 		}
 	}
 
-	ctx := context.Background()
-	svc, err := gcp.ArtifactRegistryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ArtifactRegistry(ctx)
 	if err != nil {
 		return err
 	}
@@ -530,13 +452,13 @@ func runArtifactsDockerImagesDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deleting image: %w", err)
 	}
 
-	fmt.Printf("Deleted image [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted image [%s].\n", args[0])
 	return nil
 }
 
 // --- package extraction helpers (unchanged from earlier revisions) ---
 
-func extractLocalPackages(ctx context.Context, image string) ([]*ondemandscanning.PackageData, error) {
+func (s *artifactsCmds) extractLocalPackages(ctx context.Context, image string) ([]*ondemandscanning.PackageData, error) {
 	dockerBin, err := exec.LookPath("docker")
 	if err != nil {
 		return nil, fmt.Errorf("docker not found in PATH: %w", err)
@@ -563,7 +485,7 @@ func extractLocalPackages(ctx context.Context, image string) ([]*ondemandscannin
 	}
 
 	wantExtra := make(map[string]bool)
-	for _, t := range flagArtifactsScanExtraTypes {
+	for _, t := range s.flagArtifactsScanExtraTypes {
 		wantExtra[strings.ToUpper(t)] = true
 	}
 
@@ -789,4 +711,852 @@ func extractXMLValue(line, tag string) string {
 		return line[len(prefix) : len(line)-len(suffix)]
 	}
 	return ""
+}
+
+// artifactsCmds holds the commands and flag values of one invocation's "artifacts"
+// command group, so invocations don't share state (#2070).
+type artifactsCmds struct {
+	inv *invocation
+
+	artifactsCmd *cobra.Command
+	// artifactsDockerCmd and artifactsDockerImagesCmd are shared parents used by
+	// the vulnerability-scan surface below.
+	artifactsDockerCmd                      *cobra.Command
+	artifactsDockerImagesCmd                *cobra.Command
+	artifactsScanCmd                        *cobra.Command
+	artifactsListVulnerabilitiesCmd         *cobra.Command
+	artifactsDockerImagesListCmd            *cobra.Command
+	flagArtImgListFormat                    string
+	flagArtImgListIncludeTags               bool
+	flagArtImgListURI                       bool
+	flagArtImgListLimit                     int64
+	flagArtImgListPageSize                  int64
+	artifactsDockerImagesDescribeCmd        *cobra.Command
+	artifactsDockerImagesDeleteCmd          *cobra.Command
+	flagArtifactsScanLocation               string
+	flagArtifactsScanFormat                 string
+	flagArtifactsVulnFormat                 string
+	flagArtifactsScanRemote                 bool
+	flagArtifactsScanAsync                  bool
+	flagArtifactsScanExtraTypes             []string
+	artifactsAptCmd                         *cobra.Command
+	flagArtAptLocation                      string
+	flagArtAptRepository                    string
+	flagArtAptFormat                        string
+	flagArtAptConfigFile                    string
+	flagArtAptSource                        string
+	flagArtAptAsync                         bool
+	artifactsAptImportCmd                   *cobra.Command
+	artifactsAptUploadCmd                   *cobra.Command
+	artifactsAttachmentsCmd                 *cobra.Command
+	flagArtAttLocation                      string
+	flagArtAttRepository                    string
+	flagArtAttFormat                        string
+	flagArtAttFilter                        string
+	flagArtAttConfigFile                    string
+	flagArtAttTarget                        string
+	flagArtAttType                          string
+	flagArtAttDestination                   string
+	flagArtAttAsync                         bool
+	artifactsAttachmentsCreateCmd           *cobra.Command
+	artifactsAttachmentsDeleteCmd           *cobra.Command
+	artifactsAttachmentsDescribeCmd         *cobra.Command
+	artifactsAttachmentsDownloadCmd         *cobra.Command
+	artifactsAttachmentsListCmd             *cobra.Command
+	artifactsFilesCmd                       *cobra.Command
+	flagArtFilesLocation                    string
+	flagArtFilesRepository                  string
+	flagArtFilesFormat                      string
+	flagArtFilesFilter                      string
+	flagArtFilesPageSize                    int64
+	flagArtFilesDestination                 string
+	flagArtFilesConfigFile                  string
+	flagArtFilesMask                        string
+	flagArtFilesAsync                       bool
+	artifactsFilesDeleteCmd                 *cobra.Command
+	artifactsFilesDescribeCmd               *cobra.Command
+	artifactsFilesDownloadCmd               *cobra.Command
+	artifactsFilesListCmd                   *cobra.Command
+	artifactsFilesUpdateCmd                 *cobra.Command
+	flagArtFilesUpFile                      string
+	flagArtFilesUpFileType                  string
+	flagArtFilesUpSource                    string
+	flagArtFilesUpSourceDir                 string
+	flagArtFilesUpSkipExisting              bool
+	flagArtFilesUpAsync                     bool
+	artifactsFilesUploadCmd                 *cobra.Command
+	artifactsGenericCmd                     *cobra.Command
+	flagArtGenLocation                      string
+	flagArtGenRepository                    string
+	flagArtGenFormat                        string
+	flagArtGenSource                        string
+	flagArtGenPackage                       string
+	flagArtGenVersion                       string
+	flagArtGenDestination                   string
+	flagArtGenAsync                         bool
+	artifactsGenericDownloadCmd             *cobra.Command
+	artifactsGenericUploadCmd               *cobra.Command
+	artifactsGoCmd                          *cobra.Command
+	flagArtGoLocation                       string
+	flagArtGoRepository                     string
+	flagArtGoSource                         string
+	flagArtGoModule                         string
+	flagArtGoVersion                        string
+	flagArtGoFormat                         string
+	flagArtGoAsync                          bool
+	artifactsGoAuthCmd                      *cobra.Command
+	artifactsGoUploadCmd                    *cobra.Command
+	artifactsImageStreamingCacheCmd         *cobra.Command
+	flagArtISCLocation                      string
+	flagArtISCFormat                        string
+	flagArtISCConfigFile                    string
+	artifactsImageStreamingCacheCreateCmd   *cobra.Command
+	artifactsImageStreamingCacheDeleteCmd   *cobra.Command
+	artifactsImageStreamingCacheDescribeCmd *cobra.Command
+	artifactsImageStreamingCacheListCmd     *cobra.Command
+	artifactsLocationsCmd                   *cobra.Command
+	flagArtLocationsFormat                  string
+	flagArtLocationsFilter                  string
+	flagArtLocationsPageSize                int64
+	artifactsLocationsListCmd               *cobra.Command
+	artifactsOperationsCmd                  *cobra.Command
+	flagArtOpsLocation                      string
+	flagArtOpsFormat                        string
+	artifactsOperationsDescribeCmd          *cobra.Command
+	artifactsPackagesCmd                    *cobra.Command
+	flagArtPkgLocation                      string
+	flagArtPkgRepository                    string
+	flagArtPkgFormat                        string
+	flagArtPkgFilter                        string
+	flagArtPkgPageSize                      int64
+	flagArtPkgConfigFile                    string
+	flagArtPkgMask                          string
+	flagArtPkgAsync                         bool
+	artifactsPackagesDeleteCmd              *cobra.Command
+	artifactsPackagesDescribeCmd            *cobra.Command
+	artifactsPackagesListCmd                *cobra.Command
+	artifactsPackagesUpdateCmd              *cobra.Command
+	flagArtPrintLocation                    string
+	flagArtPrintRepository                  string
+	flagArtPrintJSONKey                     string
+	flagArtPrintNpmScope                    string
+	artifactsPrintSettingsCmd               *cobra.Command
+	artifactsPrintSettingsGradleCmd         *cobra.Command
+	artifactsPrintSettingsMvnCmd            *cobra.Command
+	artifactsPrintSettingsNpmCmd            *cobra.Command
+	artifactsPrintSettingsPythonCmd         *cobra.Command
+	artifactsProjectsCmd                    *cobra.Command
+	flagArtProjectsFormat                   string
+	flagArtProjectsConfigFile               string
+	flagArtProjectsMask                     string
+	artifactsProjectsDescribeCmd            *cobra.Command
+	artifactsProjectsUpdateCmd              *cobra.Command
+	artifactsRepositoriesCmd                *cobra.Command
+	flagArtRepoLocation                     string
+	flagArtRepoFormat                       string
+	flagArtRepoFilter                       string
+	flagArtRepoPageSize                     int64
+	flagArtRepoConfigFile                   string
+	flagArtRepoMask                         string
+	flagArtRepoAsync                        bool
+	flagArtRepoAllConds                     bool
+	flagArtRepoPolicyNames                  []string
+	flagArtRepoIamMember                    string
+	flagArtRepoIamRole                      string
+	flagArtRepoIamCondExpr                  string
+	flagArtRepoIamCondTitle                 string
+	flagArtRepoIamCondDesc                  string
+	// --mode passthrough, mirroring gcloud-python's CLI vocabulary.
+	// NONE / STANDARD-REPOSITORY / VIRTUAL-REPOSITORY / REMOTE-REPOSITORY /
+	// CONNECTOR-REPOSITORY (the last one is REMOTE_REPOSITORY on the wire).
+	flagArtRepoMode                               string
+	artifactsRepositoriesCreateCmd                *cobra.Command
+	artifactsRepositoriesDeleteCmd                *cobra.Command
+	artifactsRepositoriesDescribeCmd              *cobra.Command
+	artifactsRepositoriesListCmd                  *cobra.Command
+	artifactsRepositoriesUpdateCmd                *cobra.Command
+	artifactsRepositoriesGetIamCmd                *cobra.Command
+	artifactsRepositoriesSetIamCmd                *cobra.Command
+	artifactsRepositoriesAddIamCmd                *cobra.Command
+	artifactsRepositoriesRemoveIamCmd             *cobra.Command
+	artifactsRepositoriesListCleanupPoliciesCmd   *cobra.Command
+	artifactsRepositoriesSetCleanupPoliciesCmd    *cobra.Command
+	artifactsRepositoriesDeleteCleanupPoliciesCmd *cobra.Command
+	artifactsRulesCmd                             *cobra.Command
+	flagArtRuleLocation                           string
+	flagArtRuleRepository                         string
+	flagArtRuleFormat                             string
+	flagArtRuleFilter                             string
+	flagArtRuleConfigFile                         string
+	flagArtRuleMask                               string
+	artifactsRulesCreateCmd                       *cobra.Command
+	artifactsRulesDeleteCmd                       *cobra.Command
+	artifactsRulesDescribeCmd                     *cobra.Command
+	artifactsRulesListCmd                         *cobra.Command
+	artifactsRulesUpdateCmd                       *cobra.Command
+	artifactsSbomCmd                              *cobra.Command
+	flagArtSbomLocation                           string
+	flagArtSbomRepository                         string
+	flagArtSbomFormat                             string
+	flagArtSbomDestination                        string
+	flagArtSbomConfigFile                         string
+	artifactsSbomExportCmd                        *cobra.Command
+	artifactsSbomListCmd                          *cobra.Command
+	artifactsSbomLoadCmd                          *cobra.Command
+	artifactsSettingsCmd                          *cobra.Command
+	flagArtSettingsLocation                       string
+	flagArtSettingsFormat                         string
+	artifactsSettingsDescribeCmd                  *cobra.Command
+	artifactsSettingsEnableRedirCmd               *cobra.Command
+	artifactsSettingsDisableRedirCmd              *cobra.Command
+	artifactsTagsCmd                              *cobra.Command
+	flagArtTagLocation                            string
+	flagArtTagRepository                          string
+	flagArtTagPackage                             string
+	flagArtTagVersion                             string
+	flagArtTagFormat                              string
+	flagArtTagFilter                              string
+	flagArtTagDestination                         string
+	artifactsTagsCreateCmd                        *cobra.Command
+	artifactsTagsDeleteCmd                        *cobra.Command
+	artifactsTagsExportCmd                        *cobra.Command
+	artifactsTagsListCmd                          *cobra.Command
+	artifactsTagsUpdateCmd                        *cobra.Command
+	artifactsVersionsCmd                          *cobra.Command
+	flagArtVerLocation                            string
+	flagArtVerRepository                          string
+	flagArtVerPackage                             string
+	flagArtVerFormat                              string
+	flagArtVerFilter                              string
+	flagArtVerConfigFile                          string
+	flagArtVerMask                                string
+	flagArtVerDestination                         string
+	flagArtVerAsync                               bool
+	artifactsVersionsDeleteCmd                    *cobra.Command
+	artifactsVersionsDescribeCmd                  *cobra.Command
+	artifactsVersionsExportCmd                    *cobra.Command
+	artifactsVersionsListCmd                      *cobra.Command
+	artifactsVersionsUpdateCmd                    *cobra.Command
+	artifactsVpcscConfigCmd                       *cobra.Command
+	flagArtVpcLocation                            string
+	flagArtVpcFormat                              string
+	artifactsVpcscConfigDescribeCmd               *cobra.Command
+	artifactsVpcscConfigAllowCmd                  *cobra.Command
+	artifactsVpcscConfigDenyCmd                   *cobra.Command
+	artifactsVulnerabilitiesCmd                   *cobra.Command
+	flagArtVulnLocation                           string
+	flagArtVulnRepository                         string
+	flagArtVulnImage                              string
+	flagArtVulnFormat                             string
+	flagArtVulnConfigFile                         string
+	artifactsVulnerabilitiesListCmd               *cobra.Command
+	artifactsVulnerabilitiesLoadVexCmd            *cobra.Command
+	artifactsYumCmd                               *cobra.Command
+	artifactsYumImportCmd                         *cobra.Command
+	artifactsYumUploadCmd                         *cobra.Command
+	flagArtYumLocation                            string
+	flagArtYumGcsSrc                              []string
+	flagArtYumSource                              string
+	flagArtYumAsync                               bool
+}
+
+// newArtifactsCmd returns the "artifacts" command group for inv.
+func newArtifactsCmd(inv *invocation) *cobra.Command {
+	return newArtifactsCmds(inv).artifactsCmd
+}
+
+// newArtifactsCmds builds the "artifacts" command group for inv and returns its state.
+func newArtifactsCmds(inv *invocation) *artifactsCmds {
+	s := &artifactsCmds{inv: inv}
+	s.artifactsCmd = &cobra.Command{
+		Use:   "artifacts",
+		Short: "Manage Artifact Registry",
+	}
+	s.artifactsDockerCmd = &cobra.Command{
+		Use:   "docker",
+		Short: "Manage Docker resources",
+	}
+	s.artifactsDockerImagesCmd = &cobra.Command{
+		Use:   "images",
+		Short: "Manage Docker images",
+	}
+	s.artifactsScanCmd = &cobra.Command{
+		Use:   "scan IMAGE",
+		Short: "Scan a Docker image for vulnerabilities",
+		Long: `Scan a container image for known vulnerabilities using On-Demand Scanning.
+Example:
+  gcloud artifacts docker images scan us-docker.pkg.dev/my-project/repo/image:tag --location=us`,
+		Args: cobra.ExactArgs(1),
+		RunE: s.runArtifactsScan,
+	}
+	s.artifactsListVulnerabilitiesCmd = &cobra.Command{
+		Use:   "list-vulnerabilities SCAN_RESOURCE",
+		Short: "List vulnerabilities from a scan",
+		Long: `List vulnerabilities found by an on-demand scan.
+Example:
+  gcloud artifacts docker images list-vulnerabilities projects/my-project/locations/us/scans/SCAN_ID`,
+		Args: cobra.ExactArgs(1),
+		RunE: s.runArtifactsListVulnerabilities,
+	}
+	s.artifactsDockerImagesListCmd = &cobra.Command{
+		Use:   "list REPOSITORY",
+		Short: "List Docker images in a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsDockerImagesList,
+	}
+	s.artifactsDockerImagesDescribeCmd = &cobra.Command{
+		Use:   "describe IMAGE",
+		Short: "Describe a Docker image",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsDockerImagesDescribe,
+	}
+	s.artifactsDockerImagesDeleteCmd = &cobra.Command{
+		Use:   "delete IMAGE",
+		Short: "Delete a Docker image",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsDockerImagesDelete,
+	}
+	s.artifactsAptCmd = &cobra.Command{
+		Use:   "apt",
+		Short: "Manage Artifact Registry Debian (APT) packages",
+	}
+	s.artifactsAptImportCmd = &cobra.Command{
+		Use:   "import",
+		Short: "Import one or more Debian (APT) packages into a repository",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsAptImport,
+	}
+	s.artifactsAptUploadCmd = &cobra.Command{
+		Use:   "upload",
+		Short: "Upload a Debian (APT) package to a repository",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsAptUpload,
+	}
+	s.artifactsAttachmentsCmd = &cobra.Command{
+		Use:   "attachments",
+		Short: "Manage Artifact Registry attachments",
+	}
+	s.artifactsAttachmentsCreateCmd = &cobra.Command{
+		Use:   "create ATTACHMENT",
+		Short: "Create an attachment",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsAttachmentsCreate,
+	}
+	s.artifactsAttachmentsDeleteCmd = &cobra.Command{
+		Use:   "delete ATTACHMENT",
+		Short: "Delete an attachment",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsAttachmentsDelete,
+	}
+	s.artifactsAttachmentsDescribeCmd = &cobra.Command{
+		Use:   "describe ATTACHMENT",
+		Short: "Describe an attachment",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsAttachmentsDescribe,
+	}
+	s.artifactsAttachmentsDownloadCmd = &cobra.Command{
+		Use:   "download ATTACHMENT",
+		Short: "Download all files referenced by an attachment",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsAttachmentsDownload,
+	}
+	s.artifactsAttachmentsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List attachments in a repository",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsAttachmentsList,
+	}
+	s.artifactsFilesCmd = &cobra.Command{
+		Use:   "files",
+		Short: "Manage individual files in an Artifact Registry repository",
+	}
+	s.artifactsFilesDeleteCmd = &cobra.Command{
+		Use:   "delete FILE",
+		Short: "Delete a file from a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsFilesDelete,
+	}
+	s.artifactsFilesDescribeCmd = &cobra.Command{
+		Use:   "describe FILE",
+		Short: "Describe a file in a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsFilesDescribe,
+	}
+	s.artifactsFilesDownloadCmd = &cobra.Command{
+		Use:   "download FILE",
+		Short: "Download a file from a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsFilesDownload,
+	}
+	s.artifactsFilesListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List files in a repository",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsFilesList,
+	}
+	s.artifactsFilesUpdateCmd = &cobra.Command{
+		Use:   "update FILE",
+		Short: "Update a file in a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsFilesUpdate,
+	}
+	s.artifactsFilesUploadCmd = &cobra.Command{
+		Use:   "upload",
+		Short: "Upload files to Artifact Registry",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsFilesUpload,
+	}
+	s.artifactsGenericCmd = &cobra.Command{
+		Use:   "generic",
+		Short: "Manage generic Artifact Registry artifacts",
+	}
+	s.artifactsGenericDownloadCmd = &cobra.Command{
+		Use:   "download PACKAGE VERSION FILE_NAME",
+		Short: "Download a file from a generic artifact",
+		Args:  cobra.ExactArgs(3),
+		RunE:  s.runArtifactsGenericDownload,
+	}
+	s.artifactsGenericUploadCmd = &cobra.Command{
+		Use:   "upload",
+		Short: "Upload a file to a generic artifact",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsGenericUpload,
+	}
+	s.artifactsGoCmd = &cobra.Command{
+		Use:   "go",
+		Short: "Manage Artifact Registry Go modules",
+	}
+	s.artifactsGoAuthCmd = &cobra.Command{
+		Use:   "auth",
+		Short: "Print credentials and environment for using a Go repository",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsGoAuth,
+	}
+	s.artifactsGoUploadCmd = &cobra.Command{
+		Use:   "upload",
+		Short: "Upload a Go module .zip to a repository",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsGoUpload,
+	}
+	s.artifactsImageStreamingCacheCmd = &cobra.Command{
+		Use:   "image-streaming-cache",
+		Short: "Manage Artifact Registry image streaming caches",
+	}
+	s.artifactsImageStreamingCacheCreateCmd = &cobra.Command{
+		Use:   "create CACHE",
+		Short: "Create an image streaming cache",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsISCCreate,
+	}
+	s.artifactsImageStreamingCacheDeleteCmd = &cobra.Command{
+		Use:   "delete CACHE",
+		Short: "Delete an image streaming cache",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsISCDelete,
+	}
+	s.artifactsImageStreamingCacheDescribeCmd = &cobra.Command{
+		Use:   "describe CACHE",
+		Short: "Describe an image streaming cache",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsISCDescribe,
+	}
+	s.artifactsImageStreamingCacheListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List image streaming caches",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsISCList,
+	}
+	s.artifactsLocationsCmd = &cobra.Command{
+		Use:   "locations",
+		Short: "List regional metadata for Artifact Registry",
+	}
+	s.artifactsLocationsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List Artifact Registry locations for a project",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsLocationsList,
+	}
+	s.artifactsOperationsCmd = &cobra.Command{
+		Use:   "operations",
+		Short: "Manage Artifact Registry long-running operations",
+	}
+	s.artifactsOperationsDescribeCmd = &cobra.Command{
+		Use:   "describe OPERATION",
+		Short: "Describe an Artifact Registry operation",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsOperationsDescribe,
+	}
+	s.artifactsPackagesCmd = &cobra.Command{
+		Use:   "packages",
+		Short: "Manage Artifact Registry packages",
+	}
+	s.artifactsPackagesDeleteCmd = &cobra.Command{
+		Use:   "delete PACKAGE",
+		Short: "Delete a package",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsPackagesDelete,
+	}
+	s.artifactsPackagesDescribeCmd = &cobra.Command{
+		Use:   "describe PACKAGE",
+		Short: "Describe a package",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsPackagesDescribe,
+	}
+	s.artifactsPackagesListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List packages",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsPackagesList,
+	}
+	s.artifactsPackagesUpdateCmd = &cobra.Command{
+		Use:   "update PACKAGE",
+		Short: "Update a package",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsPackagesUpdate,
+	}
+	s.artifactsPrintSettingsCmd = &cobra.Command{
+		Use:   "print-settings",
+		Short: "Print snippets to add to native tools settings files",
+		Long: `The snippets provide a credentials placeholder and configurations to allow
+native tools to interact with Artifact Registry repositories.`,
+	}
+	s.artifactsPrintSettingsGradleCmd = &cobra.Command{
+		Use:   "gradle",
+		Short: "Print a snippet to add a repository to the Gradle build.gradle file",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsPrintSettingsGradle,
+	}
+	s.artifactsPrintSettingsMvnCmd = &cobra.Command{
+		Use:   "mvn",
+		Short: "Print a snippet to add a Maven repository to the pom.xml file",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsPrintSettingsMvn,
+	}
+	s.artifactsPrintSettingsNpmCmd = &cobra.Command{
+		Use:   "npm",
+		Short: "Print credential settings to add to the .npmrc file",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsPrintSettingsNpm,
+	}
+	s.artifactsPrintSettingsPythonCmd = &cobra.Command{
+		Use:   "python",
+		Short: "Print credential settings to add to the .pypirc and pip.conf files",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsPrintSettingsPython,
+	}
+	s.artifactsProjectsCmd = &cobra.Command{
+		Use:   "projects",
+		Short: "Manage per-project Artifact Registry settings",
+	}
+	s.artifactsProjectsDescribeCmd = &cobra.Command{
+		Use:   "describe",
+		Short: "Describe the Artifact Registry project settings",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsProjectsDescribe,
+	}
+	s.artifactsProjectsUpdateCmd = &cobra.Command{
+		Use:   "update",
+		Short: "Update the Artifact Registry project settings",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsProjectsUpdate,
+	}
+	s.artifactsRepositoriesCmd = &cobra.Command{
+		Use:   "repositories",
+		Short: "Manage Artifact Registry repositories",
+	}
+	s.artifactsRepositoriesCreateCmd = &cobra.Command{
+		Use:   "create REPOSITORY",
+		Short: "Create a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesCreate,
+	}
+	s.artifactsRepositoriesDeleteCmd = &cobra.Command{
+		Use:   "delete REPOSITORY",
+		Short: "Delete a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesDelete,
+	}
+	s.artifactsRepositoriesDescribeCmd = &cobra.Command{
+		Use:   "describe REPOSITORY",
+		Short: "Describe a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesDescribe,
+	}
+	s.artifactsRepositoriesListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List repositories in a location",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsRepositoriesList,
+	}
+	s.artifactsRepositoriesUpdateCmd = &cobra.Command{
+		Use:   "update REPOSITORY",
+		Short: "Update a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesUpdate,
+	}
+	s.artifactsRepositoriesGetIamCmd = &cobra.Command{
+		Use:   "get-iam-policy REPOSITORY",
+		Short: "Get the IAM policy for a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesGetIam,
+	}
+	s.artifactsRepositoriesSetIamCmd = &cobra.Command{
+		Use:   "set-iam-policy REPOSITORY POLICY_FILE",
+		Short: "Set the IAM policy for a repository",
+		Args:  cobra.ExactArgs(2),
+		RunE:  s.runArtifactsRepositoriesSetIam,
+	}
+	s.artifactsRepositoriesAddIamCmd = &cobra.Command{
+		Use:   "add-iam-policy-binding REPOSITORY",
+		Short: "Add an IAM policy binding on a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesAddIam,
+	}
+	s.artifactsRepositoriesRemoveIamCmd = &cobra.Command{
+		Use:   "remove-iam-policy-binding REPOSITORY",
+		Short: "Remove an IAM policy binding from a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesRemoveIam,
+	}
+	s.artifactsRepositoriesListCleanupPoliciesCmd = &cobra.Command{
+		Use:   "list-cleanup-policies REPOSITORY",
+		Short: "List cleanup policies on a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesListCleanup,
+	}
+	s.artifactsRepositoriesSetCleanupPoliciesCmd = &cobra.Command{
+		Use:   "set-cleanup-policies REPOSITORY",
+		Short: "Replace cleanup policies on a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesSetCleanup,
+	}
+	s.artifactsRepositoriesDeleteCleanupPoliciesCmd = &cobra.Command{
+		Use:   "delete-cleanup-policies REPOSITORY",
+		Short: "Delete cleanup policies from a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRepositoriesDeleteCleanup,
+	}
+	s.artifactsRulesCmd = &cobra.Command{
+		Use:   "rules",
+		Short: "Manage Artifact Registry cleanup rules",
+	}
+	s.artifactsRulesCreateCmd = &cobra.Command{
+		Use:   "create RULE",
+		Short: "Create a cleanup rule",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRulesCreate,
+	}
+	s.artifactsRulesDeleteCmd = &cobra.Command{
+		Use:   "delete RULE",
+		Short: "Delete a cleanup rule",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRulesDelete,
+	}
+	s.artifactsRulesDescribeCmd = &cobra.Command{
+		Use:   "describe RULE",
+		Short: "Describe a cleanup rule",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRulesDescribe,
+	}
+	s.artifactsRulesListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List cleanup rules",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsRulesList,
+	}
+	s.artifactsRulesUpdateCmd = &cobra.Command{
+		Use:   "update RULE",
+		Short: "Update a cleanup rule",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsRulesUpdate,
+	}
+	s.artifactsSbomCmd = &cobra.Command{
+		Use:   "sbom",
+		Short: "Manage Software Bills of Materials (SBOMs)",
+	}
+	s.artifactsSbomExportCmd = &cobra.Command{
+		Use:   "export IMAGE_URI",
+		Short: "Export the SBOM for a Docker image",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsSbomExport,
+	}
+	s.artifactsSbomListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List Docker images in a repository, noting SBOM availability",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsSbomList,
+	}
+	s.artifactsSbomLoadCmd = &cobra.Command{
+		Use:   "load IMAGE_URI",
+		Short: "Attach an SBOM statement to a Docker image",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsSbomLoad,
+	}
+	s.artifactsSettingsCmd = &cobra.Command{
+		Use:   "settings",
+		Short: "Manage Artifact Registry per-location settings",
+	}
+	s.artifactsSettingsDescribeCmd = &cobra.Command{
+		Use:   "describe",
+		Short: "Describe the settings for a location",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsSettingsDescribe,
+	}
+	s.artifactsSettingsEnableRedirCmd = &cobra.Command{
+		Use:   "enable-upgrade-redirection",
+		Short: "Enable redirection of legacy container registry traffic to Artifact Registry",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsSettingsEnableRedir,
+	}
+	s.artifactsSettingsDisableRedirCmd = &cobra.Command{
+		Use:   "disable-upgrade-redirection",
+		Short: "Disable redirection of legacy container registry traffic",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsSettingsDisableRedir,
+	}
+	s.artifactsTagsCmd = &cobra.Command{
+		Use:   "tags",
+		Short: "Manage Artifact Registry package tags",
+	}
+	s.artifactsTagsCreateCmd = &cobra.Command{
+		Use:   "create TAG",
+		Short: "Create a tag pointing to a version",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsTagsCreate,
+	}
+	s.artifactsTagsDeleteCmd = &cobra.Command{
+		Use:   "delete TAG",
+		Short: "Delete a tag",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsTagsDelete,
+	}
+	s.artifactsTagsExportCmd = &cobra.Command{
+		Use:   "export",
+		Short: "Export tags for a package to a JSON file",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsTagsExport,
+	}
+	s.artifactsTagsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List tags for a package",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsTagsList,
+	}
+	s.artifactsTagsUpdateCmd = &cobra.Command{
+		Use:   "update TAG",
+		Short: "Move a tag to a different version",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsTagsUpdate,
+	}
+	s.artifactsVersionsCmd = &cobra.Command{
+		Use:   "versions",
+		Short: "Manage Artifact Registry package versions",
+	}
+	s.artifactsVersionsDeleteCmd = &cobra.Command{
+		Use:   "delete VERSION",
+		Short: "Delete a version",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsVersionsDelete,
+	}
+	s.artifactsVersionsDescribeCmd = &cobra.Command{
+		Use:   "describe VERSION",
+		Short: "Describe a version",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsVersionsDescribe,
+	}
+	s.artifactsVersionsExportCmd = &cobra.Command{
+		Use:   "export",
+		Short: "Export versions for a package to a JSON file",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsVersionsExport,
+	}
+	s.artifactsVersionsListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List versions of a package",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsVersionsList,
+	}
+	s.artifactsVersionsUpdateCmd = &cobra.Command{
+		Use:   "update VERSION",
+		Short: "Update a version",
+		Args:  cobra.ExactArgs(1),
+		RunE:  s.runArtifactsVersionsUpdate,
+	}
+	s.artifactsVpcscConfigCmd = &cobra.Command{
+		Use:   "vpcsc-config",
+		Short: "Manage the VPC Service Controls config for Artifact Registry",
+	}
+	s.artifactsVpcscConfigDescribeCmd = &cobra.Command{
+		Use:   "describe",
+		Short: "Describe the VPC-SC config for a location",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsVpcscConfigDescribe,
+	}
+	s.artifactsVpcscConfigAllowCmd = &cobra.Command{
+		Use:   "allow",
+		Short: "Allow Artifact Registry to serve requests inside a VPC-SC perimeter",
+		Args:  cobra.NoArgs,
+		RunE:  func(cmd *cobra.Command, args []string) error { return s.artSetVpcscPolicy("ALLOW") },
+	}
+	s.artifactsVpcscConfigDenyCmd = &cobra.Command{
+		Use:   "deny",
+		Short: "Deny Artifact Registry from serving requests inside a VPC-SC perimeter",
+		Args:  cobra.NoArgs,
+		RunE:  func(cmd *cobra.Command, args []string) error { return s.artSetVpcscPolicy("DENY") },
+	}
+	s.artifactsVulnerabilitiesCmd = &cobra.Command{
+		Use:   "vulnerabilities",
+		Short: "Manage Artifact Registry vulnerability reports",
+	}
+	s.artifactsVulnerabilitiesListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List vulnerabilities for a Docker image",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsVulnerabilitiesList,
+	}
+	s.artifactsVulnerabilitiesLoadVexCmd = &cobra.Command{
+		Use:   "load-vex",
+		Short: "Load a VEX statement into Artifact Registry",
+		Args:  cobra.NoArgs,
+		RunE:  s.runArtifactsVulnerabilitiesLoadVex,
+	}
+	s.artifactsYumCmd = &cobra.Command{
+		Use:   "yum",
+		Short: "Manage Artifact Registry RPM packages",
+	}
+	s.artifactsYumImportCmd = &cobra.Command{
+		Use:   "import [REPOSITORY]",
+		Short: "Import one or more RPM packages into an artifact repository",
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  s.runArtifactsYumImport,
+	}
+	s.artifactsYumUploadCmd = &cobra.Command{
+		Use:   "upload [REPOSITORY]",
+		Short: "Upload an RPM package to an artifact repository",
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  s.runArtifactsYumUpload,
+	}
+	s.initArtifacts()
+	s.initArtifactsApt()
+	s.initArtifactsAttachments()
+	s.initArtifactsFiles()
+	s.initArtifactsFilesUpload()
+	s.initArtifactsGeneric()
+	s.initArtifactsGo()
+	s.initArtifactsImageStreamingCache()
+	s.initArtifactsLocations()
+	s.initArtifactsOperations()
+	s.initArtifactsPackages()
+	s.initArtifactsPrintSettings()
+	s.initArtifactsProjects()
+	s.initArtifactsRepositories()
+	s.initArtifactsRules()
+	s.initArtifactsSbom()
+	s.initArtifactsSettings()
+	s.initArtifactsTags()
+	s.initArtifactsVersions()
+	s.initArtifactsVpcscConfig()
+	s.initArtifactsVulnerabilities()
+	s.initArtifactsYum()
+	return s
 }

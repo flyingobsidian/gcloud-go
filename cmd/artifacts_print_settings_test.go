@@ -9,10 +9,11 @@ import (
 )
 
 func TestArtifactsPrintSettingsSubcommandsRegistered(t *testing.T) {
+	grp := newArtifactsCmds(legacyTestInvocation())
 	// print-settings must be a real group (not a stub command) with the four
 	// language subcommands exposed by gcloud-python.
 	var ps *cobra.Command
-	for _, c := range artifactsCmd.Commands() {
+	for _, c := range grp.artifactsCmd.Commands() {
 		if c.Name() == "print-settings" {
 			ps = c
 			break

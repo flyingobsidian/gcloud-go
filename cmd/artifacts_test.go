@@ -107,13 +107,14 @@ func TestArtRepoParseName(t *testing.T) {
 }
 
 func TestArtRepoApplyRegistryURI(t *testing.T) {
+	grp := newArtifactsCmds(legacyTestInvocation())
 	// Server-populated URI is preserved.
 	r := &artifactregistry.Repository{
 		Name:        "projects/p/locations/us/repositories/r",
 		Format:      "DOCKER",
 		RegistryUri: "server-set.example.com/p/r",
 	}
-	artRepoApplyRegistryURI(r)
+	grp.artRepoApplyRegistryURI(r)
 	if r.RegistryUri != "server-set.example.com/p/r" {
 		t.Errorf("existing RegistryUri clobbered: %q", r.RegistryUri)
 	}
@@ -123,7 +124,7 @@ func TestArtRepoApplyRegistryURI(t *testing.T) {
 		Name:   "projects/p/locations/us-central1/repositories/my-repo",
 		Format: "DOCKER",
 	}
-	artRepoApplyRegistryURI(r)
+	grp.artRepoApplyRegistryURI(r)
 	if got, want := r.RegistryUri, "us-central1-docker.pkg.dev/p/my-repo"; got != want {
 		t.Errorf("RegistryUri = %q, want %q", got, want)
 	}
@@ -133,13 +134,13 @@ func TestArtRepoApplyRegistryURI(t *testing.T) {
 		Name:   "projects/my:proj/locations/us/repositories/r",
 		Format: "MAVEN",
 	}
-	artRepoApplyRegistryURI(r)
+	grp.artRepoApplyRegistryURI(r)
 	if got, want := r.RegistryUri, "us-maven.pkg.dev/my/proj/r"; got != want {
 		t.Errorf("RegistryUri = %q, want %q", got, want)
 	}
 
 	// nil is a no-op.
-	artRepoApplyRegistryURI(nil)
+	grp.artRepoApplyRegistryURI(nil)
 }
 
 func TestArtRepoApplyMode(t *testing.T) {
@@ -173,14 +174,16 @@ func TestArtRepoApplyMode(t *testing.T) {
 }
 
 func TestArtifactsRepositoriesCreateHasModeFlag(t *testing.T) {
-	if artifactsRepositoriesCreateCmd.Flag("mode") == nil {
+	grp := newArtifactsCmds(legacyTestInvocation())
+	if grp.artifactsRepositoriesCreateCmd.Flag("mode") == nil {
 		t.Fatal("artifacts repositories create missing --mode flag")
 	}
 }
 
 func TestArtifactsDockerImagesListHasLimitAndPageSize(t *testing.T) {
+	grp := newArtifactsCmds(legacyTestInvocation())
 	for _, name := range []string{"limit", "page-size"} {
-		if artifactsDockerImagesListCmd.Flag(name) == nil {
+		if grp.artifactsDockerImagesListCmd.Flag(name) == nil {
 			t.Errorf("artifacts docker images list missing --%s flag", name)
 		}
 	}
@@ -189,6 +192,7 @@ func TestArtifactsDockerImagesListHasLimitAndPageSize(t *testing.T) {
 // TestArtifactsStubSubcommandsRegistered checks the subgroups added in #537
 // are present on the artifacts command.
 func TestArtifactsStubSubcommandsRegistered(t *testing.T) {
+	grp := newArtifactsCmds(legacyTestInvocation())
 	want := []string{
 		"apt", "attachments", "docker", "files", "generic", "go",
 		"image-streaming-cache", "locations", "operations", "packages",
@@ -196,7 +200,7 @@ func TestArtifactsStubSubcommandsRegistered(t *testing.T) {
 		"settings", "tags", "versions", "vpcsc-config", "vulnerabilities", "yum",
 	}
 	got := map[string]bool{}
-	for _, c := range artifactsCmd.Commands() {
+	for _, c := range grp.artifactsCmd.Commands() {
 		got[c.Name()] = true
 	}
 	for _, name := range want {
