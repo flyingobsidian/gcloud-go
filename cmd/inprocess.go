@@ -56,6 +56,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newPolicyTroubleshootCmd(inv),
 		newInfoCmd(inv),
 		newComponentsCmd(inv),
+		newCloudLocationFinderCmd(inv),
 	}
 }
 
