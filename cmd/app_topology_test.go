@@ -8,11 +8,12 @@ import (
 )
 
 func TestAppTopologySubcommands(t *testing.T) {
-	assertSubcommands(t, appTopologyCmd, []string{"domains", "locations", "resources-graph"})
-	assertSubcommands(t, appTopologyDomainsCmd, []string{"describe", "list", "schema"})
-	assertSubcommands(t, appTopologySchemaCmd, []string{"describe"})
-	assertSubcommands(t, appTopologyLocCmd, []string{"describe", "list"})
-	assertSubcommands(t, appTopologyGraphCmd, []string{"generate"})
+	grp := newAppTopologyCmds(legacyTestInvocation())
+	assertSubcommands(t, grp.appTopologyCmd, []string{"domains", "locations", "resources-graph"})
+	assertSubcommands(t, grp.appTopologyDomainsCmd, []string{"describe", "list", "schema"})
+	assertSubcommands(t, grp.appTopologySchemaCmd, []string{"describe"})
+	assertSubcommands(t, grp.appTopologyLocCmd, []string{"describe", "list"})
+	assertSubcommands(t, grp.appTopologyGraphCmd, []string{"generate"})
 }
 
 func TestAppTopologyNormalizeDomains(t *testing.T) {
@@ -91,8 +92,9 @@ func TestAppTopologySchemaName(t *testing.T) {
 }
 
 func TestEmitAppTopologyDomainsList(t *testing.T) {
-	defer func(l int64, s []string) { flagATLimit, flagATSortBy = l, s }(flagATLimit, flagATSortBy)
-	flagATLimit, flagATSortBy = 2, []string{"~name"}
+	grp := newAppTopologyCmds(legacyTestInvocation())
+	defer func(l int64, s []string) { grp.flagATLimit, grp.flagATSortBy = l, s }(grp.flagATLimit, grp.flagATSortBy)
+	grp.flagATLimit, grp.flagATSortBy = 2, []string{"~name"}
 	records := []map[string]any{
 		{"name": "projects/p/locations/global/domains/A"},
 		{"name": "projects/p/locations/global/domains/C"},
@@ -103,7 +105,7 @@ func TestEmitAppTopologyDomainsList(t *testing.T) {
 		n := r["name"].(string)
 		return map[string]any{"name": n[strings.LastIndex(n, "/")+1:]}
 	}
-	if err := emitAppTopologyList(&out, &errOut, records, "table(name)", scope); err != nil {
+	if err := grp.emitAppTopologyList(&out, &errOut, records, "table(name)", scope); err != nil {
 		t.Fatal(err)
 	}
 	if want := "NAME\nC\nB\n"; out.String() != want {
@@ -111,7 +113,7 @@ func TestEmitAppTopologyDomainsList(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := emitAppTopologyList(&out, &errOut, nil, "table(name)", nil); err != nil {
+	if err := grp.emitAppTopologyList(&out, &errOut, nil, "table(name)", nil); err != nil {
 		t.Fatal(err)
 	}
 	if out.Len() != 0 || errOut.String() != "Listed 0 items.\n" {

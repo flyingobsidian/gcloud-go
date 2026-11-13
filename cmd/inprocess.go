@@ -74,6 +74,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newDatastoreCmd(inv),
 		newAuditManagerCmd(inv),
 		newMemcacheCmd(inv),
+		newAppTopologyCmd(inv),
 	}
 }
 
