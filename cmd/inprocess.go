@@ -141,6 +141,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newEventarcCmd(inv),
 		newDataCatalogCmd(inv),
 		newDeployCmd(inv),
+		newDataprocCmd(inv),
 	}
 }
 

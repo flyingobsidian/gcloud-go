@@ -1,130 +1,92 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dataproc "google.golang.org/api/dataproc/v1"
 )
 
 // --- gcloud dataproc operations (#1515) ---
 
-var dpOpCmd = &cobra.Command{Use: "operations", Short: "Manage Dataproc operations"}
-
-var (
-	flagDPOpRegion   string
-	flagDPOpFormat   string
-	flagDPOpFilter   string
-	flagDPOpPageSize int64
-)
-
-var (
-	dpOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a Dataproc operation",
-		Args: cobra.ExactArgs(1), RunE: runDPOpCancel,
-	}
-	dpOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete a Dataproc operation record",
-		Args: cobra.ExactArgs(1), RunE: runDPOpDelete,
-	}
-	dpOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Dataproc operation",
-		Args: cobra.ExactArgs(1), RunE: runDPOpDescribe,
-	}
-	dpOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Dataproc operations",
-		Args: cobra.NoArgs, RunE: runDPOpList,
-	}
-	dpOpGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy OPERATION", Short: "Get the IAM policy for a Dataproc operation",
-		Args: cobra.ExactArgs(1), RunE: runDPOpGetIam,
-	}
-	dpOpSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy OPERATION POLICY_FILE", Short: "Set the IAM policy for a Dataproc operation",
-		Args: cobra.ExactArgs(2), RunE: runDPOpSetIam,
-	}
-)
-
-func init() {
+func (s *dataprocCmds) initDataprocOperations() {
 	all := []*cobra.Command{
-		dpOpCancelCmd, dpOpDeleteCmd, dpOpDescribeCmd, dpOpListCmd, dpOpGetIamCmd, dpOpSetIamCmd,
+		s.dpOpCancelCmd, s.dpOpDeleteCmd, s.dpOpDescribeCmd, s.dpOpListCmd, s.dpOpGetIamCmd, s.dpOpSetIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDPOpRegion, "region", "", "Dataproc region (required)")
+		c.Flags().StringVar(&s.flagDPOpRegion, "region", "", "Dataproc region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDPOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDPOpFormat, "format", "", "Output format")
 	}
-	dpOpListCmd.Flags().StringVar(&flagDPOpFilter, "filter", "", "Server-side filter expression")
-	dpOpListCmd.Flags().Int64Var(&flagDPOpPageSize, "page-size", 0, "Maximum results per page")
+	s.dpOpListCmd.Flags().StringVar(&s.flagDPOpFilter, "filter", "", "Server-side filter expression")
+	s.dpOpListCmd.Flags().Int64Var(&s.flagDPOpPageSize, "page-size", 0, "Maximum results per page")
 
-	dpOpCmd.AddCommand(all...)
-	dataprocCmd.AddCommand(dpOpCmd)
+	s.dpOpCmd.AddCommand(all...)
+	s.dataprocCmd.AddCommand(s.dpOpCmd)
 }
 
-func dpOpParent() (string, error) {
-	project, err := resolveProject()
+func (s *dataprocCmds) dpOpParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/regions/%s/operations", project, flagDPOpRegion), nil
+	return fmt.Sprintf("projects/%s/regions/%s/operations", project, s.flagDPOpRegion), nil
 }
 
-func dpOpName(id string) (string, error) {
+func (s *dataprocCmds) dpOpName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := dpOpParent()
+	parent, err := s.dpOpParent()
 	if err != nil {
 		return "", err
 	}
 	return parent + "/" + id, nil
 }
 
-func runDPOpCancel(cmd *cobra.Command, args []string) error {
-	name, err := dpOpName(args[0])
+func (s *dataprocCmds) runDPOpCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.dpOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPOpRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPOpRegion)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Regions.Operations.Cancel(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancel request issued for operation %s.\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancel request issued for operation %s.\n", args[0])
 	return nil
 }
 
-func runDPOpDelete(cmd *cobra.Command, args []string) error {
-	name, err := dpOpName(args[0])
+func (s *dataprocCmds) runDPOpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.dpOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPOpRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPOpRegion)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Regions.Operations.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation %s.\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation %s.\n", args[0])
 	return nil
 }
 
-func runDPOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := dpOpName(args[0])
+func (s *dataprocCmds) runDPOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.dpOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPOpRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPOpRegion)
 	if err != nil {
 		return err
 	}
@@ -132,16 +94,16 @@ func runDPOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagDPOpFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDPOpFormat)
 }
 
-func runDPOpList(cmd *cobra.Command, args []string) error {
-	parent, err := dpOpParent()
+func (s *dataprocCmds) runDPOpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.dpOpParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPOpRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPOpRegion)
 	if err != nil {
 		return err
 	}
@@ -149,11 +111,11 @@ func runDPOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Regions.Operations.List(parent).Context(ctx)
-		if flagDPOpFilter != "" {
-			call = call.Filter(flagDPOpFilter)
+		if s.flagDPOpFilter != "" {
+			call = call.Filter(s.flagDPOpFilter)
 		}
-		if flagDPOpPageSize > 0 {
-			call = call.PageSize(flagDPOpPageSize)
+		if s.flagDPOpPageSize > 0 {
+			call = call.PageSize(s.flagDPOpPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -168,23 +130,23 @@ func runDPOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagDPOpFormat != "" {
-		return emitFormatted(all, flagDPOpFormat)
+	if s.flagDPOpFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagDPOpFormat)
 	}
-	printTableHeading(len(all), "%-50s %s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-50s %s\n", "NAME", "DONE")
 	for _, o := range all {
-		fmt.Printf("%-50s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(s.inv.stdout, "%-50s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }
 
-func runDPOpGetIam(cmd *cobra.Command, args []string) error {
-	name, err := dpOpName(args[0])
+func (s *dataprocCmds) runDPOpGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dpOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPOpRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPOpRegion)
 	if err != nil {
 		return err
 	}
@@ -194,11 +156,11 @@ func runDPOpGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagDPOpFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagDPOpFormat)
 }
 
-func runDPOpSetIam(cmd *cobra.Command, args []string) error {
-	name, err := dpOpName(args[0])
+func (s *dataprocCmds) runDPOpSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.dpOpName(args[0])
 	if err != nil {
 		return err
 	}
@@ -207,8 +169,8 @@ func runDPOpSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPOpRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPOpRegion)
 	if err != nil {
 		return err
 	}
@@ -216,6 +178,6 @@ func runDPOpSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	dpUpdatedIam(fmt.Sprintf("operation [%s]", args[0]))
-	return emitFormatted(updated, flagDPOpFormat)
+	s.dpUpdatedIam(fmt.Sprintf("operation [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDPOpFormat)
 }

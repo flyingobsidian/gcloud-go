@@ -5,178 +5,123 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dataproc "google.golang.org/api/dataproc/v1"
 )
 
 // --- gcloud dataproc jobs (#1513) ---
 
-var dpJobsCmd = &cobra.Command{Use: "jobs", Short: "Manage Dataproc jobs"}
-
-var (
-	flagDPJobRegion      string
-	flagDPJobFormat      string
-	flagDPJobConfigFile  string
-	flagDPJobUpdateMask  string
-	flagDPJobRequestID   string
-	flagDPJobCluster     string
-	flagDPJobFilter      string
-	flagDPJobStateMatch  string
-	flagDPJobPageSize    int64
-	flagDPJobWaitTimeout time.Duration
-)
-
-var (
-	dpJobDeleteCmd = &cobra.Command{
-		Use: "delete JOB", Short: "Delete a Dataproc job",
-		Args: cobra.ExactArgs(1), RunE: runDPJobDelete,
-	}
-	dpJobDescribeCmd = &cobra.Command{
-		Use: "describe JOB", Short: "Describe a Dataproc job",
-		Args: cobra.ExactArgs(1), RunE: runDPJobDescribe,
-	}
-	dpJobKillCmd = &cobra.Command{
-		Use: "kill JOB", Short: "Kill (cancel) a Dataproc job",
-		Args: cobra.ExactArgs(1), RunE: runDPJobKill,
-	}
-	dpJobListCmd = &cobra.Command{
-		Use: "list", Short: "List Dataproc jobs",
-		Args: cobra.NoArgs, RunE: runDPJobList,
-	}
-	dpJobSubmitCmd = &cobra.Command{
-		Use: "submit", Short: "Submit a Dataproc job (body loaded from --config-file)",
-		Args: cobra.NoArgs, RunE: runDPJobSubmit,
-	}
-	dpJobUpdateCmd = &cobra.Command{
-		Use: "update JOB", Short: "Update a Dataproc job",
-		Args: cobra.ExactArgs(1), RunE: runDPJobUpdate,
-	}
-	dpJobWaitCmd = &cobra.Command{
-		Use: "wait JOB", Short: "Wait for a job to reach a terminal state",
-		Args: cobra.ExactArgs(1), RunE: runDPJobWait,
-	}
-	dpJobGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy JOB", Short: "Get the IAM policy for a Dataproc job",
-		Args: cobra.ExactArgs(1), RunE: runDPJobGetIam,
-	}
-	dpJobSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy JOB POLICY_FILE", Short: "Set the IAM policy for a Dataproc job",
-		Args: cobra.ExactArgs(2), RunE: runDPJobSetIam,
-	}
-)
-
-func init() {
+func (s *dataprocCmds) initDataprocJobs() {
 	all := []*cobra.Command{
-		dpJobDeleteCmd, dpJobDescribeCmd, dpJobKillCmd, dpJobListCmd, dpJobSubmitCmd,
-		dpJobUpdateCmd, dpJobWaitCmd, dpJobGetIamCmd, dpJobSetIamCmd,
+		s.dpJobDeleteCmd, s.dpJobDescribeCmd, s.dpJobKillCmd, s.dpJobListCmd, s.dpJobSubmitCmd,
+		s.dpJobUpdateCmd, s.dpJobWaitCmd, s.dpJobGetIamCmd, s.dpJobSetIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDPJobRegion, "region", "", "Dataproc region (required)")
+		c.Flags().StringVar(&s.flagDPJobRegion, "region", "", "Dataproc region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDPJobFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDPJobFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dpJobSubmitCmd, dpJobUpdateCmd} {
-		c.Flags().StringVar(&flagDPJobConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dpJobSubmitCmd, s.dpJobUpdateCmd} {
+		c.Flags().StringVar(&s.flagDPJobConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Job body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	dpJobSubmitCmd.Flags().StringVar(&flagDPJobRequestID, "request-id", "", "Optional idempotency ID")
-	dpJobUpdateCmd.Flags().StringVar(&flagDPJobUpdateMask, "update-mask", "",
+	s.dpJobSubmitCmd.Flags().StringVar(&s.flagDPJobRequestID, "request-id", "", "Optional idempotency ID")
+	s.dpJobUpdateCmd.Flags().StringVar(&s.flagDPJobUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	dpJobListCmd.Flags().StringVar(&flagDPJobCluster, "cluster", "", "Restrict to jobs on the named cluster")
-	dpJobListCmd.Flags().StringVar(&flagDPJobFilter, "filter", "", "Server-side filter expression")
-	dpJobListCmd.Flags().StringVar(&flagDPJobStateMatch, "state-filter", "",
+	s.dpJobListCmd.Flags().StringVar(&s.flagDPJobCluster, "cluster", "", "Restrict to jobs on the named cluster")
+	s.dpJobListCmd.Flags().StringVar(&s.flagDPJobFilter, "filter", "", "Server-side filter expression")
+	s.dpJobListCmd.Flags().StringVar(&s.flagDPJobStateMatch, "state-filter", "",
 		"JobStateMatcher (ALL, ACTIVE, NON_ACTIVE)")
-	dpJobListCmd.Flags().Int64Var(&flagDPJobPageSize, "page-size", 0, "Maximum results per page")
-	dpJobWaitCmd.Flags().DurationVar(&flagDPJobWaitTimeout, "timeout", 30*time.Minute,
+	s.dpJobListCmd.Flags().Int64Var(&s.flagDPJobPageSize, "page-size", 0, "Maximum results per page")
+	s.dpJobWaitCmd.Flags().DurationVar(&s.flagDPJobWaitTimeout, "timeout", 30*time.Minute,
 		"Maximum time to wait for the job to reach a terminal state")
 
-	dpJobsCmd.AddCommand(all...)
-	dataprocCmd.AddCommand(dpJobsCmd)
+	s.dpJobsCmd.AddCommand(all...)
+	s.dataprocCmd.AddCommand(s.dpJobsCmd)
 }
 
 func dpJobResourceName(project, region, jobID string) string {
 	return fmt.Sprintf("projects/%s/regions/%s/jobs/%s", project, region, jobID)
 }
 
-func runDPJobDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPJobDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPJobRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPJobRegion)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Regions.Jobs.Delete(project, flagDPJobRegion, args[0]).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Regions.Jobs.Delete(project, s.flagDPJobRegion, args[0]).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting job: %w", err)
 	}
-	fmt.Printf("Deleted job [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted job [%s].\n", args[0])
 	return nil
 }
 
-func runDPJobDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPJobDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPJobRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPJobRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Regions.Jobs.Get(project, flagDPJobRegion, args[0]).Context(ctx).Do()
+	got, err := svc.Projects.Regions.Jobs.Get(project, s.flagDPJobRegion, args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing job: %w", err)
 	}
-	return emitFormatted(got, flagDPJobFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPJobFormat)
 }
 
-func runDPJobKill(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPJobKill(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPJobRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPJobRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Regions.Jobs.Cancel(project, flagDPJobRegion, args[0], &dataproc.CancelJobRequest{}).Context(ctx).Do()
+	got, err := svc.Projects.Regions.Jobs.Cancel(project, s.flagDPJobRegion, args[0], &dataproc.CancelJobRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("killing job: %w", err)
 	}
-	fmt.Printf("Cancel request issued for job [%s].\n", args[0])
-	return emitFormatted(got, flagDPJobFormat)
+	fmt.Fprintf(s.inv.stdout, "Cancel request issued for job [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPJobFormat)
 }
 
-func runDPJobList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPJobList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPJobRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPJobRegion)
 	if err != nil {
 		return err
 	}
 	var all []*dataproc.Job
 	pageToken := ""
 	for {
-		call := svc.Projects.Regions.Jobs.List(project, flagDPJobRegion).Context(ctx)
-		if flagDPJobCluster != "" {
-			call = call.ClusterName(flagDPJobCluster)
+		call := svc.Projects.Regions.Jobs.List(project, s.flagDPJobRegion).Context(ctx)
+		if s.flagDPJobCluster != "" {
+			call = call.ClusterName(s.flagDPJobCluster)
 		}
-		if flagDPJobFilter != "" {
-			call = call.Filter(flagDPJobFilter)
+		if s.flagDPJobFilter != "" {
+			call = call.Filter(s.flagDPJobFilter)
 		}
-		if flagDPJobStateMatch != "" {
-			call = call.JobStateMatcher(flagDPJobStateMatch)
+		if s.flagDPJobStateMatch != "" {
+			call = call.JobStateMatcher(s.flagDPJobStateMatch)
 		}
-		if flagDPJobPageSize > 0 {
-			call = call.PageSize(flagDPJobPageSize)
+		if s.flagDPJobPageSize > 0 {
+			call = call.PageSize(s.flagDPJobPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -191,57 +136,57 @@ func runDPJobList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDPJobFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDPJobFormat)
 }
 
-func runDPJobSubmit(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPJobSubmit(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	job := &dataproc.Job{}
-	if err := loadYAMLOrJSONInto(flagDPJobConfigFile, job); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDPJobConfigFile, job); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPJobRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPJobRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Regions.Jobs.Submit(project, flagDPJobRegion, &dataproc.SubmitJobRequest{
+	got, err := svc.Projects.Regions.Jobs.Submit(project, s.flagDPJobRegion, &dataproc.SubmitJobRequest{
 		Job:       job,
-		RequestId: flagDPJobRequestID,
+		RequestId: s.flagDPJobRequestID,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("submitting job: %w", err)
 	}
 	if got.Reference != nil {
-		fmt.Printf("Submitted job [%s].\n", got.Reference.JobId)
+		fmt.Fprintf(s.inv.stdout, "Submitted job [%s].\n", got.Reference.JobId)
 	} else {
-		fmt.Println("Submitted job.")
+		fmt.Fprintln(s.inv.stdout, "Submitted job.")
 	}
-	return emitFormatted(got, flagDPJobFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPJobFormat)
 }
 
-func runDPJobUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPJobUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dataproc.Job{}
-	if err := loadYAMLOrJSONInto(flagDPJobConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDPJobConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagDPJobUpdateMask
+	mask := s.flagDPJobUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPJobRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPJobRegion)
 	if err != nil {
 		return err
 	}
-	call := svc.Projects.Regions.Jobs.Patch(project, flagDPJobRegion, args[0], body).Context(ctx)
+	call := svc.Projects.Regions.Jobs.Patch(project, s.flagDPJobRegion, args[0], body).Context(ctx)
 	if mask != "" {
 		call = call.UpdateMask(mask)
 	}
@@ -249,24 +194,24 @@ func runDPJobUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating job: %w", err)
 	}
-	fmt.Printf("Updated job [%s].\n", args[0])
-	return emitFormatted(got, flagDPJobFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated job [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPJobFormat)
 }
 
-func runDPJobWait(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPJobWait(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), flagDPJobWaitTimeout)
+	ctx, cancel := context.WithTimeout(cmd.Context(), s.flagDPJobWaitTimeout)
 	defer cancel()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPJobRegion)
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPJobRegion)
 	if err != nil {
 		return err
 	}
 	backoff := 5 * time.Second
 	for {
-		got, err := svc.Projects.Regions.Jobs.Get(project, flagDPJobRegion, args[0]).Context(ctx).Do()
+		got, err := svc.Projects.Regions.Jobs.Get(project, s.flagDPJobRegion, args[0]).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("polling job: %w", err)
 		}
@@ -276,8 +221,8 @@ func runDPJobWait(cmd *cobra.Command, args []string) error {
 		}
 		switch state {
 		case "DONE":
-			fmt.Printf("Job [%s] succeeded.\n", args[0])
-			return emitFormatted(got, flagDPJobFormat)
+			fmt.Fprintf(s.inv.stdout, "Job [%s] succeeded.\n", args[0])
+			return emitFormattedTo(s.inv.stdout, got, s.flagDPJobFormat)
 		case "CANCELLED", "ERROR":
 			return fmt.Errorf("job [%s] ended in state %s", args[0], state)
 		}
@@ -292,14 +237,14 @@ func runDPJobWait(cmd *cobra.Command, args []string) error {
 	}
 }
 
-func runDPJobGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPJobGetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	name := dpJobResourceName(project, flagDPJobRegion, args[0])
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPJobRegion)
+	name := dpJobResourceName(project, s.flagDPJobRegion, args[0])
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPJobRegion)
 	if err != nil {
 		return err
 	}
@@ -309,22 +254,22 @@ func runDPJobGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagDPJobFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagDPJobFormat)
 }
 
-func runDPJobSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPJobSetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	name := dpJobResourceName(project, flagDPJobRegion, args[0])
+	name := dpJobResourceName(project, s.flagDPJobRegion, args[0])
 	policy := &dataproc.Policy{}
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPJobRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPJobRegion)
 	if err != nil {
 		return err
 	}
@@ -332,6 +277,6 @@ func runDPJobSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	dpUpdatedIam(fmt.Sprintf("job [%s]", args[0]))
-	return emitFormatted(updated, flagDPJobFormat)
+	s.dpUpdatedIam(fmt.Sprintf("job [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDPJobFormat)
 }

@@ -1,278 +1,202 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	dataproc "google.golang.org/api/dataproc/v1"
 )
 
 // --- gcloud dataproc clusters (#1512) ---
 
-var dpClustersCmd = &cobra.Command{Use: "clusters", Short: "Manage Dataproc clusters"}
-
-var dpClustersGKECmd = &cobra.Command{Use: "gke", Short: "Manage GKE-based Dataproc clusters"}
-
-var (
-	flagDPClusterRegion       string
-	flagDPClusterFormat       string
-	flagDPClusterConfigFile   string
-	flagDPClusterUpdateMask   string
-	flagDPClusterFilter       string
-	flagDPClusterPageSize     int64
-	flagDPClusterRequestID    string
-	flagDPClusterGracefulTO   string
-	flagDPClusterDiagnoseJobs string
-	flagDPClusterDiagnoseYARN string
-	flagDPClusterDiagnoseTS   string
-)
-
-var (
-	dpClusterCreateCmd = &cobra.Command{
-		Use: "create CLUSTER", Short: "Create a Dataproc cluster",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterCreate,
-	}
-	dpClusterDeleteCmd = &cobra.Command{
-		Use: "delete CLUSTER", Short: "Delete a Dataproc cluster",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterDelete,
-	}
-	dpClusterDescribeCmd = &cobra.Command{
-		Use: "describe CLUSTER", Short: "Describe a Dataproc cluster",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterDescribe,
-	}
-	dpClusterDiagnoseCmd = &cobra.Command{
-		Use: "diagnose CLUSTER", Short: "Diagnose a Dataproc cluster",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterDiagnose,
-	}
-	dpClusterExportCmd = &cobra.Command{
-		Use: "export CLUSTER", Short: "Export a Dataproc cluster (returns YAML/JSON)",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterExport,
-	}
-	dpClusterImportCmd = &cobra.Command{
-		Use: "import CLUSTER", Short: "Import (create or update) a cluster from a YAML/JSON file",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterImport,
-	}
-	dpClusterListCmd = &cobra.Command{
-		Use: "list", Short: "List Dataproc clusters",
-		Args: cobra.NoArgs, RunE: runDPClusterList,
-	}
-	dpClusterStartCmd = &cobra.Command{
-		Use: "start CLUSTER", Short: "Start a stopped Dataproc cluster",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterStart,
-	}
-	dpClusterStopCmd = &cobra.Command{
-		Use: "stop CLUSTER", Short: "Stop a Dataproc cluster",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterStop,
-	}
-	dpClusterUpdateCmd = &cobra.Command{
-		Use: "update CLUSTER", Short: "Update a Dataproc cluster",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterUpdate,
-	}
-	dpClusterGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy CLUSTER", Short: "Get the IAM policy for a Dataproc cluster",
-		Args: cobra.ExactArgs(1), RunE: runDPClusterGetIam,
-	}
-	dpClusterSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy CLUSTER POLICY_FILE", Short: "Set the IAM policy for a Dataproc cluster",
-		Args: cobra.ExactArgs(2), RunE: runDPClusterSetIam,
-	}
-	dpClusterGKECreateCmd = &cobra.Command{
-		Use:   "create CLUSTER",
-		Short: "Create a GKE-based Dataproc cluster (--config-file must set virtualClusterConfig)",
-		Args:  cobra.ExactArgs(1), RunE: runDPClusterCreate,
-	}
-)
-
-func init() {
+func (s *dataprocCmds) initDataprocClusters() {
 	all := []*cobra.Command{
-		dpClusterCreateCmd, dpClusterDeleteCmd, dpClusterDescribeCmd, dpClusterDiagnoseCmd,
-		dpClusterExportCmd, dpClusterImportCmd, dpClusterListCmd, dpClusterStartCmd,
-		dpClusterStopCmd, dpClusterUpdateCmd, dpClusterGetIamCmd, dpClusterSetIamCmd,
-		dpClusterGKECreateCmd,
+		s.dpClusterCreateCmd, s.dpClusterDeleteCmd, s.dpClusterDescribeCmd, s.dpClusterDiagnoseCmd,
+		s.dpClusterExportCmd, s.dpClusterImportCmd, s.dpClusterListCmd, s.dpClusterStartCmd,
+		s.dpClusterStopCmd, s.dpClusterUpdateCmd, s.dpClusterGetIamCmd, s.dpClusterSetIamCmd,
+		s.dpClusterGKECreateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagDPClusterRegion, "region", "", "Dataproc region (required)")
+		c.Flags().StringVar(&s.flagDPClusterRegion, "region", "", "Dataproc region (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagDPClusterFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagDPClusterFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{dpClusterCreateCmd, dpClusterGKECreateCmd, dpClusterUpdateCmd, dpClusterImportCmd} {
-		c.Flags().StringVar(&flagDPClusterConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.dpClusterCreateCmd, s.dpClusterGKECreateCmd, s.dpClusterUpdateCmd, s.dpClusterImportCmd} {
+		c.Flags().StringVar(&s.flagDPClusterConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Cluster body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	for _, c := range []*cobra.Command{dpClusterCreateCmd, dpClusterGKECreateCmd, dpClusterUpdateCmd, dpClusterDeleteCmd, dpClusterStartCmd, dpClusterStopCmd} {
-		c.Flags().StringVar(&flagDPClusterRequestID, "request-id", "",
+	for _, c := range []*cobra.Command{s.dpClusterCreateCmd, s.dpClusterGKECreateCmd, s.dpClusterUpdateCmd, s.dpClusterDeleteCmd, s.dpClusterStartCmd, s.dpClusterStopCmd} {
+		c.Flags().StringVar(&s.flagDPClusterRequestID, "request-id", "",
 			"Optional client-supplied ID for idempotent submission")
 	}
-	dpClusterUpdateCmd.Flags().StringVar(&flagDPClusterUpdateMask, "update-mask", "",
+	s.dpClusterUpdateCmd.Flags().StringVar(&s.flagDPClusterUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	dpClusterUpdateCmd.Flags().StringVar(&flagDPClusterGracefulTO, "graceful-decommission-timeout", "",
+	s.dpClusterUpdateCmd.Flags().StringVar(&s.flagDPClusterGracefulTO, "graceful-decommission-timeout", "",
 		"Timeout for graceful decommission of workers (e.g. 10m)")
-	dpClusterDeleteCmd.Flags().StringVar(&flagDPClusterGracefulTO, "graceful-termination-timeout", "",
+	s.dpClusterDeleteCmd.Flags().StringVar(&s.flagDPClusterGracefulTO, "graceful-termination-timeout", "",
 		"Timeout for graceful termination (e.g. 10m)")
-	dpClusterListCmd.Flags().StringVar(&flagDPClusterFilter, "filter", "", "Server-side filter expression")
-	dpClusterListCmd.Flags().Int64Var(&flagDPClusterPageSize, "page-size", 0, "Maximum results per page")
-	dpClusterDiagnoseCmd.Flags().StringVar(&flagDPClusterDiagnoseJobs, "job-ids", "",
+	s.dpClusterListCmd.Flags().StringVar(&s.flagDPClusterFilter, "filter", "", "Server-side filter expression")
+	s.dpClusterListCmd.Flags().Int64Var(&s.flagDPClusterPageSize, "page-size", 0, "Maximum results per page")
+	s.dpClusterDiagnoseCmd.Flags().StringVar(&s.flagDPClusterDiagnoseJobs, "job-ids", "",
 		"Comma-separated job IDs to include in the diagnostic tarball")
-	dpClusterDiagnoseCmd.Flags().StringVar(&flagDPClusterDiagnoseYARN, "yarn-application-ids", "",
+	s.dpClusterDiagnoseCmd.Flags().StringVar(&s.flagDPClusterDiagnoseYARN, "yarn-application-ids", "",
 		"Comma-separated YARN application IDs to include")
-	dpClusterDiagnoseCmd.Flags().StringVar(&flagDPClusterDiagnoseTS, "tarball-gcs-dir", "",
+	s.dpClusterDiagnoseCmd.Flags().StringVar(&s.flagDPClusterDiagnoseTS, "tarball-gcs-dir", "",
 		"Optional GCS dir where the tarball should be written")
 
-	dpClustersCmd.AddCommand(dpClusterCreateCmd, dpClusterDeleteCmd, dpClusterDescribeCmd,
-		dpClusterDiagnoseCmd, dpClusterExportCmd, dpClusterImportCmd, dpClusterListCmd,
-		dpClusterStartCmd, dpClusterStopCmd, dpClusterUpdateCmd, dpClusterGetIamCmd, dpClusterSetIamCmd)
-	dpClustersGKECmd.AddCommand(dpClusterGKECreateCmd)
-	dpClustersCmd.AddCommand(dpClustersGKECmd)
-	dataprocCmd.AddCommand(dpClustersCmd)
+	s.dpClustersCmd.AddCommand(s.dpClusterCreateCmd, s.dpClusterDeleteCmd, s.dpClusterDescribeCmd,
+		s.dpClusterDiagnoseCmd, s.dpClusterExportCmd, s.dpClusterImportCmd, s.dpClusterListCmd,
+		s.dpClusterStartCmd, s.dpClusterStopCmd, s.dpClusterUpdateCmd, s.dpClusterGetIamCmd, s.dpClusterSetIamCmd)
+	s.dpClustersGKECmd.AddCommand(s.dpClusterGKECreateCmd)
+	s.dpClustersCmd.AddCommand(s.dpClustersGKECmd)
+	s.dataprocCmd.AddCommand(s.dpClustersCmd)
 }
 
 func dpClusterResourceName(project, region, cluster string) string {
 	return fmt.Sprintf("projects/%s/regions/%s/clusters/%s", project, region, cluster)
 }
 
-func runDPClusterCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dataproc.Cluster{}
-	if err := loadYAMLOrJSONInto(flagDPClusterConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDPClusterConfigFile, body); err != nil {
 		return err
 	}
 	body.ClusterName = args[0]
 	body.ProjectId = project
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
-	call := svc.Projects.Regions.Clusters.Create(project, flagDPClusterRegion, body).Context(ctx)
-	if flagDPClusterRequestID != "" {
-		call = call.RequestId(flagDPClusterRequestID)
+	call := svc.Projects.Regions.Clusters.Create(project, s.flagDPClusterRegion, body).Context(ctx)
+	if s.flagDPClusterRequestID != "" {
+		call = call.RequestId(s.flagDPClusterRequestID)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("creating cluster: %w", err)
 	}
-	fmt.Printf("Create request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDPClusterFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDPClusterFormat)
 }
 
-func runDPClusterDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
-	call := svc.Projects.Regions.Clusters.Delete(project, flagDPClusterRegion, args[0]).Context(ctx)
-	if flagDPClusterRequestID != "" {
-		call = call.RequestId(flagDPClusterRequestID)
+	call := svc.Projects.Regions.Clusters.Delete(project, s.flagDPClusterRegion, args[0]).Context(ctx)
+	if s.flagDPClusterRequestID != "" {
+		call = call.RequestId(s.flagDPClusterRequestID)
 	}
-	if flagDPClusterGracefulTO != "" {
-		call = call.GracefulTerminationTimeout(flagDPClusterGracefulTO)
+	if s.flagDPClusterGracefulTO != "" {
+		call = call.GracefulTerminationTimeout(s.flagDPClusterGracefulTO)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("deleting cluster: %w", err)
 	}
-	fmt.Printf("Delete request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDPClusterFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDPClusterFormat)
 }
 
-func runDPClusterDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Regions.Clusters.Get(project, flagDPClusterRegion, args[0]).Context(ctx).Do()
+	got, err := svc.Projects.Regions.Clusters.Get(project, s.flagDPClusterRegion, args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing cluster: %w", err)
 	}
-	return emitFormatted(got, flagDPClusterFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagDPClusterFormat)
 }
 
-func runDPClusterDiagnose(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterDiagnose(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	req := &dataproc.DiagnoseClusterRequest{
-		TarballGcsDir: flagDPClusterDiagnoseTS,
+		TarballGcsDir: s.flagDPClusterDiagnoseTS,
 	}
-	if flagDPClusterDiagnoseJobs != "" {
-		req.Jobs = splitCSV(flagDPClusterDiagnoseJobs)
+	if s.flagDPClusterDiagnoseJobs != "" {
+		req.Jobs = splitCSV(s.flagDPClusterDiagnoseJobs)
 	}
-	if flagDPClusterDiagnoseYARN != "" {
-		req.YarnApplicationIds = splitCSV(flagDPClusterDiagnoseYARN)
+	if s.flagDPClusterDiagnoseYARN != "" {
+		req.YarnApplicationIds = splitCSV(s.flagDPClusterDiagnoseYARN)
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Regions.Clusters.Diagnose(project, flagDPClusterRegion, args[0], req).Context(ctx).Do()
+	op, err := svc.Projects.Regions.Clusters.Diagnose(project, s.flagDPClusterRegion, args[0], req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("diagnosing cluster: %w", err)
 	}
-	fmt.Printf("Diagnose request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDPClusterFormat)
+	fmt.Fprintf(s.inv.stdout, "Diagnose request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDPClusterFormat)
 }
 
-func runDPClusterExport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterExport(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Regions.Clusters.Get(project, flagDPClusterRegion, args[0]).Context(ctx).Do()
+	got, err := svc.Projects.Regions.Clusters.Get(project, s.flagDPClusterRegion, args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("exporting cluster: %w", err)
 	}
-	format := flagDPClusterFormat
+	format := s.flagDPClusterFormat
 	if format == "" {
 		format = "yaml"
 	}
-	return emitFormatted(got, format)
+	return emitFormattedTo(s.inv.stdout, got, format)
 }
 
-func runDPClusterImport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterImport(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dataproc.Cluster{}
-	if err := loadYAMLOrJSONInto(flagDPClusterConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDPClusterConfigFile, body); err != nil {
 		return err
 	}
 	body.ClusterName = args[0]
 	body.ProjectId = project
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Regions.Clusters.Get(project, flagDPClusterRegion, args[0]).Context(ctx).Do(); err == nil {
-		mask := flagDPClusterUpdateMask
+	if _, err := svc.Projects.Regions.Clusters.Get(project, s.flagDPClusterRegion, args[0]).Context(ctx).Do(); err == nil {
+		mask := s.flagDPClusterUpdateMask
 		if mask == "" {
 			mask = joinMask(nonEmptyJSONFields(body))
 		}
-		call := svc.Projects.Regions.Clusters.Patch(project, flagDPClusterRegion, args[0], body).Context(ctx)
+		call := svc.Projects.Regions.Clusters.Patch(project, s.flagDPClusterRegion, args[0], body).Context(ctx)
 		if mask != "" {
 			call = call.UpdateMask(mask)
 		}
@@ -280,36 +204,36 @@ func runDPClusterImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("updating cluster: %w", err)
 		}
-		fmt.Printf("Update request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagDPClusterFormat)
+		fmt.Fprintf(s.inv.stdout, "Update request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagDPClusterFormat)
 	}
-	op, err := svc.Projects.Regions.Clusters.Create(project, flagDPClusterRegion, body).Context(ctx).Do()
+	op, err := svc.Projects.Regions.Clusters.Create(project, s.flagDPClusterRegion, body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating cluster: %w", err)
 	}
-	fmt.Printf("Create request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDPClusterFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDPClusterFormat)
 }
 
-func runDPClusterList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
 	var all []*dataproc.Cluster
 	pageToken := ""
 	for {
-		call := svc.Projects.Regions.Clusters.List(project, flagDPClusterRegion).Context(ctx)
-		if flagDPClusterFilter != "" {
-			call = call.Filter(flagDPClusterFilter)
+		call := svc.Projects.Regions.Clusters.List(project, s.flagDPClusterRegion).Context(ctx)
+		if s.flagDPClusterFilter != "" {
+			call = call.Filter(s.flagDPClusterFilter)
 		}
-		if flagDPClusterPageSize > 0 {
-			call = call.PageSize(flagDPClusterPageSize)
+		if s.flagDPClusterPageSize > 0 {
+			call = call.PageSize(s.flagDPClusterPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -324,95 +248,95 @@ func runDPClusterList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagDPClusterFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagDPClusterFormat)
 }
 
-func runDPClusterStart(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterStart(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Regions.Clusters.Start(project, flagDPClusterRegion, args[0], &dataproc.StartClusterRequest{
-		RequestId: flagDPClusterRequestID,
+	op, err := svc.Projects.Regions.Clusters.Start(project, s.flagDPClusterRegion, args[0], &dataproc.StartClusterRequest{
+		RequestId: s.flagDPClusterRequestID,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("starting cluster: %w", err)
 	}
-	fmt.Printf("Start request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDPClusterFormat)
+	fmt.Fprintf(s.inv.stdout, "Start request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDPClusterFormat)
 }
 
-func runDPClusterStop(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterStop(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Regions.Clusters.Stop(project, flagDPClusterRegion, args[0], &dataproc.StopClusterRequest{
-		RequestId: flagDPClusterRequestID,
+	op, err := svc.Projects.Regions.Clusters.Stop(project, s.flagDPClusterRegion, args[0], &dataproc.StopClusterRequest{
+		RequestId: s.flagDPClusterRequestID,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("stopping cluster: %w", err)
 	}
-	fmt.Printf("Stop request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDPClusterFormat)
+	fmt.Fprintf(s.inv.stdout, "Stop request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDPClusterFormat)
 }
 
-func runDPClusterUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &dataproc.Cluster{}
-	if err := loadYAMLOrJSONInto(flagDPClusterConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagDPClusterConfigFile, body); err != nil {
 		return err
 	}
 	body.ClusterName = args[0]
 	body.ProjectId = project
-	mask := flagDPClusterUpdateMask
+	mask := s.flagDPClusterUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
-	call := svc.Projects.Regions.Clusters.Patch(project, flagDPClusterRegion, args[0], body).Context(ctx)
+	call := svc.Projects.Regions.Clusters.Patch(project, s.flagDPClusterRegion, args[0], body).Context(ctx)
 	if mask != "" {
 		call = call.UpdateMask(mask)
 	}
-	if flagDPClusterRequestID != "" {
-		call = call.RequestId(flagDPClusterRequestID)
+	if s.flagDPClusterRequestID != "" {
+		call = call.RequestId(s.flagDPClusterRequestID)
 	}
-	if flagDPClusterGracefulTO != "" {
-		call = call.GracefulDecommissionTimeout(flagDPClusterGracefulTO)
+	if s.flagDPClusterGracefulTO != "" {
+		call = call.GracefulDecommissionTimeout(s.flagDPClusterGracefulTO)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("updating cluster: %w", err)
 	}
-	fmt.Printf("Update request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagDPClusterFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for cluster [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagDPClusterFormat)
 }
 
-func runDPClusterGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterGetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	name := dpClusterResourceName(project, flagDPClusterRegion, args[0])
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	name := dpClusterResourceName(project, s.flagDPClusterRegion, args[0])
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
@@ -422,22 +346,22 @@ func runDPClusterGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagDPClusterFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagDPClusterFormat)
 }
 
-func runDPClusterSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *dataprocCmds) runDPClusterSetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	name := dpClusterResourceName(project, flagDPClusterRegion, args[0])
+	name := dpClusterResourceName(project, s.flagDPClusterRegion, args[0])
 	policy := &dataproc.Policy{}
 	if err := loadYAMLOrJSONInto(args[1], policy); err != nil {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.DataprocService(ctx, flagAccount, flagDPClusterRegion)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Dataproc(ctx, s.flagDPClusterRegion)
 	if err != nil {
 		return err
 	}
@@ -445,6 +369,6 @@ func runDPClusterSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	dpUpdatedIam(fmt.Sprintf("cluster [%s]", args[0]))
-	return emitFormatted(updated, flagDPClusterFormat)
+	s.dpUpdatedIam(fmt.Sprintf("cluster [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagDPClusterFormat)
 }
