@@ -129,6 +129,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newRedisCmd(inv),
 		newAccessContextManagerCmd(inv),
 		newAssetCmd(inv),
+		newPrivatecaCmd(inv),
 	}
 }
 

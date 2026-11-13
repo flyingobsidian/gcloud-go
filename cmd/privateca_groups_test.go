@@ -7,7 +7,8 @@ import (
 )
 
 func privatecaSubgroup(name string) *cobra.Command {
-	for _, c := range privatecaCmd.Commands() {
+	grp := newPrivatecaCmds(legacyTestInvocation())
+	for _, c := range grp.privatecaCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -80,57 +81,58 @@ func TestPrivatecaSubordinateActivateFirstPartyFlags(t *testing.T) {
 }
 
 func TestPCAResolveIssuerCA(t *testing.T) {
+	grp := newPrivatecaCmds(legacyTestInvocation())
 	saved := struct {
 		ca, pool, loc, sPool, sLoc string
 	}{
-		ca:    flagPCACAIssuerCA,
-		pool:  flagPCACAIssuerPool,
-		loc:   flagPCACAIssuerLocation,
-		sPool: flagPCACAPool,
-		sLoc:  flagPCACALocation,
+		ca:    grp.flagPCACAIssuerCA,
+		pool:  grp.flagPCACAIssuerPool,
+		loc:   grp.flagPCACAIssuerLocation,
+		sPool: grp.flagPCACAPool,
+		sLoc:  grp.flagPCACALocation,
 	}
 	t.Cleanup(func() {
-		flagPCACAIssuerCA = saved.ca
-		flagPCACAIssuerPool = saved.pool
-		flagPCACAIssuerLocation = saved.loc
-		flagPCACAPool = saved.sPool
-		flagPCACALocation = saved.sLoc
+		grp.flagPCACAIssuerCA = saved.ca
+		grp.flagPCACAIssuerPool = saved.pool
+		grp.flagPCACAIssuerLocation = saved.loc
+		grp.flagPCACAPool = saved.sPool
+		grp.flagPCACALocation = saved.sLoc
 	})
 
 	// Full name → passthrough.
-	flagPCACAIssuerCA = "projects/p/locations/us/caPools/pool/certificateAuthorities/ca"
-	got, err := pcaResolveIssuerCA("ignored")
-	if err != nil || got != flagPCACAIssuerCA {
+	grp.flagPCACAIssuerCA = "projects/p/locations/us/caPools/pool/certificateAuthorities/ca"
+	got, err := grp.pcaResolveIssuerCA("ignored")
+	if err != nil || got != grp.flagPCACAIssuerCA {
 		t.Fatalf("passthrough: got=%q err=%v", got, err)
 	}
 
 	// Short id inherits --location/--pool when issuer-* omitted.
-	flagPCACAIssuerCA = "ca1"
-	flagPCACAIssuerPool = ""
-	flagPCACAIssuerLocation = ""
-	flagPCACAPool = "pool"
-	flagPCACALocation = "us"
-	got, err = pcaResolveIssuerCA("proj")
+	grp.flagPCACAIssuerCA = "ca1"
+	grp.flagPCACAIssuerPool = ""
+	grp.flagPCACAIssuerLocation = ""
+	grp.flagPCACAPool = "pool"
+	grp.flagPCACALocation = "us"
+	got, err = grp.pcaResolveIssuerCA("proj")
 	want := "projects/proj/locations/us/caPools/pool/certificateAuthorities/ca1"
 	if err != nil || got != want {
 		t.Fatalf("inherit: got=%q err=%v (want %q)", got, err, want)
 	}
 
 	// Explicit --issuer-pool/--issuer-location override.
-	flagPCACAIssuerPool = "otherPool"
-	flagPCACAIssuerLocation = "eu"
-	got, _ = pcaResolveIssuerCA("proj")
+	grp.flagPCACAIssuerPool = "otherPool"
+	grp.flagPCACAIssuerLocation = "eu"
+	got, _ = grp.pcaResolveIssuerCA("proj")
 	want = "projects/proj/locations/eu/caPools/otherPool/certificateAuthorities/ca1"
 	if got != want {
 		t.Errorf("override: got=%q want=%q", got, want)
 	}
 
 	// Missing pool/location → error.
-	flagPCACAIssuerPool = ""
-	flagPCACAIssuerLocation = ""
-	flagPCACAPool = ""
-	flagPCACALocation = ""
-	if _, err := pcaResolveIssuerCA("proj"); err == nil {
+	grp.flagPCACAIssuerPool = ""
+	grp.flagPCACAIssuerLocation = ""
+	grp.flagPCACAPool = ""
+	grp.flagPCACALocation = ""
+	if _, err := grp.pcaResolveIssuerCA("proj"); err == nil {
 		t.Error("expected error when both --issuer-pool/--issuer-location and --pool/--location are unset")
 	}
 }
