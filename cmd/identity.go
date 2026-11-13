@@ -6,30 +6,11 @@ import (
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudidentity "google.golang.org/api/cloudidentity/v1"
 )
 
 // --- gcloud identity (#346) ---
-
-var identityCmd = &cobra.Command{Use: "identity", Short: "Manage Cloud Identity"}
-
-var (
-	flagIDGroupEmail      string
-	flagIDMemberEmail     string
-	flagIDGroupNamespace  string
-	flagIDMemberNamespace string
-	flagIDRoles           string
-	flagIDAddRoles        string
-	flagIDRemoveRoles     string
-	flagIDMemberType      string
-	flagIDView            string
-	flagIDQuery           string
-	flagIDPageSize        int64
-	flagIDFormat          string
-	flagIDDeliverySetting string
-)
 
 func idResolveGroupName(ctx context.Context, svc *cloudidentity.Service, emailOrName, namespace string) (string, error) {
 	if emailOrName == "" {
@@ -87,341 +68,248 @@ func idParseRoles(spec string) []*cloudidentity.MembershipRole {
 
 // --- groups CRUD (#1717) ---
 
-var (
-	flagIDGroupCustomer    string
-	flagIDGroupDisplayName string
-	flagIDGroupDescription string
-	flagIDGroupLabels      []string
-	flagIDGroupInitConfig  string
-	flagIDGroupUpdateMask  string
-	flagIDGroupPageSize    int64
-	flagIDGroupSearchView  string
-)
-
-var (
-	idGroupsCreateCmd = &cobra.Command{
-		Use: "create GROUP_EMAIL", Short: "Create a Cloud Identity group",
-		Args: cobra.ExactArgs(1), RunE: runIDGroupsCreate,
-	}
-	idGroupsDeleteCmd = &cobra.Command{
-		Use: "delete GROUP_EMAIL", Short: "Delete a Cloud Identity group",
-		Args: cobra.ExactArgs(1), RunE: runIDGroupsDelete,
-	}
-	idGroupsDescribeCmd = &cobra.Command{
-		Use: "describe GROUP_EMAIL", Short: "Describe a Cloud Identity group",
-		Args: cobra.ExactArgs(1), RunE: runIDGroupsDescribe,
-	}
-	idGroupsSearchCmd = &cobra.Command{
-		Use: "search", Short: "Search for Cloud Identity groups matching a query",
-		Args: cobra.NoArgs, RunE: runIDGroupsSearch,
-	}
-	idGroupsUpdateCmd = &cobra.Command{
-		Use: "update GROUP_EMAIL", Short: "Update a Cloud Identity group",
-		Args: cobra.ExactArgs(1), RunE: runIDGroupsUpdate,
-	}
-	idGroupsPreviewCmd = &cobra.Command{
-		Use: "preview", Short: "Preview users in a customer account using a CEL query",
-		Args: cobra.NoArgs, RunE: runIDGroupsPreview,
-	}
-)
-
 // --- groups config subgroup (#1719) ---
 
-var (
-	flagIDGroupConfigPath   string
-	flagIDGroupConfigFormat string
-)
-
-var (
-	idGroupsConfigCmd = &cobra.Command{Use: "config", Short: "Manage Cloud Identity group configurations"}
-
-	idGroupsConfigExportCmd = &cobra.Command{
-		Use: "export GROUP_EMAIL", Short: "Export a Cloud Identity group configuration",
-		Args: cobra.ExactArgs(1), RunE: runIDGroupsConfigExport,
-	}
-)
-
-func idInitGroupsCommands(groups *cobra.Command) {
+func (s *identityCmds) idInitGroupsCommands(groups *cobra.Command) {
 	addFmt := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagIDFormat, "format", "", "Output format")
+			c.Flags().StringVar(&s.flagIDFormat, "format", "", "Output format")
 		}
 	}
 
 	// create
-	addFmt(idGroupsCreateCmd)
-	idGroupsCreateCmd.Flags().StringVar(&flagIDGroupCustomer, "customer", "",
+	addFmt(s.idGroupsCreateCmd)
+	s.idGroupsCreateCmd.Flags().StringVar(&s.flagIDGroupCustomer, "customer", "",
 		"Customer ID (e.g. Cxxxxxxx or 'customers/Cxxxxxxx') that owns the group (required)")
-	_ = idGroupsCreateCmd.MarkFlagRequired("customer")
-	idGroupsCreateCmd.Flags().StringVar(&flagIDGroupNamespace, "group-namespace", "",
+	_ = s.idGroupsCreateCmd.MarkFlagRequired("customer")
+	s.idGroupsCreateCmd.Flags().StringVar(&s.flagIDGroupNamespace, "group-namespace", "",
 		"Optional namespace for the group key (for external identities)")
-	idGroupsCreateCmd.Flags().StringVar(&flagIDGroupDisplayName, "display-name", "", "Display name of the group")
-	idGroupsCreateCmd.Flags().StringVar(&flagIDGroupDescription, "description", "", "Description of the group")
-	idGroupsCreateCmd.Flags().StringSliceVar(&flagIDGroupLabels, "labels", nil,
+	s.idGroupsCreateCmd.Flags().StringVar(&s.flagIDGroupDisplayName, "display-name", "", "Display name of the group")
+	s.idGroupsCreateCmd.Flags().StringVar(&s.flagIDGroupDescription, "description", "", "Description of the group")
+	s.idGroupsCreateCmd.Flags().StringSliceVar(&s.flagIDGroupLabels, "labels", nil,
 		"Comma-separated KEY=VALUE labels; the default label 'cloudidentity.googleapis.com/groups.discussion_forum=' is applied when empty")
-	idGroupsCreateCmd.Flags().StringVar(&flagIDGroupInitConfig, "initial-group-config", "",
+	s.idGroupsCreateCmd.Flags().StringVar(&s.flagIDGroupInitConfig, "initial-group-config", "",
 		"Initial group configuration (empty, with-initial-owner)")
 
 	// delete
-	addFmt(idGroupsDeleteCmd)
-	idGroupsDeleteCmd.Flags().StringVar(&flagIDGroupNamespace, "group-namespace", "",
+	addFmt(s.idGroupsDeleteCmd)
+	s.idGroupsDeleteCmd.Flags().StringVar(&s.flagIDGroupNamespace, "group-namespace", "",
 		"Optional namespace for the group key")
 
 	// describe
-	addFmt(idGroupsDescribeCmd)
-	idGroupsDescribeCmd.Flags().StringVar(&flagIDGroupNamespace, "group-namespace", "",
+	addFmt(s.idGroupsDescribeCmd)
+	s.idGroupsDescribeCmd.Flags().StringVar(&s.flagIDGroupNamespace, "group-namespace", "",
 		"Optional namespace for the group key")
 
 	// search
-	addFmt(idGroupsSearchCmd)
-	idGroupsSearchCmd.Flags().StringVar(&flagIDQuery, "query", "",
+	addFmt(s.idGroupsSearchCmd)
+	s.idGroupsSearchCmd.Flags().StringVar(&s.flagIDQuery, "query", "",
 		"CEL query (required); e.g. \"parent == 'customers/Cxxxxxxx' && 'cloudidentity.googleapis.com/groups.discussion_forum' in labels\"")
-	_ = idGroupsSearchCmd.MarkFlagRequired("query")
-	idGroupsSearchCmd.Flags().StringVar(&flagIDGroupSearchView, "view", "",
+	_ = s.idGroupsSearchCmd.MarkFlagRequired("query")
+	s.idGroupsSearchCmd.Flags().StringVar(&s.flagIDGroupSearchView, "view", "",
 		"Search view (BASIC or FULL)")
-	idGroupsSearchCmd.Flags().Int64Var(&flagIDGroupPageSize, "page-size", 0, "Server page size hint")
+	s.idGroupsSearchCmd.Flags().Int64Var(&s.flagIDGroupPageSize, "page-size", 0, "Server page size hint")
 
 	// update
-	addFmt(idGroupsUpdateCmd)
-	idGroupsUpdateCmd.Flags().StringVar(&flagIDGroupNamespace, "group-namespace", "",
+	addFmt(s.idGroupsUpdateCmd)
+	s.idGroupsUpdateCmd.Flags().StringVar(&s.flagIDGroupNamespace, "group-namespace", "",
 		"Optional namespace for the group key")
-	idGroupsUpdateCmd.Flags().StringVar(&flagIDGroupDisplayName, "display-name", "", "Update display name")
-	idGroupsUpdateCmd.Flags().StringVar(&flagIDGroupDescription, "description", "", "Update description")
-	idGroupsUpdateCmd.Flags().StringSliceVar(&flagIDGroupLabels, "labels", nil, "Replace labels (KEY=VALUE list)")
-	idGroupsUpdateCmd.Flags().StringVar(&flagIDGroupUpdateMask, "update-mask", "",
+	s.idGroupsUpdateCmd.Flags().StringVar(&s.flagIDGroupDisplayName, "display-name", "", "Update display name")
+	s.idGroupsUpdateCmd.Flags().StringVar(&s.flagIDGroupDescription, "description", "", "Update description")
+	s.idGroupsUpdateCmd.Flags().StringSliceVar(&s.flagIDGroupLabels, "labels", nil, "Replace labels (KEY=VALUE list)")
+	s.idGroupsUpdateCmd.Flags().StringVar(&s.flagIDGroupUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (displayName, description, labels)")
 
 	// preview (leaf; not a group)
-	addFmt(idGroupsPreviewCmd)
-	idGroupsPreviewCmd.Flags().StringVar(&flagIDGroupCustomer, "customer", "",
+	addFmt(s.idGroupsPreviewCmd)
+	s.idGroupsPreviewCmd.Flags().StringVar(&s.flagIDGroupCustomer, "customer", "",
 		"Customer ID (Cxxxxxxx) whose users should be previewed (required)")
-	_ = idGroupsPreviewCmd.MarkFlagRequired("customer")
-	idGroupsPreviewCmd.Flags().StringVar(&flagIDQuery, "query", "",
+	_ = s.idGroupsPreviewCmd.MarkFlagRequired("customer")
+	s.idGroupsPreviewCmd.Flags().StringVar(&s.flagIDQuery, "query", "",
 		"CEL query filtering the returned users (e.g. \"user.locations.exists(loc, loc.desk_code == 'abc')\")")
-	idGroupsPreviewCmd.Flags().StringVar(&flagIDView, "view", "",
+	s.idGroupsPreviewCmd.Flags().StringVar(&s.flagIDView, "view", "",
 		"Search view (BASIC or FULL)")
-	idGroupsPreviewCmd.Flags().Int64Var(&flagIDGroupPageSize, "page-size", 100, "Server page size hint")
+	s.idGroupsPreviewCmd.Flags().Int64Var(&s.flagIDGroupPageSize, "page-size", 100, "Server page size hint")
 
 	// config export (subgroup)
-	addFmt(idGroupsConfigExportCmd)
-	idGroupsConfigExportCmd.Flags().StringVar(&flagIDGroupNamespace, "group-namespace", "",
+	addFmt(s.idGroupsConfigExportCmd)
+	s.idGroupsConfigExportCmd.Flags().StringVar(&s.flagIDGroupNamespace, "group-namespace", "",
 		"Optional namespace for the group key")
-	idGroupsConfigExportCmd.Flags().StringVar(&flagIDGroupConfigPath, "path", "-",
+	s.idGroupsConfigExportCmd.Flags().StringVar(&s.flagIDGroupConfigPath, "path", "-",
 		"Path of the directory or file to output configuration(s). Use '-' for stdout.")
-	idGroupsConfigExportCmd.Flags().StringVar(&flagIDGroupConfigFormat, "resource-format", "krm",
+	s.idGroupsConfigExportCmd.Flags().StringVar(&s.flagIDGroupConfigFormat, "resource-format", "krm",
 		"Configuration format (krm, terraform)")
 
 	groups.AddCommand(
-		idGroupsCreateCmd,
-		idGroupsDeleteCmd,
-		idGroupsDescribeCmd,
-		idGroupsPreviewCmd,
-		idGroupsSearchCmd,
-		idGroupsUpdateCmd,
+		s.idGroupsCreateCmd,
+		s.idGroupsDeleteCmd,
+		s.idGroupsDescribeCmd,
+		s.idGroupsPreviewCmd,
+		s.idGroupsSearchCmd,
+		s.idGroupsUpdateCmd,
 	)
-	idGroupsConfigCmd.AddCommand(idGroupsConfigExportCmd)
-	groups.AddCommand(idGroupsConfigCmd)
+	s.idGroupsConfigCmd.AddCommand(s.idGroupsConfigExportCmd)
+	groups.AddCommand(s.idGroupsConfigCmd)
 }
 
 // --- memberships (#849) ---
 
-var identityMembershipsCmd = &cobra.Command{Use: "memberships", Short: "Manage Cloud Identity group memberships"}
-
-var (
-	idMembAddCmd = &cobra.Command{
-		Use: "add", Short: "Add a member to a Cloud Identity group",
-		Args: cobra.NoArgs, RunE: runIDMembAdd,
-	}
-	idMembDeleteCmd = &cobra.Command{
-		Use: "delete", Short: "Delete a member from a Cloud Identity group",
-		Args: cobra.NoArgs, RunE: runIDMembDelete,
-	}
-	idMembDescribeCmd = &cobra.Command{
-		Use: "describe", Short: "Describe a Cloud Identity group membership",
-		Args: cobra.NoArgs, RunE: runIDMembDescribe,
-	}
-	idMembListCmd = &cobra.Command{
-		Use: "list", Short: "List memberships of a Cloud Identity group",
-		Args: cobra.NoArgs, RunE: runIDMembList,
-	}
-	idMembCheckTransitiveCmd = &cobra.Command{
-		Use: "check-transitive-membership", Short: "Check whether a member has a transitive membership in a group",
-		Args: cobra.NoArgs, RunE: runIDMembCheckTransitive,
-	}
-	idMembGetGraphCmd = &cobra.Command{
-		Use: "get-membership-graph", Short: "Get the membership graph of a group",
-		Args: cobra.NoArgs, RunE: runIDMembGetGraph,
-	}
-	idMembModifyRolesCmd = &cobra.Command{
-		Use: "modify-membership-roles", Short: "Modify roles of a Cloud Identity group membership",
-		Args: cobra.NoArgs, RunE: runIDMembModifyRoles,
-	}
-	idMembSearchTransitiveGroupsCmd = &cobra.Command{
-		Use: "search-transitive-groups", Short: "Search transitive groups a member belongs to",
-		Args: cobra.NoArgs, RunE: runIDMembSearchTransitiveGroups,
-	}
-	idMembSearchTransitiveMembershipsCmd = &cobra.Command{
-		Use: "search-transitive-memberships", Short: "Search transitive memberships of a group",
-		Args: cobra.NoArgs, RunE: runIDMembSearchTransitiveMemberships,
-	}
-)
-
-func init() {
+func (s *identityCmds) initIdentity() {
 	groups := &cobra.Command{Use: "groups", Short: "Manage Cloud Identity Groups"}
-	idInitGroupsCommands(groups)
+	s.idInitGroupsCommands(groups)
 
 	addGroupFlag := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagIDGroupEmail, "group-email", "",
+			c.Flags().StringVar(&s.flagIDGroupEmail, "group-email", "",
 				"Email or resource name (groups/{id}) of the Cloud Identity group")
-			c.Flags().StringVar(&flagIDGroupNamespace, "group-namespace", "",
+			c.Flags().StringVar(&s.flagIDGroupNamespace, "group-namespace", "",
 				"Optional namespace for the group key (for external identities)")
 		}
 	}
 	addMemberFlag := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagIDMemberEmail, "member-email", "",
+			c.Flags().StringVar(&s.flagIDMemberEmail, "member-email", "",
 				"Email or full membership resource name of the member")
-			c.Flags().StringVar(&flagIDMemberNamespace, "member-namespace", "",
+			c.Flags().StringVar(&s.flagIDMemberNamespace, "member-namespace", "",
 				"Optional namespace for the member key (for external identities)")
 		}
 	}
 	addFormatFlag := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagIDFormat, "format", "", "Output format")
+			c.Flags().StringVar(&s.flagIDFormat, "format", "", "Output format")
 		}
 	}
 
 	// add
-	addGroupFlag(idMembAddCmd)
-	addMemberFlag(idMembAddCmd)
-	addFormatFlag(idMembAddCmd)
-	idMembAddCmd.Flags().StringVar(&flagIDRoles, "roles", "MEMBER",
+	addGroupFlag(s.idMembAddCmd)
+	addMemberFlag(s.idMembAddCmd)
+	addFormatFlag(s.idMembAddCmd)
+	s.idMembAddCmd.Flags().StringVar(&s.flagIDRoles, "roles", "MEMBER",
 		"Comma-separated list of roles (OWNER, MANAGER, MEMBER)")
-	idMembAddCmd.Flags().StringVar(&flagIDMemberType, "member-type", "",
+	s.idMembAddCmd.Flags().StringVar(&s.flagIDMemberType, "member-type", "",
 		"Optional membership type (USER, SERVICE_ACCOUNT, GROUP, SHARED_DRIVE, OTHER)")
-	idMembAddCmd.Flags().StringVar(&flagIDDeliverySetting, "delivery-setting", "",
+	s.idMembAddCmd.Flags().StringVar(&s.flagIDDeliverySetting, "delivery-setting", "",
 		"Optional delivery setting (ALL_MAIL, DIGEST, DAILY, NONE, DISABLED)")
-	_ = idMembAddCmd.MarkFlagRequired("group-email")
-	_ = idMembAddCmd.MarkFlagRequired("member-email")
+	_ = s.idMembAddCmd.MarkFlagRequired("group-email")
+	_ = s.idMembAddCmd.MarkFlagRequired("member-email")
 
 	// delete
-	addGroupFlag(idMembDeleteCmd)
-	addMemberFlag(idMembDeleteCmd)
-	addFormatFlag(idMembDeleteCmd)
-	_ = idMembDeleteCmd.MarkFlagRequired("group-email")
-	_ = idMembDeleteCmd.MarkFlagRequired("member-email")
+	addGroupFlag(s.idMembDeleteCmd)
+	addMemberFlag(s.idMembDeleteCmd)
+	addFormatFlag(s.idMembDeleteCmd)
+	_ = s.idMembDeleteCmd.MarkFlagRequired("group-email")
+	_ = s.idMembDeleteCmd.MarkFlagRequired("member-email")
 
 	// describe
-	addGroupFlag(idMembDescribeCmd)
-	addMemberFlag(idMembDescribeCmd)
-	addFormatFlag(idMembDescribeCmd)
-	_ = idMembDescribeCmd.MarkFlagRequired("group-email")
-	_ = idMembDescribeCmd.MarkFlagRequired("member-email")
+	addGroupFlag(s.idMembDescribeCmd)
+	addMemberFlag(s.idMembDescribeCmd)
+	addFormatFlag(s.idMembDescribeCmd)
+	_ = s.idMembDescribeCmd.MarkFlagRequired("group-email")
+	_ = s.idMembDescribeCmd.MarkFlagRequired("member-email")
 
 	// list
-	addGroupFlag(idMembListCmd)
-	addFormatFlag(idMembListCmd)
-	idMembListCmd.Flags().StringVar(&flagIDView, "view", "",
+	addGroupFlag(s.idMembListCmd)
+	addFormatFlag(s.idMembListCmd)
+	s.idMembListCmd.Flags().StringVar(&s.flagIDView, "view", "",
 		"Optional view (BASIC or FULL)")
-	idMembListCmd.Flags().Int64Var(&flagIDPageSize, "page-size", 0, "Server page size hint")
-	_ = idMembListCmd.MarkFlagRequired("group-email")
+	s.idMembListCmd.Flags().Int64Var(&s.flagIDPageSize, "page-size", 0, "Server page size hint")
+	_ = s.idMembListCmd.MarkFlagRequired("group-email")
 
 	// check-transitive-membership
-	addGroupFlag(idMembCheckTransitiveCmd)
-	addMemberFlag(idMembCheckTransitiveCmd)
-	addFormatFlag(idMembCheckTransitiveCmd)
-	_ = idMembCheckTransitiveCmd.MarkFlagRequired("group-email")
-	_ = idMembCheckTransitiveCmd.MarkFlagRequired("member-email")
+	addGroupFlag(s.idMembCheckTransitiveCmd)
+	addMemberFlag(s.idMembCheckTransitiveCmd)
+	addFormatFlag(s.idMembCheckTransitiveCmd)
+	_ = s.idMembCheckTransitiveCmd.MarkFlagRequired("group-email")
+	_ = s.idMembCheckTransitiveCmd.MarkFlagRequired("member-email")
 
 	// get-membership-graph
-	addGroupFlag(idMembGetGraphCmd)
-	addFormatFlag(idMembGetGraphCmd)
-	idMembGetGraphCmd.Flags().StringVar(&flagIDQuery, "query", "",
+	addGroupFlag(s.idMembGetGraphCmd)
+	addFormatFlag(s.idMembGetGraphCmd)
+	s.idMembGetGraphCmd.Flags().StringVar(&s.flagIDQuery, "query", "",
 		"CEL filter over Membership metadata (see Cloud Identity Groups API docs)")
-	_ = idMembGetGraphCmd.MarkFlagRequired("group-email")
+	_ = s.idMembGetGraphCmd.MarkFlagRequired("group-email")
 
 	// modify-membership-roles
-	addGroupFlag(idMembModifyRolesCmd)
-	addMemberFlag(idMembModifyRolesCmd)
-	addFormatFlag(idMembModifyRolesCmd)
-	idMembModifyRolesCmd.Flags().StringVar(&flagIDAddRoles, "add-roles", "",
+	addGroupFlag(s.idMembModifyRolesCmd)
+	addMemberFlag(s.idMembModifyRolesCmd)
+	addFormatFlag(s.idMembModifyRolesCmd)
+	s.idMembModifyRolesCmd.Flags().StringVar(&s.flagIDAddRoles, "add-roles", "",
 		"Comma-separated list of roles to add (OWNER, MANAGER, MEMBER)")
-	idMembModifyRolesCmd.Flags().StringVar(&flagIDRemoveRoles, "remove-roles", "",
+	s.idMembModifyRolesCmd.Flags().StringVar(&s.flagIDRemoveRoles, "remove-roles", "",
 		"Comma-separated list of roles to remove (OWNER, MANAGER)")
-	_ = idMembModifyRolesCmd.MarkFlagRequired("group-email")
-	_ = idMembModifyRolesCmd.MarkFlagRequired("member-email")
+	_ = s.idMembModifyRolesCmd.MarkFlagRequired("group-email")
+	_ = s.idMembModifyRolesCmd.MarkFlagRequired("member-email")
 
 	// search-transitive-groups
-	addMemberFlag(idMembSearchTransitiveGroupsCmd)
-	addFormatFlag(idMembSearchTransitiveGroupsCmd)
-	idMembSearchTransitiveGroupsCmd.Flags().StringVar(&flagIDQuery, "query", "",
+	addMemberFlag(s.idMembSearchTransitiveGroupsCmd)
+	addFormatFlag(s.idMembSearchTransitiveGroupsCmd)
+	s.idMembSearchTransitiveGroupsCmd.Flags().StringVar(&s.flagIDQuery, "query", "",
 		"CEL filter over the searched groups (see Cloud Identity Groups API docs)")
-	idMembSearchTransitiveGroupsCmd.Flags().Int64Var(&flagIDPageSize, "page-size", 0, "Server page size hint")
+	s.idMembSearchTransitiveGroupsCmd.Flags().Int64Var(&s.flagIDPageSize, "page-size", 0, "Server page size hint")
 
 	// search-transitive-memberships
-	addGroupFlag(idMembSearchTransitiveMembershipsCmd)
-	addFormatFlag(idMembSearchTransitiveMembershipsCmd)
-	idMembSearchTransitiveMembershipsCmd.Flags().Int64Var(&flagIDPageSize, "page-size", 0, "Server page size hint")
-	_ = idMembSearchTransitiveMembershipsCmd.MarkFlagRequired("group-email")
+	addGroupFlag(s.idMembSearchTransitiveMembershipsCmd)
+	addFormatFlag(s.idMembSearchTransitiveMembershipsCmd)
+	s.idMembSearchTransitiveMembershipsCmd.Flags().Int64Var(&s.flagIDPageSize, "page-size", 0, "Server page size hint")
+	_ = s.idMembSearchTransitiveMembershipsCmd.MarkFlagRequired("group-email")
 
-	identityMembershipsCmd.AddCommand(
-		idMembAddCmd,
-		idMembCheckTransitiveCmd,
-		idMembDeleteCmd,
-		idMembDescribeCmd,
-		idMembGetGraphCmd,
-		idMembListCmd,
-		idMembModifyRolesCmd,
-		idMembSearchTransitiveGroupsCmd,
-		idMembSearchTransitiveMembershipsCmd,
+	s.identityMembershipsCmd.AddCommand(
+		s.idMembAddCmd,
+		s.idMembCheckTransitiveCmd,
+		s.idMembDeleteCmd,
+		s.idMembDescribeCmd,
+		s.idMembGetGraphCmd,
+		s.idMembListCmd,
+		s.idMembModifyRolesCmd,
+		s.idMembSearchTransitiveGroupsCmd,
+		s.idMembSearchTransitiveMembershipsCmd,
 	)
-	groups.AddCommand(identityMembershipsCmd)
+	groups.AddCommand(s.identityMembershipsCmd)
 
-	identityCmd.AddCommand(groups)
-	rootCmd.AddCommand(identityCmd)
+	s.identityCmd.AddCommand(groups)
+
 }
 
 // --- memberships impl ---
 
-func runIDMembAdd(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDMembAdd(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	groupName, err := idResolveGroupName(ctx, svc, flagIDGroupEmail, flagIDGroupNamespace)
+	groupName, err := idResolveGroupName(ctx, svc, s.flagIDGroupEmail, s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
-	ns := flagIDMemberNamespace
+	ns := s.flagIDMemberNamespace
 	if ns == "" {
-		ns = flagIDGroupNamespace
+		ns = s.flagIDGroupNamespace
 	}
 	memb := &cloudidentity.Membership{
-		PreferredMemberKey: &cloudidentity.EntityKey{Id: flagIDMemberEmail, Namespace: ns},
-		Roles:              idParseRoles(flagIDRoles),
-		Type:               flagIDMemberType,
-		DeliverySetting:    flagIDDeliverySetting,
+		PreferredMemberKey: &cloudidentity.EntityKey{Id: s.flagIDMemberEmail, Namespace: ns},
+		Roles:              idParseRoles(s.flagIDRoles),
+		Type:               s.flagIDMemberType,
+		DeliverySetting:    s.flagIDDeliverySetting,
 	}
 	op, err := svc.Groups.Memberships.Create(groupName, memb).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("adding membership: %w", err)
 	}
-	return emitFormatted(op, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIDFormat)
 }
 
-func runIDMembDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDMembDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	groupName, err := idResolveGroupName(ctx, svc, flagIDGroupEmail, flagIDGroupNamespace)
+	groupName, err := idResolveGroupName(ctx, svc, s.flagIDGroupEmail, s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
-	name, err := idResolveMembershipName(ctx, svc, groupName, flagIDMemberEmail, flagIDMemberNamespace)
+	name, err := idResolveMembershipName(ctx, svc, groupName, s.flagIDMemberEmail, s.flagIDMemberNamespace)
 	if err != nil {
 		return err
 	}
@@ -429,20 +317,20 @@ func runIDMembDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting membership: %w", err)
 	}
-	return emitFormatted(op, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIDFormat)
 }
 
-func runIDMembDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDMembDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	groupName, err := idResolveGroupName(ctx, svc, flagIDGroupEmail, flagIDGroupNamespace)
+	groupName, err := idResolveGroupName(ctx, svc, s.flagIDGroupEmail, s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
-	name, err := idResolveMembershipName(ctx, svc, groupName, flagIDMemberEmail, flagIDMemberNamespace)
+	name, err := idResolveMembershipName(ctx, svc, groupName, s.flagIDMemberEmail, s.flagIDMemberNamespace)
 	if err != nil {
 		return err
 	}
@@ -450,16 +338,16 @@ func runIDMembDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing membership: %w", err)
 	}
-	return emitFormatted(got, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIDFormat)
 }
 
-func runIDMembList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDMembList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	groupName, err := idResolveGroupName(ctx, svc, flagIDGroupEmail, flagIDGroupNamespace)
+	groupName, err := idResolveGroupName(ctx, svc, s.flagIDGroupEmail, s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
@@ -467,11 +355,11 @@ func runIDMembList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Groups.Memberships.List(groupName).Context(ctx)
-		if flagIDView != "" {
-			call = call.View(strings.ToUpper(flagIDView))
+		if s.flagIDView != "" {
+			call = call.View(strings.ToUpper(s.flagIDView))
 		}
-		if flagIDPageSize > 0 {
-			call = call.PageSize(flagIDPageSize)
+		if s.flagIDPageSize > 0 {
+			call = call.PageSize(s.flagIDPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -486,10 +374,10 @@ func runIDMembList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagIDFormat != "" {
-		return emitFormatted(all, flagIDFormat)
+	if s.flagIDFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagIDFormat)
 	}
-	printTableHeading(len(all), "%-40s %-40s %s\n", "MEMBERSHIP", "MEMBER", "ROLES")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-40s %s\n", "MEMBERSHIP", "MEMBER", "ROLES")
 	for _, m := range all {
 		var roles []string
 		for _, r := range m.Roles {
@@ -499,25 +387,25 @@ func runIDMembList(cmd *cobra.Command, args []string) error {
 		if m.PreferredMemberKey != nil {
 			id = m.PreferredMemberKey.Id
 		}
-		fmt.Printf("%-40s %-40s %s\n", path.Base(m.Name), id, strings.Join(roles, ","))
+		fmt.Fprintf(s.inv.stdout, "%-40s %-40s %s\n", path.Base(m.Name), id, strings.Join(roles, ","))
 	}
 	return nil
 }
 
-func runIDMembCheckTransitive(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDMembCheckTransitive(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	groupName, err := idResolveGroupName(ctx, svc, flagIDGroupEmail, flagIDGroupNamespace)
+	groupName, err := idResolveGroupName(ctx, svc, s.flagIDGroupEmail, s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
-	q := fmt.Sprintf("member_key_id == '%s'", flagIDMemberEmail)
-	ns := flagIDMemberNamespace
+	q := fmt.Sprintf("member_key_id == '%s'", s.flagIDMemberEmail)
+	ns := s.flagIDMemberNamespace
 	if ns == "" {
-		ns = flagIDGroupNamespace
+		ns = s.flagIDGroupNamespace
 	}
 	if ns != "" {
 		q += fmt.Sprintf(" && member_key_namespace == '%s'", ns)
@@ -526,53 +414,53 @@ func runIDMembCheckTransitive(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("checking transitive membership: %w", err)
 	}
-	return emitFormatted(resp, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, resp, s.flagIDFormat)
 }
 
-func runIDMembGetGraph(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDMembGetGraph(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	groupName, err := idResolveGroupName(ctx, svc, flagIDGroupEmail, flagIDGroupNamespace)
+	groupName, err := idResolveGroupName(ctx, svc, s.flagIDGroupEmail, s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
 	call := svc.Groups.Memberships.GetMembershipGraph(groupName).Context(ctx)
-	if flagIDQuery != "" {
-		call = call.Query(flagIDQuery)
+	if s.flagIDQuery != "" {
+		call = call.Query(s.flagIDQuery)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("getting membership graph: %w", err)
 	}
-	return emitFormatted(op, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIDFormat)
 }
 
-func runIDMembModifyRoles(cmd *cobra.Command, args []string) error {
-	if flagIDAddRoles == "" && flagIDRemoveRoles == "" {
+func (s *identityCmds) runIDMembModifyRoles(cmd *cobra.Command, args []string) error {
+	if s.flagIDAddRoles == "" && s.flagIDRemoveRoles == "" {
 		return fmt.Errorf("at least one of --add-roles or --remove-roles is required")
 	}
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	groupName, err := idResolveGroupName(ctx, svc, flagIDGroupEmail, flagIDGroupNamespace)
+	groupName, err := idResolveGroupName(ctx, svc, s.flagIDGroupEmail, s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
-	name, err := idResolveMembershipName(ctx, svc, groupName, flagIDMemberEmail, flagIDMemberNamespace)
+	name, err := idResolveMembershipName(ctx, svc, groupName, s.flagIDMemberEmail, s.flagIDMemberNamespace)
 	if err != nil {
 		return err
 	}
 	req := &cloudidentity.ModifyMembershipRolesRequest{}
-	if flagIDAddRoles != "" {
-		req.AddRoles = idParseRoles(flagIDAddRoles)
+	if s.flagIDAddRoles != "" {
+		req.AddRoles = idParseRoles(s.flagIDAddRoles)
 	}
-	if flagIDRemoveRoles != "" {
-		for _, r := range strings.Split(flagIDRemoveRoles, ",") {
+	if s.flagIDRemoveRoles != "" {
+		for _, r := range strings.Split(s.flagIDRemoveRoles, ",") {
 			r = strings.ToUpper(strings.TrimSpace(r))
 			if r != "" {
 				req.RemoveRoles = append(req.RemoveRoles, r)
@@ -583,22 +471,22 @@ func runIDMembModifyRoles(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("modifying membership roles: %w", err)
 	}
-	return emitFormatted(resp, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, resp, s.flagIDFormat)
 }
 
-func runIDMembSearchTransitiveGroups(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDMembSearchTransitiveGroups(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	q := flagIDQuery
+	q := s.flagIDQuery
 	if q == "" {
-		if flagIDMemberEmail == "" {
+		if s.flagIDMemberEmail == "" {
 			return fmt.Errorf("either --query or --member-email is required")
 		}
-		q = fmt.Sprintf("member_key_id == '%s'", flagIDMemberEmail)
-		ns := flagIDMemberNamespace
+		q = fmt.Sprintf("member_key_id == '%s'", s.flagIDMemberEmail)
+		ns := s.flagIDMemberNamespace
 		if ns != "" {
 			q += fmt.Sprintf(" && member_key_namespace == '%s'", ns)
 		}
@@ -608,8 +496,8 @@ func runIDMembSearchTransitiveGroups(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Groups.Memberships.SearchTransitiveGroups("groups/-").Query(q).Context(ctx)
-		if flagIDPageSize > 0 {
-			call = call.PageSize(flagIDPageSize)
+		if s.flagIDPageSize > 0 {
+			call = call.PageSize(s.flagIDPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -624,16 +512,16 @@ func runIDMembSearchTransitiveGroups(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagIDFormat)
 }
 
-func runIDMembSearchTransitiveMemberships(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDMembSearchTransitiveMemberships(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	groupName, err := idResolveGroupName(ctx, svc, flagIDGroupEmail, flagIDGroupNamespace)
+	groupName, err := idResolveGroupName(ctx, svc, s.flagIDGroupEmail, s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
@@ -641,8 +529,8 @@ func runIDMembSearchTransitiveMemberships(cmd *cobra.Command, args []string) err
 	pageToken := ""
 	for {
 		call := svc.Groups.Memberships.SearchTransitiveMemberships(groupName).Context(ctx)
-		if flagIDPageSize > 0 {
-			call = call.PageSize(flagIDPageSize)
+		if s.flagIDPageSize > 0 {
+			call = call.PageSize(s.flagIDPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -657,7 +545,7 @@ func runIDMembSearchTransitiveMemberships(cmd *cobra.Command, args []string) err
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagIDFormat)
 }
 
 // --- groups CRUD impl (#1717, #1718, #1719) ---
@@ -688,13 +576,13 @@ func idParseKVLabels(specs []string) (map[string]string, error) {
 	return out, nil
 }
 
-func runIDGroupsCreate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDGroupsCreate(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	labels, err := idParseKVLabels(flagIDGroupLabels)
+	labels, err := idParseKVLabels(s.flagIDGroupLabels)
 	if err != nil {
 		return err
 	}
@@ -702,36 +590,36 @@ func runIDGroupsCreate(cmd *cobra.Command, args []string) error {
 		labels = map[string]string{"cloudidentity.googleapis.com/groups.discussion_forum": ""}
 	}
 	body := &cloudidentity.Group{
-		Parent:      idNormalizeCustomer(flagIDGroupCustomer),
-		GroupKey:    &cloudidentity.EntityKey{Id: args[0], Namespace: flagIDGroupNamespace},
-		DisplayName: flagIDGroupDisplayName,
-		Description: flagIDGroupDescription,
+		Parent:      idNormalizeCustomer(s.flagIDGroupCustomer),
+		GroupKey:    &cloudidentity.EntityKey{Id: args[0], Namespace: s.flagIDGroupNamespace},
+		DisplayName: s.flagIDGroupDisplayName,
+		Description: s.flagIDGroupDescription,
 		Labels:      labels,
 	}
 	call := svc.Groups.Create(body).Context(ctx)
-	switch strings.ToLower(flagIDGroupInitConfig) {
+	switch strings.ToLower(s.flagIDGroupInitConfig) {
 	case "":
 	case "empty":
 		call = call.InitialGroupConfig("EMPTY")
 	case "with-initial-owner":
 		call = call.InitialGroupConfig("WITH_INITIAL_OWNER")
 	default:
-		return fmt.Errorf("invalid --initial-group-config %q (want empty or with-initial-owner)", flagIDGroupInitConfig)
+		return fmt.Errorf("invalid --initial-group-config %q (want empty or with-initial-owner)", s.flagIDGroupInitConfig)
 	}
 	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("creating group: %w", err)
 	}
-	return emitFormatted(op, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIDFormat)
 }
 
-func runIDGroupsDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDGroupsDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := idResolveGroupName(ctx, svc, args[0], flagIDGroupNamespace)
+	name, err := idResolveGroupName(ctx, svc, args[0], s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
@@ -739,16 +627,16 @@ func runIDGroupsDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting group: %w", err)
 	}
-	return emitFormatted(op, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIDFormat)
 }
 
-func runIDGroupsDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDGroupsDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := idResolveGroupName(ctx, svc, args[0], flagIDGroupNamespace)
+	name, err := idResolveGroupName(ctx, svc, args[0], s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
@@ -756,24 +644,24 @@ func runIDGroupsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing group: %w", err)
 	}
-	return emitFormatted(got, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagIDFormat)
 }
 
-func runIDGroupsSearch(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDGroupsSearch(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*cloudidentity.Group
 	pageToken := ""
 	for {
-		call := svc.Groups.Search().Query(flagIDQuery).Context(ctx)
-		if flagIDGroupSearchView != "" {
-			call = call.View(strings.ToUpper(flagIDGroupSearchView))
+		call := svc.Groups.Search().Query(s.flagIDQuery).Context(ctx)
+		if s.flagIDGroupSearchView != "" {
+			call = call.View(strings.ToUpper(s.flagIDGroupSearchView))
 		}
-		if flagIDGroupPageSize > 0 {
-			call = call.PageSize(flagIDGroupPageSize)
+		if s.flagIDGroupPageSize > 0 {
+			call = call.PageSize(s.flagIDGroupPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -788,40 +676,40 @@ func runIDGroupsSearch(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagIDFormat != "" {
-		return emitFormatted(all, flagIDFormat)
+	if s.flagIDFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagIDFormat)
 	}
-	printTableHeading(len(all), "%-40s %-40s %s\n", "NAME", "GROUP_KEY", "DISPLAY_NAME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-40s %s\n", "NAME", "GROUP_KEY", "DISPLAY_NAME")
 	for _, g := range all {
 		key := ""
 		if g.GroupKey != nil {
 			key = g.GroupKey.Id
 		}
-		fmt.Printf("%-40s %-40s %s\n", path.Base(g.Name), key, g.DisplayName)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-40s %s\n", path.Base(g.Name), key, g.DisplayName)
 	}
 	return nil
 }
 
-func runIDGroupsUpdate(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDGroupsUpdate(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := idResolveGroupName(ctx, svc, args[0], flagIDGroupNamespace)
+	name, err := idResolveGroupName(ctx, svc, args[0], s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
 	body := &cloudidentity.Group{}
-	mask := flagIDGroupUpdateMask
-	if flagIDGroupDisplayName != "" || strings.Contains(mask, "displayName") {
-		body.DisplayName = flagIDGroupDisplayName
+	mask := s.flagIDGroupUpdateMask
+	if s.flagIDGroupDisplayName != "" || strings.Contains(mask, "displayName") {
+		body.DisplayName = s.flagIDGroupDisplayName
 	}
-	if flagIDGroupDescription != "" || strings.Contains(mask, "description") {
-		body.Description = flagIDGroupDescription
+	if s.flagIDGroupDescription != "" || strings.Contains(mask, "description") {
+		body.Description = s.flagIDGroupDescription
 	}
-	if len(flagIDGroupLabels) > 0 || strings.Contains(mask, "labels") {
-		labels, err := idParseKVLabels(flagIDGroupLabels)
+	if len(s.flagIDGroupLabels) > 0 || strings.Contains(mask, "labels") {
+		labels, err := idParseKVLabels(s.flagIDGroupLabels)
 		if err != nil {
 			return err
 		}
@@ -847,17 +735,17 @@ func runIDGroupsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating group: %w", err)
 	}
-	return emitFormatted(op, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagIDFormat)
 }
 
-func runIDGroupsPreview(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDGroupsPreview(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	customer := idNormalizeCustomer(flagIDGroupCustomer)
-	q := flagIDQuery
+	customer := idNormalizeCustomer(s.flagIDGroupCustomer)
+	q := s.flagIDQuery
 	if q == "" {
 		q = fmt.Sprintf("parent == '%s'", customer)
 	}
@@ -865,11 +753,11 @@ func runIDGroupsPreview(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Groups.Search().Query(q).Context(ctx)
-		if flagIDView != "" {
-			call = call.View(strings.ToUpper(flagIDView))
+		if s.flagIDView != "" {
+			call = call.View(strings.ToUpper(s.flagIDView))
 		}
-		if flagIDGroupPageSize > 0 {
-			call = call.PageSize(flagIDGroupPageSize)
+		if s.flagIDGroupPageSize > 0 {
+			call = call.PageSize(s.flagIDGroupPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -884,16 +772,16 @@ func runIDGroupsPreview(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagIDFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagIDFormat)
 }
 
-func runIDGroupsConfigExport(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.CloudIdentityService(ctx, flagAccount)
+func (s *identityCmds) runIDGroupsConfigExport(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().CloudIdentity(ctx)
 	if err != nil {
 		return err
 	}
-	name, err := idResolveGroupName(ctx, svc, args[0], flagIDGroupNamespace)
+	name, err := idResolveGroupName(ctx, svc, args[0], s.flagIDGroupNamespace)
 	if err != nil {
 		return err
 	}
@@ -901,7 +789,7 @@ func runIDGroupsConfigExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("fetching group for export: %w", err)
 	}
-	format := strings.ToLower(flagIDGroupConfigFormat)
+	format := strings.ToLower(s.flagIDGroupConfigFormat)
 	if format == "" {
 		format = "krm"
 	}
@@ -926,5 +814,133 @@ func runIDGroupsConfigExport(cmd *cobra.Command, args []string) error {
 			"parent":      g.Parent,
 		},
 	}
-	return emitFormatted(out, "yaml")
+	return emitFormattedTo(s.inv.stdout, out, "yaml")
+}
+
+// identityCmds holds the commands and flag values of one invocation's "identity"
+// command group, so invocations don't share state (#2070).
+type identityCmds struct {
+	inv *invocation
+
+	identityCmd                          *cobra.Command
+	flagIDGroupEmail                     string
+	flagIDMemberEmail                    string
+	flagIDGroupNamespace                 string
+	flagIDMemberNamespace                string
+	flagIDRoles                          string
+	flagIDAddRoles                       string
+	flagIDRemoveRoles                    string
+	flagIDMemberType                     string
+	flagIDView                           string
+	flagIDQuery                          string
+	flagIDPageSize                       int64
+	flagIDFormat                         string
+	flagIDDeliverySetting                string
+	flagIDGroupCustomer                  string
+	flagIDGroupDisplayName               string
+	flagIDGroupDescription               string
+	flagIDGroupLabels                    []string
+	flagIDGroupInitConfig                string
+	flagIDGroupUpdateMask                string
+	flagIDGroupPageSize                  int64
+	flagIDGroupSearchView                string
+	idGroupsCreateCmd                    *cobra.Command
+	idGroupsDeleteCmd                    *cobra.Command
+	idGroupsDescribeCmd                  *cobra.Command
+	idGroupsSearchCmd                    *cobra.Command
+	idGroupsUpdateCmd                    *cobra.Command
+	idGroupsPreviewCmd                   *cobra.Command
+	flagIDGroupConfigPath                string
+	flagIDGroupConfigFormat              string
+	idGroupsConfigCmd                    *cobra.Command
+	idGroupsConfigExportCmd              *cobra.Command
+	identityMembershipsCmd               *cobra.Command
+	idMembAddCmd                         *cobra.Command
+	idMembDeleteCmd                      *cobra.Command
+	idMembDescribeCmd                    *cobra.Command
+	idMembListCmd                        *cobra.Command
+	idMembCheckTransitiveCmd             *cobra.Command
+	idMembGetGraphCmd                    *cobra.Command
+	idMembModifyRolesCmd                 *cobra.Command
+	idMembSearchTransitiveGroupsCmd      *cobra.Command
+	idMembSearchTransitiveMembershipsCmd *cobra.Command
+}
+
+// newIdentityCmd returns the "identity" command group for inv.
+func newIdentityCmd(inv *invocation) *cobra.Command {
+	return newIdentityCmds(inv).identityCmd
+}
+
+// newIdentityCmds builds the "identity" command group for inv and returns its state.
+func newIdentityCmds(inv *invocation) *identityCmds {
+	s := &identityCmds{inv: inv}
+	s.identityCmd = &cobra.Command{Use: "identity", Short: "Manage Cloud Identity"}
+	s.idGroupsCreateCmd = &cobra.Command{
+		Use: "create GROUP_EMAIL", Short: "Create a Cloud Identity group",
+		Args: cobra.ExactArgs(1), RunE: s.runIDGroupsCreate,
+	}
+	s.idGroupsDeleteCmd = &cobra.Command{
+		Use: "delete GROUP_EMAIL", Short: "Delete a Cloud Identity group",
+		Args: cobra.ExactArgs(1), RunE: s.runIDGroupsDelete,
+	}
+	s.idGroupsDescribeCmd = &cobra.Command{
+		Use: "describe GROUP_EMAIL", Short: "Describe a Cloud Identity group",
+		Args: cobra.ExactArgs(1), RunE: s.runIDGroupsDescribe,
+	}
+	s.idGroupsSearchCmd = &cobra.Command{
+		Use: "search", Short: "Search for Cloud Identity groups matching a query",
+		Args: cobra.NoArgs, RunE: s.runIDGroupsSearch,
+	}
+	s.idGroupsUpdateCmd = &cobra.Command{
+		Use: "update GROUP_EMAIL", Short: "Update a Cloud Identity group",
+		Args: cobra.ExactArgs(1), RunE: s.runIDGroupsUpdate,
+	}
+	s.idGroupsPreviewCmd = &cobra.Command{
+		Use: "preview", Short: "Preview users in a customer account using a CEL query",
+		Args: cobra.NoArgs, RunE: s.runIDGroupsPreview,
+	}
+	s.idGroupsConfigCmd = &cobra.Command{Use: "config", Short: "Manage Cloud Identity group configurations"}
+	s.idGroupsConfigExportCmd = &cobra.Command{
+		Use: "export GROUP_EMAIL", Short: "Export a Cloud Identity group configuration",
+		Args: cobra.ExactArgs(1), RunE: s.runIDGroupsConfigExport,
+	}
+	s.identityMembershipsCmd = &cobra.Command{Use: "memberships", Short: "Manage Cloud Identity group memberships"}
+	s.idMembAddCmd = &cobra.Command{
+		Use: "add", Short: "Add a member to a Cloud Identity group",
+		Args: cobra.NoArgs, RunE: s.runIDMembAdd,
+	}
+	s.idMembDeleteCmd = &cobra.Command{
+		Use: "delete", Short: "Delete a member from a Cloud Identity group",
+		Args: cobra.NoArgs, RunE: s.runIDMembDelete,
+	}
+	s.idMembDescribeCmd = &cobra.Command{
+		Use: "describe", Short: "Describe a Cloud Identity group membership",
+		Args: cobra.NoArgs, RunE: s.runIDMembDescribe,
+	}
+	s.idMembListCmd = &cobra.Command{
+		Use: "list", Short: "List memberships of a Cloud Identity group",
+		Args: cobra.NoArgs, RunE: s.runIDMembList,
+	}
+	s.idMembCheckTransitiveCmd = &cobra.Command{
+		Use: "check-transitive-membership", Short: "Check whether a member has a transitive membership in a group",
+		Args: cobra.NoArgs, RunE: s.runIDMembCheckTransitive,
+	}
+	s.idMembGetGraphCmd = &cobra.Command{
+		Use: "get-membership-graph", Short: "Get the membership graph of a group",
+		Args: cobra.NoArgs, RunE: s.runIDMembGetGraph,
+	}
+	s.idMembModifyRolesCmd = &cobra.Command{
+		Use: "modify-membership-roles", Short: "Modify roles of a Cloud Identity group membership",
+		Args: cobra.NoArgs, RunE: s.runIDMembModifyRoles,
+	}
+	s.idMembSearchTransitiveGroupsCmd = &cobra.Command{
+		Use: "search-transitive-groups", Short: "Search transitive groups a member belongs to",
+		Args: cobra.NoArgs, RunE: s.runIDMembSearchTransitiveGroups,
+	}
+	s.idMembSearchTransitiveMembershipsCmd = &cobra.Command{
+		Use: "search-transitive-memberships", Short: "Search transitive memberships of a group",
+		Args: cobra.NoArgs, RunE: s.runIDMembSearchTransitiveMemberships,
+	}
+	s.initIdentity()
+	return s
 }

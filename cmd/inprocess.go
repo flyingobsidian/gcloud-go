@@ -95,6 +95,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newSourceManagerCmd(inv),
 		newPamCmd(inv),
 		newWorkbenchCmd(inv),
+		newIdentityCmd(inv),
 	}
 }
 
