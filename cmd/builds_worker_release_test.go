@@ -8,10 +8,11 @@ import (
 )
 
 func TestApplyBuildsWPWorkerRelease(t *testing.T) {
+	grp := newBuildsCmds(legacyTestInvocation())
 	for _, c := range []struct {
 		name string
 		cmd  *cobra.Command
-	}{{"create", buildsWPCreateCmd}, {"update", buildsWPUpdateCmd}} {
+	}{{"create", grp.buildsWPCreateCmd}, {"update", grp.buildsWPUpdateCmd}} {
 		cmd := c.cmd
 		f := cmd.Flags().Lookup("worker-release")
 		if f == nil {
@@ -19,7 +20,7 @@ func TestApplyBuildsWPWorkerRelease(t *testing.T) {
 		}
 
 		wp := &cloudbuild.WorkerPool{}
-		if applyBuildsWPWorkerRelease(cmd, wp) || wp.PrivatePoolV1Config != nil {
+		if grp.applyBuildsWPWorkerRelease(cmd, wp) || wp.PrivatePoolV1Config != nil {
 			t.Errorf("%s: unset flag modified the body", c.name)
 		}
 
@@ -29,7 +30,7 @@ func TestApplyBuildsWPWorkerRelease(t *testing.T) {
 		wp = &cloudbuild.WorkerPool{PrivatePoolV1Config: &cloudbuild.PrivatePoolV1Config{
 			WorkerConfig: &cloudbuild.WorkerConfig{MachineType: "e2-medium", WorkerRelease: "rapid"},
 		}}
-		if !applyBuildsWPWorkerRelease(cmd, wp) {
+		if !grp.applyBuildsWPWorkerRelease(cmd, wp) {
 			t.Errorf("%s: set flag not applied", c.name)
 		}
 		wc := wp.PrivatePoolV1Config.WorkerConfig
@@ -37,7 +38,7 @@ func TestApplyBuildsWPWorkerRelease(t *testing.T) {
 			t.Errorf("%s: workerConfig = %+v", c.name, wc)
 		}
 		f.Changed = false
-		flagBuildsWorkerRelease = ""
+		grp.flagBuildsWorkerRelease = ""
 	}
 }
 

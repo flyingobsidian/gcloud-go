@@ -7,7 +7,8 @@ import (
 )
 
 func buildsSubgroup(name string) *cobra.Command {
-	for _, c := range buildsCmd.Commands() {
+	grp := newBuildsCmds(legacyTestInvocation())
+	for _, c := range grp.buildsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
