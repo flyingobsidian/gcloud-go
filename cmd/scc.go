@@ -17,42 +17,11 @@ import (
 // (securitycenter.googleapis.com) and Security Posture v1
 // (securityposture.googleapis.com; see scc_posture.go).
 
-var sccCmd = &cobra.Command{Use: "scc", Short: "Manage Security Command Center"}
-
 // Common flags shared across all scc groups. Callers must set exactly one of
 // --organization, --folder, or --project; if none are set the resolved active
 // project is used.
 var (
-	flagSccOrg        string
-	flagSccFolder     string
-	flagSccProject    string
-	flagSccLocation   string
-	flagSccFormat     string
-	flagSccFilter     string
-	flagSccOrderBy    string
-	flagSccPageSize   int64
-	flagSccConfigFile string
-	flagSccUpdateMask string
-
-	// assets flags
-	flagSccAssetsResourceName    string
-	flagSccAssetsAssetID         string
-	flagSccAssetsCompareDuration string
-	flagSccAssetsReadTime        string
-	flagSccAssetsFieldMask       string
-	flagSccAssetsGroupBy         string
-
-	// findings flags
-	flagSccFindingSource         string
-	flagSccFindingMuteState      string
-	flagSccFindingBulkMuteFilter string
-	flagSccFindingBulkMuteState  string
-	flagSccFindingDataset        string
-	flagSccFindingGroupBy        string
-	flagSccFindingCompareDur     string
-	flagSccFindingReadTime       string
-	flagSccFindingFieldMask      string
-	flagSccFindingLocation       string
+	flagSccLocation string
 )
 
 // --- scope resolution ---
@@ -60,9 +29,9 @@ var (
 // sccResolveParent returns the SCC scope parent as
 // "organizations/{id}", "folders/{id}", or "projects/{id}". If no scope flag
 // is set, it falls back to the active gcloud project.
-func sccResolveParent() (string, error) {
+func (g *sccCmds) sccResolveParent() (string, error) {
 	set := 0
-	for _, v := range []string{flagSccOrg, flagSccFolder, flagSccProject} {
+	for _, v := range []string{g.flagSccOrg, g.flagSccFolder, g.flagSccProject} {
 		if v != "" {
 			set++
 		}
@@ -70,16 +39,16 @@ func sccResolveParent() (string, error) {
 	if set > 1 {
 		return "", fmt.Errorf("--organization, --folder, and --project are mutually exclusive")
 	}
-	if flagSccOrg != "" {
-		return "organizations/" + strings.TrimPrefix(flagSccOrg, "organizations/"), nil
+	if g.flagSccOrg != "" {
+		return "organizations/" + strings.TrimPrefix(g.flagSccOrg, "organizations/"), nil
 	}
-	if flagSccFolder != "" {
-		return "folders/" + strings.TrimPrefix(flagSccFolder, "folders/"), nil
+	if g.flagSccFolder != "" {
+		return "folders/" + strings.TrimPrefix(g.flagSccFolder, "folders/"), nil
 	}
-	if flagSccProject != "" {
-		return "projects/" + strings.TrimPrefix(flagSccProject, "projects/"), nil
+	if g.flagSccProject != "" {
+		return "projects/" + strings.TrimPrefix(g.flagSccProject, "projects/"), nil
 	}
-	project, err := resolveProject()
+	project, err := g.inv.project()
 	if err != nil {
 		return "", err
 	}
@@ -91,9 +60,9 @@ func sccResolveParent() (string, error) {
 // --organization/--folder/--project flags (matching gcloud-python, which
 // accepts the parent as a positional). A bare ID (e.g. "1234567890") is
 // treated as an organization to preserve gcloud-python compatibility.
-func sccResolveParentFromArg(arg string) (string, error) {
+func (g *sccCmds) sccResolveParentFromArg(arg string) (string, error) {
 	if arg == "" {
-		return sccResolveParent()
+		return g.sccResolveParent()
 	}
 	if i := strings.Index(arg, "/"); i > 0 {
 		kind := arg[:i]
@@ -120,165 +89,37 @@ func sccQualifyChild(parent, collection, id string) string {
 
 // sccFlagStringVars registers the given --organization/--folder/--project set
 // on cmd.
-func sccAddScopeFlags(cmds ...*cobra.Command) {
+func (g *sccCmds) sccAddScopeFlags(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagSccOrg, "organization", "", "Organization ID or fully-qualified organizations/{id}")
-		c.Flags().StringVar(&flagSccFolder, "folder", "", "Folder ID or fully-qualified folders/{id}")
-		c.Flags().StringVar(&flagSccProject, "project", "", "Project ID or fully-qualified projects/{id}")
+		c.Flags().StringVar(&g.flagSccOrg, "organization", "", "Organization ID or fully-qualified organizations/{id}")
+		c.Flags().StringVar(&g.flagSccFolder, "folder", "", "Folder ID or fully-qualified folders/{id}")
+		c.Flags().StringVar(&g.flagSccProject, "project", "", "Project ID or fully-qualified projects/{id}")
 	}
 }
 
-func sccAddFormatFlag(cmds ...*cobra.Command) {
+func (g *sccCmds) sccAddFormatFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagSccFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagSccFormat, "format", "", "Output format")
 	}
 }
 
-func sccAddFilterFlag(cmds ...*cobra.Command) {
+func (g *sccCmds) sccAddFilterFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().StringVar(&flagSccFilter, "filter", "", "Server-side list filter")
+		c.Flags().StringVar(&g.flagSccFilter, "filter", "", "Server-side list filter")
 	}
 }
 
-func sccAddPageSizeFlag(cmds ...*cobra.Command) {
+func (g *sccCmds) sccAddPageSizeFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().Int64Var(&flagSccPageSize, "page-size", 0, "Page size for list requests")
+		c.Flags().Int64Var(&g.flagSccPageSize, "page-size", 0, "Page size for list requests")
 	}
 }
 
 // --- assets ---
 
-var sccAssetsCmd = &cobra.Command{Use: "assets", Short: "Manage Security Command Center assets"}
-
-var (
-	sccAssetsDescribeCmd = &cobra.Command{
-		Use: "describe PARENT", Short: "Describe an asset",
-		Args: cobra.ExactArgs(1), RunE: runSccAssetsDescribe,
-	}
-	sccAssetsGroupCmd = &cobra.Command{
-		Use: "group PARENT", Short: "Group assets by fields",
-		Args: cobra.ExactArgs(1), RunE: runSccAssetsGroup,
-	}
-	sccAssetsListCmd = &cobra.Command{
-		Use: "list PARENT", Short: "List Security Command Center assets",
-		Args: cobra.ExactArgs(1), RunE: runSccAssetsList,
-	}
-	sccAssetsRunDiscoveryCmd = &cobra.Command{
-		Use: "run-discovery ORGANIZATION", Short: "Run asset discovery for an organization",
-		Args: cobra.ExactArgs(1), RunE: runSccAssetsRunDiscovery,
-	}
-	sccAssetsUpdateMarksCmd = &cobra.Command{
-		Use: "update-security-marks ASSET_NAME", Short: "Update security marks on an asset",
-		Args: cobra.ExactArgs(1), RunE: runSccAssetsUpdateMarks,
-	}
-)
-
 // --- bqexports ---
 
-var sccBQExportsCmd = &cobra.Command{Use: "bqexports", Short: "Manage BigQuery exports"}
-
-var (
-	sccBQExportsCreateCmd = &cobra.Command{
-		Use: "create EXPORT", Short: "Create a BigQuery export from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccBQExportCreate,
-	}
-	sccBQExportsDeleteCmd = &cobra.Command{
-		Use: "delete EXPORT", Short: "Delete a BigQuery export",
-		Args: cobra.ExactArgs(1), RunE: runSccBQExportDelete,
-	}
-	sccBQExportsDescribeCmd = &cobra.Command{
-		Use: "describe EXPORT", Short: "Describe a BigQuery export",
-		Args: cobra.ExactArgs(1), RunE: runSccBQExportDescribe,
-	}
-	sccBQExportsListCmd = &cobra.Command{
-		Use: "list", Short: "List BigQuery exports",
-		Args: cobra.NoArgs, RunE: runSccBQExportList,
-	}
-	sccBQExportsUpdateCmd = &cobra.Command{
-		Use: "update EXPORT", Short: "Update a BigQuery export from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccBQExportUpdate,
-	}
-)
-
 // --- custom-modules ---
-
-var sccCustomModulesCmd = &cobra.Command{Use: "custom-modules", Short: "Manage SCC custom modules"}
-
-// custom-modules etd
-var sccCustomModulesEtdCmd = &cobra.Command{Use: "etd", Short: "Manage Event Threat Detection custom modules"}
-
-var (
-	sccEtdCreateCmd = &cobra.Command{
-		Use: "create MODULE", Short: "Create an ETD custom module from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccEtdCreate,
-	}
-	sccEtdDeleteCmd = &cobra.Command{
-		Use: "delete MODULE", Short: "Delete an ETD custom module",
-		Args: cobra.ExactArgs(1), RunE: runSccEtdDelete,
-	}
-	sccEtdDescribeCmd = &cobra.Command{
-		Use: "describe MODULE", Short: "Describe an ETD custom module",
-		Args: cobra.ExactArgs(1), RunE: runSccEtdDescribe,
-	}
-	sccEtdDescribeEffectiveCmd = &cobra.Command{
-		Use: "describe-effective MODULE", Short: "Describe an effective ETD custom module",
-		Args: cobra.ExactArgs(1), RunE: runSccEtdDescribeEffective,
-	}
-	sccEtdListCmd = &cobra.Command{
-		Use: "list", Short: "List ETD custom modules",
-		Args: cobra.NoArgs, RunE: runSccEtdList,
-	}
-	sccEtdListDescendantCmd = &cobra.Command{
-		Use: "list-descendant", Short: "List ETD custom modules and descendants",
-		Args: cobra.NoArgs, RunE: runSccEtdListDescendant,
-	}
-	sccEtdListEffectiveCmd = &cobra.Command{
-		Use: "list-effective", Short: "List effective ETD custom modules",
-		Args: cobra.NoArgs, RunE: runSccEtdListEffective,
-	}
-	sccEtdUpdateCmd = &cobra.Command{
-		Use: "update MODULE", Short: "Update an ETD custom module from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccEtdUpdate,
-	}
-)
-
-// custom-modules sha
-var sccCustomModulesShaCmd = &cobra.Command{Use: "sha", Short: "Manage Security Health Analytics custom modules"}
-
-var (
-	sccShaCreateCmd = &cobra.Command{
-		Use: "create MODULE", Short: "Create a SHA custom module from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccShaCreate,
-	}
-	sccShaDeleteCmd = &cobra.Command{
-		Use: "delete MODULE", Short: "Delete a SHA custom module",
-		Args: cobra.ExactArgs(1), RunE: runSccShaDelete,
-	}
-	sccShaDescribeCmd = &cobra.Command{
-		Use: "describe MODULE", Short: "Describe a SHA custom module",
-		Args: cobra.ExactArgs(1), RunE: runSccShaDescribe,
-	}
-	sccShaDescribeEffectiveCmd = &cobra.Command{
-		Use: "describe-effective MODULE", Short: "Describe an effective SHA custom module",
-		Args: cobra.ExactArgs(1), RunE: runSccShaDescribeEffective,
-	}
-	sccShaListCmd = &cobra.Command{
-		Use: "list", Short: "List SHA custom modules",
-		Args: cobra.NoArgs, RunE: runSccShaList,
-	}
-	sccShaListDescendantCmd = &cobra.Command{
-		Use: "list-descendant", Short: "List SHA custom modules and descendants",
-		Args: cobra.NoArgs, RunE: runSccShaListDescendant,
-	}
-	sccShaListEffectiveCmd = &cobra.Command{
-		Use: "list-effective", Short: "List effective SHA custom modules",
-		Args: cobra.NoArgs, RunE: runSccShaListEffective,
-	}
-	sccShaUpdateCmd = &cobra.Command{
-		Use: "update MODULE", Short: "Update a SHA custom module from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccShaUpdate,
-	}
-)
 
 // --- findings ---
 
@@ -288,363 +129,227 @@ const sccLocationFlagHelp = "Location of the resource. Passing --location routes
 	"including --location=global; omitting it uses the SCC V1 API (deprecated server-side). " +
 	"Organizations without data residency controls must use \"global\"."
 
-var sccFindingsCmd = &cobra.Command{Use: "findings", Short: "Manage findings"}
-
-var (
-	sccFindingsBulkMuteCmd = &cobra.Command{
-		Use: "bulk-mute", Short: "Bulk-mute findings that match a filter",
-		Args: cobra.NoArgs, RunE: runSccFindingsBulkMute,
-	}
-	sccFindingsCreateCmd = &cobra.Command{
-		Use: "create FINDING_ID", Short: "Create a finding from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccFindingsCreate,
-	}
-	sccFindingsExportBQCmd = &cobra.Command{
-		Use: "export-to-bigquery [PARENT]", Short: "Export findings to a BigQuery dataset",
-		Args: cobra.MaximumNArgs(1), RunE: runSccFindingsExportBQ,
-	}
-	sccFindingsGroupCmd = &cobra.Command{
-		Use: "group [PARENT]", Short: "Group findings by fields",
-		Args: cobra.MaximumNArgs(1), RunE: runSccFindingsGroup,
-	}
-	sccFindingsListCmd = &cobra.Command{
-		Use: "list [PARENT]", Short: "List findings",
-		Args: cobra.MaximumNArgs(1), RunE: runSccFindingsList,
-	}
-	sccFindingsListMarksCmd = &cobra.Command{
-		Use: "list-marks FINDING", Short: "List security marks on a finding",
-		Args: cobra.ExactArgs(1), RunE: runSccFindingsListMarks,
-	}
-	sccFindingsSetMuteCmd = &cobra.Command{
-		Use: "set-mute FINDING", Short: "Set the mute state of a finding",
-		Args: cobra.ExactArgs(1), RunE: runSccFindingsSetMute,
-	}
-	sccFindingsUpdateCmd = &cobra.Command{
-		Use: "update FINDING", Short: "Update a finding from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccFindingsUpdate,
-	}
-	sccFindingsUpdateMarksCmd = &cobra.Command{
-		Use: "update-marks FINDING", Short: "Update security marks on a finding",
-		Args: cobra.ExactArgs(1), RunE: runSccFindingsUpdateMarks,
-	}
-)
-
 // --- manage ---
-
-var sccManageCmd = &cobra.Command{Use: "manage", Short: "Manage Security Command Center settings"}
-
-var sccManageSettingsCmd = &cobra.Command{Use: "settings", Short: "Manage organization SCC settings"}
-
-var (
-	sccManageSettingsDescribeCmd = &cobra.Command{
-		Use: "describe", Short: "Describe an organization's SCC settings",
-		Args: cobra.NoArgs, RunE: runSccManageSettingsDescribe,
-	}
-	sccManageSettingsUpdateCmd = &cobra.Command{
-		Use: "update", Short: "Update an organization's SCC settings from a --config-file",
-		Args: cobra.NoArgs, RunE: runSccManageSettingsUpdate,
-	}
-)
 
 // --- muteconfigs ---
 
-var sccMuteConfigsCmd = &cobra.Command{Use: "muteconfigs", Short: "Manage mute configs"}
-
-var (
-	sccMuteCreateCmd = &cobra.Command{
-		Use: "create MUTE_CONFIG", Short: "Create a mute config from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccMuteCreate,
-	}
-	sccMuteDeleteCmd = &cobra.Command{
-		Use: "delete MUTE_CONFIG", Short: "Delete a mute config",
-		Args: cobra.ExactArgs(1), RunE: runSccMuteDelete,
-	}
-	sccMuteDescribeCmd = &cobra.Command{
-		Use: "describe MUTE_CONFIG", Short: "Describe a mute config",
-		Args: cobra.ExactArgs(1), RunE: runSccMuteDescribe,
-	}
-	sccMuteListCmd = &cobra.Command{
-		Use: "list", Short: "List mute configs",
-		Args: cobra.NoArgs, RunE: runSccMuteList,
-	}
-	sccMuteUpdateCmd = &cobra.Command{
-		Use: "update MUTE_CONFIG", Short: "Update a mute config from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccMuteUpdate,
-	}
-)
-
 // --- notifications ---
-
-var sccNotificationsCmd = &cobra.Command{Use: "notifications", Short: "Manage notifications"}
-
-var (
-	sccNotifyCreateCmd = &cobra.Command{
-		Use: "create NOTIFICATION_CONFIG", Short: "Create a notification config from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccNotifyCreate,
-	}
-	sccNotifyDeleteCmd = &cobra.Command{
-		Use: "delete NOTIFICATION_CONFIG", Short: "Delete a notification config",
-		Args: cobra.ExactArgs(1), RunE: runSccNotifyDelete,
-	}
-	sccNotifyDescribeCmd = &cobra.Command{
-		Use: "describe NOTIFICATION_CONFIG", Short: "Describe a notification config",
-		Args: cobra.ExactArgs(1), RunE: runSccNotifyDescribe,
-	}
-	sccNotifyListCmd = &cobra.Command{
-		Use: "list", Short: "List notification configs",
-		Args: cobra.NoArgs, RunE: runSccNotifyList,
-	}
-	sccNotifyUpdateCmd = &cobra.Command{
-		Use: "update NOTIFICATION_CONFIG", Short: "Update a notification config from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runSccNotifyUpdate,
-	}
-)
 
 // --- operations ---
 
-var sccOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Security Command Center operations"}
-
-var (
-	sccOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an SCC operation",
-		Args: cobra.ExactArgs(1), RunE: runSccOpDescribe,
-	}
-	sccOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete an SCC operation",
-		Args: cobra.ExactArgs(1), RunE: runSccOpDelete,
-	}
-	sccOpListCmd = &cobra.Command{
-		Use: "list", Short: "List SCC operations",
-		Args: cobra.NoArgs, RunE: runSccOpList,
-	}
-)
-
 // --- sources ---
 
-var sccSourcesCmd = &cobra.Command{Use: "sources", Short: "Manage Security Command Center sources"}
-
-var (
-	sccSourcesDescribeCmd = &cobra.Command{
-		Use: "describe SOURCE", Short: "Describe a Security Command Center source",
-		Args: cobra.ExactArgs(1), RunE: runSccSourcesDescribe,
-	}
-	sccSourcesListCmd = &cobra.Command{
-		Use: "list", Short: "List Security Command Center sources",
-		Args: cobra.NoArgs, RunE: runSccSourcesList,
-	}
-)
-
-func init() {
+func (g *sccCmds) initScc() {
 	// --- assets flags ---
-	sccAddScopeFlags(sccAssetsDescribeCmd, sccAssetsGroupCmd, sccAssetsListCmd,
-		sccAssetsRunDiscoveryCmd, sccAssetsUpdateMarksCmd)
-	sccAddFormatFlag(sccAssetsDescribeCmd, sccAssetsGroupCmd, sccAssetsListCmd, sccAssetsUpdateMarksCmd)
-	sccAddFilterFlag(sccAssetsGroupCmd, sccAssetsListCmd)
-	sccAddPageSizeFlag(sccAssetsGroupCmd, sccAssetsListCmd)
-	sccAssetsDescribeCmd.Flags().StringVar(&flagSccAssetsResourceName, "resource-name", "",
+	g.sccAddScopeFlags(g.sccAssetsDescribeCmd, g.sccAssetsGroupCmd, g.sccAssetsListCmd,
+		g.sccAssetsRunDiscoveryCmd, g.sccAssetsUpdateMarksCmd)
+	g.sccAddFormatFlag(g.sccAssetsDescribeCmd, g.sccAssetsGroupCmd, g.sccAssetsListCmd, g.sccAssetsUpdateMarksCmd)
+	g.sccAddFilterFlag(g.sccAssetsGroupCmd, g.sccAssetsListCmd)
+	g.sccAddPageSizeFlag(g.sccAssetsGroupCmd, g.sccAssetsListCmd)
+	g.sccAssetsDescribeCmd.Flags().StringVar(&g.flagSccAssetsResourceName, "resource-name", "",
 		"Full resource name of the asset to describe (e.g. //storage.googleapis.com/my-bucket)")
-	sccAssetsDescribeCmd.Flags().StringVar(&flagSccAssetsAssetID, "asset", "", "Numeric SCC asset id")
-	sccAssetsListCmd.Flags().StringVar(&flagSccAssetsCompareDuration, "compare-duration", "", "Compare-duration for state-change results")
-	sccAssetsListCmd.Flags().StringVar(&flagSccAssetsReadTime, "read-time", "", "Read time (RFC3339)")
-	sccAssetsListCmd.Flags().StringVar(&flagSccAssetsFieldMask, "field-mask", "", "Field mask for the response")
-	sccAssetsListCmd.Flags().StringVar(&flagSccOrderBy, "order-by", "", "Server-side ordering expression")
-	sccAssetsGroupCmd.Flags().StringVar(&flagSccAssetsGroupBy, "group-by", "", "Comma-separated list of fields to group by (required)")
-	_ = sccAssetsGroupCmd.MarkFlagRequired("group-by")
-	sccAssetsUpdateMarksCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	g.sccAssetsDescribeCmd.Flags().StringVar(&g.flagSccAssetsAssetID, "asset", "", "Numeric SCC asset id")
+	g.sccAssetsListCmd.Flags().StringVar(&g.flagSccAssetsCompareDuration, "compare-duration", "", "Compare-duration for state-change results")
+	g.sccAssetsListCmd.Flags().StringVar(&g.flagSccAssetsReadTime, "read-time", "", "Read time (RFC3339)")
+	g.sccAssetsListCmd.Flags().StringVar(&g.flagSccAssetsFieldMask, "field-mask", "", "Field mask for the response")
+	g.sccAssetsListCmd.Flags().StringVar(&g.flagSccOrderBy, "order-by", "", "Server-side ordering expression")
+	g.sccAssetsGroupCmd.Flags().StringVar(&g.flagSccAssetsGroupBy, "group-by", "", "Comma-separated list of fields to group by (required)")
+	_ = g.sccAssetsGroupCmd.MarkFlagRequired("group-by")
+	g.sccAssetsUpdateMarksCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the SecurityMarks body (required)")
-	_ = sccAssetsUpdateMarksCmd.MarkFlagRequired("config-file")
-	sccAssetsUpdateMarksCmd.Flags().StringVar(&flagSccUpdateMask, "update-mask", "",
+	_ = g.sccAssetsUpdateMarksCmd.MarkFlagRequired("config-file")
+	g.sccAssetsUpdateMarksCmd.Flags().StringVar(&g.flagSccUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update")
-	sccAssetsCmd.AddCommand(sccAssetsDescribeCmd, sccAssetsGroupCmd, sccAssetsListCmd,
-		sccAssetsRunDiscoveryCmd, sccAssetsUpdateMarksCmd)
-	sccCmd.AddCommand(sccAssetsCmd)
+	g.sccAssetsCmd.AddCommand(g.sccAssetsDescribeCmd, g.sccAssetsGroupCmd, g.sccAssetsListCmd,
+		g.sccAssetsRunDiscoveryCmd, g.sccAssetsUpdateMarksCmd)
+	g.sccCmd.AddCommand(g.sccAssetsCmd)
 
 	// --- bqexports flags ---
-	sccAddScopeFlags(sccBQExportsCreateCmd, sccBQExportsDeleteCmd, sccBQExportsDescribeCmd,
-		sccBQExportsListCmd, sccBQExportsUpdateCmd)
-	sccAddFormatFlag(sccBQExportsDescribeCmd, sccBQExportsListCmd)
-	sccAddPageSizeFlag(sccBQExportsListCmd)
-	sccBQExportsCreateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	g.sccAddScopeFlags(g.sccBQExportsCreateCmd, g.sccBQExportsDeleteCmd, g.sccBQExportsDescribeCmd,
+		g.sccBQExportsListCmd, g.sccBQExportsUpdateCmd)
+	g.sccAddFormatFlag(g.sccBQExportsDescribeCmd, g.sccBQExportsListCmd)
+	g.sccAddPageSizeFlag(g.sccBQExportsListCmd)
+	g.sccBQExportsCreateCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the BigQueryExport body (required)")
-	_ = sccBQExportsCreateCmd.MarkFlagRequired("config-file")
-	sccBQExportsUpdateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	_ = g.sccBQExportsCreateCmd.MarkFlagRequired("config-file")
+	g.sccBQExportsUpdateCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the BigQueryExport body (required)")
-	_ = sccBQExportsUpdateCmd.MarkFlagRequired("config-file")
-	sccBQExportsUpdateCmd.Flags().StringVar(&flagSccUpdateMask, "update-mask", "",
+	_ = g.sccBQExportsUpdateCmd.MarkFlagRequired("config-file")
+	g.sccBQExportsUpdateCmd.Flags().StringVar(&g.flagSccUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update")
-	sccBQExportsCmd.AddCommand(sccBQExportsCreateCmd, sccBQExportsDeleteCmd, sccBQExportsDescribeCmd,
-		sccBQExportsListCmd, sccBQExportsUpdateCmd)
-	sccCmd.AddCommand(sccBQExportsCmd)
+	g.sccBQExportsCmd.AddCommand(g.sccBQExportsCreateCmd, g.sccBQExportsDeleteCmd, g.sccBQExportsDescribeCmd,
+		g.sccBQExportsListCmd, g.sccBQExportsUpdateCmd)
+	g.sccCmd.AddCommand(g.sccBQExportsCmd)
 
 	// --- custom-modules flags ---
-	etdCmds := []*cobra.Command{sccEtdCreateCmd, sccEtdDeleteCmd, sccEtdDescribeCmd,
-		sccEtdDescribeEffectiveCmd, sccEtdListCmd, sccEtdListDescendantCmd,
-		sccEtdListEffectiveCmd, sccEtdUpdateCmd}
-	shaCmds := []*cobra.Command{sccShaCreateCmd, sccShaDeleteCmd, sccShaDescribeCmd,
-		sccShaDescribeEffectiveCmd, sccShaListCmd, sccShaListDescendantCmd,
-		sccShaListEffectiveCmd, sccShaUpdateCmd}
-	sccAddScopeFlags(etdCmds...)
-	sccAddScopeFlags(shaCmds...)
-	sccAddFormatFlag(sccEtdDescribeCmd, sccEtdDescribeEffectiveCmd, sccEtdListCmd,
-		sccEtdListDescendantCmd, sccEtdListEffectiveCmd,
-		sccShaDescribeCmd, sccShaDescribeEffectiveCmd, sccShaListCmd,
-		sccShaListDescendantCmd, sccShaListEffectiveCmd)
-	sccAddPageSizeFlag(sccEtdListCmd, sccEtdListDescendantCmd, sccEtdListEffectiveCmd,
-		sccShaListCmd, sccShaListDescendantCmd, sccShaListEffectiveCmd)
-	for _, c := range []*cobra.Command{sccEtdCreateCmd, sccEtdUpdateCmd,
-		sccShaCreateCmd, sccShaUpdateCmd} {
-		c.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	etdCmds := []*cobra.Command{g.sccEtdCreateCmd, g.sccEtdDeleteCmd, g.sccEtdDescribeCmd,
+		g.sccEtdDescribeEffectiveCmd, g.sccEtdListCmd, g.sccEtdListDescendantCmd,
+		g.sccEtdListEffectiveCmd, g.sccEtdUpdateCmd}
+	shaCmds := []*cobra.Command{g.sccShaCreateCmd, g.sccShaDeleteCmd, g.sccShaDescribeCmd,
+		g.sccShaDescribeEffectiveCmd, g.sccShaListCmd, g.sccShaListDescendantCmd,
+		g.sccShaListEffectiveCmd, g.sccShaUpdateCmd}
+	g.sccAddScopeFlags(etdCmds...)
+	g.sccAddScopeFlags(shaCmds...)
+	g.sccAddFormatFlag(g.sccEtdDescribeCmd, g.sccEtdDescribeEffectiveCmd, g.sccEtdListCmd,
+		g.sccEtdListDescendantCmd, g.sccEtdListEffectiveCmd,
+		g.sccShaDescribeCmd, g.sccShaDescribeEffectiveCmd, g.sccShaListCmd,
+		g.sccShaListDescendantCmd, g.sccShaListEffectiveCmd)
+	g.sccAddPageSizeFlag(g.sccEtdListCmd, g.sccEtdListDescendantCmd, g.sccEtdListEffectiveCmd,
+		g.sccShaListCmd, g.sccShaListDescendantCmd, g.sccShaListEffectiveCmd)
+	for _, c := range []*cobra.Command{g.sccEtdCreateCmd, g.sccEtdUpdateCmd,
+		g.sccShaCreateCmd, g.sccShaUpdateCmd} {
+		c.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the custom module body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	for _, c := range []*cobra.Command{sccEtdUpdateCmd, sccShaUpdateCmd} {
-		c.Flags().StringVar(&flagSccUpdateMask, "update-mask", "",
+	for _, c := range []*cobra.Command{g.sccEtdUpdateCmd, g.sccShaUpdateCmd} {
+		c.Flags().StringVar(&g.flagSccUpdateMask, "update-mask", "",
 			"Comma-separated list of fields to update")
 	}
-	sccCustomModulesEtdCmd.AddCommand(etdCmds...)
-	sccCustomModulesShaCmd.AddCommand(shaCmds...)
-	sccCustomModulesCmd.AddCommand(sccCustomModulesEtdCmd, sccCustomModulesShaCmd)
-	sccCmd.AddCommand(sccCustomModulesCmd)
+	g.sccCustomModulesEtdCmd.AddCommand(etdCmds...)
+	g.sccCustomModulesShaCmd.AddCommand(shaCmds...)
+	g.sccCustomModulesCmd.AddCommand(g.sccCustomModulesEtdCmd, g.sccCustomModulesShaCmd)
+	g.sccCmd.AddCommand(g.sccCustomModulesCmd)
 
 	// --- findings flags ---
-	findAll := []*cobra.Command{sccFindingsBulkMuteCmd, sccFindingsCreateCmd, sccFindingsExportBQCmd,
-		sccFindingsGroupCmd, sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
-		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd}
-	sccAddScopeFlags(findAll...)
-	sccAddFormatFlag(sccFindingsCreateCmd, sccFindingsExportBQCmd, sccFindingsGroupCmd,
-		sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
-		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd)
-	for _, c := range []*cobra.Command{sccFindingsCreateCmd, sccFindingsExportBQCmd,
-		sccFindingsGroupCmd, sccFindingsListCmd, sccFindingsListMarksCmd, sccFindingsSetMuteCmd,
-		sccFindingsUpdateCmd, sccFindingsUpdateMarksCmd} {
-		c.Flags().StringVar(&flagSccFindingSource, "source", "-",
+	findAll := []*cobra.Command{g.sccFindingsBulkMuteCmd, g.sccFindingsCreateCmd, g.sccFindingsExportBQCmd,
+		g.sccFindingsGroupCmd, g.sccFindingsListCmd, g.sccFindingsListMarksCmd, g.sccFindingsSetMuteCmd,
+		g.sccFindingsUpdateCmd, g.sccFindingsUpdateMarksCmd}
+	g.sccAddScopeFlags(findAll...)
+	g.sccAddFormatFlag(g.sccFindingsCreateCmd, g.sccFindingsExportBQCmd, g.sccFindingsGroupCmd,
+		g.sccFindingsListCmd, g.sccFindingsListMarksCmd, g.sccFindingsSetMuteCmd,
+		g.sccFindingsUpdateCmd, g.sccFindingsUpdateMarksCmd)
+	for _, c := range []*cobra.Command{g.sccFindingsCreateCmd, g.sccFindingsExportBQCmd,
+		g.sccFindingsGroupCmd, g.sccFindingsListCmd, g.sccFindingsListMarksCmd, g.sccFindingsSetMuteCmd,
+		g.sccFindingsUpdateCmd, g.sccFindingsUpdateMarksCmd} {
+		c.Flags().StringVar(&g.flagSccFindingSource, "source", "-",
 			"Source id (or fully-qualified sources/{id}). Defaults to \"-\" (all sources)")
 	}
-	sccFindingsBulkMuteCmd.Flags().StringVar(&flagSccFindingBulkMuteFilter, "filter", "",
+	g.sccFindingsBulkMuteCmd.Flags().StringVar(&g.flagSccFindingBulkMuteFilter, "filter", "",
 		"Filter expression identifying findings to mute (required)")
-	_ = sccFindingsBulkMuteCmd.MarkFlagRequired("filter")
-	sccFindingsBulkMuteCmd.Flags().StringVar(&flagSccFindingBulkMuteState, "mute-state", "muted",
+	_ = g.sccFindingsBulkMuteCmd.MarkFlagRequired("filter")
+	g.sccFindingsBulkMuteCmd.Flags().StringVar(&g.flagSccFindingBulkMuteState, "mute-state", "muted",
 		"Desired mute state of the findings (muted|undefined)")
-	sccFindingsBulkMuteCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
+	g.sccFindingsBulkMuteCmd.Flags().StringVar(&g.flagSccFindingLocation, "location", "global",
 		sccLocationFlagHelp)
-	sccFindingsCreateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	g.sccFindingsCreateCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the Finding body (required)")
-	_ = sccFindingsCreateCmd.MarkFlagRequired("config-file")
-	sccFindingsExportBQCmd.Flags().StringVar(&flagSccFindingDataset, "dataset", "",
+	_ = g.sccFindingsCreateCmd.MarkFlagRequired("config-file")
+	g.sccFindingsExportBQCmd.Flags().StringVar(&g.flagSccFindingDataset, "dataset", "",
 		"BigQuery dataset to export findings to, as projects/{project}/datasets/{dataset} (required)")
-	_ = sccFindingsExportBQCmd.MarkFlagRequired("dataset")
-	sccFindingsExportBQCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
+	_ = g.sccFindingsExportBQCmd.MarkFlagRequired("dataset")
+	g.sccFindingsExportBQCmd.Flags().StringVar(&g.flagSccFindingLocation, "location", "global",
 		sccLocationFlagHelp)
-	sccFindingsListCmd.Flags().StringVar(&flagSccFilter, "filter", "", "Server-side list filter")
-	sccFindingsListCmd.Flags().StringVar(&flagSccOrderBy, "order-by", "", "Server-side ordering expression")
-	sccFindingsListCmd.Flags().StringVar(&flagSccFindingFieldMask, "field-mask", "", "Response field mask")
-	sccFindingsListCmd.Flags().StringVar(&flagSccFindingCompareDur, "compare-duration", "", "Compare-duration for state-change results")
-	sccFindingsListCmd.Flags().StringVar(&flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
-	sccFindingsListCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0,
+	g.sccFindingsListCmd.Flags().StringVar(&g.flagSccFilter, "filter", "", "Server-side list filter")
+	g.sccFindingsListCmd.Flags().StringVar(&g.flagSccOrderBy, "order-by", "", "Server-side ordering expression")
+	g.sccFindingsListCmd.Flags().StringVar(&g.flagSccFindingFieldMask, "field-mask", "", "Response field mask")
+	g.sccFindingsListCmd.Flags().StringVar(&g.flagSccFindingCompareDur, "compare-duration", "", "Compare-duration for state-change results")
+	g.sccFindingsListCmd.Flags().StringVar(&g.flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
+	g.sccFindingsListCmd.Flags().Int64Var(&g.flagSccPageSize, "page-size", 0,
 		"Results per page. Unset lets the server choose: SCC findings.list defaults to 10, maximum 1000.")
-	sccFindingsListCmd.Flags().StringVar(&flagSccFindingLocation, "location", "global",
+	g.sccFindingsListCmd.Flags().StringVar(&g.flagSccFindingLocation, "location", "global",
 		sccLocationFlagHelp)
-	sccFindingsGroupCmd.Flags().StringVar(&flagSccFindingGroupBy, "group-by", "",
+	g.sccFindingsGroupCmd.Flags().StringVar(&g.flagSccFindingGroupBy, "group-by", "",
 		"Comma-separated list of fields to group by (required)")
-	_ = sccFindingsGroupCmd.MarkFlagRequired("group-by")
-	sccFindingsGroupCmd.Flags().StringVar(&flagSccFilter, "filter", "", "Server-side filter")
-	sccFindingsGroupCmd.Flags().StringVar(&flagSccFindingCompareDur, "compare-duration", "", "Compare-duration for state-change results")
-	sccFindingsGroupCmd.Flags().StringVar(&flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
-	sccFindingsGroupCmd.Flags().Int64Var(&flagSccPageSize, "page-size", 0, "Page size for group requests")
-	sccFindingsSetMuteCmd.Flags().StringVar(&flagSccFindingMuteState, "mute", "",
+	_ = g.sccFindingsGroupCmd.MarkFlagRequired("group-by")
+	g.sccFindingsGroupCmd.Flags().StringVar(&g.flagSccFilter, "filter", "", "Server-side filter")
+	g.sccFindingsGroupCmd.Flags().StringVar(&g.flagSccFindingCompareDur, "compare-duration", "", "Compare-duration for state-change results")
+	g.sccFindingsGroupCmd.Flags().StringVar(&g.flagSccFindingReadTime, "read-time", "", "Read time (RFC3339)")
+	g.sccFindingsGroupCmd.Flags().Int64Var(&g.flagSccPageSize, "page-size", 0, "Page size for group requests")
+	g.sccFindingsSetMuteCmd.Flags().StringVar(&g.flagSccFindingMuteState, "mute", "",
 		"Mute state (MUTE_UNSPECIFIED|MUTED|UNMUTED|UNDEFINED) (required)")
-	_ = sccFindingsSetMuteCmd.MarkFlagRequired("mute")
-	sccFindingsUpdateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	_ = g.sccFindingsSetMuteCmd.MarkFlagRequired("mute")
+	g.sccFindingsUpdateCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the Finding body (required)")
-	_ = sccFindingsUpdateCmd.MarkFlagRequired("config-file")
-	sccFindingsUpdateCmd.Flags().StringVar(&flagSccUpdateMask, "update-mask", "",
+	_ = g.sccFindingsUpdateCmd.MarkFlagRequired("config-file")
+	g.sccFindingsUpdateCmd.Flags().StringVar(&g.flagSccUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update")
-	sccFindingsUpdateMarksCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	g.sccFindingsUpdateMarksCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the SecurityMarks body (required)")
-	_ = sccFindingsUpdateMarksCmd.MarkFlagRequired("config-file")
-	sccFindingsUpdateMarksCmd.Flags().StringVar(&flagSccUpdateMask, "update-mask", "",
+	_ = g.sccFindingsUpdateMarksCmd.MarkFlagRequired("config-file")
+	g.sccFindingsUpdateMarksCmd.Flags().StringVar(&g.flagSccUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update")
-	sccFindingsCmd.AddCommand(findAll...)
-	sccCmd.AddCommand(sccFindingsCmd)
+	g.sccFindingsCmd.AddCommand(findAll...)
+	g.sccCmd.AddCommand(g.sccFindingsCmd)
 
 	// --- manage flags ---
-	sccManageSettingsDescribeCmd.Flags().StringVar(&flagSccOrg, "organization", "",
+	g.sccManageSettingsDescribeCmd.Flags().StringVar(&g.flagSccOrg, "organization", "",
 		"Organization ID (required)")
-	_ = sccManageSettingsDescribeCmd.MarkFlagRequired("organization")
-	sccManageSettingsDescribeCmd.Flags().StringVar(&flagSccFormat, "format", "", "Output format")
-	sccManageSettingsUpdateCmd.Flags().StringVar(&flagSccOrg, "organization", "",
+	_ = g.sccManageSettingsDescribeCmd.MarkFlagRequired("organization")
+	g.sccManageSettingsDescribeCmd.Flags().StringVar(&g.flagSccFormat, "format", "", "Output format")
+	g.sccManageSettingsUpdateCmd.Flags().StringVar(&g.flagSccOrg, "organization", "",
 		"Organization ID (required)")
-	_ = sccManageSettingsUpdateCmd.MarkFlagRequired("organization")
-	sccManageSettingsUpdateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	_ = g.sccManageSettingsUpdateCmd.MarkFlagRequired("organization")
+	g.sccManageSettingsUpdateCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the OrganizationSettings body (required)")
-	_ = sccManageSettingsUpdateCmd.MarkFlagRequired("config-file")
-	sccManageSettingsUpdateCmd.Flags().StringVar(&flagSccUpdateMask, "update-mask", "",
+	_ = g.sccManageSettingsUpdateCmd.MarkFlagRequired("config-file")
+	g.sccManageSettingsUpdateCmd.Flags().StringVar(&g.flagSccUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update")
-	sccManageSettingsCmd.AddCommand(sccManageSettingsDescribeCmd, sccManageSettingsUpdateCmd)
-	sccManageCmd.AddCommand(sccManageSettingsCmd)
-	sccCmd.AddCommand(sccManageCmd)
+	g.sccManageSettingsCmd.AddCommand(g.sccManageSettingsDescribeCmd, g.sccManageSettingsUpdateCmd)
+	g.sccManageCmd.AddCommand(g.sccManageSettingsCmd)
+	g.sccCmd.AddCommand(g.sccManageCmd)
 
 	// --- muteconfigs flags ---
-	muteAll := []*cobra.Command{sccMuteCreateCmd, sccMuteDeleteCmd, sccMuteDescribeCmd,
-		sccMuteListCmd, sccMuteUpdateCmd}
-	sccAddScopeFlags(muteAll...)
-	sccAddFormatFlag(sccMuteDescribeCmd, sccMuteListCmd)
-	sccAddPageSizeFlag(sccMuteListCmd)
-	sccMuteCreateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	muteAll := []*cobra.Command{g.sccMuteCreateCmd, g.sccMuteDeleteCmd, g.sccMuteDescribeCmd,
+		g.sccMuteListCmd, g.sccMuteUpdateCmd}
+	g.sccAddScopeFlags(muteAll...)
+	g.sccAddFormatFlag(g.sccMuteDescribeCmd, g.sccMuteListCmd)
+	g.sccAddPageSizeFlag(g.sccMuteListCmd)
+	g.sccMuteCreateCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the MuteConfig body (required)")
-	_ = sccMuteCreateCmd.MarkFlagRequired("config-file")
-	sccMuteUpdateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	_ = g.sccMuteCreateCmd.MarkFlagRequired("config-file")
+	g.sccMuteUpdateCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the MuteConfig body (required)")
-	_ = sccMuteUpdateCmd.MarkFlagRequired("config-file")
-	sccMuteUpdateCmd.Flags().StringVar(&flagSccUpdateMask, "update-mask", "",
+	_ = g.sccMuteUpdateCmd.MarkFlagRequired("config-file")
+	g.sccMuteUpdateCmd.Flags().StringVar(&g.flagSccUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update")
-	sccMuteConfigsCmd.AddCommand(muteAll...)
-	sccCmd.AddCommand(sccMuteConfigsCmd)
+	g.sccMuteConfigsCmd.AddCommand(muteAll...)
+	g.sccCmd.AddCommand(g.sccMuteConfigsCmd)
 
 	// --- notifications flags ---
-	notifyAll := []*cobra.Command{sccNotifyCreateCmd, sccNotifyDeleteCmd, sccNotifyDescribeCmd,
-		sccNotifyListCmd, sccNotifyUpdateCmd}
-	sccAddScopeFlags(notifyAll...)
-	sccAddFormatFlag(sccNotifyDescribeCmd, sccNotifyListCmd)
-	sccAddPageSizeFlag(sccNotifyListCmd)
-	sccNotifyCreateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	notifyAll := []*cobra.Command{g.sccNotifyCreateCmd, g.sccNotifyDeleteCmd, g.sccNotifyDescribeCmd,
+		g.sccNotifyListCmd, g.sccNotifyUpdateCmd}
+	g.sccAddScopeFlags(notifyAll...)
+	g.sccAddFormatFlag(g.sccNotifyDescribeCmd, g.sccNotifyListCmd)
+	g.sccAddPageSizeFlag(g.sccNotifyListCmd)
+	g.sccNotifyCreateCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the NotificationConfig body (required)")
-	_ = sccNotifyCreateCmd.MarkFlagRequired("config-file")
-	sccNotifyUpdateCmd.Flags().StringVar(&flagSccConfigFile, "config-file", "",
+	_ = g.sccNotifyCreateCmd.MarkFlagRequired("config-file")
+	g.sccNotifyUpdateCmd.Flags().StringVar(&g.flagSccConfigFile, "config-file", "",
 		"Path to a JSON/YAML file with the NotificationConfig body (required)")
-	_ = sccNotifyUpdateCmd.MarkFlagRequired("config-file")
-	sccNotifyUpdateCmd.Flags().StringVar(&flagSccUpdateMask, "update-mask", "",
+	_ = g.sccNotifyUpdateCmd.MarkFlagRequired("config-file")
+	g.sccNotifyUpdateCmd.Flags().StringVar(&g.flagSccUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update")
-	sccNotificationsCmd.AddCommand(notifyAll...)
-	sccCmd.AddCommand(sccNotificationsCmd)
+	g.sccNotificationsCmd.AddCommand(notifyAll...)
+	g.sccCmd.AddCommand(g.sccNotificationsCmd)
 
 	// --- operations flags (organization-scoped only in v1) ---
-	for _, c := range []*cobra.Command{sccOpDescribeCmd, sccOpDeleteCmd, sccOpListCmd} {
-		c.Flags().StringVar(&flagSccOrg, "organization", "",
+	for _, c := range []*cobra.Command{g.sccOpDescribeCmd, g.sccOpDeleteCmd, g.sccOpListCmd} {
+		c.Flags().StringVar(&g.flagSccOrg, "organization", "",
 			"Organization ID (required unless the operation name is fully-qualified)")
 	}
-	sccAddFormatFlag(sccOpDescribeCmd, sccOpListCmd)
-	sccAddFilterFlag(sccOpListCmd)
-	sccAddPageSizeFlag(sccOpListCmd)
-	sccOperationsCmd.AddCommand(sccOpDescribeCmd, sccOpDeleteCmd, sccOpListCmd)
-	sccCmd.AddCommand(sccOperationsCmd)
+	g.sccAddFormatFlag(g.sccOpDescribeCmd, g.sccOpListCmd)
+	g.sccAddFilterFlag(g.sccOpListCmd)
+	g.sccAddPageSizeFlag(g.sccOpListCmd)
+	g.sccOperationsCmd.AddCommand(g.sccOpDescribeCmd, g.sccOpDeleteCmd, g.sccOpListCmd)
+	g.sccCmd.AddCommand(g.sccOperationsCmd)
 
 	// --- sources flags ---
-	sccAddScopeFlags(sccSourcesDescribeCmd, sccSourcesListCmd)
-	sccAddFormatFlag(sccSourcesDescribeCmd, sccSourcesListCmd)
-	sccAddPageSizeFlag(sccSourcesListCmd)
-	sccSourcesCmd.AddCommand(sccSourcesDescribeCmd, sccSourcesListCmd)
-	sccCmd.AddCommand(sccSourcesCmd)
+	g.sccAddScopeFlags(g.sccSourcesDescribeCmd, g.sccSourcesListCmd)
+	g.sccAddFormatFlag(g.sccSourcesDescribeCmd, g.sccSourcesListCmd)
+	g.sccAddPageSizeFlag(g.sccSourcesListCmd)
+	g.sccSourcesCmd.AddCommand(g.sccSourcesDescribeCmd, g.sccSourcesListCmd)
+	g.sccCmd.AddCommand(g.sccSourcesCmd)
 
 	// Register scc_posture.go subgroups (see init in that file).
-	rootCmd.AddCommand(sccCmd)
+
 }
 
 // --- helpers for scope-dispatched API calls ---
 
 // sccClient returns an initialised securitycenter service.
-func sccClient(ctx context.Context) (*securitycenter.Service, error) {
-	return gcp.SecurityCenterService(ctx, flagAccount, httpDebugWriter())
+func (g *sccCmds) sccClient(ctx context.Context) (*securitycenter.Service, error) {
+	return gcp.SecurityCenterService(ctx, g.inv.flags.account, g.inv.httpDebugWriter())
 }
 
 // splitScope returns ("organizations"|"folders"|"projects", "{id}") from a
@@ -659,21 +364,21 @@ func splitScope(parent string) (string, string) {
 
 // --- assets impl ---
 
-func runSccAssetsDescribe(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccAssetsDescribe(cmd *cobra.Command, args []string) error {
 	// Describe is implemented client-side by listing with a filter that pins
 	// the specific asset. This mirrors gcloud's DescribeAssetReqHook behavior.
 	parent := args[0]
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
-	filter := flagSccFilter
+	filter := g.flagSccFilter
 	switch {
-	case flagSccAssetsResourceName != "":
-		filter = fmt.Sprintf("securityCenterProperties.resourceName=%q", flagSccAssetsResourceName)
-	case flagSccAssetsAssetID != "":
-		filter = fmt.Sprintf("name : %q", "/assets/"+flagSccAssetsAssetID)
+	case g.flagSccAssetsResourceName != "":
+		filter = fmt.Sprintf("securityCenterProperties.resourceName=%q", g.flagSccAssetsResourceName)
+	case g.flagSccAssetsAssetID != "":
+		filter = fmt.Sprintf("name : %q", "/assets/"+g.flagSccAssetsAssetID)
 	}
 	scope, _ := splitScope(parent)
 	var assets []*securitycenter.ListAssetsResult
@@ -717,18 +422,18 @@ func runSccAssetsDescribe(cmd *cobra.Command, args []string) error {
 	if len(assets) > 1 {
 		return fmt.Errorf("filter matched %d assets; refine --resource-name/--asset", len(assets))
 	}
-	return emitFormatted(assets[0], flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, assets[0], g.flagSccFormat)
 }
 
-func runSccAssetsGroup(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccAssetsGroup(cmd *cobra.Command, args []string) error {
 	parent := args[0]
 	req := &securitycenter.GroupAssetsRequest{
-		GroupBy:  flagSccAssetsGroupBy,
-		Filter:   flagSccFilter,
-		PageSize: flagSccPageSize,
+		GroupBy:  g.flagSccAssetsGroupBy,
+		Filter:   g.flagSccFilter,
+		PageSize: g.flagSccPageSize,
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -747,13 +452,13 @@ func runSccAssetsGroup(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("grouping assets: %w", err)
 	}
-	return emitFormatted(resp, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, resp, g.flagSccFormat)
 }
 
-func runSccAssetsList(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccAssetsList(cmd *cobra.Command, args []string) error {
 	parent := args[0]
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -768,23 +473,23 @@ func runSccAssetsList(cmd *cobra.Command, args []string) error {
 		switch scope {
 		case "organizations":
 			call := svc.Organizations.Assets.List(parent).Context(ctx)
-			if flagSccFilter != "" {
-				call = call.Filter(flagSccFilter)
+			if g.flagSccFilter != "" {
+				call = call.Filter(g.flagSccFilter)
 			}
-			if flagSccOrderBy != "" {
-				call = call.OrderBy(flagSccOrderBy)
+			if g.flagSccOrderBy != "" {
+				call = call.OrderBy(g.flagSccOrderBy)
 			}
-			if flagSccAssetsCompareDuration != "" {
-				call = call.CompareDuration(flagSccAssetsCompareDuration)
+			if g.flagSccAssetsCompareDuration != "" {
+				call = call.CompareDuration(g.flagSccAssetsCompareDuration)
 			}
-			if flagSccAssetsReadTime != "" {
-				call = call.ReadTime(flagSccAssetsReadTime)
+			if g.flagSccAssetsReadTime != "" {
+				call = call.ReadTime(g.flagSccAssetsReadTime)
 			}
-			if flagSccAssetsFieldMask != "" {
-				call = call.FieldMask(flagSccAssetsFieldMask)
+			if g.flagSccAssetsFieldMask != "" {
+				call = call.FieldMask(g.flagSccAssetsFieldMask)
 			}
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -797,23 +502,23 @@ func runSccAssetsList(cmd *cobra.Command, args []string) error {
 			nextPageToken = resp.NextPageToken
 		case "folders":
 			call := svc.Folders.Assets.List(parent).Context(ctx)
-			if flagSccFilter != "" {
-				call = call.Filter(flagSccFilter)
+			if g.flagSccFilter != "" {
+				call = call.Filter(g.flagSccFilter)
 			}
-			if flagSccOrderBy != "" {
-				call = call.OrderBy(flagSccOrderBy)
+			if g.flagSccOrderBy != "" {
+				call = call.OrderBy(g.flagSccOrderBy)
 			}
-			if flagSccAssetsCompareDuration != "" {
-				call = call.CompareDuration(flagSccAssetsCompareDuration)
+			if g.flagSccAssetsCompareDuration != "" {
+				call = call.CompareDuration(g.flagSccAssetsCompareDuration)
 			}
-			if flagSccAssetsReadTime != "" {
-				call = call.ReadTime(flagSccAssetsReadTime)
+			if g.flagSccAssetsReadTime != "" {
+				call = call.ReadTime(g.flagSccAssetsReadTime)
 			}
-			if flagSccAssetsFieldMask != "" {
-				call = call.FieldMask(flagSccAssetsFieldMask)
+			if g.flagSccAssetsFieldMask != "" {
+				call = call.FieldMask(g.flagSccAssetsFieldMask)
 			}
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -826,23 +531,23 @@ func runSccAssetsList(cmd *cobra.Command, args []string) error {
 			nextPageToken = resp.NextPageToken
 		case "projects":
 			call := svc.Projects.Assets.List(parent).Context(ctx)
-			if flagSccFilter != "" {
-				call = call.Filter(flagSccFilter)
+			if g.flagSccFilter != "" {
+				call = call.Filter(g.flagSccFilter)
 			}
-			if flagSccOrderBy != "" {
-				call = call.OrderBy(flagSccOrderBy)
+			if g.flagSccOrderBy != "" {
+				call = call.OrderBy(g.flagSccOrderBy)
 			}
-			if flagSccAssetsCompareDuration != "" {
-				call = call.CompareDuration(flagSccAssetsCompareDuration)
+			if g.flagSccAssetsCompareDuration != "" {
+				call = call.CompareDuration(g.flagSccAssetsCompareDuration)
 			}
-			if flagSccAssetsReadTime != "" {
-				call = call.ReadTime(flagSccAssetsReadTime)
+			if g.flagSccAssetsReadTime != "" {
+				call = call.ReadTime(g.flagSccAssetsReadTime)
 			}
-			if flagSccAssetsFieldMask != "" {
-				call = call.FieldMask(flagSccAssetsFieldMask)
+			if g.flagSccAssetsFieldMask != "" {
+				call = call.FieldMask(g.flagSccAssetsFieldMask)
 			}
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -862,10 +567,10 @@ func runSccAssetsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = nextPageToken
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(all, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagSccFormat)
 	}
-	printTableHeading(len(all), "%-60s %s\n", "NAME", "RESOURCE_TYPE")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-60s %s\n", "NAME", "RESOURCE_TYPE")
 	for _, a := range all {
 		if a.Asset != nil {
 			name := a.Asset.Name
@@ -873,19 +578,19 @@ func runSccAssetsList(cmd *cobra.Command, args []string) error {
 			if a.Asset.SecurityCenterProperties != nil {
 				rtype = a.Asset.SecurityCenterProperties.ResourceType
 			}
-			fmt.Printf("%-60s %s\n", path.Base(name), rtype)
+			fmt.Fprintf(g.inv.stdout, "%-60s %s\n", path.Base(name), rtype)
 		}
 	}
 	return nil
 }
 
-func runSccAssetsRunDiscovery(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccAssetsRunDiscovery(cmd *cobra.Command, args []string) error {
 	org := args[0]
 	if !strings.HasPrefix(org, "organizations/") {
 		org = "organizations/" + org
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -893,10 +598,10 @@ func runSccAssetsRunDiscovery(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("running discovery: %w", err)
 	}
-	return emitFormatted(op, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, op, g.flagSccFormat)
 }
 
-func runSccAssetsUpdateMarks(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccAssetsUpdateMarks(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	// Expect assetName in the form <parent>/assets/{id}/securityMarks or the
 	// full asset resource name; append /securityMarks if missing.
@@ -904,15 +609,15 @@ func runSccAssetsUpdateMarks(cmd *cobra.Command, args []string) error {
 		name = strings.TrimSuffix(name, "/") + "/securityMarks"
 	}
 	body := &securitycenter.SecurityMarks{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagSccUpdateMask
+	mask := g.flagSccUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -931,22 +636,22 @@ func runSccAssetsUpdateMarks(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating security marks: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
 // --- bqexports impl ---
 
-func runSccBQExportCreate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccBQExportCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	body := &securitycenter.GoogleCloudSecuritycenterV1BigQueryExport{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -965,17 +670,17 @@ func runSccBQExportCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating BigQuery export: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccBQExportDelete(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccBQExportDelete(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "bigQueryExports", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -993,18 +698,18 @@ func runSccBQExportDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting BigQuery export: %w", err)
 	}
-	fmt.Printf("Deleted BigQuery export [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted BigQuery export [%s].\n", args[0])
 	return nil
 }
 
-func runSccBQExportDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccBQExportDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "bigQueryExports", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1023,16 +728,16 @@ func runSccBQExportDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing BigQuery export: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccBQExportList(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccBQExportList(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1048,8 +753,8 @@ func runSccBQExportList(cmd *cobra.Command, args []string) error {
 		switch scope {
 		case "organizations":
 			call := svc.Organizations.BigQueryExports.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -1062,8 +767,8 @@ func runSccBQExportList(cmd *cobra.Command, args []string) error {
 			}
 		case "folders":
 			call := svc.Folders.BigQueryExports.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -1076,8 +781,8 @@ func runSccBQExportList(cmd *cobra.Command, args []string) error {
 			}
 		case "projects":
 			call := svc.Projects.BigQueryExports.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -1100,32 +805,32 @@ func runSccBQExportList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(all, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagSccFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DATASET")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %s\n", "NAME", "DATASET")
 	for _, e := range all {
-		fmt.Printf("%-40s %s\n", path.Base(e.Name), e.Dataset)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(e.Name), e.Dataset)
 	}
 	return nil
 }
 
-func runSccBQExportUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccBQExportUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "bigQueryExports", args[0])
 	body := &securitycenter.GoogleCloudSecuritycenterV1BigQueryExport{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagSccUpdateMask
+	mask := g.flagSccUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1144,7 +849,7 @@ func runSccBQExportUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating BigQuery export: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
 // --- custom-modules etd impl ---
@@ -1153,20 +858,20 @@ func etdParent(parent string) string {
 	return parent + "/eventThreatDetectionSettings"
 }
 
-func runSccEtdCreate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccEtdCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	body := &securitycenter.EventThreatDetectionCustomModule{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
 	if body.DisplayName == "" {
 		body.DisplayName = args[0]
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1186,17 +891,17 @@ func runSccEtdCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating ETD custom module: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccEtdDelete(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccEtdDelete(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(etdParent(parent), "customModules", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1212,18 +917,18 @@ func runSccEtdDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting ETD custom module: %w", err)
 	}
-	fmt.Printf("Deleted ETD custom module [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted ETD custom module [%s].\n", args[0])
 	return nil
 }
 
-func runSccEtdDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccEtdDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(etdParent(parent), "customModules", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1240,17 +945,17 @@ func runSccEtdDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing ETD custom module: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccEtdDescribeEffective(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccEtdDescribeEffective(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(etdParent(parent), "effectiveCustomModules", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1267,17 +972,17 @@ func runSccEtdDescribeEffective(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing effective ETD custom module: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccEtdList(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccEtdList(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	settings := etdParent(parent)
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1286,8 +991,8 @@ func runSccEtdList(cmd *cobra.Command, args []string) error {
 	switch scope {
 	case "organizations":
 		call := svc.Organizations.EventThreatDetectionSettings.CustomModules.List(settings).Context(ctx)
-		if flagSccPageSize > 0 {
-			call = call.PageSize(flagSccPageSize)
+		if g.flagSccPageSize > 0 {
+			call = call.PageSize(g.flagSccPageSize)
 		}
 		resp, err := call.Do()
 		if err != nil {
@@ -1296,8 +1001,8 @@ func runSccEtdList(cmd *cobra.Command, args []string) error {
 		results = resp.EventThreatDetectionCustomModules
 	case "folders":
 		call := svc.Folders.EventThreatDetectionSettings.CustomModules.List(settings).Context(ctx)
-		if flagSccPageSize > 0 {
-			call = call.PageSize(flagSccPageSize)
+		if g.flagSccPageSize > 0 {
+			call = call.PageSize(g.flagSccPageSize)
 		}
 		resp, err := call.Do()
 		if err != nil {
@@ -1306,8 +1011,8 @@ func runSccEtdList(cmd *cobra.Command, args []string) error {
 		results = resp.EventThreatDetectionCustomModules
 	case "projects":
 		call := svc.Projects.EventThreatDetectionSettings.CustomModules.List(settings).Context(ctx)
-		if flagSccPageSize > 0 {
-			call = call.PageSize(flagSccPageSize)
+		if g.flagSccPageSize > 0 {
+			call = call.PageSize(g.flagSccPageSize)
 		}
 		resp, err := call.Do()
 		if err != nil {
@@ -1315,21 +1020,21 @@ func runSccEtdList(cmd *cobra.Command, args []string) error {
 		}
 		results = resp.EventThreatDetectionCustomModules
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(results, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, results, g.flagSccFormat)
 	}
-	printModulesEtd(results)
+	g.printModulesEtd(results)
 	return nil
 }
 
-func runSccEtdListDescendant(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccEtdListDescendant(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	settings := etdParent(parent)
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1355,21 +1060,21 @@ func runSccEtdListDescendant(cmd *cobra.Command, args []string) error {
 		}
 		results = resp.EventThreatDetectionCustomModules
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(results, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, results, g.flagSccFormat)
 	}
-	printModulesEtd(results)
+	g.printModulesEtd(results)
 	return nil
 }
 
-func runSccEtdListEffective(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccEtdListEffective(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	settings := etdParent(parent)
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1395,25 +1100,25 @@ func runSccEtdListEffective(cmd *cobra.Command, args []string) error {
 		}
 		results = resp.EffectiveEventThreatDetectionCustomModules
 	}
-	return emitFormatted(results, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, results, g.flagSccFormat)
 }
 
-func runSccEtdUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccEtdUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(etdParent(parent), "customModules", args[0])
 	body := &securitycenter.EventThreatDetectionCustomModule{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagSccUpdateMask
+	mask := g.flagSccUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1430,13 +1135,13 @@ func runSccEtdUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating ETD custom module: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func printModulesEtd(modules []*securitycenter.EventThreatDetectionCustomModule) {
-	printTableHeading(len(modules), "%-40s %s\n", "NAME", "DISPLAY_NAME")
+func (g *sccCmds) printModulesEtd(modules []*securitycenter.EventThreatDetectionCustomModule) {
+	printTableHeadingTo(g.inv.stdout, len(modules), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, m := range modules {
-		fmt.Printf("%-40s %s\n", path.Base(m.Name), m.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(m.Name), m.DisplayName)
 	}
 }
 
@@ -1446,21 +1151,21 @@ func shaParent(parent string) string {
 	return parent + "/securityHealthAnalyticsSettings"
 }
 
-func runSccShaCreate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccShaCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	body := &securitycenter.GoogleCloudSecuritycenterV1SecurityHealthAnalyticsCustomModule{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
 	if body.DisplayName == "" {
 		body.DisplayName = args[0]
 	}
 	settings := shaParent(parent)
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1477,17 +1182,17 @@ func runSccShaCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating SHA custom module: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccShaDelete(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccShaDelete(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(shaParent(parent), "customModules", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1503,18 +1208,18 @@ func runSccShaDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting SHA custom module: %w", err)
 	}
-	fmt.Printf("Deleted SHA custom module [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted SHA custom module [%s].\n", args[0])
 	return nil
 }
 
-func runSccShaDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccShaDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(shaParent(parent), "customModules", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1531,17 +1236,17 @@ func runSccShaDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing SHA custom module: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccShaDescribeEffective(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccShaDescribeEffective(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(shaParent(parent), "effectiveCustomModules", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1558,17 +1263,17 @@ func runSccShaDescribeEffective(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing effective SHA custom module: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccShaList(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccShaList(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	settings := shaParent(parent)
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1577,8 +1282,8 @@ func runSccShaList(cmd *cobra.Command, args []string) error {
 	switch scope {
 	case "organizations":
 		call := svc.Organizations.SecurityHealthAnalyticsSettings.CustomModules.List(settings).Context(ctx)
-		if flagSccPageSize > 0 {
-			call = call.PageSize(flagSccPageSize)
+		if g.flagSccPageSize > 0 {
+			call = call.PageSize(g.flagSccPageSize)
 		}
 		resp, err := call.Do()
 		if err != nil {
@@ -1587,8 +1292,8 @@ func runSccShaList(cmd *cobra.Command, args []string) error {
 		results = resp.SecurityHealthAnalyticsCustomModules
 	case "folders":
 		call := svc.Folders.SecurityHealthAnalyticsSettings.CustomModules.List(settings).Context(ctx)
-		if flagSccPageSize > 0 {
-			call = call.PageSize(flagSccPageSize)
+		if g.flagSccPageSize > 0 {
+			call = call.PageSize(g.flagSccPageSize)
 		}
 		resp, err := call.Do()
 		if err != nil {
@@ -1597,8 +1302,8 @@ func runSccShaList(cmd *cobra.Command, args []string) error {
 		results = resp.SecurityHealthAnalyticsCustomModules
 	case "projects":
 		call := svc.Projects.SecurityHealthAnalyticsSettings.CustomModules.List(settings).Context(ctx)
-		if flagSccPageSize > 0 {
-			call = call.PageSize(flagSccPageSize)
+		if g.flagSccPageSize > 0 {
+			call = call.PageSize(g.flagSccPageSize)
 		}
 		resp, err := call.Do()
 		if err != nil {
@@ -1606,21 +1311,21 @@ func runSccShaList(cmd *cobra.Command, args []string) error {
 		}
 		results = resp.SecurityHealthAnalyticsCustomModules
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(results, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, results, g.flagSccFormat)
 	}
-	printModulesSha(results)
+	g.printModulesSha(results)
 	return nil
 }
 
-func runSccShaListDescendant(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccShaListDescendant(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	settings := shaParent(parent)
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1646,21 +1351,21 @@ func runSccShaListDescendant(cmd *cobra.Command, args []string) error {
 		}
 		results = resp.SecurityHealthAnalyticsCustomModules
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(results, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, results, g.flagSccFormat)
 	}
-	printModulesSha(results)
+	g.printModulesSha(results)
 	return nil
 }
 
-func runSccShaListEffective(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccShaListEffective(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	settings := shaParent(parent)
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1686,25 +1391,25 @@ func runSccShaListEffective(cmd *cobra.Command, args []string) error {
 		}
 		results = resp.EffectiveSecurityHealthAnalyticsCustomModules
 	}
-	return emitFormatted(results, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, results, g.flagSccFormat)
 }
 
-func runSccShaUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccShaUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(shaParent(parent), "customModules", args[0])
 	body := &securitycenter.GoogleCloudSecuritycenterV1SecurityHealthAnalyticsCustomModule{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagSccUpdateMask
+	mask := g.flagSccUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1721,13 +1426,13 @@ func runSccShaUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating SHA custom module: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func printModulesSha(modules []*securitycenter.GoogleCloudSecuritycenterV1SecurityHealthAnalyticsCustomModule) {
-	printTableHeading(len(modules), "%-40s %s\n", "NAME", "DISPLAY_NAME")
+func (g *sccCmds) printModulesSha(modules []*securitycenter.GoogleCloudSecuritycenterV1SecurityHealthAnalyticsCustomModule) {
+	printTableHeadingTo(g.inv.stdout, len(modules), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, m := range modules {
-		fmt.Printf("%-40s %s\n", path.Base(m.Name), m.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(m.Name), m.DisplayName)
 	}
 }
 
@@ -1743,25 +1448,25 @@ func findingsSourceParent(parent, source string) string {
 	return parent + "/sources/" + source
 }
 
-func runSccFindingsBulkMute(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccFindingsBulkMute(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	// Same V1/V2 routing as findings list: an explicit --location selects V2.
 	if sccLocationSpecified(cmd) {
-		return sccV2BulkMuteFindings(parent)
+		return g.sccV2BulkMuteFindings(parent)
 	}
-	muteState, err := sccMuteStateEnum(flagSccFindingBulkMuteState)
+	muteState, err := sccMuteStateEnum(g.flagSccFindingBulkMuteState)
 	if err != nil {
 		return err
 	}
 	req := &securitycenter.BulkMuteFindingsRequest{
-		Filter:    flagSccFindingBulkMuteFilter,
+		Filter:    g.flagSccFindingBulkMuteFilter,
 		MuteState: muteState,
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1778,11 +1483,11 @@ func runSccFindingsBulkMute(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("bulk muting findings: %w", err)
 	}
-	return emitFormatted(op, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, op, g.flagSccFormat)
 }
 
-func runSccFindingsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccFindingsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
@@ -1790,13 +1495,13 @@ func runSccFindingsCreate(cmd *cobra.Command, args []string) error {
 	if scope != "organizations" {
 		return fmt.Errorf("findings.create is only supported for --organization scope")
 	}
-	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
+	sourceParent := findingsSourceParent(parent, g.flagSccFindingSource)
 	body := &securitycenter.Finding{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1804,43 +1509,43 @@ func runSccFindingsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating finding: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
 // runSccFindingsExportBQ exports findings to BigQuery. gcloud-python pins this
 // command to the V2 API regardless of --location (surface/scc/findings/
 // export_to_bigquery.py sets version = "v2"), so there is no V1 branch here.
-func runSccFindingsExportBQ(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccFindingsExportBQ(cmd *cobra.Command, args []string) error {
 	pos := ""
 	if len(args) == 1 {
 		pos = args[0]
 	}
-	parent, err := sccResolveParentFromArg(pos)
+	parent, err := g.sccResolveParentFromArg(pos)
 	if err != nil {
 		return err
 	}
-	return sccV2ExportFindings(parent)
+	return g.sccV2ExportFindings(parent)
 }
 
-func runSccFindingsGroup(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccFindingsGroup(cmd *cobra.Command, args []string) error {
 	pos := ""
 	if len(args) == 1 {
 		pos = args[0]
 	}
-	parent, err := sccResolveParentFromArg(pos)
+	parent, err := g.sccResolveParentFromArg(pos)
 	if err != nil {
 		return err
 	}
-	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
+	sourceParent := findingsSourceParent(parent, g.flagSccFindingSource)
 	req := &securitycenter.GroupFindingsRequest{
-		GroupBy:         flagSccFindingGroupBy,
-		Filter:          flagSccFilter,
-		CompareDuration: flagSccFindingCompareDur,
-		ReadTime:        flagSccFindingReadTime,
-		PageSize:        flagSccPageSize,
+		GroupBy:         g.flagSccFindingGroupBy,
+		Filter:          g.flagSccFilter,
+		CompareDuration: g.flagSccFindingCompareDur,
+		ReadTime:        g.flagSccFindingReadTime,
+		PageSize:        g.flagSccPageSize,
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1857,7 +1562,7 @@ func runSccFindingsGroup(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("grouping findings: %w", err)
 	}
-	return emitFormatted(resp, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, resp, g.flagSccFormat)
 }
 
 // sccLocationSpecified reports whether the caller passed --location, which is
@@ -1871,12 +1576,12 @@ func sccLocationSpecified(cmd *cobra.Command) bool {
 	return f != nil && f.Changed
 }
 
-func runSccFindingsList(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccFindingsList(cmd *cobra.Command, args []string) error {
 	pos := ""
 	if len(args) == 1 {
 		pos = args[0]
 	}
-	parent, err := sccResolveParentFromArg(pos)
+	parent, err := g.sccResolveParentFromArg(pos)
 	if err != nil {
 		return err
 	}
@@ -1893,11 +1598,11 @@ func runSccFindingsList(cmd *cobra.Command, args []string) error {
 	// doesn't ship a generated securitycenter/v2 client, V2 is implemented via
 	// direct REST calls (see sccV2ListFindings).
 	if sccLocationSpecified(cmd) {
-		return sccV2ListFindings(parent)
+		return g.sccV2ListFindings(parent)
 	}
-	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	sourceParent := findingsSourceParent(parent, g.flagSccFindingSource)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1912,23 +1617,23 @@ func runSccFindingsList(cmd *cobra.Command, args []string) error {
 		switch scope {
 		case "organizations":
 			call := svc.Organizations.Sources.Findings.List(sourceParent).Context(ctx)
-			if flagSccFilter != "" {
-				call = call.Filter(flagSccFilter)
+			if g.flagSccFilter != "" {
+				call = call.Filter(g.flagSccFilter)
 			}
-			if flagSccOrderBy != "" {
-				call = call.OrderBy(flagSccOrderBy)
+			if g.flagSccOrderBy != "" {
+				call = call.OrderBy(g.flagSccOrderBy)
 			}
-			if flagSccFindingFieldMask != "" {
-				call = call.FieldMask(flagSccFindingFieldMask)
+			if g.flagSccFindingFieldMask != "" {
+				call = call.FieldMask(g.flagSccFindingFieldMask)
 			}
-			if flagSccFindingCompareDur != "" {
-				call = call.CompareDuration(flagSccFindingCompareDur)
+			if g.flagSccFindingCompareDur != "" {
+				call = call.CompareDuration(g.flagSccFindingCompareDur)
 			}
-			if flagSccFindingReadTime != "" {
-				call = call.ReadTime(flagSccFindingReadTime)
+			if g.flagSccFindingReadTime != "" {
+				call = call.ReadTime(g.flagSccFindingReadTime)
 			}
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -1941,23 +1646,23 @@ func runSccFindingsList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "folders":
 			call := svc.Folders.Sources.Findings.List(sourceParent).Context(ctx)
-			if flagSccFilter != "" {
-				call = call.Filter(flagSccFilter)
+			if g.flagSccFilter != "" {
+				call = call.Filter(g.flagSccFilter)
 			}
-			if flagSccOrderBy != "" {
-				call = call.OrderBy(flagSccOrderBy)
+			if g.flagSccOrderBy != "" {
+				call = call.OrderBy(g.flagSccOrderBy)
 			}
-			if flagSccFindingFieldMask != "" {
-				call = call.FieldMask(flagSccFindingFieldMask)
+			if g.flagSccFindingFieldMask != "" {
+				call = call.FieldMask(g.flagSccFindingFieldMask)
 			}
-			if flagSccFindingCompareDur != "" {
-				call = call.CompareDuration(flagSccFindingCompareDur)
+			if g.flagSccFindingCompareDur != "" {
+				call = call.CompareDuration(g.flagSccFindingCompareDur)
 			}
-			if flagSccFindingReadTime != "" {
-				call = call.ReadTime(flagSccFindingReadTime)
+			if g.flagSccFindingReadTime != "" {
+				call = call.ReadTime(g.flagSccFindingReadTime)
 			}
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -1970,23 +1675,23 @@ func runSccFindingsList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "projects":
 			call := svc.Projects.Sources.Findings.List(sourceParent).Context(ctx)
-			if flagSccFilter != "" {
-				call = call.Filter(flagSccFilter)
+			if g.flagSccFilter != "" {
+				call = call.Filter(g.flagSccFilter)
 			}
-			if flagSccOrderBy != "" {
-				call = call.OrderBy(flagSccOrderBy)
+			if g.flagSccOrderBy != "" {
+				call = call.OrderBy(g.flagSccOrderBy)
 			}
-			if flagSccFindingFieldMask != "" {
-				call = call.FieldMask(flagSccFindingFieldMask)
+			if g.flagSccFindingFieldMask != "" {
+				call = call.FieldMask(g.flagSccFindingFieldMask)
 			}
-			if flagSccFindingCompareDur != "" {
-				call = call.CompareDuration(flagSccFindingCompareDur)
+			if g.flagSccFindingCompareDur != "" {
+				call = call.CompareDuration(g.flagSccFindingCompareDur)
 			}
-			if flagSccFindingReadTime != "" {
-				call = call.ReadTime(flagSccFindingReadTime)
+			if g.flagSccFindingReadTime != "" {
+				call = call.ReadTime(g.flagSccFindingReadTime)
 			}
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2004,31 +1709,31 @@ func runSccFindingsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(all, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagSccFormat)
 	}
-	printTableHeading(len(all), "%-40s %-10s %s\n", "NAME", "STATE", "CATEGORY")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %-10s %s\n", "NAME", "STATE", "CATEGORY")
 	for _, r := range all {
 		if r.Finding == nil {
 			continue
 		}
-		fmt.Printf("%-40s %-10s %s\n", path.Base(r.Finding.Name), r.Finding.State, r.Finding.Category)
+		fmt.Fprintf(g.inv.stdout, "%-40s %-10s %s\n", path.Base(r.Finding.Name), r.Finding.State, r.Finding.Category)
 	}
 	return nil
 }
 
-func runSccFindingsListMarks(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccFindingsListMarks(cmd *cobra.Command, args []string) error {
 	// Marks are embedded on the Finding; we fetch the finding via the list
 	// endpoint (filtering by name) and emit its SecurityMarks.
-	parent, err := sccResolveParent()
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
-	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
+	sourceParent := findingsSourceParent(parent, g.flagSccFindingSource)
 	findingName := sccQualifyChild(sourceParent, "findings", args[0])
 	filter := fmt.Sprintf("name=%q", findingName)
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2057,19 +1762,19 @@ func runSccFindingsListMarks(cmd *cobra.Command, args []string) error {
 	if len(results) == 0 || results[0].Finding == nil {
 		return fmt.Errorf("finding %q not found", args[0])
 	}
-	return emitFormatted(results[0].Finding.SecurityMarks, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, results[0].Finding.SecurityMarks, g.flagSccFormat)
 }
 
-func runSccFindingsSetMute(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccFindingsSetMute(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
-	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
+	sourceParent := findingsSourceParent(parent, g.flagSccFindingSource)
 	name := sccQualifyChild(sourceParent, "findings", args[0])
-	req := &securitycenter.SetMuteRequest{Mute: flagSccFindingMuteState}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	req := &securitycenter.SetMuteRequest{Mute: g.flagSccFindingMuteState}
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2086,26 +1791,26 @@ func runSccFindingsSetMute(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting mute: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccFindingsUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccFindingsUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
-	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
+	sourceParent := findingsSourceParent(parent, g.flagSccFindingSource)
 	name := sccQualifyChild(sourceParent, "findings", args[0])
 	body := &securitycenter.Finding{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagSccUpdateMask
+	mask := g.flagSccUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2122,26 +1827,26 @@ func runSccFindingsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating finding: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccFindingsUpdateMarks(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccFindingsUpdateMarks(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
-	sourceParent := findingsSourceParent(parent, flagSccFindingSource)
+	sourceParent := findingsSourceParent(parent, g.flagSccFindingSource)
 	name := sccQualifyChild(sourceParent, "findings", args[0]) + "/securityMarks"
 	body := &securitycenter.SecurityMarks{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagSccUpdateMask
+	mask := g.flagSccUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2158,15 +1863,15 @@ func runSccFindingsUpdateMarks(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating finding security marks: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
 // --- manage settings impl ---
 
-func runSccManageSettingsDescribe(cmd *cobra.Command, args []string) error {
-	name := "organizations/" + strings.TrimPrefix(flagSccOrg, "organizations/") + "/organizationSettings"
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+func (g *sccCmds) runSccManageSettingsDescribe(cmd *cobra.Command, args []string) error {
+	name := "organizations/" + strings.TrimPrefix(g.flagSccOrg, "organizations/") + "/organizationSettings"
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2174,21 +1879,21 @@ func runSccManageSettingsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing organization settings: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccManageSettingsUpdate(cmd *cobra.Command, args []string) error {
-	name := "organizations/" + strings.TrimPrefix(flagSccOrg, "organizations/") + "/organizationSettings"
+func (g *sccCmds) runSccManageSettingsUpdate(cmd *cobra.Command, args []string) error {
+	name := "organizations/" + strings.TrimPrefix(g.flagSccOrg, "organizations/") + "/organizationSettings"
 	body := &securitycenter.OrganizationSettings{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagSccUpdateMask
+	mask := g.flagSccUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2196,22 +1901,22 @@ func runSccManageSettingsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating organization settings: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
 // --- muteconfigs impl ---
 
-func runSccMuteCreate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccMuteCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	body := &securitycenter.GoogleCloudSecuritycenterV1MuteConfig{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2228,17 +1933,17 @@ func runSccMuteCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating mute config: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccMuteDelete(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccMuteDelete(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "muteConfigs", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2254,18 +1959,18 @@ func runSccMuteDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting mute config: %w", err)
 	}
-	fmt.Printf("Deleted mute config [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted mute config [%s].\n", args[0])
 	return nil
 }
 
-func runSccMuteDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccMuteDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "muteConfigs", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2282,16 +1987,16 @@ func runSccMuteDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing mute config: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccMuteList(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccMuteList(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2306,8 +2011,8 @@ func runSccMuteList(cmd *cobra.Command, args []string) error {
 		switch scope {
 		case "organizations":
 			call := svc.Organizations.MuteConfigs.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2320,8 +2025,8 @@ func runSccMuteList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "folders":
 			call := svc.Folders.MuteConfigs.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2334,8 +2039,8 @@ func runSccMuteList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "projects":
 			call := svc.Projects.MuteConfigs.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2353,32 +2058,32 @@ func runSccMuteList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(all, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagSccFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, m := range all {
-		fmt.Printf("%-40s %s\n", path.Base(m.Name), m.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(m.Name), m.DisplayName)
 	}
 	return nil
 }
 
-func runSccMuteUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccMuteUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "muteConfigs", args[0])
 	body := &securitycenter.GoogleCloudSecuritycenterV1MuteConfig{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagSccUpdateMask
+	mask := g.flagSccUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2395,22 +2100,22 @@ func runSccMuteUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating mute config: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
 // --- notifications impl ---
 
-func runSccNotifyCreate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccNotifyCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	body := &securitycenter.NotificationConfig{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2427,17 +2132,17 @@ func runSccNotifyCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating notification config: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccNotifyDelete(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccNotifyDelete(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "notificationConfigs", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2453,18 +2158,18 @@ func runSccNotifyDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting notification config: %w", err)
 	}
-	fmt.Printf("Deleted notification config [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted notification config [%s].\n", args[0])
 	return nil
 }
 
-func runSccNotifyDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccNotifyDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "notificationConfigs", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2481,16 +2186,16 @@ func runSccNotifyDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing notification config: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccNotifyList(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccNotifyList(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2505,8 +2210,8 @@ func runSccNotifyList(cmd *cobra.Command, args []string) error {
 		switch scope {
 		case "organizations":
 			call := svc.Organizations.NotificationConfigs.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2519,8 +2224,8 @@ func runSccNotifyList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "folders":
 			call := svc.Folders.NotificationConfigs.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2533,8 +2238,8 @@ func runSccNotifyList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "projects":
 			call := svc.Projects.NotificationConfigs.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2552,32 +2257,32 @@ func runSccNotifyList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(all, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagSccFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "PUBSUB_TOPIC")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %s\n", "NAME", "PUBSUB_TOPIC")
 	for _, n := range all {
-		fmt.Printf("%-40s %s\n", path.Base(n.Name), n.PubsubTopic)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(n.Name), n.PubsubTopic)
 	}
 	return nil
 }
 
-func runSccNotifyUpdate(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccNotifyUpdate(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "notificationConfigs", args[0])
 	body := &securitycenter.NotificationConfig{}
-	if err := loadYAMLOrJSONInto(flagSccConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(g.flagSccConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagSccUpdateMask
+	mask := g.flagSccUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2594,7 +2299,7 @@ func runSccNotifyUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating notification config: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
 // --- operations impl ---
@@ -2602,24 +2307,24 @@ func runSccNotifyUpdate(cmd *cobra.Command, args []string) error {
 // SCC v1 Operations endpoints are only exposed under organizations/. Callers
 // must supply --organization or pass a fully-qualified operation resource
 // name.
-func sccOperationsParent() (string, error) {
-	if flagSccOrg != "" {
-		return "organizations/" + strings.TrimPrefix(flagSccOrg, "organizations/"), nil
+func (g *sccCmds) sccOperationsParent() (string, error) {
+	if g.flagSccOrg != "" {
+		return "organizations/" + strings.TrimPrefix(g.flagSccOrg, "organizations/"), nil
 	}
 	return "", fmt.Errorf("--organization is required for scc operations")
 }
 
-func runSccOpDescribe(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccOpDescribe(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	if !strings.Contains(name, "/operations/") {
-		parent, err := sccOperationsParent()
+		parent, err := g.sccOperationsParent()
 		if err != nil {
 			return err
 		}
 		name = parent + "/operations/" + name
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2627,72 +2332,72 @@ func runSccOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccOpDelete(cmd *cobra.Command, args []string) error {
+func (g *sccCmds) runSccOpDelete(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	if !strings.Contains(name, "/operations/") {
-		parent, err := sccOperationsParent()
+		parent, err := g.sccOperationsParent()
 		if err != nil {
 			return err
 		}
 		name = parent + "/operations/" + name
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Organizations.Operations.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runSccOpList(cmd *cobra.Command, args []string) error {
-	parent, err := sccOperationsParent()
+func (g *sccCmds) runSccOpList(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccOperationsParent()
 	if err != nil {
 		return err
 	}
 	name := parent + "/operations"
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Organizations.Operations.List(name).Context(ctx)
-	if flagSccFilter != "" {
-		call = call.Filter(flagSccFilter)
+	if g.flagSccFilter != "" {
+		call = call.Filter(g.flagSccFilter)
 	}
-	if flagSccPageSize > 0 {
-		call = call.PageSize(flagSccPageSize)
+	if g.flagSccPageSize > 0 {
+		call = call.PageSize(g.flagSccPageSize)
 	}
 	resp, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(resp.Operations, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Operations, g.flagSccFormat)
 	}
-	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(g.inv.stdout, len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
-		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(g.inv.stdout, "%-40s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }
 
 // --- sources impl ---
 
-func runSccSourcesDescribe(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccSourcesDescribe(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
 	name := sccQualifyChild(parent, "sources", args[0])
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2701,16 +2406,16 @@ func runSccSourcesDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing source: %w", err)
 	}
-	return emitFormatted(got, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagSccFormat)
 }
 
-func runSccSourcesList(cmd *cobra.Command, args []string) error {
-	parent, err := sccResolveParent()
+func (g *sccCmds) runSccSourcesList(cmd *cobra.Command, args []string) error {
+	parent, err := g.sccResolveParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := sccClient(ctx)
+	ctx := cmd.Context()
+	svc, err := g.sccClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -2725,8 +2430,8 @@ func runSccSourcesList(cmd *cobra.Command, args []string) error {
 		switch scope {
 		case "organizations":
 			call := svc.Organizations.Sources.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2739,8 +2444,8 @@ func runSccSourcesList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "folders":
 			call := svc.Folders.Sources.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2753,8 +2458,8 @@ func runSccSourcesList(cmd *cobra.Command, args []string) error {
 			next = resp.NextPageToken
 		case "projects":
 			call := svc.Projects.Sources.List(parent).Context(ctx)
-			if flagSccPageSize > 0 {
-				call = call.PageSize(flagSccPageSize)
+			if g.flagSccPageSize > 0 {
+				call = call.PageSize(g.flagSccPageSize)
 			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
@@ -2772,12 +2477,527 @@ func runSccSourcesList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = next
 	}
-	if flagSccFormat != "" {
-		return emitFormatted(sources, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, sources, g.flagSccFormat)
 	}
-	printTableHeading(len(sources), "%-40s %s\n", "NAME", "DISPLAY_NAME")
+	printTableHeadingTo(g.inv.stdout, len(sources), "%-40s %s\n", "NAME", "DISPLAY_NAME")
 	for _, s := range sources {
-		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.DisplayName)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(s.Name), s.DisplayName)
 	}
 	return nil
+}
+
+// sccCmds holds the commands and flag values of one invocation's "scc"
+// command group, so invocations don't share state (#2070).
+type sccCmds struct {
+	inv *invocation
+
+	sccCmd            *cobra.Command
+	flagSccOrg        string
+	flagSccFolder     string
+	flagSccProject    string
+	flagSccFormat     string
+	flagSccFilter     string
+	flagSccOrderBy    string
+	flagSccPageSize   int64
+	flagSccConfigFile string
+	flagSccUpdateMask string
+	// assets flags
+	flagSccAssetsResourceName    string
+	flagSccAssetsAssetID         string
+	flagSccAssetsCompareDuration string
+	flagSccAssetsReadTime        string
+	flagSccAssetsFieldMask       string
+	flagSccAssetsGroupBy         string
+	// findings flags
+	flagSccFindingSource         string
+	flagSccFindingMuteState      string
+	flagSccFindingBulkMuteFilter string
+	flagSccFindingBulkMuteState  string
+	flagSccFindingDataset        string
+	flagSccFindingGroupBy        string
+	flagSccFindingCompareDur     string
+	flagSccFindingReadTime       string
+	flagSccFindingFieldMask      string
+	flagSccFindingLocation       string
+	sccAssetsCmd                 *cobra.Command
+	sccAssetsDescribeCmd         *cobra.Command
+	sccAssetsGroupCmd            *cobra.Command
+	sccAssetsListCmd             *cobra.Command
+	sccAssetsRunDiscoveryCmd     *cobra.Command
+	sccAssetsUpdateMarksCmd      *cobra.Command
+	sccBQExportsCmd              *cobra.Command
+	sccBQExportsCreateCmd        *cobra.Command
+	sccBQExportsDeleteCmd        *cobra.Command
+	sccBQExportsDescribeCmd      *cobra.Command
+	sccBQExportsListCmd          *cobra.Command
+	sccBQExportsUpdateCmd        *cobra.Command
+	sccCustomModulesCmd          *cobra.Command
+	// custom-modules etd
+	sccCustomModulesEtdCmd     *cobra.Command
+	sccEtdCreateCmd            *cobra.Command
+	sccEtdDeleteCmd            *cobra.Command
+	sccEtdDescribeCmd          *cobra.Command
+	sccEtdDescribeEffectiveCmd *cobra.Command
+	sccEtdListCmd              *cobra.Command
+	sccEtdListDescendantCmd    *cobra.Command
+	sccEtdListEffectiveCmd     *cobra.Command
+	sccEtdUpdateCmd            *cobra.Command
+	// custom-modules sha
+	sccCustomModulesShaCmd       *cobra.Command
+	sccShaCreateCmd              *cobra.Command
+	sccShaDeleteCmd              *cobra.Command
+	sccShaDescribeCmd            *cobra.Command
+	sccShaDescribeEffectiveCmd   *cobra.Command
+	sccShaListCmd                *cobra.Command
+	sccShaListDescendantCmd      *cobra.Command
+	sccShaListEffectiveCmd       *cobra.Command
+	sccShaUpdateCmd              *cobra.Command
+	sccFindingsCmd               *cobra.Command
+	sccFindingsBulkMuteCmd       *cobra.Command
+	sccFindingsCreateCmd         *cobra.Command
+	sccFindingsExportBQCmd       *cobra.Command
+	sccFindingsGroupCmd          *cobra.Command
+	sccFindingsListCmd           *cobra.Command
+	sccFindingsListMarksCmd      *cobra.Command
+	sccFindingsSetMuteCmd        *cobra.Command
+	sccFindingsUpdateCmd         *cobra.Command
+	sccFindingsUpdateMarksCmd    *cobra.Command
+	sccManageCmd                 *cobra.Command
+	sccManageSettingsCmd         *cobra.Command
+	sccManageSettingsDescribeCmd *cobra.Command
+	sccManageSettingsUpdateCmd   *cobra.Command
+	sccMuteConfigsCmd            *cobra.Command
+	sccMuteCreateCmd             *cobra.Command
+	sccMuteDeleteCmd             *cobra.Command
+	sccMuteDescribeCmd           *cobra.Command
+	sccMuteListCmd               *cobra.Command
+	sccMuteUpdateCmd             *cobra.Command
+	sccNotificationsCmd          *cobra.Command
+	sccNotifyCreateCmd           *cobra.Command
+	sccNotifyDeleteCmd           *cobra.Command
+	sccNotifyDescribeCmd         *cobra.Command
+	sccNotifyListCmd             *cobra.Command
+	sccNotifyUpdateCmd           *cobra.Command
+	sccOperationsCmd             *cobra.Command
+	sccOpDescribeCmd             *cobra.Command
+	sccOpDeleteCmd               *cobra.Command
+	sccOpListCmd                 *cobra.Command
+	sccSourcesCmd                *cobra.Command
+	sccSourcesDescribeCmd        *cobra.Command
+	sccSourcesListCmd            *cobra.Command
+	sccManageRest                *restClient
+	// flagSccManageParent is the shared --parent flag for scc manage services
+	// commands. It is registered separately from --organization/--folder/
+	// --project (which come from sccAddScopeFlags) so `--parent=folders/1`
+	// works as an alternative one-flag form.
+	flagSccManageParent string
+	// flagSccManageFilterModules restricts describe output to a comma-separated
+	// list of module names (SCREAMING_SNAKE_CASE). Empty means no filter.
+	flagSccManageFilterModules string
+	// flagSccManageEnablementState is --enablement-state on update, one of
+	// ENABLED / DISABLED / INHERITED (case-insensitive). Empty means unset.
+	flagSccManageEnablementState string
+	// flagSccManageModuleConfigFile is --module-config-file on update, a
+	// path to a JSON or YAML file describing per-module intended state.
+	flagSccManageModuleConfigFile string
+	// flagSccManageValidateOnly is --validate-only on update: perform IAM
+	// checks and validation without mutating the service.
+	flagSccManageValidateOnly    bool
+	sccManageServicesCmd         *cobra.Command
+	sccManageServicesDescribeCmd *cobra.Command
+	sccManageServicesListCmd     *cobra.Command
+	sccManageServicesUpdateCmd   *cobra.Command
+	flagPostureOrg               string
+	flagPostureLocation          string
+	flagPostureFormat            string
+	flagPostureFilter            string
+	flagPostureConfigFile        string
+	flagPostureUpdateMask        string
+	flagPostureAsync             bool
+	flagPostureRevision          string
+	flagPostureExtractWL         string
+	flagPosturePageSize          int64
+	// iac-validation-reports create
+	flagIaCConfigFile        string
+	sccPosturesCmd           *cobra.Command
+	postureCreateCmd         *cobra.Command
+	postureDeleteCmd         *cobra.Command
+	postureDescribeCmd       *cobra.Command
+	postureExtractCmd        *cobra.Command
+	postureListCmd           *cobra.Command
+	postureListRevisionsCmd  *cobra.Command
+	postureUpdateCmd         *cobra.Command
+	sccPostureDeploymentsCmd *cobra.Command
+	pdCreateCmd              *cobra.Command
+	pdDeleteCmd              *cobra.Command
+	pdDescribeCmd            *cobra.Command
+	pdListCmd                *cobra.Command
+	pdUpdateCmd              *cobra.Command
+	sccPostureTemplatesCmd   *cobra.Command
+	ptDescribeCmd            *cobra.Command
+	ptListCmd                *cobra.Command
+	sccPostureOperationsCmd  *cobra.Command
+	poCancelCmd              *cobra.Command
+	poDeleteCmd              *cobra.Command
+	poDescribeCmd            *cobra.Command
+	poListCmd                *cobra.Command
+	sccIaCReportsCmd         *cobra.Command
+	iacCreateCmd             *cobra.Command
+	iacDescribeCmd           *cobra.Command
+	iacListCmd               *cobra.Command
+	// sccV2Rest is the REST client for the SCC V2 API. google.golang.org/api
+	// (through v0.293.0 at the time of writing) does not ship a generated
+	// securitycenter/v2 client, so V2 endpoints are called directly. Requests
+	// automatically pick up the caller's ADC / --account credentials via the
+	// shared restClient.
+	sccV2Rest *restClient
+}
+
+// newSccCmd returns the "scc" command group for inv.
+func newSccCmd(inv *invocation) *cobra.Command {
+	return newSccCmds(inv).sccCmd
+}
+
+// newSccCmds builds the "scc" command group for inv and returns its state.
+func newSccCmds(inv *invocation) *sccCmds {
+	g := &sccCmds{inv: inv}
+	g.sccCmd = &cobra.Command{Use: "scc", Short: "Manage Security Command Center"}
+	g.sccAssetsCmd = &cobra.Command{Use: "assets", Short: "Manage Security Command Center assets"}
+	g.sccAssetsDescribeCmd = &cobra.Command{
+		Use: "describe PARENT", Short: "Describe an asset",
+		Args: cobra.ExactArgs(1), RunE: g.runSccAssetsDescribe,
+	}
+	g.sccAssetsGroupCmd = &cobra.Command{
+		Use: "group PARENT", Short: "Group assets by fields",
+		Args: cobra.ExactArgs(1), RunE: g.runSccAssetsGroup,
+	}
+	g.sccAssetsListCmd = &cobra.Command{
+		Use: "list PARENT", Short: "List Security Command Center assets",
+		Args: cobra.ExactArgs(1), RunE: g.runSccAssetsList,
+	}
+	g.sccAssetsRunDiscoveryCmd = &cobra.Command{
+		Use: "run-discovery ORGANIZATION", Short: "Run asset discovery for an organization",
+		Args: cobra.ExactArgs(1), RunE: g.runSccAssetsRunDiscovery,
+	}
+	g.sccAssetsUpdateMarksCmd = &cobra.Command{
+		Use: "update-security-marks ASSET_NAME", Short: "Update security marks on an asset",
+		Args: cobra.ExactArgs(1), RunE: g.runSccAssetsUpdateMarks,
+	}
+	g.sccBQExportsCmd = &cobra.Command{Use: "bqexports", Short: "Manage BigQuery exports"}
+	g.sccBQExportsCreateCmd = &cobra.Command{
+		Use: "create EXPORT", Short: "Create a BigQuery export from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccBQExportCreate,
+	}
+	g.sccBQExportsDeleteCmd = &cobra.Command{
+		Use: "delete EXPORT", Short: "Delete a BigQuery export",
+		Args: cobra.ExactArgs(1), RunE: g.runSccBQExportDelete,
+	}
+	g.sccBQExportsDescribeCmd = &cobra.Command{
+		Use: "describe EXPORT", Short: "Describe a BigQuery export",
+		Args: cobra.ExactArgs(1), RunE: g.runSccBQExportDescribe,
+	}
+	g.sccBQExportsListCmd = &cobra.Command{
+		Use: "list", Short: "List BigQuery exports",
+		Args: cobra.NoArgs, RunE: g.runSccBQExportList,
+	}
+	g.sccBQExportsUpdateCmd = &cobra.Command{
+		Use: "update EXPORT", Short: "Update a BigQuery export from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccBQExportUpdate,
+	}
+	g.sccCustomModulesCmd = &cobra.Command{Use: "custom-modules", Short: "Manage SCC custom modules"}
+	g.sccCustomModulesEtdCmd = &cobra.Command{Use: "etd", Short: "Manage Event Threat Detection custom modules"}
+	g.sccEtdCreateCmd = &cobra.Command{
+		Use: "create MODULE", Short: "Create an ETD custom module from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccEtdCreate,
+	}
+	g.sccEtdDeleteCmd = &cobra.Command{
+		Use: "delete MODULE", Short: "Delete an ETD custom module",
+		Args: cobra.ExactArgs(1), RunE: g.runSccEtdDelete,
+	}
+	g.sccEtdDescribeCmd = &cobra.Command{
+		Use: "describe MODULE", Short: "Describe an ETD custom module",
+		Args: cobra.ExactArgs(1), RunE: g.runSccEtdDescribe,
+	}
+	g.sccEtdDescribeEffectiveCmd = &cobra.Command{
+		Use: "describe-effective MODULE", Short: "Describe an effective ETD custom module",
+		Args: cobra.ExactArgs(1), RunE: g.runSccEtdDescribeEffective,
+	}
+	g.sccEtdListCmd = &cobra.Command{
+		Use: "list", Short: "List ETD custom modules",
+		Args: cobra.NoArgs, RunE: g.runSccEtdList,
+	}
+	g.sccEtdListDescendantCmd = &cobra.Command{
+		Use: "list-descendant", Short: "List ETD custom modules and descendants",
+		Args: cobra.NoArgs, RunE: g.runSccEtdListDescendant,
+	}
+	g.sccEtdListEffectiveCmd = &cobra.Command{
+		Use: "list-effective", Short: "List effective ETD custom modules",
+		Args: cobra.NoArgs, RunE: g.runSccEtdListEffective,
+	}
+	g.sccEtdUpdateCmd = &cobra.Command{
+		Use: "update MODULE", Short: "Update an ETD custom module from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccEtdUpdate,
+	}
+	g.sccCustomModulesShaCmd = &cobra.Command{Use: "sha", Short: "Manage Security Health Analytics custom modules"}
+	g.sccShaCreateCmd = &cobra.Command{
+		Use: "create MODULE", Short: "Create a SHA custom module from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccShaCreate,
+	}
+	g.sccShaDeleteCmd = &cobra.Command{
+		Use: "delete MODULE", Short: "Delete a SHA custom module",
+		Args: cobra.ExactArgs(1), RunE: g.runSccShaDelete,
+	}
+	g.sccShaDescribeCmd = &cobra.Command{
+		Use: "describe MODULE", Short: "Describe a SHA custom module",
+		Args: cobra.ExactArgs(1), RunE: g.runSccShaDescribe,
+	}
+	g.sccShaDescribeEffectiveCmd = &cobra.Command{
+		Use: "describe-effective MODULE", Short: "Describe an effective SHA custom module",
+		Args: cobra.ExactArgs(1), RunE: g.runSccShaDescribeEffective,
+	}
+	g.sccShaListCmd = &cobra.Command{
+		Use: "list", Short: "List SHA custom modules",
+		Args: cobra.NoArgs, RunE: g.runSccShaList,
+	}
+	g.sccShaListDescendantCmd = &cobra.Command{
+		Use: "list-descendant", Short: "List SHA custom modules and descendants",
+		Args: cobra.NoArgs, RunE: g.runSccShaListDescendant,
+	}
+	g.sccShaListEffectiveCmd = &cobra.Command{
+		Use: "list-effective", Short: "List effective SHA custom modules",
+		Args: cobra.NoArgs, RunE: g.runSccShaListEffective,
+	}
+	g.sccShaUpdateCmd = &cobra.Command{
+		Use: "update MODULE", Short: "Update a SHA custom module from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccShaUpdate,
+	}
+	g.sccFindingsCmd = &cobra.Command{Use: "findings", Short: "Manage findings"}
+	g.sccFindingsBulkMuteCmd = &cobra.Command{
+		Use: "bulk-mute", Short: "Bulk-mute findings that match a filter",
+		Args: cobra.NoArgs, RunE: g.runSccFindingsBulkMute,
+	}
+	g.sccFindingsCreateCmd = &cobra.Command{
+		Use: "create FINDING_ID", Short: "Create a finding from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccFindingsCreate,
+	}
+	g.sccFindingsExportBQCmd = &cobra.Command{
+		Use: "export-to-bigquery [PARENT]", Short: "Export findings to a BigQuery dataset",
+		Args: cobra.MaximumNArgs(1), RunE: g.runSccFindingsExportBQ,
+	}
+	g.sccFindingsGroupCmd = &cobra.Command{
+		Use: "group [PARENT]", Short: "Group findings by fields",
+		Args: cobra.MaximumNArgs(1), RunE: g.runSccFindingsGroup,
+	}
+	g.sccFindingsListCmd = &cobra.Command{
+		Use: "list [PARENT]", Short: "List findings",
+		Args: cobra.MaximumNArgs(1), RunE: g.runSccFindingsList,
+	}
+	g.sccFindingsListMarksCmd = &cobra.Command{
+		Use: "list-marks FINDING", Short: "List security marks on a finding",
+		Args: cobra.ExactArgs(1), RunE: g.runSccFindingsListMarks,
+	}
+	g.sccFindingsSetMuteCmd = &cobra.Command{
+		Use: "set-mute FINDING", Short: "Set the mute state of a finding",
+		Args: cobra.ExactArgs(1), RunE: g.runSccFindingsSetMute,
+	}
+	g.sccFindingsUpdateCmd = &cobra.Command{
+		Use: "update FINDING", Short: "Update a finding from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccFindingsUpdate,
+	}
+	g.sccFindingsUpdateMarksCmd = &cobra.Command{
+		Use: "update-marks FINDING", Short: "Update security marks on a finding",
+		Args: cobra.ExactArgs(1), RunE: g.runSccFindingsUpdateMarks,
+	}
+	g.sccManageCmd = &cobra.Command{Use: "manage", Short: "Manage Security Command Center settings"}
+	g.sccManageSettingsCmd = &cobra.Command{Use: "settings", Short: "Manage organization SCC settings"}
+	g.sccManageSettingsDescribeCmd = &cobra.Command{
+		Use: "describe", Short: "Describe an organization's SCC settings",
+		Args: cobra.NoArgs, RunE: g.runSccManageSettingsDescribe,
+	}
+	g.sccManageSettingsUpdateCmd = &cobra.Command{
+		Use: "update", Short: "Update an organization's SCC settings from a --config-file",
+		Args: cobra.NoArgs, RunE: g.runSccManageSettingsUpdate,
+	}
+	g.sccMuteConfigsCmd = &cobra.Command{Use: "muteconfigs", Short: "Manage mute configs"}
+	g.sccMuteCreateCmd = &cobra.Command{
+		Use: "create MUTE_CONFIG", Short: "Create a mute config from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccMuteCreate,
+	}
+	g.sccMuteDeleteCmd = &cobra.Command{
+		Use: "delete MUTE_CONFIG", Short: "Delete a mute config",
+		Args: cobra.ExactArgs(1), RunE: g.runSccMuteDelete,
+	}
+	g.sccMuteDescribeCmd = &cobra.Command{
+		Use: "describe MUTE_CONFIG", Short: "Describe a mute config",
+		Args: cobra.ExactArgs(1), RunE: g.runSccMuteDescribe,
+	}
+	g.sccMuteListCmd = &cobra.Command{
+		Use: "list", Short: "List mute configs",
+		Args: cobra.NoArgs, RunE: g.runSccMuteList,
+	}
+	g.sccMuteUpdateCmd = &cobra.Command{
+		Use: "update MUTE_CONFIG", Short: "Update a mute config from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccMuteUpdate,
+	}
+	g.sccNotificationsCmd = &cobra.Command{Use: "notifications", Short: "Manage notifications"}
+	g.sccNotifyCreateCmd = &cobra.Command{
+		Use: "create NOTIFICATION_CONFIG", Short: "Create a notification config from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccNotifyCreate,
+	}
+	g.sccNotifyDeleteCmd = &cobra.Command{
+		Use: "delete NOTIFICATION_CONFIG", Short: "Delete a notification config",
+		Args: cobra.ExactArgs(1), RunE: g.runSccNotifyDelete,
+	}
+	g.sccNotifyDescribeCmd = &cobra.Command{
+		Use: "describe NOTIFICATION_CONFIG", Short: "Describe a notification config",
+		Args: cobra.ExactArgs(1), RunE: g.runSccNotifyDescribe,
+	}
+	g.sccNotifyListCmd = &cobra.Command{
+		Use: "list", Short: "List notification configs",
+		Args: cobra.NoArgs, RunE: g.runSccNotifyList,
+	}
+	g.sccNotifyUpdateCmd = &cobra.Command{
+		Use: "update NOTIFICATION_CONFIG", Short: "Update a notification config from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runSccNotifyUpdate,
+	}
+	g.sccOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Security Command Center operations"}
+	g.sccOpDescribeCmd = &cobra.Command{
+		Use: "describe OPERATION", Short: "Describe an SCC operation",
+		Args: cobra.ExactArgs(1), RunE: g.runSccOpDescribe,
+	}
+	g.sccOpDeleteCmd = &cobra.Command{
+		Use: "delete OPERATION", Short: "Delete an SCC operation",
+		Args: cobra.ExactArgs(1), RunE: g.runSccOpDelete,
+	}
+	g.sccOpListCmd = &cobra.Command{
+		Use: "list", Short: "List SCC operations",
+		Args: cobra.NoArgs, RunE: g.runSccOpList,
+	}
+	g.sccSourcesCmd = &cobra.Command{Use: "sources", Short: "Manage Security Command Center sources"}
+	g.sccSourcesDescribeCmd = &cobra.Command{
+		Use: "describe SOURCE", Short: "Describe a Security Command Center source",
+		Args: cobra.ExactArgs(1), RunE: g.runSccSourcesDescribe,
+	}
+	g.sccSourcesListCmd = &cobra.Command{
+		Use: "list", Short: "List Security Command Center sources",
+		Args: cobra.NoArgs, RunE: g.runSccSourcesList,
+	}
+	g.sccManageRest = g.inv.restClient("https://securitycentermanagement.googleapis.com/v1")
+	g.sccManageServicesCmd = &cobra.Command{
+		Use:   "services",
+		Short: "Manage Security Command Center services",
+	}
+	g.sccManageServicesDescribeCmd = &cobra.Command{
+		Use:   "describe SERVICE_NAME",
+		Short: "Describe a Security Command Center service",
+		Args:  cobra.ExactArgs(1),
+		RunE:  g.runSccManageServicesDescribe,
+	}
+	g.sccManageServicesListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List Security Command Center services",
+		Args:  cobra.NoArgs,
+		RunE:  g.runSccManageServicesList,
+	}
+	g.sccManageServicesUpdateCmd = &cobra.Command{
+		Use:   "update SERVICE_NAME",
+		Short: "Update a Security Command Center service",
+		Args:  cobra.ExactArgs(1),
+		RunE:  g.runSccManageServicesUpdate,
+	}
+	g.sccPosturesCmd = &cobra.Command{Use: "postures", Short: "Manage Security Command Center postures"}
+	g.postureCreateCmd = &cobra.Command{
+		Use: "create POSTURE", Short: "Create a posture from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runPostureCreate,
+	}
+	g.postureDeleteCmd = &cobra.Command{
+		Use: "delete POSTURE", Short: "Delete a posture",
+		Args: cobra.ExactArgs(1), RunE: g.runPostureDelete,
+	}
+	g.postureDescribeCmd = &cobra.Command{
+		Use: "describe POSTURE", Short: "Describe a posture",
+		Args: cobra.ExactArgs(1), RunE: g.runPostureDescribe,
+	}
+	g.postureExtractCmd = &cobra.Command{
+		Use: "extract POSTURE_ID", Short: "Extract a posture from a workload",
+		Args: cobra.ExactArgs(1), RunE: g.runPostureExtract,
+	}
+	g.postureListCmd = &cobra.Command{
+		Use: "list", Short: "List postures",
+		Args: cobra.NoArgs, RunE: g.runPostureList,
+	}
+	g.postureListRevisionsCmd = &cobra.Command{
+		Use: "list-revisions POSTURE", Short: "List revisions of a posture",
+		Args: cobra.ExactArgs(1), RunE: g.runPostureListRevisions,
+	}
+	g.postureUpdateCmd = &cobra.Command{
+		Use: "update POSTURE", Short: "Update a posture from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runPostureUpdate,
+	}
+	g.sccPostureDeploymentsCmd = &cobra.Command{Use: "posture-deployments", Short: "Manage posture deployments"}
+	g.pdCreateCmd = &cobra.Command{
+		Use: "create DEPLOYMENT", Short: "Create a posture deployment from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runPDCreate,
+	}
+	g.pdDeleteCmd = &cobra.Command{
+		Use: "delete DEPLOYMENT", Short: "Delete a posture deployment",
+		Args: cobra.ExactArgs(1), RunE: g.runPDDelete,
+	}
+	g.pdDescribeCmd = &cobra.Command{
+		Use: "describe DEPLOYMENT", Short: "Describe a posture deployment",
+		Args: cobra.ExactArgs(1), RunE: g.runPDDescribe,
+	}
+	g.pdListCmd = &cobra.Command{
+		Use: "list", Short: "List posture deployments",
+		Args: cobra.NoArgs, RunE: g.runPDList,
+	}
+	g.pdUpdateCmd = &cobra.Command{
+		Use: "update DEPLOYMENT", Short: "Update a posture deployment from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: g.runPDUpdate,
+	}
+	g.sccPostureTemplatesCmd = &cobra.Command{Use: "posture-templates", Short: "Manage posture templates"}
+	g.ptDescribeCmd = &cobra.Command{
+		Use: "describe TEMPLATE", Short: "Describe a posture template",
+		Args: cobra.ExactArgs(1), RunE: g.runPTDescribe,
+	}
+	g.ptListCmd = &cobra.Command{
+		Use: "list", Short: "List posture templates",
+		Args: cobra.NoArgs, RunE: g.runPTList,
+	}
+	g.sccPostureOperationsCmd = &cobra.Command{Use: "posture-operations", Short: "Manage posture operations"}
+	g.poCancelCmd = &cobra.Command{
+		Use: "cancel OPERATION", Short: "Cancel a posture operation",
+		Args: cobra.ExactArgs(1), RunE: g.runPOCancel,
+	}
+	g.poDeleteCmd = &cobra.Command{
+		Use: "delete OPERATION", Short: "Delete a posture operation",
+		Args: cobra.ExactArgs(1), RunE: g.runPODelete,
+	}
+	g.poDescribeCmd = &cobra.Command{
+		Use: "describe OPERATION", Short: "Describe a posture operation",
+		Args: cobra.ExactArgs(1), RunE: g.runPODescribe,
+	}
+	g.poListCmd = &cobra.Command{
+		Use: "list", Short: "List posture operations",
+		Args: cobra.NoArgs, RunE: g.runPOList,
+	}
+	g.sccIaCReportsCmd = &cobra.Command{Use: "iac-validation-reports", Short: "Manage IaC validation reports"}
+	g.iacCreateCmd = &cobra.Command{
+		Use: "create", Short: "Create an IaC validation report from a --config-file",
+		Args: cobra.NoArgs, RunE: g.runIaCCreate,
+	}
+	g.iacDescribeCmd = &cobra.Command{
+		Use: "describe REPORT", Short: "Describe an IaC validation report",
+		Args: cobra.ExactArgs(1), RunE: g.runIaCDescribe,
+	}
+	g.iacListCmd = &cobra.Command{
+		Use: "list", Short: "List IaC validation reports",
+		Args: cobra.NoArgs, RunE: g.runIaCList,
+	}
+	g.sccV2Rest = g.inv.restClient("https://securitycenter.googleapis.com/v2")
+	g.initScc()
+	g.initSccManageServices()
+	g.initSccPosture()
+	return g
 }

@@ -143,17 +143,18 @@ func TestSccManageBuildUpdateMask(t *testing.T) {
 // --organization, --folder, --project, and --parent, plus the mutex rule
 // between --parent and the others.
 func TestSccManageServicesParent(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	saveOrg, saveFolder, saveProj, saveParent :=
-		flagSccOrg, flagSccFolder, flagSccProject, flagSccManageParent
+		grp.flagSccOrg, grp.flagSccFolder, grp.flagSccProject, grp.flagSccManageParent
 	defer func() {
-		flagSccOrg, flagSccFolder, flagSccProject, flagSccManageParent =
+		grp.flagSccOrg, grp.flagSccFolder, grp.flagSccProject, grp.flagSccManageParent =
 			saveOrg, saveFolder, saveProj, saveParent
 	}()
 
 	// --organization
-	flagSccOrg = "1057127509270"
-	flagSccFolder, flagSccProject, flagSccManageParent = "", "", ""
-	got, err := sccManageServicesParent()
+	grp.flagSccOrg = "1057127509270"
+	grp.flagSccFolder, grp.flagSccProject, grp.flagSccManageParent = "", "", ""
+	got, err := grp.sccManageServicesParent()
 	if err != nil {
 		t.Fatalf("--organization: %v", err)
 	}
@@ -162,8 +163,8 @@ func TestSccManageServicesParent(t *testing.T) {
 	}
 
 	// --folder
-	flagSccOrg, flagSccFolder, flagSccProject, flagSccManageParent = "", "42", "", ""
-	got, err = sccManageServicesParent()
+	grp.flagSccOrg, grp.flagSccFolder, grp.flagSccProject, grp.flagSccManageParent = "", "42", "", ""
+	got, err = grp.sccManageServicesParent()
 	if err != nil {
 		t.Fatalf("--folder: %v", err)
 	}
@@ -172,8 +173,8 @@ func TestSccManageServicesParent(t *testing.T) {
 	}
 
 	// --project (id only)
-	flagSccOrg, flagSccFolder, flagSccProject, flagSccManageParent = "", "", "my-proj", ""
-	got, err = sccManageServicesParent()
+	grp.flagSccOrg, grp.flagSccFolder, grp.flagSccProject, grp.flagSccManageParent = "", "", "my-proj", ""
+	got, err = grp.sccManageServicesParent()
 	if err != nil {
 		t.Fatalf("--project: %v", err)
 	}
@@ -182,8 +183,8 @@ func TestSccManageServicesParent(t *testing.T) {
 	}
 
 	// --parent (organizations/…)
-	flagSccOrg, flagSccFolder, flagSccProject, flagSccManageParent = "", "", "", "organizations/9"
-	got, err = sccManageServicesParent()
+	grp.flagSccOrg, grp.flagSccFolder, grp.flagSccProject, grp.flagSccManageParent = "", "", "", "organizations/9"
+	got, err = grp.sccManageServicesParent()
 	if err != nil {
 		t.Fatalf("--parent org: %v", err)
 	}
@@ -192,9 +193,9 @@ func TestSccManageServicesParent(t *testing.T) {
 	}
 
 	// --parent with trailing slash trimmed.
-	flagSccManageParent = "folders/12/"
-	flagSccOrg, flagSccFolder, flagSccProject = "", "", ""
-	got, err = sccManageServicesParent()
+	grp.flagSccManageParent = "folders/12/"
+	grp.flagSccOrg, grp.flagSccFolder, grp.flagSccProject = "", "", ""
+	got, err = grp.sccManageServicesParent()
 	if err != nil {
 		t.Fatalf("--parent folder w/ trailing slash: %v", err)
 	}
@@ -203,15 +204,15 @@ func TestSccManageServicesParent(t *testing.T) {
 	}
 
 	// --parent bad shape.
-	flagSccManageParent = "widgets/1"
-	if _, err := sccManageServicesParent(); err == nil {
+	grp.flagSccManageParent = "widgets/1"
+	if _, err := grp.sccManageServicesParent(); err == nil {
 		t.Error("--parent=widgets/1: expected error")
 	}
 
 	// --parent + --organization: mutex.
-	flagSccManageParent = "organizations/1"
-	flagSccOrg = "2"
-	if _, err := sccManageServicesParent(); err == nil ||
+	grp.flagSccManageParent = "organizations/1"
+	grp.flagSccOrg = "2"
+	if _, err := grp.sccManageServicesParent(); err == nil ||
 		!strings.Contains(err.Error(), "mutually exclusive") {
 		t.Errorf("expected mutex error, got %v", err)
 	}
@@ -310,11 +311,12 @@ func TestSccManageLoadModuleConfig(t *testing.T) {
 // server, injects a synthetic OAuth token, and resets the manage-services
 // flag globals when the test ends.
 func sccManageServicesTestSetup(t *testing.T, server *httptest.Server) {
+	grp := newSccCmds(legacyTestInvocation())
 	t.Helper()
 
-	origRest := sccManageRest
-	sccManageRestClientForTest(server.URL)
-	t.Cleanup(func() { sccManageRest = origRest })
+	origRest := grp.sccManageRest
+	grp.sccManageRestClientForTest(server.URL)
+	t.Cleanup(func() { grp.sccManageRest = origRest })
 
 	restoreTok := SetRestTokenSourceForTest(
 		oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
@@ -324,27 +326,28 @@ func sccManageServicesTestSetup(t *testing.T, server *httptest.Server) {
 	t.Cleanup(restoreQP)
 
 	saveOrg, saveFolder, saveProj, saveParent :=
-		flagSccOrg, flagSccFolder, flagSccProject, flagSccManageParent
+		grp.flagSccOrg, grp.flagSccFolder, grp.flagSccProject, grp.flagSccManageParent
 	saveState, saveModuleFile, saveValidate :=
-		flagSccManageEnablementState, flagSccManageModuleConfigFile, flagSccManageValidateOnly
+		grp.flagSccManageEnablementState, grp.flagSccManageModuleConfigFile, grp.flagSccManageValidateOnly
 	saveFilter, saveFormat, savePage :=
-		flagSccManageFilterModules, flagSccFormat, flagSccPageSize
+		grp.flagSccManageFilterModules, grp.flagSccFormat, grp.flagSccPageSize
 	t.Cleanup(func() {
-		flagSccOrg, flagSccFolder, flagSccProject, flagSccManageParent =
+		grp.flagSccOrg, grp.flagSccFolder, grp.flagSccProject, grp.flagSccManageParent =
 			saveOrg, saveFolder, saveProj, saveParent
-		flagSccManageEnablementState, flagSccManageModuleConfigFile, flagSccManageValidateOnly =
+		grp.flagSccManageEnablementState, grp.flagSccManageModuleConfigFile, grp.flagSccManageValidateOnly =
 			saveState, saveModuleFile, saveValidate
-		flagSccManageFilterModules, flagSccFormat, flagSccPageSize =
+		grp.flagSccManageFilterModules, grp.flagSccFormat, grp.flagSccPageSize =
 			saveFilter, saveFormat, savePage
 	})
 	// Start from a clean slate so a leaking global from an earlier test
 	// doesn't affect the parent resolution here.
-	flagSccOrg, flagSccFolder, flagSccProject, flagSccManageParent = "", "", "", ""
-	flagSccManageEnablementState, flagSccManageModuleConfigFile, flagSccManageValidateOnly = "", "", false
-	flagSccManageFilterModules, flagSccFormat, flagSccPageSize = "", "", 0
+	grp.flagSccOrg, grp.flagSccFolder, grp.flagSccProject, grp.flagSccManageParent = "", "", "", ""
+	grp.flagSccManageEnablementState, grp.flagSccManageModuleConfigFile, grp.flagSccManageValidateOnly = "", "", false
+	grp.flagSccManageFilterModules, grp.flagSccFormat, grp.flagSccPageSize = "", "", 0
 }
 
 func TestSccManageServicesDescribe(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotPath, gotMethod string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath, gotMethod = r.URL.Path, r.Method
@@ -363,10 +366,10 @@ func TestSccManageServicesDescribe(t *testing.T) {
 	sccManageServicesTestSetup(t, server)
 
 	// Abbreviation input should be normalised to the full name in the URL.
-	flagSccOrg = "1"
-	flagSccFormat = "json"
+	grp.flagSccOrg = "1"
+	grp.flagSccFormat = "json"
 	out := captureStdout(t, func() {
-		if err := runSccManageServicesDescribe(sccManageServicesDescribeCmd, []string{"sha"}); err != nil {
+		if err := grp.runSccManageServicesDescribe(grp.sccManageServicesDescribeCmd, []string{"sha"}); err != nil {
 			t.Fatalf("runSccManageServicesDescribe: %v", err)
 		}
 	})
@@ -388,6 +391,7 @@ func TestSccManageServicesDescribe(t *testing.T) {
 // TestSccManageServicesDescribeFilterModules exercises --filter-modules,
 // which reduces the response to a modules map holding only the named keys.
 func TestSccManageServicesDescribeFilterModules(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -401,12 +405,12 @@ func TestSccManageServicesDescribeFilterModules(t *testing.T) {
 	defer server.Close()
 	sccManageServicesTestSetup(t, server)
 
-	flagSccOrg = "1"
-	flagSccFormat = "json"
-	flagSccManageFilterModules = "MOD_KEEP,MOD_OTHER"
+	grp.flagSccOrg = "1"
+	grp.flagSccFormat = "json"
+	grp.flagSccManageFilterModules = "MOD_KEEP,MOD_OTHER"
 
 	out := captureStdout(t, func() {
-		if err := runSccManageServicesDescribe(sccManageServicesDescribeCmd,
+		if err := grp.runSccManageServicesDescribe(grp.sccManageServicesDescribeCmd,
 			[]string{"security-health-analytics"}); err != nil {
 			t.Fatalf("runSccManageServicesDescribe: %v", err)
 		}
@@ -423,20 +427,22 @@ func TestSccManageServicesDescribeFilterModules(t *testing.T) {
 // bails out before making an HTTP request when the service isn't in the
 // allowlist. The reference test would otherwise wait for the server's 404.
 func TestSccManageServicesDescribeRejectsUnknownService(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Error("HTTP server should not be reached for an invalid service")
 	}))
 	defer server.Close()
 	sccManageServicesTestSetup(t, server)
-	flagSccOrg = "1"
+	grp.flagSccOrg = "1"
 
-	err := runSccManageServicesDescribe(sccManageServicesDescribeCmd, []string{"not-a-service"})
+	err := grp.runSccManageServicesDescribe(grp.sccManageServicesDescribeCmd, []string{"not-a-service"})
 	if err == nil || !strings.Contains(err.Error(), "invalid service name") {
 		t.Errorf("expected invalid-service-name error, got %v", err)
 	}
 }
 
 func TestSccManageServicesList(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -459,9 +465,9 @@ func TestSccManageServicesList(t *testing.T) {
 	defer server.Close()
 	sccManageServicesTestSetup(t, server)
 
-	flagSccFolder = "42"
+	grp.flagSccFolder = "42"
 	out := captureStdout(t, func() {
-		if err := runSccManageServicesList(sccManageServicesListCmd, nil); err != nil {
+		if err := grp.runSccManageServicesList(grp.sccManageServicesListCmd, nil); err != nil {
 			t.Fatalf("runSccManageServicesList: %v", err)
 		}
 	})
@@ -481,6 +487,7 @@ func TestSccManageServicesList(t *testing.T) {
 }
 
 func TestSccManageServicesUpdate(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotPath, gotMethod, gotQuery string
 	var gotBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -498,9 +505,9 @@ func TestSccManageServicesUpdate(t *testing.T) {
 	// Take the prompt out of the way: in a non-interactive test context
 	// promptYesNo(_, true) already defaults to yes, but flagQuiet keeps
 	// it explicit and independent of tty detection quirks.
-	saveQuiet := flagQuiet
-	flagQuiet = true
-	defer func() { flagQuiet = saveQuiet }()
+	saveQuiet := grp.inv.flags.quiet
+	grp.inv.flags.quiet = true
+	defer func() { grp.inv.flags.quiet = saveQuiet }()
 
 	// Module config on disk so the load path is exercised as well.
 	dir := t.TempDir()
@@ -510,12 +517,12 @@ func TestSccManageServicesUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flagSccOrg = "1"
-	flagSccManageEnablementState = "enabled"
-	flagSccManageModuleConfigFile = modulePath
-	flagSccFormat = "json"
+	grp.flagSccOrg = "1"
+	grp.flagSccManageEnablementState = "enabled"
+	grp.flagSccManageModuleConfigFile = modulePath
+	grp.flagSccFormat = "json"
 
-	if err := runSccManageServicesUpdate(sccManageServicesUpdateCmd, []string{"sha"}); err != nil {
+	if err := grp.runSccManageServicesUpdate(grp.sccManageServicesUpdateCmd, []string{"sha"}); err != nil {
 		t.Fatalf("runSccManageServicesUpdate: %v", err)
 	}
 
@@ -549,6 +556,7 @@ func TestSccManageServicesUpdate(t *testing.T) {
 // the request must carry validateOnly=true and skip the confirmation
 // prompt entirely, so it works fine without --quiet.
 func TestSccManageServicesUpdateValidateOnly(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	var gotQuery string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.RawQuery
@@ -558,12 +566,12 @@ func TestSccManageServicesUpdateValidateOnly(t *testing.T) {
 	defer server.Close()
 	sccManageServicesTestSetup(t, server)
 
-	flagSccOrg = "1"
-	flagSccManageEnablementState = "disabled"
-	flagSccManageValidateOnly = true
-	flagSccFormat = "json"
+	grp.flagSccOrg = "1"
+	grp.flagSccManageEnablementState = "disabled"
+	grp.flagSccManageValidateOnly = true
+	grp.flagSccFormat = "json"
 
-	if err := runSccManageServicesUpdate(sccManageServicesUpdateCmd, []string{"etd"}); err != nil {
+	if err := grp.runSccManageServicesUpdate(grp.sccManageServicesUpdateCmd, []string{"etd"}); err != nil {
 		t.Fatalf("runSccManageServicesUpdate: %v", err)
 	}
 	if !strings.Contains(gotQuery, "validateOnly=true") {
@@ -578,15 +586,16 @@ func TestSccManageServicesUpdateValidateOnly(t *testing.T) {
 // least one of --enablement-state or --module-config-file must be supplied,
 // otherwise the caller has asked for a Patch with an empty mask.
 func TestSccManageServicesUpdateRequiresAField(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Error("HTTP server should not be reached without --enablement-state or --module-config-file")
 	}))
 	defer server.Close()
 	sccManageServicesTestSetup(t, server)
 
-	flagSccOrg = "1"
+	grp.flagSccOrg = "1"
 
-	err := runSccManageServicesUpdate(sccManageServicesUpdateCmd, []string{"sha"})
+	err := grp.runSccManageServicesUpdate(grp.sccManageServicesUpdateCmd, []string{"sha"})
 	if err == nil || !strings.Contains(err.Error(), "--enablement-state") {
 		t.Errorf("expected update-mask error naming --enablement-state, got %v", err)
 	}

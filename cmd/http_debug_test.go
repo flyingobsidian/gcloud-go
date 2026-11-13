@@ -39,15 +39,16 @@ func TestHTTPDebugWriter(t *testing.T) {
 // call `scc findings list` makes, including the headers that carry the
 // credentials and the billing project.
 func TestSccFindingsListV2LogsCurl(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"listFindingsResults": []any{}})
 	}))
 	defer server.Close()
 
-	orig := sccV2Rest
-	defer func() { sccV2Rest = orig }()
-	sccV2RestClientForTest(server.URL)
+	orig := grp.sccV2Rest
+	defer func() { grp.sccV2Rest = orig }()
+	grp.sccV2RestClientForTest(server.URL)
 
 	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
 	defer restore()
@@ -55,23 +56,23 @@ func TestSccFindingsListV2LogsCurl(t *testing.T) {
 	defer restoreQP()
 
 	var debug bytes.Buffer
-	saveOut, saveVerbosity := httpDebugOut, flagVerbosity
-	httpDebugOut, flagVerbosity = &debug, "debug"
-	defer func() { httpDebugOut, flagVerbosity = saveOut, saveVerbosity }()
+	saveOut, saveVerbosity := httpDebugOut, grp.inv.flags.verbosity
+	httpDebugOut, grp.inv.flags.verbosity = &debug, "debug"
+	defer func() { httpDebugOut, grp.inv.flags.verbosity = saveOut, saveVerbosity }()
 
-	saveOrg, saveSrc, saveLoc, saveFmt, saveFilter := flagSccOrg, flagSccFindingSource, flagSccFindingLocation, flagSccFormat, flagSccFilter
+	saveOrg, saveSrc, saveLoc, saveFmt, saveFilter := grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccFindingLocation, grp.flagSccFormat, grp.flagSccFilter
 	defer func() {
-		flagSccOrg, flagSccFindingSource, flagSccFindingLocation, flagSccFormat, flagSccFilter =
+		grp.flagSccOrg, grp.flagSccFindingSource, grp.flagSccFindingLocation, grp.flagSccFormat, grp.flagSccFilter =
 			saveOrg, saveSrc, saveLoc, saveFmt, saveFilter
 	}()
-	flagSccOrg = "1"
-	flagSccFindingSource = "-"
-	withSccLocation(t, sccFindingsListCmd, "eu")
-	flagSccFilter = "state=\"ACTIVE\""
-	flagSccFormat = ""
+	grp.flagSccOrg = "1"
+	grp.flagSccFindingSource = "-"
+	withSccLocation(t, grp.sccFindingsListCmd, "eu")
+	grp.flagSccFilter = "state=\"ACTIVE\""
+	grp.flagSccFormat = ""
 
 	_ = captureStdout(t, func() {
-		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+		if err := grp.runSccFindingsList(grp.sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})
@@ -95,15 +96,16 @@ func TestSccFindingsListV2LogsCurl(t *testing.T) {
 // TestSccFindingsListV2QuietByDefault guards against curl output appearing
 // without --verbosity debug / --log-http.
 func TestSccFindingsListV2QuietByDefault(t *testing.T) {
+	grp := newSccCmds(legacyTestInvocation())
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"listFindingsResults": []any{}})
 	}))
 	defer server.Close()
 
-	orig := sccV2Rest
-	defer func() { sccV2Rest = orig }()
-	sccV2RestClientForTest(server.URL)
+	orig := grp.sccV2Rest
+	defer func() { grp.sccV2Rest = orig }()
+	grp.sccV2RestClientForTest(server.URL)
 
 	restore := SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "test-token"}))
 	defer restore()
@@ -111,17 +113,19 @@ func TestSccFindingsListV2QuietByDefault(t *testing.T) {
 	defer restoreQP()
 
 	var debug bytes.Buffer
-	saveOut, saveVerbosity, saveLogHTTP := httpDebugOut, flagVerbosity, flagLogHTTP
-	httpDebugOut, flagVerbosity, flagLogHTTP = &debug, "warning", false
-	defer func() { httpDebugOut, flagVerbosity, flagLogHTTP = saveOut, saveVerbosity, saveLogHTTP }()
+	saveOut, saveVerbosity, saveLogHTTP := httpDebugOut, grp.inv.flags.verbosity, grp.inv.flags.logHTTP
+	httpDebugOut, grp.inv.flags.verbosity, grp.inv.flags.logHTTP = &debug, "warning", false
+	defer func() {
+		httpDebugOut, grp.inv.flags.verbosity, grp.inv.flags.logHTTP = saveOut, saveVerbosity, saveLogHTTP
+	}()
 
-	saveOrg := flagSccOrg
-	defer func() { flagSccOrg = saveOrg }()
-	flagSccOrg = "1"
-	withSccLocation(t, sccFindingsListCmd, "eu")
+	saveOrg := grp.flagSccOrg
+	defer func() { grp.flagSccOrg = saveOrg }()
+	grp.flagSccOrg = "1"
+	withSccLocation(t, grp.sccFindingsListCmd, "eu")
 
 	_ = captureStdout(t, func() {
-		if err := runSccFindingsList(sccFindingsListCmd, nil); err != nil {
+		if err := grp.runSccFindingsList(grp.sccFindingsListCmd, nil); err != nil {
 			t.Fatalf("runSccFindingsList: %v", err)
 		}
 	})

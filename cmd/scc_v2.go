@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,13 +8,6 @@ import (
 	"regexp"
 	"strings"
 )
-
-// sccV2Rest is the REST client for the SCC V2 API. google.golang.org/api
-// (through v0.293.0 at the time of writing) does not ship a generated
-// securitycenter/v2 client, so V2 endpoints are called directly. Requests
-// automatically pick up the caller's ADC / --account credentials via the
-// shared restClient.
-var sccV2Rest = newRESTClient("https://securitycenter.googleapis.com/v2")
 
 // sccV2ParentPath builds the V2-style parent used for findings list:
 //
@@ -69,26 +61,26 @@ func sccMuteStateEnum(muteState string) (string, error) {
 // `POST /v2/{parent}/findings:bulkMute`, which mutes every finding matching
 // the filter server-side and returns a long-running operation. It is the only
 // bulk write in the findings surface: there is no bulk state change.
-func sccV2BulkMuteFindings(parent string) error {
-	if restUserProject() == "" {
+func (g *sccCmds) sccV2BulkMuteFindings(parent string) error {
+	if g.inv.quotaProject() == "" {
 		return errNoBillingProject("the SCC V2 API")
 	}
-	muteState, err := sccMuteStateEnum(flagSccFindingBulkMuteState)
+	muteState, err := sccMuteStateEnum(g.flagSccFindingBulkMuteState)
 	if err != nil {
 		return err
 	}
-	scopePath := sccV2ScopePath(parent, flagSccFindingLocation)
+	scopePath := sccV2ScopePath(parent, g.flagSccFindingLocation)
 	body := map[string]any{
-		"filter":    flagSccFindingBulkMuteFilter,
+		"filter":    g.flagSccFindingBulkMuteFilter,
 		"muteState": muteState,
 	}
 
-	ctx := context.Background()
+	ctx := g.inv.context()
 	var op map[string]any
-	if err := sccV2Rest.do(ctx, http.MethodPost, "/"+scopePath+"/findings:bulkMute", nil, body, &op); err != nil {
+	if err := g.sccV2Rest.do(ctx, http.MethodPost, "/"+scopePath+"/findings:bulkMute", nil, body, &op); err != nil {
 		return fmt.Errorf("bulk muting findings (V2): %w", err)
 	}
-	return emitFormatted(op, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, op, g.flagSccFormat)
 }
 
 // sccDatasetPattern is the shape gcloud-python validates --dataset against
@@ -98,73 +90,73 @@ var sccDatasetPattern = regexp.MustCompile(`^projects/[a-zA-Z0-9-]+/datasets/[a-
 // sccV2ExportFindings performs `POST /v2/{parent}/findings:export`, exporting
 // the findings under a source to a BigQuery dataset. Unlike the other findings
 // commands this one has no V1 equivalent: gcloud-python pins it to V2.
-func sccV2ExportFindings(parent string) error {
-	if restUserProject() == "" {
+func (g *sccCmds) sccV2ExportFindings(parent string) error {
+	if g.inv.quotaProject() == "" {
 		return errNoBillingProject("the SCC V2 API")
 	}
-	if !sccDatasetPattern.MatchString(flagSccFindingDataset) {
+	if !sccDatasetPattern.MatchString(g.flagSccFindingDataset) {
 		return fmt.Errorf(
 			"--dataset must match projects/[a-zA-Z0-9-]+/datasets/[a-zA-Z0-9_]+, got %q",
-			flagSccFindingDataset)
+			g.flagSccFindingDataset)
 	}
-	parentPath := sccV2ParentPath(parent, flagSccFindingSource, flagSccFindingLocation)
+	parentPath := sccV2ParentPath(parent, g.flagSccFindingSource, g.flagSccFindingLocation)
 	body := map[string]any{
-		"bigQueryDestination": map[string]any{"dataset": flagSccFindingDataset},
+		"bigQueryDestination": map[string]any{"dataset": g.flagSccFindingDataset},
 	}
 
-	ctx := context.Background()
+	ctx := g.inv.context()
 	var resp map[string]any
-	if err := sccV2Rest.do(ctx, http.MethodPost, "/"+parentPath+"/findings:export", nil, body, &resp); err != nil {
+	if err := g.sccV2Rest.do(ctx, http.MethodPost, "/"+parentPath+"/findings:export", nil, body, &resp); err != nil {
 		return fmt.Errorf("exporting findings to BigQuery: %w", err)
 	}
-	return emitFormatted(resp, flagSccFormat)
+	return emitFormattedTo(g.inv.stdout, resp, g.flagSccFormat)
 }
 
 // sccV2ListFindings performs `GET /v2/{parent}/findings` and prints the
 // results using the same table/format branches as the V1 path.
-func sccV2ListFindings(parent string) error {
+func (g *sccCmds) sccV2ListFindings(parent string) error {
 	// SCC V2 rejects unauthenticated ADC user creds with PERMISSION_DENIED
 	// unless a quota project is set (#1740). Resolve it up-front so the
 	// user gets a clear message rather than an opaque server error; the
 	// value is transparently forwarded as x-goog-user-project by the
 	// shared restClient. Goes through restUserProject so tests can inject
 	// a synthetic project without touching global config or ADC.
-	if restUserProject() == "" {
+	if g.inv.quotaProject() == "" {
 		return errNoBillingProject("the SCC V2 API")
 	}
-	parentPath := sccV2ParentPath(parent, flagSccFindingSource, flagSccFindingLocation)
+	parentPath := sccV2ParentPath(parent, g.flagSccFindingSource, g.flagSccFindingLocation)
 
 	q := url.Values{}
-	if flagSccFilter != "" {
-		q.Set("filter", flagSccFilter)
+	if g.flagSccFilter != "" {
+		q.Set("filter", g.flagSccFilter)
 	}
-	if flagSccOrderBy != "" {
-		q.Set("orderBy", flagSccOrderBy)
+	if g.flagSccOrderBy != "" {
+		q.Set("orderBy", g.flagSccOrderBy)
 	}
-	if flagSccFindingFieldMask != "" {
-		q.Set("fieldMask", flagSccFindingFieldMask)
+	if g.flagSccFindingFieldMask != "" {
+		q.Set("fieldMask", g.flagSccFindingFieldMask)
 	}
 	// The V2 findings.list endpoint does not accept compareDuration /
 	// readTime (those were V1-only). If the caller provided them we return
 	// a clear error rather than silently dropping them.
-	if flagSccFindingCompareDur != "" {
-		return fmt.Errorf("--compare-duration is not supported by the SCC V2 API (--location=%q)", flagSccFindingLocation)
+	if g.flagSccFindingCompareDur != "" {
+		return fmt.Errorf("--compare-duration is not supported by the SCC V2 API (--location=%q)", g.flagSccFindingLocation)
 	}
-	if flagSccFindingReadTime != "" {
-		return fmt.Errorf("--read-time is not supported by the SCC V2 API (--location=%q)", flagSccFindingLocation)
+	if g.flagSccFindingReadTime != "" {
+		return fmt.Errorf("--read-time is not supported by the SCC V2 API (--location=%q)", g.flagSccFindingLocation)
 	}
 
-	ctx := context.Background()
-	results, err := sccV2Rest.paginate(ctx, "/"+parentPath+"/findings", q, "listFindingsResults", flagSccPageSize)
+	ctx := g.inv.context()
+	results, err := g.sccV2Rest.paginate(ctx, "/"+parentPath+"/findings", q, "listFindingsResults", g.flagSccPageSize)
 	if err != nil {
 		return fmt.Errorf("listing findings (V2): %w", err)
 	}
 
-	if flagSccFormat != "" {
-		return emitFormatted(results, flagSccFormat)
+	if g.flagSccFormat != "" {
+		return emitFormattedTo(g.inv.stdout, results, g.flagSccFormat)
 	}
 	// Default table matching the V1 codepath.
-	printTableHeading(len(results), "%-40s %-10s %s\n", "NAME", "STATE", "CATEGORY")
+	printTableHeadingTo(g.inv.stdout, len(results), "%-40s %-10s %s\n", "NAME", "STATE", "CATEGORY")
 	for _, r := range results {
 		finding, _ := r["finding"].(map[string]any)
 		if finding == nil {
@@ -173,13 +165,13 @@ func sccV2ListFindings(parent string) error {
 		name, _ := finding["name"].(string)
 		state, _ := finding["state"].(string)
 		category, _ := finding["category"].(string)
-		fmt.Printf("%-40s %-10s %s\n", path.Base(name), state, category)
+		fmt.Fprintf(g.inv.stdout, "%-40s %-10s %s\n", path.Base(name), state, category)
 	}
 	return nil
 }
 
 // sccV2RestClientForTest is exposed for tests that want to override the
 // endpoint (e.g. point at an httptest.Server).
-func sccV2RestClientForTest(endpoint string) {
-	sccV2Rest = newRESTClient(endpoint)
+func (g *sccCmds) sccV2RestClientForTest(endpoint string) {
+	g.sccV2Rest = g.inv.restClient(endpoint)
 }
