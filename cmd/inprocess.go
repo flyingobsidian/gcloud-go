@@ -51,6 +51,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newCheatSheetCmd(inv),
 		newEdgeCloudCmd(inv),
 		newFeedbackCmd(inv),
+		newBackupDRCmd(inv),
 	}
 }
 

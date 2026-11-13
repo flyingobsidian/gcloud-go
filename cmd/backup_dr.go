@@ -12,11 +12,6 @@ import (
 // twelve sub-groups. This file registers the CLI surface as stubs so callers
 // can discover the commands; a follow-up PR should implement each group.
 
-var backupDRCmd = &cobra.Command{
-	Use:   "backup-dr",
-	Short: "Manage Backup and DR",
-}
-
 var backupDRGroups = []struct {
 	name, short string
 	subs        []string
@@ -35,7 +30,7 @@ var backupDRGroups = []struct {
 	{"service-config", "Manage service configuration", []string{"initialize"}},
 }
 
-func init() {
+func (s *backupDRCmds) initBackupDr() {
 	for _, g := range backupDRGroups {
 		g := g
 		group := &cobra.Command{Use: g.name, Short: g.short}
@@ -49,7 +44,31 @@ func init() {
 				},
 			})
 		}
-		backupDRCmd.AddCommand(group)
+		s.backupDRCmd.AddCommand(group)
 	}
-	rootCmd.AddCommand(backupDRCmd)
+
+}
+
+// backupDRCmds holds the commands and flag values of one invocation's "backupDR"
+// command group, so invocations don't share state (#2070).
+type backupDRCmds struct {
+	inv *invocation
+
+	backupDRCmd *cobra.Command
+}
+
+// newBackupDRCmd returns the "backupDR" command group for inv.
+func newBackupDRCmd(inv *invocation) *cobra.Command {
+	return newBackupDRCmds(inv).backupDRCmd
+}
+
+// newBackupDRCmds builds the "backupDR" command group for inv and returns its state.
+func newBackupDRCmds(inv *invocation) *backupDRCmds {
+	s := &backupDRCmds{inv: inv}
+	s.backupDRCmd = &cobra.Command{
+		Use:   "backup-dr",
+		Short: "Manage Backup and DR",
+	}
+	s.initBackupDr()
+	return s
 }
