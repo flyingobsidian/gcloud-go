@@ -7,7 +7,8 @@ import (
 )
 
 func apigeeSubgroup(name string) *cobra.Command {
-	for _, c := range apigeeCmd.Commands() {
+	grp := newApigeeCmds(legacyTestInvocation())
+	for _, c := range grp.apigeeCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,74 +9,43 @@ import (
 
 // --- gcloud apigee products (#1383) ---
 
-var apigeeProductsCmd = &cobra.Command{Use: "products", Short: "Manage Apigee API products"}
-
-var (
-	flagApigeePrdOrganization string
-	flagApigeePrdFormat       string
-	flagApigeePrdConfigFile   string
-)
-
-var (
-	apigeePrdCreateCmd = &cobra.Command{
-		Use: "create RESOURCE", Short: "Create an API product",
-		Args: cobra.ExactArgs(1), RunE: runApigeePrdCreate,
-	}
-	apigeePrdDeleteCmd = &cobra.Command{
-		Use: "delete RESOURCE", Short: "Delete an API product",
-		Args: cobra.ExactArgs(1), RunE: runApigeePrdDelete,
-	}
-	apigeePrdDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe an API product",
-		Args: cobra.ExactArgs(1), RunE: runApigeePrdDescribe,
-	}
-	apigeePrdListCmd = &cobra.Command{
-		Use: "list", Short: "List API products in an organization",
-		Args: cobra.NoArgs, RunE: runApigeePrdList,
-	}
-	apigeePrdUpdateCmd = &cobra.Command{
-		Use: "update RESOURCE", Short: "Update an API product",
-		Args: cobra.ExactArgs(1), RunE: runApigeePrdUpdate,
-	}
-)
-
-func init() {
+func (s *apigeeCmds) initApigeeProducts() {
 	all := []*cobra.Command{
-		apigeePrdCreateCmd, apigeePrdDeleteCmd, apigeePrdDescribeCmd,
-		apigeePrdListCmd, apigeePrdUpdateCmd,
+		s.apigeePrdCreateCmd, s.apigeePrdDeleteCmd, s.apigeePrdDescribeCmd,
+		s.apigeePrdListCmd, s.apigeePrdUpdateCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApigeePrdOrganization, "organization", "", "Apigee organization (required)")
+		c.Flags().StringVar(&s.flagApigeePrdOrganization, "organization", "", "Apigee organization (required)")
 		_ = c.MarkFlagRequired("organization")
-		c.Flags().StringVar(&flagApigeePrdFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagApigeePrdFormat, "format", "", "Output format")
 	}
-	apigeePrdCreateCmd.Flags().StringVar(&flagApigeePrdConfigFile, "config-file", "", "Path to YAML/JSON API product definition (required)")
-	_ = apigeePrdCreateCmd.MarkFlagRequired("config-file")
-	apigeePrdUpdateCmd.Flags().StringVar(&flagApigeePrdConfigFile, "config-file", "", "Path to YAML/JSON API product definition (required)")
-	_ = apigeePrdUpdateCmd.MarkFlagRequired("config-file")
+	s.apigeePrdCreateCmd.Flags().StringVar(&s.flagApigeePrdConfigFile, "config-file", "", "Path to YAML/JSON API product definition (required)")
+	_ = s.apigeePrdCreateCmd.MarkFlagRequired("config-file")
+	s.apigeePrdUpdateCmd.Flags().StringVar(&s.flagApigeePrdConfigFile, "config-file", "", "Path to YAML/JSON API product definition (required)")
+	_ = s.apigeePrdUpdateCmd.MarkFlagRequired("config-file")
 
-	apigeeProductsCmd.AddCommand(all...)
-	apigeeCmd.AddCommand(apigeeProductsCmd)
+	s.apigeeProductsCmd.AddCommand(all...)
+	s.apigeeCmd.AddCommand(s.apigeeProductsCmd)
 }
 
-func apigeePrdName(id string) (string, error) {
-	return apigeeResource(flagApigeePrdOrganization, "apiproducts", id)
+func (s *apigeeCmds) apigeePrdName(id string) (string, error) {
+	return apigeeResource(s.flagApigeePrdOrganization, "apiproducts", id)
 }
 
-func runApigeePrdCreate(cmd *cobra.Command, args []string) error {
-	parent, err := apigeeOrgName(flagApigeePrdOrganization)
+func (s *apigeeCmds) runApigeePrdCreate(cmd *cobra.Command, args []string) error {
+	parent, err := apigeeOrgName(s.flagApigeePrdOrganization)
 	if err != nil {
 		return err
 	}
 	body := &apigee.GoogleCloudApigeeV1ApiProduct{}
-	if err := loadYAMLOrJSONInto(flagApigeePrdConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagApigeePrdConfigFile, body); err != nil {
 		return err
 	}
 	if body.Name == "" {
 		body.Name = args[0]
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, parent)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -85,33 +53,33 @@ func runApigeePrdCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating api product: %w", err)
 	}
-	return emitFormatted(got, flagApigeePrdFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeePrdFormat)
 }
 
-func runApigeePrdDelete(cmd *cobra.Command, args []string) error {
-	name, err := apigeePrdName(args[0])
+func (s *apigeeCmds) runApigeePrdDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeePrdName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Organizations.Apiproducts.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting api product: %w", err)
 	}
-	fmt.Printf("Deleted api product [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted api product [%s].\n", args[0])
 	return nil
 }
 
-func runApigeePrdDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apigeePrdName(args[0])
+func (s *apigeeCmds) runApigeePrdDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeePrdName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -119,16 +87,16 @@ func runApigeePrdDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing api product: %w", err)
 	}
-	return emitFormatted(got, flagApigeePrdFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeePrdFormat)
 }
 
-func runApigeePrdList(cmd *cobra.Command, args []string) error {
-	parent, err := apigeeOrgName(flagApigeePrdOrganization)
+func (s *apigeeCmds) runApigeePrdList(cmd *cobra.Command, args []string) error {
+	parent, err := apigeeOrgName(s.flagApigeePrdOrganization)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, parent)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -138,20 +106,20 @@ func runApigeePrdList(cmd *cobra.Command, args []string) error {
 	}
 	var all []*apigee.GoogleCloudApigeeV1ApiProduct
 	all = append(all, resp.ApiProduct...)
-	return emitFormatted(all, flagApigeePrdFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagApigeePrdFormat)
 }
 
-func runApigeePrdUpdate(cmd *cobra.Command, args []string) error {
-	name, err := apigeePrdName(args[0])
+func (s *apigeeCmds) runApigeePrdUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeePrdName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &apigee.GoogleCloudApigeeV1ApiProduct{}
-	if err := loadYAMLOrJSONInto(flagApigeePrdConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagApigeePrdConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -159,5 +127,5 @@ func runApigeePrdUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating api product: %w", err)
 	}
-	return emitFormatted(got, flagApigeePrdFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeePrdFormat)
 }

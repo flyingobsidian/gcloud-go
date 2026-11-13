@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,49 +9,30 @@ import (
 
 // --- gcloud apigee applications (#1376) ---
 
-var apigeeApplicationsCmd = &cobra.Command{Use: "applications", Short: "Manage Apigee applications"}
-
-var (
-	flagApigeeAppOrganization string
-	flagApigeeAppFormat       string
-	flagApigeeAppPageSize     int64
-)
-
-var (
-	apigeeAppDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe an Apigee application",
-		Args: cobra.ExactArgs(1), RunE: runApigeeAppDescribe,
-	}
-	apigeeAppListCmd = &cobra.Command{
-		Use: "list", Short: "List Apigee applications in an organization",
-		Args: cobra.NoArgs, RunE: runApigeeAppList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{apigeeAppDescribeCmd, apigeeAppListCmd}
+func (s *apigeeCmds) initApigeeApplications() {
+	all := []*cobra.Command{s.apigeeAppDescribeCmd, s.apigeeAppListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagApigeeAppOrganization, "organization", "", "Apigee organization (required)")
+		c.Flags().StringVar(&s.flagApigeeAppOrganization, "organization", "", "Apigee organization (required)")
 		_ = c.MarkFlagRequired("organization")
-		c.Flags().StringVar(&flagApigeeAppFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagApigeeAppFormat, "format", "", "Output format")
 	}
-	apigeeAppListCmd.Flags().Int64Var(&flagApigeeAppPageSize, "page-size", 0, "Maximum results per page")
+	s.apigeeAppListCmd.Flags().Int64Var(&s.flagApigeeAppPageSize, "page-size", 0, "Maximum results per page")
 
-	apigeeApplicationsCmd.AddCommand(all...)
-	apigeeCmd.AddCommand(apigeeApplicationsCmd)
+	s.apigeeApplicationsCmd.AddCommand(all...)
+	s.apigeeCmd.AddCommand(s.apigeeApplicationsCmd)
 }
 
-func apigeeAppName(id string) (string, error) {
-	return apigeeResource(flagApigeeAppOrganization, "apps", id)
+func (s *apigeeCmds) apigeeAppName(id string) (string, error) {
+	return apigeeResource(s.flagApigeeAppOrganization, "apps", id)
 }
 
-func runApigeeAppDescribe(cmd *cobra.Command, args []string) error {
-	name, err := apigeeAppName(args[0])
+func (s *apigeeCmds) runApigeeAppDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.apigeeAppName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, name)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -60,16 +40,16 @@ func runApigeeAppDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing application: %w", err)
 	}
-	return emitFormatted(got, flagApigeeAppFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagApigeeAppFormat)
 }
 
-func runApigeeAppList(cmd *cobra.Command, args []string) error {
-	parent, err := apigeeOrgName(flagApigeeAppOrganization)
+func (s *apigeeCmds) runApigeeAppList(cmd *cobra.Command, args []string) error {
+	parent, err := apigeeOrgName(s.flagApigeeAppOrganization)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := apigeeServiceFor(ctx, parent)
+	ctx := cmd.Context()
+	svc, err := s.apigeeServiceFor(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -77,8 +57,8 @@ func runApigeeAppList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Organizations.Apps.List(parent).Context(ctx)
-		if flagApigeeAppPageSize > 0 {
-			call = call.PageSize(flagApigeeAppPageSize)
+		if s.flagApigeeAppPageSize > 0 {
+			call = call.PageSize(s.flagApigeeAppPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -93,5 +73,5 @@ func runApigeeAppList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagApigeeAppFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagApigeeAppFormat)
 }
