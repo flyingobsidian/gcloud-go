@@ -7,7 +7,8 @@ import (
 )
 
 func monitoringSubgroup(name string) *cobra.Command {
-	for _, c := range monitoringCmd.Commands() {
+	grp := newMonitoringCmds(legacyTestInvocation())
+	for _, c := range grp.monitoringCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

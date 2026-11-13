@@ -1,60 +1,32 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	monitoring "google.golang.org/api/monitoring/v3"
 )
 
 // --- gcloud monitoring alerts (GA in gcloud-python 589.0.0, #1919) ---
 
-var monitoringAlertsCmd = &cobra.Command{Use: "alerts", Short: "Manage Cloud Monitoring alerts"}
-
-var monitoringAlertsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List alerts for a project",
-	Args:  cobra.NoArgs,
-	RunE:  runMonitoringAlertsList,
-}
-
-var monitoringAlertsDescribeCmd = &cobra.Command{
-	Use:   "describe ALERT",
-	Short: "Describe an alert",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runMonitoringAlertsDescribe,
-}
-
-var (
-	flagMonAlertsFormat   string
-	flagMonAlertsFilter   string
-	flagMonAlertsSortBy   []string
-	flagMonAlertsPageSize int64
-	flagMonAlertsLimit    int
-	flagMonAlertsURI      bool
-)
-
-func init() {
-	for _, c := range []*cobra.Command{monitoringAlertsListCmd, monitoringAlertsDescribeCmd} {
-		c.Flags().StringVar(&flagMonAlertsFormat, "format", "", "Output format (default yaml)")
+func (g *monitoringCmds) initMonitoringAlerts() {
+	for _, c := range []*cobra.Command{g.monitoringAlertsListCmd, g.monitoringAlertsDescribeCmd} {
+		c.Flags().StringVar(&g.flagMonAlertsFormat, "format", "", "Output format (default yaml)")
 	}
-	monitoringAlertsListCmd.Flags().StringVar(&flagMonAlertsFilter, "filter", "",
+	g.monitoringAlertsListCmd.Flags().StringVar(&g.flagMonAlertsFilter, "filter", "",
 		"Server-side filter expression, e.g. state=OPEN")
-	monitoringAlertsListCmd.Flags().StringSliceVar(&flagMonAlertsSortBy, "sort-by", nil,
+	g.monitoringAlertsListCmd.Flags().StringSliceVar(&g.flagMonAlertsSortBy, "sort-by", nil,
 		"Comma-separated list of fields to order by (sent to the API as orderBy)")
-	monitoringAlertsListCmd.Flags().Int64Var(&flagMonAlertsPageSize, "page-size", 1000,
+	g.monitoringAlertsListCmd.Flags().Int64Var(&g.flagMonAlertsPageSize, "page-size", 1000,
 		"Maximum number of alerts to request")
-	monitoringAlertsListCmd.Flags().IntVar(&flagMonAlertsLimit, "limit", 0,
+	g.monitoringAlertsListCmd.Flags().IntVar(&g.flagMonAlertsLimit, "limit", 0,
 		"Maximum number of alerts to list (0 = no limit)")
-	monitoringAlertsListCmd.Flags().BoolVar(&flagMonAlertsURI, "uri", false, "Print resource names")
+	g.monitoringAlertsListCmd.Flags().BoolVar(&g.flagMonAlertsURI, "uri", false, "Print resource names")
 
-	monitoringAlertsCmd.AddCommand(monitoringAlertsListCmd, monitoringAlertsDescribeCmd)
-	monitoringCmd.AddCommand(monitoringAlertsCmd)
+	g.monitoringAlertsCmd.AddCommand(g.monitoringAlertsListCmd, g.monitoringAlertsDescribeCmd)
+	g.monitoringCmd.AddCommand(g.monitoringAlertsCmd)
 }
 
 // monitoringAlertName expands a short alert id to projects/P/alerts/ID;
@@ -66,34 +38,34 @@ func monitoringAlertName(project, id string) string {
 	return fmt.Sprintf("projects/%s/alerts/%s", project, id)
 }
 
-func runMonitoringAlertsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonitoringAlertsList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MonitoringService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Monitoring(ctx)
 	if err != nil {
 		return err
 	}
 	// Like gcloud-python, filter and order are applied server-side and only
 	// a single page of --page-size alerts is fetched.
-	call := svc.Projects.Alerts.List("projects/" + project).PageSize(flagMonAlertsPageSize).Context(ctx)
-	if flagMonAlertsFilter != "" {
-		call = call.Filter(flagMonAlertsFilter)
+	call := svc.Projects.Alerts.List("projects/" + project).PageSize(g.flagMonAlertsPageSize).Context(ctx)
+	if g.flagMonAlertsFilter != "" {
+		call = call.Filter(g.flagMonAlertsFilter)
 	}
-	if len(flagMonAlertsSortBy) > 0 {
-		call = call.OrderBy(strings.Join(flagMonAlertsSortBy, ","))
+	if len(g.flagMonAlertsSortBy) > 0 {
+		call = call.OrderBy(strings.Join(g.flagMonAlertsSortBy, ","))
 	}
 	resp, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("listing alerts: %w", err)
 	}
 	alerts := resp.Alerts
-	if flagMonAlertsLimit > 0 && len(alerts) > flagMonAlertsLimit {
-		alerts = alerts[:flagMonAlertsLimit]
+	if g.flagMonAlertsLimit > 0 && len(alerts) > g.flagMonAlertsLimit {
+		alerts = alerts[:g.flagMonAlertsLimit]
 	}
-	return emitMonitoringAlerts(os.Stdout, alerts, flagMonAlertsFormat, flagMonAlertsURI)
+	return emitMonitoringAlerts(g.inv.stdout, alerts, g.flagMonAlertsFormat, g.flagMonAlertsURI)
 }
 
 // emitMonitoringAlerts prints alerts as yaml records separated by "---"
@@ -126,13 +98,13 @@ func emitMonitoringAlerts(w io.Writer, alerts []*monitoring.Alert, format string
 	return nil
 }
 
-func runMonitoringAlertsDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *monitoringCmds) runMonitoringAlertsDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.MonitoringService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().Monitoring(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,5 +112,5 @@ func runMonitoringAlertsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing alert: %w", err)
 	}
-	return emitFormatted(alert, flagMonAlertsFormat)
+	return emitFormattedTo(g.inv.stdout, alert, g.flagMonAlertsFormat)
 }

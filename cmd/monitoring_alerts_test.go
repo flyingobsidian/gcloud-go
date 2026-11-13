@@ -49,12 +49,13 @@ func TestEmitMonitoringAlerts(t *testing.T) {
 }
 
 func TestMonitoringAlertsRegistered(t *testing.T) {
-	c, _, err := monitoringCmd.Find([]string{"alerts"})
-	if err != nil || c != monitoringAlertsCmd {
+	grp := newMonitoringCmds(legacyTestInvocation())
+	c, _, err := grp.monitoringCmd.Find([]string{"alerts"})
+	if err != nil || c != grp.monitoringAlertsCmd {
 		t.Fatalf("monitoring alerts not registered: %v", err)
 	}
 	assertSubcommands(t, c, []string{"describe", "list"})
-	if f := monitoringAlertsListCmd.Flags().Lookup("page-size"); f == nil || f.DefValue != "1000" {
+	if f := grp.monitoringAlertsListCmd.Flags().Lookup("page-size"); f == nil || f.DefValue != "1000" {
 		t.Error("list --page-size should default to 1000")
 	}
 }
