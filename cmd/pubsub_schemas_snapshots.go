@@ -1,13 +1,11 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	pubsub "google.golang.org/api/pubsub/v1"
 )
@@ -28,172 +26,95 @@ func psSnapshotName(project, id string) string {
 	return fmt.Sprintf("projects/%s/snapshots/%s", project, id)
 }
 
-var (
-	flagPSSchemaType       string
-	flagPSSchemaDefinition string
-	flagPSSchemaDefFile    string
-	flagPSSchemaMsgFile    string
-	flagPSSchemaEncoding   string
-	flagPSSchemaRevision   string
-
-	flagPSSnapshotSub string
-)
-
 // --- schemas ---
-
-var pubsubSchemasCmd = &cobra.Command{Use: "schemas", Short: "Manage Pub/Sub schemas"}
-
-var (
-	psSchemaCreateCmd = &cobra.Command{
-		Use: "create SCHEMA", Short: "Create a Pub/Sub schema",
-		Args: cobra.ExactArgs(1), RunE: runPSSchemaCreate,
-	}
-	psSchemaDeleteCmd = &cobra.Command{
-		Use: "delete SCHEMA", Short: "Delete a Pub/Sub schema",
-		Args: cobra.ExactArgs(1), RunE: runPSSchemaDelete,
-	}
-	psSchemaDeleteRevCmd = &cobra.Command{
-		Use: "delete-revision SCHEMA", Short: "Delete a schema revision (--revision required)",
-		Args: cobra.ExactArgs(1), RunE: runPSSchemaDeleteRev,
-	}
-	psSchemaDescribeCmd = &cobra.Command{
-		Use: "describe SCHEMA", Short: "Describe a Pub/Sub schema",
-		Args: cobra.ExactArgs(1), RunE: runPSSchemaDescribe,
-	}
-	psSchemaListCmd = &cobra.Command{
-		Use: "list", Short: "List Pub/Sub schemas",
-		Args: cobra.NoArgs, RunE: runPSSchemaList,
-	}
-	psSchemaListRevsCmd = &cobra.Command{
-		Use: "list-revisions SCHEMA", Short: "List revisions of a Pub/Sub schema",
-		Args: cobra.ExactArgs(1), RunE: runPSSchemaListRevs,
-	}
-	psSchemaCommitCmd = &cobra.Command{
-		Use: "commit SCHEMA", Short: "Commit a new revision of a schema",
-		Args: cobra.ExactArgs(1), RunE: runPSSchemaCommit,
-	}
-	psSchemaRollbackCmd = &cobra.Command{
-		Use: "rollback SCHEMA", Short: "Roll back a schema to a given revision",
-		Args: cobra.ExactArgs(1), RunE: runPSSchemaRollback,
-	}
-	psSchemaValidateSchemaCmd = &cobra.Command{
-		Use: "validate-schema", Short: "Validate a schema definition without persisting it",
-		Args: cobra.NoArgs, RunE: runPSSchemaValidateSchema,
-	}
-	psSchemaValidateMessageCmd = &cobra.Command{
-		Use: "validate-message SCHEMA", Short: "Validate a message against a schema",
-		Args: cobra.ExactArgs(1), RunE: runPSSchemaValidateMessage,
-	}
-)
 
 // --- snapshots ---
 
-var pubsubSnapshotsCmd = &cobra.Command{Use: "snapshots", Short: "Manage Pub/Sub snapshots"}
-
-var (
-	psSnapCreateCmd = &cobra.Command{
-		Use: "create SNAPSHOT", Short: "Create a Pub/Sub snapshot",
-		Args: cobra.ExactArgs(1), RunE: runPSSnapCreate,
-	}
-	psSnapDeleteCmd = &cobra.Command{
-		Use: "delete SNAPSHOT", Short: "Delete a Pub/Sub snapshot",
-		Args: cobra.ExactArgs(1), RunE: runPSSnapDelete,
-	}
-	psSnapDescribeCmd = &cobra.Command{
-		Use: "describe SNAPSHOT", Short: "Describe a Pub/Sub snapshot",
-		Args: cobra.ExactArgs(1), RunE: runPSSnapDescribe,
-	}
-	psSnapListCmd = &cobra.Command{
-		Use: "list", Short: "List Pub/Sub snapshots",
-		Args: cobra.NoArgs, RunE: runPSSnapList,
-	}
-)
-
-func init() {
+func (g *pubsubCmds) initPubsubSchemasSnapshots() {
 	// schemas
 	for _, c := range []*cobra.Command{
-		psSchemaCreateCmd, psSchemaDeleteCmd, psSchemaDeleteRevCmd, psSchemaDescribeCmd,
-		psSchemaListCmd, psSchemaListRevsCmd, psSchemaCommitCmd, psSchemaRollbackCmd,
-		psSchemaValidateSchemaCmd, psSchemaValidateMessageCmd,
+		g.psSchemaCreateCmd, g.psSchemaDeleteCmd, g.psSchemaDeleteRevCmd, g.psSchemaDescribeCmd,
+		g.psSchemaListCmd, g.psSchemaListRevsCmd, g.psSchemaCommitCmd, g.psSchemaRollbackCmd,
+		g.psSchemaValidateSchemaCmd, g.psSchemaValidateMessageCmd,
 	} {
-		c.Flags().StringVar(&flagPSFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagPSFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{psSchemaCreateCmd, psSchemaCommitCmd, psSchemaValidateSchemaCmd} {
-		c.Flags().StringVar(&flagPSSchemaType, "type", "", "Schema type: AVRO or PROTOCOL_BUFFER (required)")
-		c.Flags().StringVar(&flagPSSchemaDefinition, "definition", "", "Inline schema definition")
-		c.Flags().StringVar(&flagPSSchemaDefFile, "definition-file", "",
+	for _, c := range []*cobra.Command{g.psSchemaCreateCmd, g.psSchemaCommitCmd, g.psSchemaValidateSchemaCmd} {
+		c.Flags().StringVar(&g.flagPSSchemaType, "type", "", "Schema type: AVRO or PROTOCOL_BUFFER (required)")
+		c.Flags().StringVar(&g.flagPSSchemaDefinition, "definition", "", "Inline schema definition")
+		c.Flags().StringVar(&g.flagPSSchemaDefFile, "definition-file", "",
 			"Path to file with schema definition (mutually exclusive with --definition)")
 		_ = c.MarkFlagRequired("type")
 	}
-	psSchemaDeleteRevCmd.Flags().StringVar(&flagPSSchemaRevision, "revision-id", "", "Revision ID to delete (required)")
-	_ = psSchemaDeleteRevCmd.MarkFlagRequired("revision-id")
-	psSchemaRollbackCmd.Flags().StringVar(&flagPSSchemaRevision, "revision-id", "", "Revision ID to roll back to (required)")
-	_ = psSchemaRollbackCmd.MarkFlagRequired("revision-id")
-	psSchemaValidateMessageCmd.Flags().StringVar(&flagPSSchemaMsgFile, "message-file", "",
+	g.psSchemaDeleteRevCmd.Flags().StringVar(&g.flagPSSchemaRevision, "revision-id", "", "Revision ID to delete (required)")
+	_ = g.psSchemaDeleteRevCmd.MarkFlagRequired("revision-id")
+	g.psSchemaRollbackCmd.Flags().StringVar(&g.flagPSSchemaRevision, "revision-id", "", "Revision ID to roll back to (required)")
+	_ = g.psSchemaRollbackCmd.MarkFlagRequired("revision-id")
+	g.psSchemaValidateMessageCmd.Flags().StringVar(&g.flagPSSchemaMsgFile, "message-file", "",
 		"Path to file with the message body (required)")
-	_ = psSchemaValidateMessageCmd.MarkFlagRequired("message-file")
-	psSchemaValidateMessageCmd.Flags().StringVar(&flagPSSchemaEncoding, "message-encoding", "JSON",
+	_ = g.psSchemaValidateMessageCmd.MarkFlagRequired("message-file")
+	g.psSchemaValidateMessageCmd.Flags().StringVar(&g.flagPSSchemaEncoding, "message-encoding", "JSON",
 		"Message encoding: JSON or BINARY")
-	pubsubSchemasCmd.AddCommand(
-		psSchemaCreateCmd, psSchemaDeleteCmd, psSchemaDeleteRevCmd, psSchemaDescribeCmd,
-		psSchemaListCmd, psSchemaListRevsCmd, psSchemaCommitCmd, psSchemaRollbackCmd,
-		psSchemaValidateSchemaCmd, psSchemaValidateMessageCmd,
+	g.pubsubSchemasCmd.AddCommand(
+		g.psSchemaCreateCmd, g.psSchemaDeleteCmd, g.psSchemaDeleteRevCmd, g.psSchemaDescribeCmd,
+		g.psSchemaListCmd, g.psSchemaListRevsCmd, g.psSchemaCommitCmd, g.psSchemaRollbackCmd,
+		g.psSchemaValidateSchemaCmd, g.psSchemaValidateMessageCmd,
 	)
 	// pubsub.go still registers the schemas stub group; replace it with the real one.
-	replacePubsubSubgroup("schemas", pubsubSchemasCmd)
+	g.replacePubsubSubgroup("schemas", g.pubsubSchemasCmd)
 
 	// snapshots
-	psSnapCreateCmd.Flags().StringVar(&flagPSSnapshotSub, "subscription", "",
+	g.psSnapCreateCmd.Flags().StringVar(&g.flagPSSnapshotSub, "subscription", "",
 		"Subscription to snapshot from (required)")
-	_ = psSnapCreateCmd.MarkFlagRequired("subscription")
-	for _, c := range []*cobra.Command{psSnapDescribeCmd, psSnapListCmd} {
-		c.Flags().StringVar(&flagPSFormat, "format", "", "Output format")
+	_ = g.psSnapCreateCmd.MarkFlagRequired("subscription")
+	for _, c := range []*cobra.Command{g.psSnapDescribeCmd, g.psSnapListCmd} {
+		c.Flags().StringVar(&g.flagPSFormat, "format", "", "Output format")
 	}
-	pubsubSnapshotsCmd.AddCommand(psSnapCreateCmd, psSnapDeleteCmd, psSnapDescribeCmd, psSnapListCmd)
-	replacePubsubSubgroup("snapshots", pubsubSnapshotsCmd)
+	g.pubsubSnapshotsCmd.AddCommand(g.psSnapCreateCmd, g.psSnapDeleteCmd, g.psSnapDescribeCmd, g.psSnapListCmd)
+	g.replacePubsubSubgroup("snapshots", g.pubsubSnapshotsCmd)
 }
 
-func replacePubsubSubgroup(name string, real *cobra.Command) {
-	for _, c := range pubsubCmd.Commands() {
+func (g *pubsubCmds) replacePubsubSubgroup(name string, real *cobra.Command) {
+	for _, c := range g.pubsubCmd.Commands() {
 		if c.Name() == name {
-			pubsubCmd.RemoveCommand(c)
+			g.pubsubCmd.RemoveCommand(c)
 			break
 		}
 	}
-	pubsubCmd.AddCommand(real)
+	g.pubsubCmd.AddCommand(real)
 }
 
 // --- schemas impl ---
 
-func loadSchemaDefinition() (string, error) {
-	if flagPSSchemaDefinition != "" && flagPSSchemaDefFile != "" {
+func (g *pubsubCmds) loadSchemaDefinition() (string, error) {
+	if g.flagPSSchemaDefinition != "" && g.flagPSSchemaDefFile != "" {
 		return "", fmt.Errorf("--definition and --definition-file are mutually exclusive")
 	}
-	if flagPSSchemaDefinition != "" {
-		return flagPSSchemaDefinition, nil
+	if g.flagPSSchemaDefinition != "" {
+		return g.flagPSSchemaDefinition, nil
 	}
-	if flagPSSchemaDefFile == "" {
+	if g.flagPSSchemaDefFile == "" {
 		return "", fmt.Errorf("--definition or --definition-file is required")
 	}
-	data, err := os.ReadFile(flagPSSchemaDefFile)
+	data, err := os.ReadFile(g.flagPSSchemaDefFile)
 	if err != nil {
 		return "", fmt.Errorf("reading definition file: %w", err)
 	}
 	return string(data), nil
 }
 
-func runPSSchemaCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	def, err := loadSchemaDefinition()
+	def, err := g.loadSchemaDefinition()
 	if err != nil {
 		return err
 	}
-	schema := &pubsub.Schema{Type: flagPSSchemaType, Definition: def}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	schema := &pubsub.Schema{Type: g.flagPSSchemaType, Definition: def}
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
@@ -202,51 +123,51 @@ func runPSSchemaCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating schema: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runPSSchemaDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Schemas.Delete(psSchemaName(project, args[0])).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting schema: %w", err)
 	}
-	fmt.Printf("Deleted schema [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted schema [%s].\n", args[0])
 	return nil
 }
 
-func runPSSchemaDeleteRev(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaDeleteRev(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
-	name := fmt.Sprintf("%s@%s", psSchemaName(project, args[0]), flagPSSchemaRevision)
+	name := fmt.Sprintf("%s@%s", psSchemaName(project, args[0]), g.flagPSSchemaRevision)
 	got, err := svc.Projects.Schemas.DeleteRevision(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting schema revision: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runPSSchemaDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
@@ -254,16 +175,16 @@ func runPSSchemaDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing schema: %w", err)
 	}
-	return emitFormatted(got, flagPSFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagPSFormat)
 }
 
-func runPSSchemaList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
@@ -284,23 +205,23 @@ func runPSSchemaList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagPSFormat != "" {
-		return emitFormatted(all, flagPSFormat)
+	if g.flagPSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagPSFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "TYPE")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %s\n", "NAME", "TYPE")
 	for _, s := range all {
-		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.Type)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(s.Name), s.Type)
 	}
 	return nil
 }
 
-func runPSSchemaListRevs(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaListRevs(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
@@ -308,28 +229,28 @@ func runPSSchemaListRevs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing schema revisions: %w", err)
 	}
-	if flagPSFormat != "" {
-		return emitFormatted(resp.Schemas, flagPSFormat)
+	if g.flagPSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, resp.Schemas, g.flagPSFormat)
 	}
-	printTableHeading(len(resp.Schemas), "%-40s %s\n", "REVISION_ID", "CREATED")
+	printTableHeadingTo(g.inv.stdout, len(resp.Schemas), "%-40s %s\n", "REVISION_ID", "CREATED")
 	for _, s := range resp.Schemas {
-		fmt.Printf("%-40s %s\n", s.RevisionId, s.RevisionCreateTime)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", s.RevisionId, s.RevisionCreateTime)
 	}
 	return nil
 }
 
-func runPSSchemaCommit(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaCommit(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	def, err := loadSchemaDefinition()
+	def, err := g.loadSchemaDefinition()
 	if err != nil {
 		return err
 	}
-	req := &pubsub.CommitSchemaRequest{Schema: &pubsub.Schema{Type: flagPSSchemaType, Definition: def}}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	req := &pubsub.CommitSchemaRequest{Schema: &pubsub.Schema{Type: g.flagPSSchemaType, Definition: def}}
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
@@ -337,39 +258,39 @@ func runPSSchemaCommit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("committing schema revision: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runPSSchemaRollback(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaRollback(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
 	got, err := svc.Projects.Schemas.Rollback(psSchemaName(project, args[0]),
-		&pubsub.RollbackSchemaRequest{RevisionId: flagPSSchemaRevision}).Context(ctx).Do()
+		&pubsub.RollbackSchemaRequest{RevisionId: g.flagPSSchemaRevision}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("rolling back schema: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runPSSchemaValidateSchema(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaValidateSchema(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	def, err := loadSchemaDefinition()
+	def, err := g.loadSchemaDefinition()
 	if err != nil {
 		return err
 	}
-	req := &pubsub.ValidateSchemaRequest{Schema: &pubsub.Schema{Type: flagPSSchemaType, Definition: def}}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	req := &pubsub.ValidateSchemaRequest{Schema: &pubsub.Schema{Type: g.flagPSSchemaType, Definition: def}}
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
@@ -377,25 +298,25 @@ func runPSSchemaValidateSchema(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("validating schema: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runPSSchemaValidateMessage(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSchemaValidateMessage(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	msg, err := os.ReadFile(flagPSSchemaMsgFile)
+	msg, err := os.ReadFile(g.flagPSSchemaMsgFile)
 	if err != nil {
 		return fmt.Errorf("reading message file: %w", err)
 	}
 	req := &pubsub.ValidateMessageRequest{
 		Name:     psSchemaName(project, args[0]),
 		Message:  string(msg),
-		Encoding: flagPSSchemaEncoding,
+		Encoding: g.flagPSSchemaEncoding,
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
@@ -403,53 +324,53 @@ func runPSSchemaValidateMessage(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("validating message: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
 // --- snapshots impl ---
 
-func runPSSnapCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSnapCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
 	got, err := svc.Projects.Snapshots.Create(psSnapshotName(project, args[0]),
-		&pubsub.CreateSnapshotRequest{Subscription: psSubName(project, flagPSSnapshotSub)}).Context(ctx).Do()
+		&pubsub.CreateSnapshotRequest{Subscription: psSubName(project, g.flagPSSnapshotSub)}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating snapshot: %w", err)
 	}
-	return emitFormatted(got, "")
+	return emitFormattedTo(g.inv.stdout, got, "")
 }
 
-func runPSSnapDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSnapDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Snapshots.Delete(psSnapshotName(project, args[0])).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting snapshot: %w", err)
 	}
-	fmt.Printf("Deleted snapshot [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stdout, "Deleted snapshot [%s].\n", args[0])
 	return nil
 }
 
-func runPSSnapDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSnapDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
@@ -457,16 +378,16 @@ func runPSSnapDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing snapshot: %w", err)
 	}
-	return emitFormatted(got, flagPSFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagPSFormat)
 }
 
-func runPSSnapList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPSSnapList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.PubSubService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().PubSub(ctx)
 	if err != nil {
 		return err
 	}
@@ -487,12 +408,12 @@ func runPSSnapList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagPSFormat != "" {
-		return emitFormatted(all, flagPSFormat)
+	if g.flagPSFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagPSFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "TOPIC")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %s\n", "NAME", "TOPIC")
 	for _, s := range all {
-		fmt.Printf("%-40s %s\n", path.Base(s.Name), s.Topic)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(s.Name), s.Topic)
 	}
 	return nil
 }

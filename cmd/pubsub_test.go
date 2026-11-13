@@ -7,7 +7,8 @@ import (
 )
 
 func pubsubSubgroup(name string) *cobra.Command {
-	for _, c := range pubsubCmd.Commands() {
+	grp := newPubsubCmds(legacyTestInvocation())
+	for _, c := range grp.pubsubCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

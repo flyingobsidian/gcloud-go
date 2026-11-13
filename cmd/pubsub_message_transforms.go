@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -23,51 +22,25 @@ import (
 // projects:validateMessageTransform, but the generated Go client does not
 // (yet) surface them, so we talk directly to pubsub.googleapis.com.
 
-var pubsubMessageTransformsCmd = &cobra.Command{
-	Use:   "message-transforms",
-	Short: "Manage Cloud Pub/Sub message transforms",
-}
-
-var (
-	flagPMTMessage           string
-	flagPMTAttributes        []string
-	flagPMTMessageTransforms string
-	flagPMTTopic             string
-	flagPMTSubscription      string
-	flagPMTTransformFile     string
-	flagPMTFormat            string
-)
-
-var (
-	pubsubMTTestCmd = &cobra.Command{
-		Use: "test", Short: "Test message transforms against a given message",
-		Args: cobra.NoArgs, RunE: runPMTTest,
-	}
-	pubsubMTValidateCmd = &cobra.Command{
-		Use: "validate", Short: "Validate a message transform",
-		Args: cobra.NoArgs, RunE: runPMTValidate,
-	}
-)
-
-func init() {
-	pubsubMTTestCmd.Flags().StringVar(&flagPMTMessage, "message", "",
+func (g *pubsubCmds) initPubsubMessageTransforms() {
+	g.pubsubMTTestCmd.Flags().StringVar(&g.flagPMTMessage, "message", "",
 		"Message body to test (utf-8 string)")
-	pubsubMTTestCmd.Flags().StringSliceVar(&flagPMTAttributes, "attribute", nil,
+	g.pubsubMTTestCmd.Flags().StringSliceVar(&g.flagPMTAttributes, "attribute", nil,
 		"Message attributes as KEY=VALUE (may be repeated)")
-	pubsubMTTestCmd.Flags().StringVar(&flagPMTMessageTransforms, "message-transforms-file", "",
+	g.pubsubMTTestCmd.Flags().StringVar(&g.flagPMTMessageTransforms, "message-transforms-file", "",
 		"Path to a YAML/JSON file containing message transforms to test")
-	pubsubMTTestCmd.Flags().StringVar(&flagPMTTopic, "topic", "",
+	g.pubsubMTTestCmd.Flags().StringVar(&g.flagPMTTopic, "topic", "",
 		"Topic whose transforms to test against")
-	pubsubMTTestCmd.Flags().StringVar(&flagPMTSubscription, "subscription", "",
+	g.pubsubMTTestCmd.Flags().StringVar(&g.flagPMTSubscription, "subscription", "",
 		"Subscription whose transforms to test against")
-	pubsubMTTestCmd.Flags().StringVar(&flagPMTFormat, "format", "", "Output format")
+	g.pubsubMTTestCmd.Flags().StringVar(&g.flagPMTFormat, "format", "", "Output format")
 
-	pubsubMTValidateCmd.Flags().StringVar(&flagPMTTransformFile, "message-transform-file", "",
+	g.pubsubMTValidateCmd.Flags().StringVar(&g.flagPMTTransformFile, "message-transform-file", "",
 		"Path to a YAML/JSON file containing a single message transform to validate (required)")
-	_ = pubsubMTValidateCmd.MarkFlagRequired("message-transform-file")
+	_ = g.pubsubMTValidateCmd.MarkFlagRequired("message-transform-file")
 
-	pubsubMessageTransformsCmd.AddCommand(pubsubMTTestCmd, pubsubMTValidateCmd)
-	pubsubCmd.AddCommand(pubsubMessageTransformsCmd)
+	g.pubsubMessageTransformsCmd.AddCommand(g.pubsubMTTestCmd, g.pubsubMTValidateCmd)
+	g.pubsubCmd.AddCommand(g.pubsubMessageTransformsCmd)
 }
 
 // pmtLoadTransforms reads a file containing either a single message transform
@@ -99,12 +72,12 @@ func pmtLoadTransforms(path string) ([]any, error) {
 	}
 }
 
-func pmtAttributesFromFlag() (map[string]string, error) {
-	if len(flagPMTAttributes) == 0 {
+func (g *pubsubCmds) pmtAttributesFromFlag() (map[string]string, error) {
+	if len(g.flagPMTAttributes) == 0 {
 		return nil, nil
 	}
 	out := map[string]string{}
-	for _, kv := range flagPMTAttributes {
+	for _, kv := range g.flagPMTAttributes {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok {
 			return nil, fmt.Errorf("--attribute %q must be KEY=VALUE", kv)
@@ -114,74 +87,74 @@ func pmtAttributesFromFlag() (map[string]string, error) {
 	return out, nil
 }
 
-func pmtTopicRef(project string) string {
-	if flagPMTTopic == "" {
+func (g *pubsubCmds) pmtTopicRef(project string) string {
+	if g.flagPMTTopic == "" {
 		return ""
 	}
-	if strings.HasPrefix(flagPMTTopic, "projects/") {
-		return flagPMTTopic
+	if strings.HasPrefix(g.flagPMTTopic, "projects/") {
+		return g.flagPMTTopic
 	}
-	return fmt.Sprintf("projects/%s/topics/%s", project, flagPMTTopic)
+	return fmt.Sprintf("projects/%s/topics/%s", project, g.flagPMTTopic)
 }
 
-func pmtSubscriptionRef(project string) string {
-	if flagPMTSubscription == "" {
+func (g *pubsubCmds) pmtSubscriptionRef(project string) string {
+	if g.flagPMTSubscription == "" {
 		return ""
 	}
-	if strings.HasPrefix(flagPMTSubscription, "projects/") {
-		return flagPMTSubscription
+	if strings.HasPrefix(g.flagPMTSubscription, "projects/") {
+		return g.flagPMTSubscription
 	}
-	return fmt.Sprintf("projects/%s/subscriptions/%s", project, flagPMTSubscription)
+	return fmt.Sprintf("projects/%s/subscriptions/%s", project, g.flagPMTSubscription)
 }
 
-func runPMTTest(cmd *cobra.Command, args []string) error {
-	if flagPMTMessage == "" && len(flagPMTAttributes) == 0 {
+func (g *pubsubCmds) runPMTTest(cmd *cobra.Command, args []string) error {
+	if g.flagPMTMessage == "" && len(g.flagPMTAttributes) == 0 {
 		return fmt.Errorf("must specify --message, one or more --attribute, or both")
 	}
-	project, err := resolveProject()
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	attrs, err := pmtAttributesFromFlag()
+	attrs, err := g.pmtAttributesFromFlag()
 	if err != nil {
 		return err
 	}
 	message := map[string]any{}
-	if flagPMTMessage != "" {
-		message["data"] = base64.StdEncoding.EncodeToString([]byte(flagPMTMessage))
+	if g.flagPMTMessage != "" {
+		message["data"] = base64.StdEncoding.EncodeToString([]byte(g.flagPMTMessage))
 	}
 	if attrs != nil {
 		message["attributes"] = attrs
 	}
 	body := map[string]any{"message": message}
-	if flagPMTMessageTransforms != "" {
-		transforms, err := pmtLoadTransforms(flagPMTMessageTransforms)
+	if g.flagPMTMessageTransforms != "" {
+		transforms, err := pmtLoadTransforms(g.flagPMTMessageTransforms)
 		if err != nil {
 			return err
 		}
 		body["messageTransforms"] = map[string]any{"messageTransforms": transforms}
 	}
-	if ref := pmtTopicRef(project); ref != "" {
+	if ref := g.pmtTopicRef(project); ref != "" {
 		body["topic"] = ref
 	}
-	if ref := pmtSubscriptionRef(project); ref != "" {
+	if ref := g.pmtSubscriptionRef(project); ref != "" {
 		body["subscription"] = ref
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	return pubsubHTTP(ctx, http.MethodPost,
-		fmt.Sprintf("projects/%s:testMessageTransforms", project), payload, flagPMTFormat)
+	ctx := cmd.Context()
+	return g.pubsubHTTP(ctx, http.MethodPost,
+		fmt.Sprintf("projects/%s:testMessageTransforms", project), payload, g.flagPMTFormat)
 }
 
-func runPMTValidate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *pubsubCmds) runPMTValidate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	transforms, err := pmtLoadTransforms(flagPMTTransformFile)
+	transforms, err := pmtLoadTransforms(g.flagPMTTransformFile)
 	if err != nil {
 		return err
 	}
@@ -193,19 +166,19 @@ func runPMTValidate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if err := pubsubHTTP(ctx, http.MethodPost,
+	ctx := cmd.Context()
+	if err := g.pubsubHTTP(ctx, http.MethodPost,
 		fmt.Sprintf("projects/%s:validateMessageTransform", project), payload, ""); err != nil {
 		return err
 	}
-	fmt.Println("Message transform is valid.")
+	fmt.Fprintln(g.inv.stdout, "Message transform is valid.")
 	return nil
 }
 
 // pubsubHTTP posts an authenticated JSON request against
 // https://pubsub.googleapis.com/v1 and emits the decoded body.
-func pubsubHTTP(ctx context.Context, method, name string, payload []byte, format string) error {
-	ts, err := gcp.PlatformTokenSource(ctx, flagAccount)
+func (g *pubsubCmds) pubsubHTTP(ctx context.Context, method, name string, payload []byte, format string) error {
+	ts, err := g.inv.clients().PlatformTokenSource(ctx)
 	if err != nil {
 		return err
 	}
@@ -241,8 +214,8 @@ func pubsubHTTP(ctx context.Context, method, name string, payload []byte, format
 	}
 	var out any
 	if err := json.Unmarshal(respBody, &out); err != nil {
-		_, werr := os.Stdout.Write(respBody)
+		_, werr := g.inv.stdout.Write(respBody)
 		return werr
 	}
-	return emitFormatted(out, format)
+	return emitFormattedTo(g.inv.stdout, out, format)
 }

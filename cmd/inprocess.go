@@ -143,6 +143,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newDeployCmd(inv),
 		newDataprocCmd(inv),
 		newDatabaseMigrationCmd(inv),
+		newPubsubCmd(inv),
 	}
 }
 
