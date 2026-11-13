@@ -1,97 +1,73 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	container "google.golang.org/api/container/v1"
 )
 
 // --- gcloud container operations (#1141) ---
 
-var containerOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage GKE long-running operations"}
-
-var (
-	flagCtnOpLocation string
-	flagCtnOpFormat   string
-)
-
-var (
-	containerOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a GKE operation",
-		Args: cobra.ExactArgs(1), RunE: runCtnOpCancel,
-	}
-	containerOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a GKE operation",
-		Args: cobra.ExactArgs(1), RunE: runCtnOpDescribe,
-	}
-	containerOpListCmd = &cobra.Command{
-		Use: "list", Short: "List GKE operations in a location",
-		Args: cobra.NoArgs, RunE: runCtnOpList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{containerOpCancelCmd, containerOpDescribeCmd, containerOpListCmd}
+func (s *containerCmds) initContainerOperations() {
+	all := []*cobra.Command{s.containerOpCancelCmd, s.containerOpDescribeCmd, s.containerOpListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagCtnOpLocation, "location", "", "Location (region or zone) (required)")
+		c.Flags().StringVar(&s.flagCtnOpLocation, "location", "", "Location (region or zone) (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagCtnOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagCtnOpFormat, "format", "", "Output format")
 	}
 
-	containerOperationsCmd.AddCommand(all...)
-	containerCmd.AddCommand(containerOperationsCmd)
+	s.containerOperationsCmd.AddCommand(all...)
+	s.containerCmd.AddCommand(s.containerOperationsCmd)
 }
 
-func ctnOpParent() (string, error) {
-	project, err := resolveProject()
+func (s *containerCmds) ctnOpParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	if flagCtnOpLocation == "" {
+	if s.flagCtnOpLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagCtnOpLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagCtnOpLocation), nil
 }
 
-func ctnOpName(id string) (string, error) {
+func (s *containerCmds) ctnOpName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := ctnOpParent()
+	parent, err := s.ctnOpParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/operations/%s", parent, id), nil
 }
 
-func runCtnOpCancel(cmd *cobra.Command, args []string) error {
-	name, err := ctnOpName(args[0])
+func (s *containerCmds) runCtnOpCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Operations.Cancel(name, &container.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runCtnOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := ctnOpName(args[0])
+func (s *containerCmds) runCtnOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,16 +75,16 @@ func runCtnOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagCtnOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagCtnOpFormat)
 }
 
-func runCtnOpList(cmd *cobra.Command, args []string) error {
-	parent, err := ctnOpParent()
+func (s *containerCmds) runCtnOpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.ctnOpParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -116,5 +92,5 @@ func runCtnOpList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	return emitFormatted(resp.Operations, flagCtnOpFormat)
+	return emitFormattedTo(s.inv.stdout, resp.Operations, s.flagCtnOpFormat)
 }

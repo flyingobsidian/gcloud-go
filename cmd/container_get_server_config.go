@@ -1,43 +1,29 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 )
 
 // --- gcloud container get-server-config (#1145) ---
 
-var (
-	flagCtnCfgLocation string
-	flagCtnCfgFormat   string
-)
+func (s *containerCmds) initContainerGetServerConfig() {
+	s.containerGetServerConfigCmd.Flags().StringVar(&s.flagCtnCfgLocation, "location", "", "Location (region or zone) (required)")
+	_ = s.containerGetServerConfigCmd.MarkFlagRequired("location")
+	s.containerGetServerConfigCmd.Flags().StringVar(&s.flagCtnCfgFormat, "format", "", "Output format")
 
-var containerGetServerConfigCmd = &cobra.Command{
-	Use:   "get-server-config",
-	Short: "Get GKE server configuration for a location",
-	Args:  cobra.NoArgs,
-	RunE:  runCtnGetServerConfig,
+	s.containerCmd.AddCommand(s.containerGetServerConfigCmd)
 }
 
-func init() {
-	containerGetServerConfigCmd.Flags().StringVar(&flagCtnCfgLocation, "location", "", "Location (region or zone) (required)")
-	_ = containerGetServerConfigCmd.MarkFlagRequired("location")
-	containerGetServerConfigCmd.Flags().StringVar(&flagCtnCfgFormat, "format", "", "Output format")
-
-	containerCmd.AddCommand(containerGetServerConfigCmd)
-}
-
-func runCtnGetServerConfig(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *containerCmds) runCtnGetServerConfig(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	name := fmt.Sprintf("projects/%s/locations/%s", project, flagCtnCfgLocation)
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	name := fmt.Sprintf("projects/%s/locations/%s", project, s.flagCtnCfgLocation)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -45,5 +31,5 @@ func runCtnGetServerConfig(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting server config: %w", err)
 	}
-	return emitFormatted(got, flagCtnCfgFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagCtnCfgFormat)
 }

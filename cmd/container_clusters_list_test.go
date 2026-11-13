@@ -9,7 +9,8 @@ import (
 )
 
 func TestCtnClListLocation(t *testing.T) {
-	defer func() { flagCtnClLocation, flagCtnClRegion, flagZone = "", "", "" }()
+	grp := newContainerCmds(legacyTestInvocation())
+	defer func() { grp.flagCtnClLocation, grp.flagCtnClRegion, grp.inv.flags.zone = "", "", "" }()
 	cases := []struct {
 		location, region, zone, want string
 	}{
@@ -19,22 +20,23 @@ func TestCtnClListLocation(t *testing.T) {
 		{"", "", "europe-west2-a", "europe-west2-a"},
 	}
 	for _, tc := range cases {
-		flagCtnClLocation, flagCtnClRegion, flagZone = tc.location, tc.region, tc.zone
-		if got := ctnClListLocation(); got != tc.want {
+		grp.flagCtnClLocation, grp.flagCtnClRegion, grp.inv.flags.zone = tc.location, tc.region, tc.zone
+		if got := grp.ctnClListLocation(); got != tc.want {
 			t.Errorf("ctnClListLocation(%q, %q, %q) = %q, want %q", tc.location, tc.region, tc.zone, got, tc.want)
 		}
 	}
 }
 
 func TestContainerClustersListLocationOptional(t *testing.T) {
-	f := containerClListCmd.Flags().Lookup("location")
+	grp := newContainerCmds(legacyTestInvocation())
+	f := grp.containerClListCmd.Flags().Lookup("location")
 	if f == nil {
 		t.Fatal("clusters list missing --location")
 	}
 	if _, required := f.Annotations["cobra_annotation_bash_completion_one_required_flag"]; required {
 		t.Error("clusters list --location should be optional")
 	}
-	if containerClListCmd.Flags().Lookup("region") == nil {
+	if grp.containerClListCmd.Flags().Lookup("region") == nil {
 		t.Error("clusters list missing --region")
 	}
 }
@@ -62,7 +64,7 @@ func TestCtnClDefaultTable(t *testing.T) {
 		{
 			Name: "prod", Zone: "europe-west2", CurrentMasterVersion: "1.33.1-gke.100", Endpoint: "10.0.0.1",
 			CurrentNodeVersion: "1.33.1-gke.100", CurrentNodeCount: 3, Status: "RUNNING",
-			NodePools: []*container.NodePool{{Config: &container.NodeConfig{MachineType: "e2-medium"}}},
+			NodePools:          []*container.NodePool{{Config: &container.NodeConfig{MachineType: "e2-medium"}}},
 			IpAllocationPolicy: &container.IPAllocationPolicy{StackType: "IPV4_IPV6"},
 		},
 		{

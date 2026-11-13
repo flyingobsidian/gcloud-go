@@ -1,111 +1,73 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	container "google.golang.org/api/container/v1"
 )
 
 // --- gcloud container node-pools (#1140) ---
 
-var containerNodePoolsCmd = &cobra.Command{Use: "node-pools", Short: "Manage GKE node pools"}
-
-var (
-	flagCtnNpLocation   string
-	flagCtnNpCluster    string
-	flagCtnNpFormat     string
-	flagCtnNpConfigFile string
-)
-
-var (
-	containerNpCreateCmd = &cobra.Command{
-		Use: "create NODE_POOL", Short: "Create a node pool (loads CreateNodePoolRequest.nodePool from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runCtnNpCreate,
-	}
-	containerNpDeleteCmd = &cobra.Command{
-		Use: "delete NODE_POOL", Short: "Delete a node pool",
-		Args: cobra.ExactArgs(1), RunE: runCtnNpDelete,
-	}
-	containerNpDescribeCmd = &cobra.Command{
-		Use: "describe NODE_POOL", Short: "Describe a node pool",
-		Args: cobra.ExactArgs(1), RunE: runCtnNpDescribe,
-	}
-	containerNpListCmd = &cobra.Command{
-		Use: "list", Short: "List node pools on a cluster",
-		Args: cobra.NoArgs, RunE: runCtnNpList,
-	}
-	containerNpUpdateCmd = &cobra.Command{
-		Use: "update NODE_POOL", Short: "Update a node pool (loads UpdateNodePoolRequest from --config-file)",
-		Args: cobra.ExactArgs(1), RunE: runCtnNpUpdate,
-	}
-	containerNpRollbackCmd = &cobra.Command{
-		Use: "rollback NODE_POOL", Short: "Roll back a previously-Aborted or Failed NodePool upgrade",
-		Args: cobra.ExactArgs(1), RunE: runCtnNpRollback,
-	}
-)
-
-func init() {
+func (s *containerCmds) initContainerNodePools() {
 	all := []*cobra.Command{
-		containerNpCreateCmd, containerNpDeleteCmd, containerNpDescribeCmd,
-		containerNpListCmd, containerNpUpdateCmd, containerNpRollbackCmd,
+		s.containerNpCreateCmd, s.containerNpDeleteCmd, s.containerNpDescribeCmd,
+		s.containerNpListCmd, s.containerNpUpdateCmd, s.containerNpRollbackCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagCtnNpLocation, "location", "", "Cluster location (region or zone) (required)")
+		c.Flags().StringVar(&s.flagCtnNpLocation, "location", "", "Cluster location (region or zone) (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagCtnNpCluster, "cluster", "", "Cluster that owns the node pool (required)")
+		c.Flags().StringVar(&s.flagCtnNpCluster, "cluster", "", "Cluster that owns the node pool (required)")
 		_ = c.MarkFlagRequired("cluster")
-		c.Flags().StringVar(&flagCtnNpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagCtnNpFormat, "format", "", "Output format")
 	}
-	containerNpCreateCmd.Flags().StringVar(&flagCtnNpConfigFile, "config-file", "", "YAML/JSON file with a container.NodePool body (required)")
-	_ = containerNpCreateCmd.MarkFlagRequired("config-file")
-	containerNpUpdateCmd.Flags().StringVar(&flagCtnNpConfigFile, "config-file", "", "YAML/JSON file with an UpdateNodePoolRequest body (required)")
-	_ = containerNpUpdateCmd.MarkFlagRequired("config-file")
+	s.containerNpCreateCmd.Flags().StringVar(&s.flagCtnNpConfigFile, "config-file", "", "YAML/JSON file with a container.NodePool body (required)")
+	_ = s.containerNpCreateCmd.MarkFlagRequired("config-file")
+	s.containerNpUpdateCmd.Flags().StringVar(&s.flagCtnNpConfigFile, "config-file", "", "YAML/JSON file with an UpdateNodePoolRequest body (required)")
+	_ = s.containerNpUpdateCmd.MarkFlagRequired("config-file")
 
-	containerNodePoolsCmd.AddCommand(all...)
-	containerCmd.AddCommand(containerNodePoolsCmd)
+	s.containerNodePoolsCmd.AddCommand(all...)
+	s.containerCmd.AddCommand(s.containerNodePoolsCmd)
 }
 
-func ctnNpClusterName() (string, error) {
-	project, err := resolveProject()
+func (s *containerCmds) ctnNpClusterName() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	if flagCtnNpLocation == "" {
+	if s.flagCtnNpLocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	if flagCtnNpCluster == "" {
+	if s.flagCtnNpCluster == "" {
 		return "", fmt.Errorf("--cluster is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s/clusters/%s", project, flagCtnNpLocation, flagCtnNpCluster), nil
+	return fmt.Sprintf("projects/%s/locations/%s/clusters/%s", project, s.flagCtnNpLocation, s.flagCtnNpCluster), nil
 }
 
-func ctnNpName(id string) (string, error) {
+func (s *containerCmds) ctnNpName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	cluster, err := ctnNpClusterName()
+	cluster, err := s.ctnNpClusterName()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/nodePools/%s", cluster, id), nil
 }
 
-func runCtnNpCreate(cmd *cobra.Command, args []string) error {
-	parent, err := ctnNpClusterName()
+func (s *containerCmds) runCtnNpCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.ctnNpClusterName()
 	if err != nil {
 		return err
 	}
 	np := &container.NodePool{}
-	if err := loadYAMLOrJSONInto(flagCtnNpConfigFile, np); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCtnNpConfigFile, np); err != nil {
 		return err
 	}
 	np.Name = args[0]
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -113,17 +75,17 @@ func runCtnNpCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating node pool: %w", err)
 	}
-	fmt.Printf("Create node pool [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCtnNpFormat)
+	fmt.Fprintf(s.inv.stdout, "Create node pool [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCtnNpFormat)
 }
 
-func runCtnNpDelete(cmd *cobra.Command, args []string) error {
-	name, err := ctnNpName(args[0])
+func (s *containerCmds) runCtnNpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnNpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -131,17 +93,17 @@ func runCtnNpDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting node pool: %w", err)
 	}
-	fmt.Printf("Delete node pool [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCtnNpFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete node pool [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCtnNpFormat)
 }
 
-func runCtnNpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := ctnNpName(args[0])
+func (s *containerCmds) runCtnNpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnNpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -149,16 +111,16 @@ func runCtnNpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing node pool: %w", err)
 	}
-	return emitFormatted(got, flagCtnNpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagCtnNpFormat)
 }
 
-func runCtnNpList(cmd *cobra.Command, args []string) error {
-	parent, err := ctnNpClusterName()
+func (s *containerCmds) runCtnNpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.ctnNpClusterName()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -166,20 +128,20 @@ func runCtnNpList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing node pools: %w", err)
 	}
-	return emitFormatted(resp.NodePools, flagCtnNpFormat)
+	return emitFormattedTo(s.inv.stdout, resp.NodePools, s.flagCtnNpFormat)
 }
 
-func runCtnNpUpdate(cmd *cobra.Command, args []string) error {
-	name, err := ctnNpName(args[0])
+func (s *containerCmds) runCtnNpUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnNpName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &container.UpdateNodePoolRequest{}
-	if err := loadYAMLOrJSONInto(flagCtnNpConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagCtnNpConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -187,17 +149,17 @@ func runCtnNpUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating node pool: %w", err)
 	}
-	fmt.Printf("Update node pool [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCtnNpFormat)
+	fmt.Fprintf(s.inv.stdout, "Update node pool [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCtnNpFormat)
 }
 
-func runCtnNpRollback(cmd *cobra.Command, args []string) error {
-	name, err := ctnNpName(args[0])
+func (s *containerCmds) runCtnNpRollback(cmd *cobra.Command, args []string) error {
+	name, err := s.ctnNpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ContainerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Container(ctx)
 	if err != nil {
 		return err
 	}
@@ -205,6 +167,6 @@ func runCtnNpRollback(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("rolling back node pool: %w", err)
 	}
-	fmt.Printf("Rollback node pool [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagCtnNpFormat)
+	fmt.Fprintf(s.inv.stdout, "Rollback node pool [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagCtnNpFormat)
 }

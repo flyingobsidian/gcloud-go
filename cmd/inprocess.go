@@ -135,6 +135,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newFirestoreCmd(inv),
 		newMonitoringCmd(inv),
 		newAppCmd(inv),
+		newContainerCmd(inv),
 	}
 }
 
