@@ -1,12 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"path"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	agentidentity "google.golang.org/api/agentidentity/v1"
 )
@@ -24,191 +21,97 @@ import (
 //
 // gcloud-go tracks GA. Backed by the agentidentity v1 SDK.
 
-var agentIdentityCmd = &cobra.Command{
-	Use:   "agent-identity",
-	Short: "Manage Agent Identity resources",
-}
-
 // --- shared flags ---
 
 var (
-	flagAILocation                       string
-	flagAIFormat                         string
-	flagAIFilter                         string
-	flagAIConfigFile                     string
-	flagAIUpdateMask                     string
-	flagAIAuthProviderID                 string
-	flagAIThreeLeggedOAuthDefContinueURI string
-	flagAIIamMember                      string
-	flagAIIamRole                        string
-	flagAIIamCondExpr                    string
-	flagAIIamCondTitle                   string
-	flagAIIamCondDesc                    string
-	flagAIIamPermissions                 []string
-	flagAIIamAllConds                    bool
+	flagAIAuthProviderID string
 )
 
 // --- agent-identity auth-providers ---
 
-var agentIdentityAuthProvidersCmd = &cobra.Command{
-	Use:   "auth-providers",
-	Short: "Manage Agent Identity auth providers",
-}
-
-var (
-	aiAPCreateCmd = &cobra.Command{
-		Use: "create AUTH_PROVIDER", Short: "Create an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPCreate,
-	}
-	aiAPDeleteCmd = &cobra.Command{
-		Use: "delete AUTH_PROVIDER", Short: "Delete an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPDelete,
-	}
-	aiAPDescribeCmd = &cobra.Command{
-		Use: "describe AUTH_PROVIDER", Short: "Describe an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPDescribe,
-	}
-	aiAPListCmd = &cobra.Command{
-		Use: "list", Short: "List auth providers in a location",
-		Args: cobra.NoArgs, RunE: runAIAPList,
-	}
-	aiAPUpdateCmd = &cobra.Command{
-		Use: "update AUTH_PROVIDER", Short: "Update an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPUpdate,
-	}
-	aiAPEnableCmd = &cobra.Command{
-		Use: "enable AUTH_PROVIDER", Short: "Enable an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPEnable,
-	}
-	aiAPDisableCmd = &cobra.Command{
-		Use: "disable AUTH_PROVIDER", Short: "Disable an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPDisable,
-	}
-	aiAPUndeleteCmd = &cobra.Command{
-		Use: "undelete AUTH_PROVIDER", Short: "Undelete an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPUndelete,
-	}
-	aiAPGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy AUTH_PROVIDER", Short: "Get IAM policy for an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPGetIam,
-	}
-	aiAPSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy AUTH_PROVIDER POLICY_FILE", Short: "Set IAM policy on an auth provider",
-		Args: cobra.ExactArgs(2), RunE: runAIAPSetIam,
-	}
-	aiAPAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding AUTH_PROVIDER", Short: "Add an IAM policy binding on an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPAddIam,
-	}
-	aiAPRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding AUTH_PROVIDER", Short: "Remove an IAM policy binding from an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPRemoveIam,
-	}
-	aiAPTestIamCmd = &cobra.Command{
-		Use: "test-iam-permissions AUTH_PROVIDER", Short: "Test IAM permissions on an auth provider",
-		Args: cobra.ExactArgs(1), RunE: runAIAPTestIam,
-	}
-)
-
 // --- agent-identity access-summaries ---
 
-var agentIdentityAccessSummariesCmd = &cobra.Command{
-	Use:   "access-summaries",
-	Short: "View Agent Identity access summaries",
-}
-
-var (
-	aiASDescribeCmd = &cobra.Command{
-		Use: "describe ACCESS_SUMMARY", Short: "Describe an access summary",
-		Args: cobra.ExactArgs(1), RunE: runAIASDescribe,
-	}
-	aiASListCmd = &cobra.Command{
-		Use: "list", Short: "List access summaries in a location",
-		Args: cobra.NoArgs, RunE: runAIASList,
-	}
-)
-
-func init() {
+func (g *agentIdentityCmds) initAgentIdentity() {
 	// Every command in this group is location-scoped.
 	locCmds := []*cobra.Command{
-		aiAPCreateCmd, aiAPDeleteCmd, aiAPDescribeCmd, aiAPListCmd, aiAPUpdateCmd,
-		aiAPEnableCmd, aiAPDisableCmd, aiAPUndeleteCmd,
-		aiAPGetIamCmd, aiAPSetIamCmd, aiAPAddIamCmd, aiAPRemoveIamCmd, aiAPTestIamCmd,
-		aiASDescribeCmd, aiASListCmd,
+		g.aiAPCreateCmd, g.aiAPDeleteCmd, g.aiAPDescribeCmd, g.aiAPListCmd, g.aiAPUpdateCmd,
+		g.aiAPEnableCmd, g.aiAPDisableCmd, g.aiAPUndeleteCmd,
+		g.aiAPGetIamCmd, g.aiAPSetIamCmd, g.aiAPAddIamCmd, g.aiAPRemoveIamCmd, g.aiAPTestIamCmd,
+		g.aiASDescribeCmd, g.aiASListCmd,
 	}
 	for _, c := range locCmds {
-		c.Flags().StringVar(&flagAILocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&g.flagAILocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagAIFormat, "format", "", "Output format")
+		c.Flags().StringVar(&g.flagAIFormat, "format", "", "Output format")
 	}
 
 	// list flags
-	aiAPListCmd.Flags().StringVar(&flagAIFilter, "filter", "", "Server-side list filter")
-	aiASListCmd.Flags().StringVar(&flagAIFilter, "filter", "", "Server-side list filter")
+	g.aiAPListCmd.Flags().StringVar(&g.flagAIFilter, "filter", "", "Server-side list filter")
+	g.aiASListCmd.Flags().StringVar(&g.flagAIFilter, "filter", "", "Server-side list filter")
 
 	// create/update take a --config-file for the AuthProvider body plus the
 	// new (579.0.0) --three-legged-oauth-default-continue-uri override.
-	for _, c := range []*cobra.Command{aiAPCreateCmd, aiAPUpdateCmd} {
-		c.Flags().StringVar(&flagAIConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{g.aiAPCreateCmd, g.aiAPUpdateCmd} {
+		c.Flags().StringVar(&g.flagAIConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the AuthProvider body")
-		c.Flags().StringVar(&flagAIThreeLeggedOAuthDefContinueURI,
+		c.Flags().StringVar(&g.flagAIThreeLeggedOAuthDefContinueURI,
 			"three-legged-oauth-default-continue-uri", "",
 			"Default continue URI for the ThreeLeggedOAuth flow")
 	}
-	aiAPUpdateCmd.Flags().StringVar(&flagAIUpdateMask, "update-mask", "",
+	g.aiAPUpdateCmd.Flags().StringVar(&g.flagAIUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 
 	// add/remove IAM binding flags.
-	for _, c := range []*cobra.Command{aiAPAddIamCmd, aiAPRemoveIamCmd} {
-		c.Flags().StringVar(&flagAIIamMember, "member", "", "IAM member (required)")
-		c.Flags().StringVar(&flagAIIamRole, "role", "", "IAM role to bind (required)")
-		c.Flags().StringVar(&flagAIIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding")
-		c.Flags().StringVar(&flagAIIamCondTitle, "condition-title", "", "Title for a conditional binding")
-		c.Flags().StringVar(&flagAIIamCondDesc, "condition-description", "", "Description for a conditional binding")
+	for _, c := range []*cobra.Command{g.aiAPAddIamCmd, g.aiAPRemoveIamCmd} {
+		c.Flags().StringVar(&g.flagAIIamMember, "member", "", "IAM member (required)")
+		c.Flags().StringVar(&g.flagAIIamRole, "role", "", "IAM role to bind (required)")
+		c.Flags().StringVar(&g.flagAIIamCondExpr, "condition-expression", "", "CEL expression for a conditional binding")
+		c.Flags().StringVar(&g.flagAIIamCondTitle, "condition-title", "", "Title for a conditional binding")
+		c.Flags().StringVar(&g.flagAIIamCondDesc, "condition-description", "", "Description for a conditional binding")
 		_ = c.MarkFlagRequired("member")
 		_ = c.MarkFlagRequired("role")
 	}
-	aiAPRemoveIamCmd.Flags().BoolVar(&flagAIIamAllConds, "all", false,
+	g.aiAPRemoveIamCmd.Flags().BoolVar(&g.flagAIIamAllConds, "all", false,
 		"Remove matching bindings across all conditions, not just the given one")
 
 	// test-iam-permissions
-	aiAPTestIamCmd.Flags().StringSliceVar(&flagAIIamPermissions, "permissions", nil,
+	g.aiAPTestIamCmd.Flags().StringSliceVar(&g.flagAIIamPermissions, "permissions", nil,
 		"Comma-separated list of permissions to test (required)")
-	_ = aiAPTestIamCmd.MarkFlagRequired("permissions")
+	_ = g.aiAPTestIamCmd.MarkFlagRequired("permissions")
 
-	agentIdentityAuthProvidersCmd.AddCommand(
-		aiAPCreateCmd, aiAPDeleteCmd, aiAPDescribeCmd, aiAPListCmd, aiAPUpdateCmd,
-		aiAPEnableCmd, aiAPDisableCmd, aiAPUndeleteCmd,
-		aiAPGetIamCmd, aiAPSetIamCmd, aiAPAddIamCmd, aiAPRemoveIamCmd, aiAPTestIamCmd,
+	g.agentIdentityAuthProvidersCmd.AddCommand(
+		g.aiAPCreateCmd, g.aiAPDeleteCmd, g.aiAPDescribeCmd, g.aiAPListCmd, g.aiAPUpdateCmd,
+		g.aiAPEnableCmd, g.aiAPDisableCmd, g.aiAPUndeleteCmd,
+		g.aiAPGetIamCmd, g.aiAPSetIamCmd, g.aiAPAddIamCmd, g.aiAPRemoveIamCmd, g.aiAPTestIamCmd,
 	)
-	agentIdentityAccessSummariesCmd.AddCommand(aiASDescribeCmd, aiASListCmd)
-	agentIdentityCmd.AddCommand(agentIdentityAuthProvidersCmd, agentIdentityAccessSummariesCmd)
-	rootCmd.AddCommand(agentIdentityCmd)
+	g.agentIdentityAccessSummariesCmd.AddCommand(g.aiASDescribeCmd, g.aiASListCmd)
+	g.agentIdentityCmd.AddCommand(g.agentIdentityAuthProvidersCmd, g.agentIdentityAccessSummariesCmd)
+
 }
 
 // --- helpers ---
 
-func aiParentLocation() (string, error) {
-	project, err := resolveProject()
+func (g *agentIdentityCmds) aiParentLocation() (string, error) {
+	project, err := g.inv.project()
 	if err != nil {
 		return "", err
 	}
-	if flagAILocation == "" {
+	if g.flagAILocation == "" {
 		return "", fmt.Errorf("--location is required")
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagAILocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, g.flagAILocation), nil
 }
 
-func aiAuthProviderName(id string) (string, error) {
-	parent, err := aiParentLocation()
+func (g *agentIdentityCmds) aiAuthProviderName(id string) (string, error) {
+	parent, err := g.aiParentLocation()
 	if err != nil {
 		return "", err
 	}
 	return parent + "/authProviders/" + id, nil
 }
 
-func aiAccessSummaryName(id string) (string, error) {
-	parent, err := aiParentLocation()
+func (g *agentIdentityCmds) aiAccessSummaryName(id string) (string, error) {
+	parent, err := g.aiParentLocation()
 	if err != nil {
 		return "", err
 	}
@@ -217,14 +120,14 @@ func aiAccessSummaryName(id string) (string, error) {
 
 // aiIamBuildCondition returns an agentidentity.Expr or nil if no condition
 // fields are set.
-func aiIamBuildCondition() *agentidentity.Expr {
-	if flagAIIamCondExpr == "" && flagAIIamCondTitle == "" && flagAIIamCondDesc == "" {
+func (g *agentIdentityCmds) aiIamBuildCondition() *agentidentity.Expr {
+	if g.flagAIIamCondExpr == "" && g.flagAIIamCondTitle == "" && g.flagAIIamCondDesc == "" {
 		return nil
 	}
 	return &agentidentity.Expr{
-		Expression:  flagAIIamCondExpr,
-		Title:       flagAIIamCondTitle,
-		Description: flagAIIamCondDesc,
+		Expression:  g.flagAIIamCondExpr,
+		Title:       g.flagAIIamCondTitle,
+		Description: g.flagAIIamCondDesc,
 	}
 }
 
@@ -303,20 +206,20 @@ func aiApplyThreeLeggedContinueURI(ap *agentidentity.AuthProvider, uri string) {
 
 // --- auth-providers implementations ---
 
-func runAIAPCreate(cmd *cobra.Command, args []string) error {
-	parent, err := aiParentLocation()
+func (g *agentIdentityCmds) runAIAPCreate(cmd *cobra.Command, args []string) error {
+	parent, err := g.aiParentLocation()
 	if err != nil {
 		return err
 	}
 	ap := &agentidentity.AuthProvider{}
-	if flagAIConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagAIConfigFile, ap); err != nil {
+	if g.flagAIConfigFile != "" {
+		if err := loadYAMLOrJSONInto(g.flagAIConfigFile, ap); err != nil {
 			return err
 		}
 	}
-	aiApplyThreeLeggedContinueURI(ap, flagAIThreeLeggedOAuthDefContinueURI)
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	aiApplyThreeLeggedContinueURI(ap, g.flagAIThreeLeggedOAuthDefContinueURI)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -325,34 +228,34 @@ func runAIAPCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating auth provider: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Created auth provider [%s].\n", args[0])
-	return emitFormatted(got, flagAIFormat)
+	fmt.Fprintf(g.inv.stderr, "Created auth provider [%s].\n", args[0])
+	return emitFormattedTo(g.inv.stdout, got, g.flagAIFormat)
 }
 
-func runAIAPDelete(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPDelete(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.AuthProviders.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting auth provider: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Deleted auth provider [%s].\n", args[0])
+	fmt.Fprintf(g.inv.stderr, "Deleted auth provider [%s].\n", args[0])
 	return nil
 }
 
-func runAIAPDescribe(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -360,16 +263,16 @@ func runAIAPDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing auth provider: %w", err)
 	}
-	return emitFormatted(got, flagAIFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAIFormat)
 }
 
-func runAIAPList(cmd *cobra.Command, args []string) error {
-	parent, err := aiParentLocation()
+func (g *agentIdentityCmds) runAIAPList(cmd *cobra.Command, args []string) error {
+	parent, err := g.aiParentLocation()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -377,8 +280,8 @@ func runAIAPList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.AuthProviders.List(parent).Context(ctx)
-		if flagAIFilter != "" {
-			call = call.Filter(flagAIFilter)
+		if g.flagAIFilter != "" {
+			call = call.Filter(g.flagAIFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -393,34 +296,34 @@ func runAIAPList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagAIFormat != "" {
-		return emitFormatted(all, flagAIFormat)
+	if g.flagAIFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagAIFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "STATE")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %s\n", "NAME", "STATE")
 	for _, p := range all {
-		fmt.Printf("%-40s %s\n", path.Base(p.Name), p.State)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", path.Base(p.Name), p.State)
 	}
 	return nil
 }
 
-func runAIAPUpdate(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPUpdate(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
 	ap := &agentidentity.AuthProvider{}
-	if flagAIConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagAIConfigFile, ap); err != nil {
+	if g.flagAIConfigFile != "" {
+		if err := loadYAMLOrJSONInto(g.flagAIConfigFile, ap); err != nil {
 			return err
 		}
 	}
-	aiApplyThreeLeggedContinueURI(ap, flagAIThreeLeggedOAuthDefContinueURI)
-	mask := flagAIUpdateMask
+	aiApplyThreeLeggedContinueURI(ap, g.flagAIThreeLeggedOAuthDefContinueURI)
+	mask := g.flagAIUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(ap))
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -432,17 +335,17 @@ func runAIAPUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating auth provider: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated auth provider [%s].\n", args[0])
-	return emitFormatted(got, flagAIFormat)
+	fmt.Fprintf(g.inv.stderr, "Updated auth provider [%s].\n", args[0])
+	return emitFormattedTo(g.inv.stdout, got, g.flagAIFormat)
 }
 
-func runAIAPEnable(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPEnable(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -451,17 +354,17 @@ func runAIAPEnable(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("enabling auth provider: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Enabled auth provider [%s].\n", args[0])
-	return emitFormatted(got, flagAIFormat)
+	fmt.Fprintf(g.inv.stderr, "Enabled auth provider [%s].\n", args[0])
+	return emitFormattedTo(g.inv.stdout, got, g.flagAIFormat)
 }
 
-func runAIAPDisable(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPDisable(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -470,17 +373,17 @@ func runAIAPDisable(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("disabling auth provider: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Disabled auth provider [%s].\n", args[0])
-	return emitFormatted(got, flagAIFormat)
+	fmt.Fprintf(g.inv.stderr, "Disabled auth provider [%s].\n", args[0])
+	return emitFormattedTo(g.inv.stdout, got, g.flagAIFormat)
 }
 
-func runAIAPUndelete(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPUndelete(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -489,19 +392,19 @@ func runAIAPUndelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("undeleting auth provider: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Undeleted auth provider [%s].\n", args[0])
-	return emitFormatted(got, flagAIFormat)
+	fmt.Fprintf(g.inv.stderr, "Undeleted auth provider [%s].\n", args[0])
+	return emitFormattedTo(g.inv.stdout, got, g.flagAIFormat)
 }
 
 // --- IAM ---
 
-func runAIAPGetIam(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPGetIam(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -510,11 +413,11 @@ func runAIAPGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(pol, flagAIFormat)
+	return emitFormattedTo(g.inv.stdout, pol, g.flagAIFormat)
 }
 
-func runAIAPSetIam(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPSetIam(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
@@ -522,8 +425,8 @@ func runAIAPSetIam(cmd *cobra.Command, args []string) error {
 	if err := loadYAMLOrJSONInto(args[1], pol); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -532,17 +435,17 @@ func runAIAPSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for %s.\n", name)
-	return emitFormatted(out, flagAIFormat)
+	fmt.Fprintf(g.inv.stderr, "Updated IAM policy for %s.\n", name)
+	return emitFormattedTo(g.inv.stdout, out, g.flagAIFormat)
 }
 
-func runAIAPAddIam(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPAddIam(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -551,8 +454,8 @@ func runAIAPAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	cond := aiIamBuildCondition()
-	aiIamAddBinding(pol, flagAIIamRole, flagAIIamMember, cond)
+	cond := g.aiIamBuildCondition()
+	aiIamAddBinding(pol, g.flagAIIamRole, g.flagAIIamMember, cond)
 	if cond != nil && pol.Version < 3 {
 		pol.Version = 3
 	}
@@ -561,17 +464,17 @@ func runAIAPAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("adding IAM binding: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for %s.\n", name)
-	return emitFormatted(out, flagAIFormat)
+	fmt.Fprintf(g.inv.stderr, "Updated IAM policy for %s.\n", name)
+	return emitFormattedTo(g.inv.stdout, out, g.flagAIFormat)
 }
 
-func runAIAPRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -580,8 +483,8 @@ func runAIAPRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	cond := aiIamBuildCondition()
-	if !aiIamRemoveBinding(pol, flagAIIamRole, flagAIIamMember, cond, flagAIIamAllConds) {
+	cond := g.aiIamBuildCondition()
+	if !aiIamRemoveBinding(pol, g.flagAIIamRole, g.flagAIIamMember, cond, g.flagAIIamAllConds) {
 		return fmt.Errorf("no matching binding to remove")
 	}
 	out, err := svc.Projects.Locations.AuthProviders.SetIamPolicy(name,
@@ -589,37 +492,37 @@ func runAIAPRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("removing IAM binding: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for %s.\n", name)
-	return emitFormatted(out, flagAIFormat)
+	fmt.Fprintf(g.inv.stderr, "Updated IAM policy for %s.\n", name)
+	return emitFormattedTo(g.inv.stdout, out, g.flagAIFormat)
 }
 
-func runAIAPTestIam(cmd *cobra.Command, args []string) error {
-	name, err := aiAuthProviderName(args[0])
+func (g *agentIdentityCmds) runAIAPTestIam(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAuthProviderName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
 	resp, err := svc.Projects.Locations.AuthProviders.TestIamPermissions(name,
-		&agentidentity.TestIamPermissionsRequest{Permissions: flagAIIamPermissions}).Context(ctx).Do()
+		&agentidentity.TestIamPermissionsRequest{Permissions: g.flagAIIamPermissions}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("testing IAM permissions: %w", err)
 	}
-	return emitFormatted(resp, flagAIFormat)
+	return emitFormattedTo(g.inv.stdout, resp, g.flagAIFormat)
 }
 
 // --- access-summaries ---
 
-func runAIASDescribe(cmd *cobra.Command, args []string) error {
-	name, err := aiAccessSummaryName(args[0])
+func (g *agentIdentityCmds) runAIASDescribe(cmd *cobra.Command, args []string) error {
+	name, err := g.aiAccessSummaryName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -627,16 +530,16 @@ func runAIASDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing access summary: %w", err)
 	}
-	return emitFormatted(got, flagAIFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagAIFormat)
 }
 
-func runAIASList(cmd *cobra.Command, args []string) error {
-	parent, err := aiParentLocation()
+func (g *agentIdentityCmds) runAIASList(cmd *cobra.Command, args []string) error {
+	parent, err := g.aiParentLocation()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AgentIdentityService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().AgentIdentity(ctx)
 	if err != nil {
 		return err
 	}
@@ -644,8 +547,8 @@ func runAIASList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.AccessSummaries.List(parent).Context(ctx)
-		if flagAIFilter != "" {
-			call = call.Filter(flagAIFilter)
+		if g.flagAIFilter != "" {
+			call = call.Filter(g.flagAIFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -660,12 +563,174 @@ func runAIASList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagAIFormat != "" {
-		return emitFormatted(all, flagAIFormat)
+	if g.flagAIFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagAIFormat)
 	}
-	printTableHeading(len(all), "%-40s\n", "NAME")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s\n", "NAME")
 	for _, s := range all {
-		fmt.Printf("%-40s\n", path.Base(s.Name))
+		fmt.Fprintf(g.inv.stdout, "%-40s\n", path.Base(s.Name))
 	}
 	return nil
+}
+
+// agentIdentityCmds holds the commands and flag values of one invocation's "agentIdentity"
+// command group, so invocations don't share state (#2070).
+type agentIdentityCmds struct {
+	inv *invocation
+
+	agentIdentityCmd                     *cobra.Command
+	flagAILocation                       string
+	flagAIFormat                         string
+	flagAIFilter                         string
+	flagAIConfigFile                     string
+	flagAIUpdateMask                     string
+	flagAIThreeLeggedOAuthDefContinueURI string
+	flagAIIamMember                      string
+	flagAIIamRole                        string
+	flagAIIamCondExpr                    string
+	flagAIIamCondTitle                   string
+	flagAIIamCondDesc                    string
+	flagAIIamPermissions                 []string
+	flagAIIamAllConds                    bool
+	agentIdentityAuthProvidersCmd        *cobra.Command
+	aiAPCreateCmd                        *cobra.Command
+	aiAPDeleteCmd                        *cobra.Command
+	aiAPDescribeCmd                      *cobra.Command
+	aiAPListCmd                          *cobra.Command
+	aiAPUpdateCmd                        *cobra.Command
+	aiAPEnableCmd                        *cobra.Command
+	aiAPDisableCmd                       *cobra.Command
+	aiAPUndeleteCmd                      *cobra.Command
+	aiAPGetIamCmd                        *cobra.Command
+	aiAPSetIamCmd                        *cobra.Command
+	aiAPAddIamCmd                        *cobra.Command
+	aiAPRemoveIamCmd                     *cobra.Command
+	aiAPTestIamCmd                       *cobra.Command
+	agentIdentityAccessSummariesCmd      *cobra.Command
+	aiASDescribeCmd                      *cobra.Command
+	aiASListCmd                          *cobra.Command
+	flagAIAuthzLocation                  string
+	flagAIAuthzAuthProvider              string
+	flagAIAuthzEndpointMode              string
+	flagAIAuthzMember                    string
+	flagAIAuthzRole                      string
+	flagAIAuthzPermissions               []string
+	flagAIAuthzLimit                     int64
+	flagAIAuthzPageSize                  int64
+	flagAIAuthzSortBy                    []string
+	agentIdentityAuthorizationsCmd       *cobra.Command
+	aiAuthzGetIamCmd                     *cobra.Command
+	aiAuthzSetIamCmd                     *cobra.Command
+	aiAuthzAddIamCmd                     *cobra.Command
+	aiAuthzRemoveIamCmd                  *cobra.Command
+	aiAuthzTestIamCmd                    *cobra.Command
+}
+
+// newAgentIdentityCmd returns the "agentIdentity" command group for inv.
+func newAgentIdentityCmd(inv *invocation) *cobra.Command {
+	return newAgentIdentityCmds(inv).agentIdentityCmd
+}
+
+// newAgentIdentityCmds builds the "agentIdentity" command group for inv and returns its state.
+func newAgentIdentityCmds(inv *invocation) *agentIdentityCmds {
+	g := &agentIdentityCmds{inv: inv}
+	g.agentIdentityCmd = &cobra.Command{
+		Use:   "agent-identity",
+		Short: "Manage Agent Identity resources",
+	}
+	g.agentIdentityAuthProvidersCmd = &cobra.Command{
+		Use:   "auth-providers",
+		Short: "Manage Agent Identity auth providers",
+	}
+	g.aiAPCreateCmd = &cobra.Command{
+		Use: "create AUTH_PROVIDER", Short: "Create an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPCreate,
+	}
+	g.aiAPDeleteCmd = &cobra.Command{
+		Use: "delete AUTH_PROVIDER", Short: "Delete an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPDelete,
+	}
+	g.aiAPDescribeCmd = &cobra.Command{
+		Use: "describe AUTH_PROVIDER", Short: "Describe an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPDescribe,
+	}
+	g.aiAPListCmd = &cobra.Command{
+		Use: "list", Short: "List auth providers in a location",
+		Args: cobra.NoArgs, RunE: g.runAIAPList,
+	}
+	g.aiAPUpdateCmd = &cobra.Command{
+		Use: "update AUTH_PROVIDER", Short: "Update an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPUpdate,
+	}
+	g.aiAPEnableCmd = &cobra.Command{
+		Use: "enable AUTH_PROVIDER", Short: "Enable an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPEnable,
+	}
+	g.aiAPDisableCmd = &cobra.Command{
+		Use: "disable AUTH_PROVIDER", Short: "Disable an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPDisable,
+	}
+	g.aiAPUndeleteCmd = &cobra.Command{
+		Use: "undelete AUTH_PROVIDER", Short: "Undelete an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPUndelete,
+	}
+	g.aiAPGetIamCmd = &cobra.Command{
+		Use: "get-iam-policy AUTH_PROVIDER", Short: "Get IAM policy for an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPGetIam,
+	}
+	g.aiAPSetIamCmd = &cobra.Command{
+		Use: "set-iam-policy AUTH_PROVIDER POLICY_FILE", Short: "Set IAM policy on an auth provider",
+		Args: cobra.ExactArgs(2), RunE: g.runAIAPSetIam,
+	}
+	g.aiAPAddIamCmd = &cobra.Command{
+		Use: "add-iam-policy-binding AUTH_PROVIDER", Short: "Add an IAM policy binding on an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPAddIam,
+	}
+	g.aiAPRemoveIamCmd = &cobra.Command{
+		Use: "remove-iam-policy-binding AUTH_PROVIDER", Short: "Remove an IAM policy binding from an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPRemoveIam,
+	}
+	g.aiAPTestIamCmd = &cobra.Command{
+		Use: "test-iam-permissions AUTH_PROVIDER", Short: "Test IAM permissions on an auth provider",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAPTestIam,
+	}
+	g.agentIdentityAccessSummariesCmd = &cobra.Command{
+		Use:   "access-summaries",
+		Short: "View Agent Identity access summaries",
+	}
+	g.aiASDescribeCmd = &cobra.Command{
+		Use: "describe ACCESS_SUMMARY", Short: "Describe an access summary",
+		Args: cobra.ExactArgs(1), RunE: g.runAIASDescribe,
+	}
+	g.aiASListCmd = &cobra.Command{
+		Use: "list", Short: "List access summaries in a location",
+		Args: cobra.NoArgs, RunE: g.runAIASList,
+	}
+	g.agentIdentityAuthorizationsCmd = &cobra.Command{
+		Use:   "authorizations",
+		Short: "Manage Authorization resources",
+	}
+	g.aiAuthzGetIamCmd = &cobra.Command{
+		Use: "get-iam-policy AUTHORIZATION", Short: "Get the IAM policy for an Agent Identity authorization",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAuthzGetIam,
+	}
+	g.aiAuthzSetIamCmd = &cobra.Command{
+		Use: "set-iam-policy AUTHORIZATION POLICY_FILE", Short: "Set the IAM policy for an Agent Identity authorization",
+		Args: cobra.ExactArgs(2), RunE: g.runAIAuthzSetIam,
+	}
+	g.aiAuthzAddIamCmd = &cobra.Command{
+		Use: "add-iam-policy-binding AUTHORIZATION", Short: "Add IAM policy binding to an Agent Identity authorization",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAuthzAddIam,
+	}
+	g.aiAuthzRemoveIamCmd = &cobra.Command{
+		Use: "remove-iam-policy-binding AUTHORIZATION", Short: "Remove IAM policy binding from an Agent Identity authorization",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAuthzRemoveIam,
+	}
+	g.aiAuthzTestIamCmd = &cobra.Command{
+		Use: "test-iam-permissions AUTHORIZATION", Short: "Test IAM permissions for an Agent Identity authorization",
+		Args: cobra.ExactArgs(1), RunE: g.runAIAuthzTestIam,
+	}
+	g.initAgentIdentity()
+	g.initAgentIdentityAuthorizations()
+	return g
 }

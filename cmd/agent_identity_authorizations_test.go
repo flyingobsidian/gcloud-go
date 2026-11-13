@@ -10,16 +10,18 @@ import (
 )
 
 func TestAgentIdentityAuthorizationsSubcommands(t *testing.T) {
-	assertSubcommands(t, agentIdentityAuthorizationsCmd, []string{
+	grp := newAgentIdentityCmds(legacyTestInvocation())
+	assertSubcommands(t, grp.agentIdentityAuthorizationsCmd, []string{
 		"add-iam-policy-binding", "get-iam-policy", "remove-iam-policy-binding",
 		"set-iam-policy", "test-iam-permissions",
 	})
-	if agentIdentityAuthorizationsCmd.Parent() != agentIdentityAuthProvidersCmd {
+	if grp.agentIdentityAuthorizationsCmd.Parent() != grp.agentIdentityAuthProvidersCmd {
 		t.Fatal("authorizations should be registered under agent-identity auth-providers")
 	}
 }
 
 func TestAgentIdentityAuthorizationsFlags(t *testing.T) {
+	grp := newAgentIdentityCmds(legacyTestInvocation())
 	cases := map[string][]string{
 		"get-iam-policy":            {"auth-provider", "endpoint-mode", "location", "limit", "page-size", "sort-by"},
 		"set-iam-policy":            {"auth-provider", "endpoint-mode", "location"},
@@ -27,7 +29,7 @@ func TestAgentIdentityAuthorizationsFlags(t *testing.T) {
 		"remove-iam-policy-binding": {"auth-provider", "endpoint-mode", "location", "member", "role"},
 		"test-iam-permissions":      {"auth-provider", "endpoint-mode", "location", "permissions"},
 	}
-	for _, c := range agentIdentityAuthorizationsCmd.Commands() {
+	for _, c := range grp.agentIdentityAuthorizationsCmd.Commands() {
 		want, ok := cases[c.Name()]
 		if !ok {
 			continue
@@ -45,26 +47,29 @@ func TestAgentIdentityAuthorizationsFlags(t *testing.T) {
 }
 
 func TestAIAuthorizationName(t *testing.T) {
-	prevLoc, prevAP, prevProj := flagAIAuthzLocation, flagAIAuthzAuthProvider, flagProject
-	defer func() { flagAIAuthzLocation, flagAIAuthzAuthProvider, flagProject = prevLoc, prevAP, prevProj }()
+	grp := newAgentIdentityCmds(legacyTestInvocation())
+	prevLoc, prevAP, prevProj := grp.flagAIAuthzLocation, grp.flagAIAuthzAuthProvider, grp.inv.flags.project
+	defer func() {
+		grp.flagAIAuthzLocation, grp.flagAIAuthzAuthProvider, grp.inv.flags.project = prevLoc, prevAP, prevProj
+	}()
 
 	full := "projects/p/locations/us-central1/authProviders/ap/authorizations/a"
-	flagAIAuthzLocation, flagAIAuthzAuthProvider = "", ""
-	if got, err := aiAuthorizationName(full); err != nil || got != full {
+	grp.flagAIAuthzLocation, grp.flagAIAuthzAuthProvider = "", ""
+	if got, err := grp.aiAuthorizationName(full); err != nil || got != full {
 		t.Fatalf("full name: got %q, %v", got, err)
 	}
-	if _, err := aiAuthorizationName("projects/p/locations/l/authorizations/a"); err == nil {
+	if _, err := grp.aiAuthorizationName("projects/p/locations/l/authorizations/a"); err == nil {
 		t.Fatal("expected error for malformed resource name")
 	}
-	if _, err := aiAuthorizationName("a"); err == nil {
+	if _, err := grp.aiAuthorizationName("a"); err == nil {
 		t.Fatal("expected error without --location")
 	}
-	flagAIAuthzLocation = "us-central1"
-	if _, err := aiAuthorizationName("a"); err == nil {
+	grp.flagAIAuthzLocation = "us-central1"
+	if _, err := grp.aiAuthorizationName("a"); err == nil {
 		t.Fatal("expected error without --auth-provider")
 	}
-	flagAIAuthzAuthProvider, flagProject = "ap", "p"
-	if got, err := aiAuthorizationName("a"); err != nil || got != full {
+	grp.flagAIAuthzAuthProvider, grp.inv.flags.project = "ap", "p"
+	if got, err := grp.aiAuthorizationName("a"); err != nil || got != full {
 		t.Fatalf("short name: got %q, %v", got, err)
 	}
 }
