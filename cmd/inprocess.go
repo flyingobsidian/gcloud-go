@@ -52,6 +52,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newEdgeCloudCmd(inv),
 		newFeedbackCmd(inv),
 		newBackupDRCmd(inv),
+		newPubliccaCmd(inv),
 	}
 }
 
