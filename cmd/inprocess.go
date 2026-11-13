@@ -78,6 +78,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newAccessApprovalCmd(inv),
 		newWorkstationsCmd(inv),
 		newDesignCenterCmd(inv),
+		newParameterManagerCmd(inv),
 	}
 }
 
