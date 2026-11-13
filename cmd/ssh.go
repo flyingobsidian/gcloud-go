@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"github.com/flyingobsidian/gcloud-go/internal/iap"
 	ioslogin "github.com/flyingobsidian/gcloud-go/internal/oslogin"
 	"github.com/spf13/cobra"
@@ -326,7 +325,7 @@ func knownHostsHasHost(host string) bool {
 }
 
 func (s *computeCmds) startIAPTunnel(ctx context.Context, project, zone, instance string) (net.Listener, error) {
-	ts, err := auth.TokenSource(ctx, s.inv.flags.account,
+	ts, err := s.inv.tokens.TokenSource(ctx, s.inv.flags.account,
 		"https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return nil, fmt.Errorf("obtaining token source: %w", err)

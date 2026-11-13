@@ -5,7 +5,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
@@ -44,7 +43,7 @@ func (g *workbenchCmds) runWBExecCreate(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBExecRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBExecRegion)
 	if err != nil {
 		return err
 	}
@@ -62,7 +61,7 @@ func (g *workbenchCmds) runWBExecDelete(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBExecRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBExecRegion)
 	if err != nil {
 		return err
 	}
@@ -79,7 +78,7 @@ func (g *workbenchCmds) runWBExecDescribe(cmd *cobra.Command, args []string) err
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBExecRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBExecRegion)
 	if err != nil {
 		return err
 	}
@@ -96,7 +95,7 @@ func (g *workbenchCmds) runWBExecList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBExecRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBExecRegion)
 	if err != nil {
 		return err
 	}
@@ -157,7 +156,7 @@ func (g *workbenchCmds) runWBSchedCreate(cmd *cobra.Command, args []string) erro
 		sched.DisplayName = args[0]
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -174,7 +173,7 @@ func (g *workbenchCmds) runWBSchedDelete(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -191,7 +190,7 @@ func (g *workbenchCmds) runWBSchedDescribe(cmd *cobra.Command, args []string) er
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -208,7 +207,7 @@ func (g *workbenchCmds) runWBSchedList(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -240,7 +239,7 @@ func (g *workbenchCmds) runWBSchedUpdate(cmd *cobra.Command, args []string) erro
 		mask = joinMask(nonEmptyJSONFields(sched))
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -258,7 +257,7 @@ func (g *workbenchCmds) runWBSchedPause(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -275,7 +274,7 @@ func (g *workbenchCmds) runWBSchedResume(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, g.inv.flags.account, g.flagWBSchedRegion)
+	svc, err := g.inv.clients().AIPlatform(ctx, g.flagWBSchedRegion)
 	if err != nil {
 		return err
 	}

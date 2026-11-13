@@ -6,7 +6,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	securitycenter "google.golang.org/api/securitycenter/v1"
 )
@@ -349,7 +348,7 @@ func (g *sccCmds) initScc() {
 
 // sccClient returns an initialised securitycenter service.
 func (g *sccCmds) sccClient(ctx context.Context) (*securitycenter.Service, error) {
-	return gcp.SecurityCenterService(ctx, g.inv.flags.account, g.inv.httpDebugWriter())
+	return g.inv.clients().SecurityCenter(ctx)
 }
 
 // splitScope returns ("organizations"|"folders"|"projects", "{id}") from a

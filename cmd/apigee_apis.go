@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apigee "google.golang.org/api/apigee/v1"
 )
@@ -152,7 +151,7 @@ func (s *apigeeCmds) runApigeeApisImport(cmd *cobra.Command, args []string) erro
 	if s.flagApigeeApiSpace != "" {
 		q.Set("space", s.flagApigeeApiSpace)
 	}
-	host, err := gcp.ApigeeOrgHost(ctx, s.inv.flags.account, org)
+	host, err := s.inv.clients().ApigeeOrgHost(ctx, org)
 	if err != nil {
 		return err
 	}

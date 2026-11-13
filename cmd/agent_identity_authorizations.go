@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	agentidentityalpha "google.golang.org/api/agentidentity/v1alpha"
 	"google.golang.org/api/googleapi"
@@ -125,7 +124,7 @@ func (g *agentIdentityCmds) aiAuthzService(ctx context.Context, arg string) (*ag
 	if err != nil {
 		return nil, "", err
 	}
-	svc, err := gcp.AgentIdentityAlphaService(ctx, g.inv.flags.account, endpoint)
+	svc, err := g.inv.clients().AgentIdentityAlpha(ctx, endpoint)
 	if err != nil {
 		return nil, "", err
 	}

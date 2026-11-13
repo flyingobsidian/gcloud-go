@@ -52,7 +52,7 @@ func (s *authCmds) runAuthLogin(cmd *cobra.Command, args []string) error {
 }
 
 func (s *authCmds) runAuthLoginCredFile() error {
-	store, err := auth.NewStore()
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -181,7 +181,7 @@ func (s *authCmds) runAuthLoginBrowser() error {
 
 	data, _ := json.Marshal(credJSON)
 
-	store, err := auth.NewStore()
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -222,7 +222,7 @@ func openBrowser(url string) {
 }
 
 func (s *authCmds) runAuthList(cmd *cobra.Command, args []string) error {
-	store, err := auth.NewStore()
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -299,7 +299,7 @@ func (s *authCmds) runAuthList(cmd *cobra.Command, args []string) error {
 }
 
 func (s *authCmds) runAuthRevoke(cmd *cobra.Command, args []string) error {
-	store, err := auth.NewStore()
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -372,7 +372,7 @@ func (s *authCmds) runAuthRevoke(cmd *cobra.Command, args []string) error {
 }
 
 func (s *authCmds) runAuthActivateServiceAccount(cmd *cobra.Command, args []string) error {
-	store, err := auth.NewStore()
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -402,7 +402,7 @@ func (s *authCmds) runAuthPrintAccessToken(cmd *cobra.Command, args []string) er
 	}
 
 	ctx := cmd.Context()
-	ts, err := auth.TokenSource(ctx, account, "https://www.googleapis.com/auth/cloud-platform")
+	ts, err := s.inv.tokens.TokenSource(ctx, account, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return fmt.Errorf("obtaining credentials: %w", err)
 	}

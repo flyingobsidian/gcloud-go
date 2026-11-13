@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
@@ -57,7 +56,7 @@ func (s *colabCmds) runColabSchedCreate(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabSchedRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -75,7 +74,7 @@ func (s *colabCmds) runColabSchedDelete(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabSchedRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -93,7 +92,7 @@ func (s *colabCmds) runColabSchedDescribe(cmd *cobra.Command, args []string) err
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabSchedRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -110,7 +109,7 @@ func (s *colabCmds) runColabSchedList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabSchedRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -157,7 +156,7 @@ func (s *colabCmds) runColabSchedUpdate(cmd *cobra.Command, args []string) error
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabSchedRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -179,7 +178,7 @@ func (s *colabCmds) runColabSchedPause(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabSchedRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabSchedRegion)
 	if err != nil {
 		return err
 	}
@@ -196,7 +195,7 @@ func (s *colabCmds) runColabSchedResume(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabSchedRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabSchedRegion)
 	if err != nil {
 		return err
 	}

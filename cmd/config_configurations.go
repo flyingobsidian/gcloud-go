@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +17,7 @@ func (s *configCmds) initConfigConfigurations() {
 
 func (s *configCmds) runConfigConfigurationsCreate(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	if err := config.CreateConfiguration(name); err != nil {
+	if err := s.inv.env.CreateConfiguration(name); err != nil {
 		return err
 	}
 	fmt.Fprintf(s.inv.stdout, "Created configuration [%s].\n", name)
@@ -26,12 +25,12 @@ func (s *configCmds) runConfigConfigurationsCreate(cmd *cobra.Command, args []st
 }
 
 func (s *configCmds) runConfigConfigurationsList(cmd *cobra.Command, args []string) error {
-	names, err := config.ListConfigurations()
+	names, err := s.inv.env.ListConfigurations()
 	if err != nil {
 		return fmt.Errorf("listing configurations: %w", err)
 	}
 
-	active := config.ActiveConfigName()
+	active := s.inv.env.ActiveConfigName()
 
 	printTableHeadingTo(s.inv.stdout, len(names), "NAME      IS_ACTIVE\n")
 	for _, name := range names {
@@ -46,7 +45,7 @@ func (s *configCmds) runConfigConfigurationsList(cmd *cobra.Command, args []stri
 
 func (s *configCmds) runConfigConfigurationsActivate(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	if err := config.ActivateConfiguration(name); err != nil {
+	if err := s.inv.env.ActivateConfiguration(name); err != nil {
 		return err
 	}
 	fmt.Fprintf(s.inv.stdout, "Activated configuration [%s].\n", name)
@@ -55,7 +54,7 @@ func (s *configCmds) runConfigConfigurationsActivate(cmd *cobra.Command, args []
 
 func (s *configCmds) runConfigConfigurationsDelete(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	if err := config.DeleteConfiguration(name); err != nil {
+	if err := s.inv.env.DeleteConfiguration(name); err != nil {
 		return err
 	}
 	fmt.Fprintf(s.inv.stdout, "Deleted configuration [%s].\n", name)
@@ -64,12 +63,12 @@ func (s *configCmds) runConfigConfigurationsDelete(cmd *cobra.Command, args []st
 
 func (s *configCmds) runConfigConfigurationsDescribe(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	props, err := config.LoadNamed(name)
+	props, err := s.inv.env.LoadNamed(name)
 	if err != nil {
 		return fmt.Errorf("loading configuration [%s]: %w", name, err)
 	}
 
-	active := config.ActiveConfigName()
+	active := s.inv.env.ActiveConfigName()
 	fmt.Fprintf(s.inv.stdout, "name: %s\n", name)
 	fmt.Fprintf(s.inv.stdout, "is_active: %v\n", name == active)
 

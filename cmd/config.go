@@ -23,7 +23,7 @@ func (s *configCmds) initConfig() {
 
 func (s *configCmds) runConfigSet(cmd *cobra.Command, args []string) error {
 	section, key := parseProperty(args[0])
-	if err := config.SetProperty(section, key, args[1]); err != nil {
+	if err := s.inv.env.SetProperty(section, key, args[1]); err != nil {
 		return fmt.Errorf("setting property: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Updated property [%s/%s].\n", section, key)
@@ -32,7 +32,7 @@ func (s *configCmds) runConfigSet(cmd *cobra.Command, args []string) error {
 
 func (s *configCmds) runConfigUnset(cmd *cobra.Command, args []string) error {
 	section, key := parseProperty(args[0])
-	if err := config.UnsetProperty(section, key); err != nil {
+	if err := s.inv.env.UnsetProperty(section, key); err != nil {
 		return fmt.Errorf("unsetting property: %w", err)
 	}
 	fmt.Fprintf(s.inv.stdout, "Unset property [%s/%s].\n", section, key)
@@ -51,7 +51,7 @@ func (s *configCmds) runConfigGet(cmd *cobra.Command, args []string) error {
 	}
 
 	// gcloud-python only reports a non-default active configuration here.
-	if name := config.ActiveConfigName(); name != "default" {
+	if name := s.inv.env.ActiveConfigName(); name != "default" {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Your active configuration is: [%s]\n", name)
 	}
 	if val == "" {
@@ -75,7 +75,7 @@ var configListKnown = map[string][]string{
 }
 
 func (s *configCmds) runConfigList(cmd *cobra.Command, args []string) error {
-	props, err := config.FileProperties()
+	props, err := s.inv.env.FileProperties()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -112,7 +112,7 @@ func (s *configCmds) runConfigList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Fprintf(cmd.ErrOrStderr(), "\nYour active configuration is: [%s]\n", config.ActiveConfigName())
+	fmt.Fprintf(cmd.ErrOrStderr(), "\nYour active configuration is: [%s]\n", s.inv.env.ActiveConfigName())
 	return nil
 }
 

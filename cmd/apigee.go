@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apigee "google.golang.org/api/apigee/v1"
 )
@@ -39,7 +38,7 @@ func apigeeOrgID(resource string) string {
 // for the organization that owns resource ("organizations/ORG/..."),
 // matching gcloud-python's per-organization location routing.
 func (s *apigeeCmds) apigeeServiceFor(ctx context.Context, resource string) (*apigee.Service, error) {
-	return gcp.ApigeeServiceForOrg(ctx, s.inv.flags.account, apigeeOrgID(resource))
+	return s.inv.clients().ApigeeForOrg(ctx, apigeeOrgID(resource))
 }
 
 // apigeeResource returns organizations/ORG/COLLECTION/ID.

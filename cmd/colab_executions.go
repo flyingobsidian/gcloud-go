@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
@@ -51,7 +50,7 @@ func (s *colabCmds) runColabExecCreate(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabExecRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabExecRegion)
 	if err != nil {
 		return err
 	}
@@ -69,7 +68,7 @@ func (s *colabCmds) runColabExecDelete(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabExecRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabExecRegion)
 	if err != nil {
 		return err
 	}
@@ -87,7 +86,7 @@ func (s *colabCmds) runColabExecDescribe(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabExecRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabExecRegion)
 	if err != nil {
 		return err
 	}
@@ -108,7 +107,7 @@ func (s *colabCmds) runColabExecList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabExecRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabExecRegion)
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aw "google.golang.org/api/assuredworkloads/v1"
 )
@@ -84,7 +83,7 @@ func (g *assuredCmds) assuredWorkloadName(id string) string {
 // endpoint, logging it as gcloud-python's
 // AssuredWorkloadsEndpointOverridesFromRegion does.
 func (g *assuredCmds) assuredV1Service(ctx context.Context, region string) (*aw.Service, error) {
-	return gcp.AssuredWorkloadsService(ctx, g.inv.flags.account, g.assuredRegionalEndpoint(region))
+	return g.inv.clients().AssuredWorkloads(ctx, g.assuredRegionalEndpoint(region))
 }
 
 // assuredOperationRegion returns the region of OPERATION_NAME, falling back

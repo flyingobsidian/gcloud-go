@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	aiplatform "google.golang.org/api/aiplatform/v1"
 )
@@ -60,7 +59,7 @@ func (s *colabCmds) runColabRTCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -78,7 +77,7 @@ func (s *colabCmds) runColabRTDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -96,7 +95,7 @@ func (s *colabCmds) runColabRTDescribe(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -113,7 +112,7 @@ func (s *colabCmds) runColabRTList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -155,7 +154,7 @@ func (s *colabCmds) runColabRTStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -173,7 +172,7 @@ func (s *colabCmds) runColabRTStop(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -191,7 +190,7 @@ func (s *colabCmds) runColabRTUpgrade(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
+	svc, err := s.inv.clients().AIPlatform(ctx, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}

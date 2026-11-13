@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +26,7 @@ func (s *componentsCmds) initComponents() {
 }
 
 func (s *componentsCmds) runComponentsReposAdd(cmd *cobra.Command, args []string) error {
-	repos, err := config.LoadAdditionalRepositories()
+	repos, err := s.inv.env.LoadAdditionalRepositories()
 	if err != nil {
 		return err
 	}
@@ -45,7 +44,7 @@ func (s *componentsCmds) runComponentsReposAdd(cmd *cobra.Command, args []string
 		repos = append(repos, url)
 		added = append(added, url)
 	}
-	if err := config.SaveAdditionalRepositories(repos); err != nil {
+	if err := s.inv.env.SaveAdditionalRepositories(repos); err != nil {
 		return err
 	}
 	for _, url := range added {
@@ -58,7 +57,7 @@ func (s *componentsCmds) runComponentsReposAdd(cmd *cobra.Command, args []string
 }
 
 func (s *componentsCmds) runComponentsReposList(cmd *cobra.Command, args []string) error {
-	repos, err := config.LoadAdditionalRepositories()
+	repos, err := s.inv.env.LoadAdditionalRepositories()
 	if err != nil {
 		return err
 	}
@@ -73,7 +72,7 @@ func (s *componentsCmds) runComponentsReposList(cmd *cobra.Command, args []strin
 }
 
 func (s *componentsCmds) runComponentsReposRemove(cmd *cobra.Command, args []string) error {
-	repos, err := config.LoadAdditionalRepositories()
+	repos, err := s.inv.env.LoadAdditionalRepositories()
 	if err != nil {
 		return err
 	}
@@ -102,7 +101,7 @@ func (s *componentsCmds) runComponentsReposRemove(cmd *cobra.Command, args []str
 	if len(missing) > 0 {
 		return fmt.Errorf("repository not present: %v", missing)
 	}
-	if err := config.SaveAdditionalRepositories(kept); err != nil {
+	if err := s.inv.env.SaveAdditionalRepositories(kept); err != nil {
 		return err
 	}
 	for _, url := range removed {

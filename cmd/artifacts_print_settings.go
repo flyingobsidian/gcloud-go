@@ -116,7 +116,7 @@ func (s *artifactsCmds) getServiceAccountCreds(jsonKey string) (string, error) {
 	if account == "" {
 		return "", nil
 	}
-	store, err := auth.NewStore()
+	store, err := auth.NewStoreFor(s.inv.env)
 	if err != nil {
 		return "", nil
 	}
