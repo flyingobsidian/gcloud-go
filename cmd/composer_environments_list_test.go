@@ -12,13 +12,14 @@ import (
 )
 
 func TestComposerEnvListLocations(t *testing.T) {
-	defer func() { flagComposerEnvListLocations, flagComposerEnvLocation = nil, "" }()
+	grp := newComposerCmds(legacyTestInvocation())
+	defer func() { grp.flagComposerEnvListLocations, grp.flagComposerEnvLocation = nil, "" }()
 	dir := t.TempDir()
 	t.Setenv("CLOUDSDK_CONFIG", dir)
 	t.Setenv("CLOUDSDK_ACTIVE_CONFIG_NAME", "default")
 	t.Setenv("CLOUDSDK_COMPOSER_LOCATION", "")
 
-	if _, err := composerEnvListLocations(); !errors.Is(err, errComposerNoLocations) {
+	if _, err := grp.composerEnvListLocations(); !errors.Is(err, errComposerNoLocations) {
 		t.Errorf("no locations: err = %v", err)
 	}
 
@@ -30,15 +31,15 @@ func TestComposerEnvListLocations(t *testing.T) {
 	}
 	check := func(name, want string) {
 		t.Helper()
-		got, err := composerEnvListLocations()
+		got, err := grp.composerEnvListLocations()
 		if err != nil || strings.Join(got, ",") != want {
 			t.Errorf("%s: got %v, %v; want %s", name, got, err, want)
 		}
 	}
 	check("property", "europe-west2")
-	flagComposerEnvLocation = "us-east1"
+	grp.flagComposerEnvLocation = "us-east1"
 	check("hidden --location", "us-east1")
-	flagComposerEnvListLocations = []string{"us-central1", "asia-east1"}
+	grp.flagComposerEnvListLocations = []string{"us-central1", "asia-east1"}
 	check("--locations", "us-central1,asia-east1")
 }
 
@@ -86,15 +87,16 @@ func TestListComposerEnvs(t *testing.T) {
 }
 
 func TestComposerEnvListFlags(t *testing.T) {
-	if composerEnvListCmd.Flags().Lookup("locations") == nil {
+	grp := newComposerCmds(legacyTestInvocation())
+	if grp.composerEnvListCmd.Flags().Lookup("locations") == nil {
 		t.Fatal("composer environments list missing --locations")
 	}
-	if f := composerEnvListCmd.Flags().Lookup("location"); f == nil || !f.Hidden {
+	if f := grp.composerEnvListCmd.Flags().Lookup("location"); f == nil || !f.Hidden {
 		t.Error("composer environments list --location should be a hidden alias")
 	} else if _, required := f.Annotations["cobra_annotation_bash_completion_one_required_flag"]; required {
 		t.Error("composer environments list --location should not be required")
 	}
-	if f := composerEnvDescribeCmd.Flags().Lookup("location"); f == nil || f.Annotations["cobra_annotation_bash_completion_one_required_flag"] == nil {
+	if f := grp.composerEnvDescribeCmd.Flags().Lookup("location"); f == nil || f.Annotations["cobra_annotation_bash_completion_one_required_flag"] == nil {
 		t.Error("composer environments describe --location should stay required")
 	}
 }

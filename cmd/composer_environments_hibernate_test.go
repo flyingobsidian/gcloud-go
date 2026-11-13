@@ -15,8 +15,9 @@ import (
 )
 
 func TestComposerHibernateResumeRegistered(t *testing.T) {
+	grp := newComposerCmds(legacyTestInvocation())
 	for _, name := range []string{"hibernate", "resume"} {
-		c, _, err := composerEnvCmd.Find([]string{name})
+		c, _, err := grp.composerEnvCmd.Find([]string{name})
 		if err != nil || c.Name() != name {
 			t.Fatalf("environments %s not registered: %v", name, err)
 		}
@@ -72,7 +73,8 @@ func TestComposerBetaWaitOp(t *testing.T) {
 }
 
 func TestApplyComposerDevelopmentMode(t *testing.T) {
-	if composerEnvCreateCmd.Flags().Lookup("enable-development-mode") == nil {
+	grp := newComposerCmds(legacyTestInvocation())
+	if grp.composerEnvCreateCmd.Flags().Lookup("enable-development-mode") == nil {
 		t.Fatal("create missing --enable-development-mode")
 	}
 	env := &composer.Environment{Mode: "MODE_UNSPECIFIED"}

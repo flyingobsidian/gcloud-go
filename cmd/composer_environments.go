@@ -7,181 +7,90 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/config"
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	composer "google.golang.org/api/composer/v1"
 )
 
 // --- gcloud composer environments (#1502) ---
 
-var composerEnvCmd = &cobra.Command{Use: "environments", Short: "Manage Composer environments"}
-
 var (
-	flagComposerEnvLocation      string
-	flagComposerEnvFormat        string
-	flagComposerEnvConfigFile    string
-	flagComposerEnvUpdateMask    string
-	flagComposerEnvFilter        string
-	flagComposerEnvListLocations []string
-	flagComposerEnvListLimit     int64
-	flagComposerEnvPageSize      int64
-	flagComposerEnvImageVersion  string
-	flagComposerEnvSnapLocation  string
-	flagComposerEnvSnapPath      string
-	flagComposerEnvSkipOverrides bool
-	flagComposerEnvSkipEnv       bool
-	flagComposerEnvSkipData      bool
-	flagComposerEnvSkipPypi      bool
 	flagComposerEnvRunCommand    string
 	flagComposerEnvRunSubcommand string
-	flagComposerEnvRunParams     []string
-	flagComposerEnvRunTimeout    time.Duration
-	flagComposerEnvRunTree       bool
 )
 
-var (
-	composerEnvCreateCmd = &cobra.Command{
-		Use: "create ENVIRONMENT", Short: "Create a Composer environment",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvCreate,
-	}
-	composerEnvDeleteCmd = &cobra.Command{
-		Use: "delete ENVIRONMENT", Short: "Delete a Composer environment",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvDelete,
-	}
-	composerEnvDescribeCmd = &cobra.Command{
-		Use: "describe ENVIRONMENT", Short: "Describe a Composer environment",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvDescribe,
-	}
-	composerEnvListCmd = &cobra.Command{
-		Use: "list", Short: "List Composer environments",
-		Args: cobra.NoArgs, RunE: runComposerEnvList,
-	}
-	composerEnvUpdateCmd = &cobra.Command{
-		Use: "update ENVIRONMENT", Short: "Update a Composer environment",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvUpdate,
-	}
-	composerEnvCheckUpgradeCmd = &cobra.Command{
-		Use: "check-upgrade ENVIRONMENT", Short: "Check whether the environment can be upgraded to an image version",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvCheckUpgrade,
-	}
-	composerEnvDatabaseFailoverCmd = &cobra.Command{
-		Use: "database-failover ENVIRONMENT", Short: "Trigger a Cloud SQL failover for a Composer environment",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvDatabaseFailover,
-	}
-	composerEnvFetchDatabasePropertiesCmd = &cobra.Command{
-		Use: "fetch-database-properties ENVIRONMENT", Short: "Fetch Cloud SQL database properties for a Composer environment",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvFetchDatabaseProperties,
-	}
-	composerEnvRestartWebServerCmd = &cobra.Command{
-		Use: "restart-web-server ENVIRONMENT", Short: "Restart the Composer web server",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvRestartWebServer,
-	}
-	composerEnvListWorkloadsCmd = &cobra.Command{
-		Use: "list-workloads ENVIRONMENT", Short: "List Airflow workloads in a Composer environment",
-		Args: cobra.ExactArgs(1), RunE: runComposerEnvListWorkloads,
-	}
-	composerEnvListUpgradesCmd = &cobra.Command{
-		Use:   "list-upgrades ENVIRONMENT",
-		Short: "List the image versions this environment can upgrade to",
-		Args:  cobra.ExactArgs(1), RunE: runComposerEnvListUpgrades,
-	}
-	composerEnvListPackagesCmd = &cobra.Command{
-		Use:   "list-packages ENVIRONMENT",
-		Short: "List Python packages installed in the Airflow worker",
-		Args:  cobra.ExactArgs(1), RunE: runComposerEnvListPackages,
-	}
-	// composerEnvRunCmd forwards the caller's subcommand to Composer's
-	// ExecuteAirflowCommand API without client-side allowlisting. That means
-	// Airflow CLI support tracked by gcloud-python's SUBCOMMAND_ALLOWLIST
-	// (backfill on Airflow 3, `config lint` on Airflow >=2.11, and any commands
-	// enabled for the Airflow 3.2/3.3.x tracks introduced in gcloud-python
-	// 578.0.0–582.0.0) is naturally available here as soon as the server
-	// exposes it — no additional gating needed on our side.
-	composerEnvRunCmd = &cobra.Command{
-		Use:   "run ENVIRONMENT SUBCOMMAND [-- ARG ...]",
-		Short: "Run an Airflow CLI subcommand in the environment (via composer's ExecuteAirflowCommand API)",
-		Args:  cobra.MinimumNArgs(2), RunE: runComposerEnvRun,
-	}
-)
-
-func init() {
+func (s *composerCmds) initComposerEnvironments() {
 	all := []*cobra.Command{
-		composerEnvCreateCmd, composerEnvDeleteCmd, composerEnvDescribeCmd,
-		composerEnvListCmd, composerEnvUpdateCmd, composerEnvCheckUpgradeCmd,
-		composerEnvDatabaseFailoverCmd, composerEnvFetchDatabasePropertiesCmd,
-		composerEnvRestartWebServerCmd, composerEnvListWorkloadsCmd,
-		composerEnvListUpgradesCmd, composerEnvListPackagesCmd, composerEnvRunCmd,
+		s.composerEnvCreateCmd, s.composerEnvDeleteCmd, s.composerEnvDescribeCmd,
+		s.composerEnvListCmd, s.composerEnvUpdateCmd, s.composerEnvCheckUpgradeCmd,
+		s.composerEnvDatabaseFailoverCmd, s.composerEnvFetchDatabasePropertiesCmd,
+		s.composerEnvRestartWebServerCmd, s.composerEnvListWorkloadsCmd,
+		s.composerEnvListUpgradesCmd, s.composerEnvListPackagesCmd, s.composerEnvRunCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagComposerEnvFormat, "format", "", "Output format")
-		if c == composerEnvListCmd {
+		c.Flags().StringVar(&s.flagComposerEnvFormat, "format", "", "Output format")
+		if c == s.composerEnvListCmd {
 			continue
 		}
-		c.Flags().StringVar(&flagComposerEnvLocation, "location", "", "Composer location (required)")
+		c.Flags().StringVar(&s.flagComposerEnvLocation, "location", "", "Composer location (required)")
 		_ = c.MarkFlagRequired("location")
 	}
 	// As in gcloud, list takes --locations, falling back to composer/location.
-	composerEnvListCmd.Flags().StringSliceVar(&flagComposerEnvListLocations, "locations", nil,
+	s.composerEnvListCmd.Flags().StringSliceVar(&s.flagComposerEnvListLocations, "locations", nil,
 		"Locations in which to list environments; default the composer/location property")
 	// --location is kept as a hidden alias for earlier gcloud-go releases.
-	composerEnvListCmd.Flags().StringVar(&flagComposerEnvLocation, "location", "", "Composer location")
-	_ = composerEnvListCmd.Flags().MarkHidden("location")
-	composerEnvListCmd.Flags().Int64Var(&flagComposerEnvListLimit, "limit", 0, "Maximum number of environments to list (0 = no limit)")
-	for _, c := range []*cobra.Command{composerEnvCreateCmd, composerEnvUpdateCmd} {
-		c.Flags().StringVar(&flagComposerEnvConfigFile, "config-file", "",
+	s.composerEnvListCmd.Flags().StringVar(&s.flagComposerEnvLocation, "location", "", "Composer location")
+	_ = s.composerEnvListCmd.Flags().MarkHidden("location")
+	s.composerEnvListCmd.Flags().Int64Var(&s.flagComposerEnvListLimit, "limit", 0, "Maximum number of environments to list (0 = no limit)")
+	for _, c := range []*cobra.Command{s.composerEnvCreateCmd, s.composerEnvUpdateCmd} {
+		c.Flags().StringVar(&s.flagComposerEnvConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Environment body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	composerEnvUpdateCmd.Flags().StringVar(&flagComposerEnvUpdateMask, "update-mask", "",
+	s.composerEnvUpdateCmd.Flags().StringVar(&s.flagComposerEnvUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	composerEnvListCmd.Flags().StringVar(&flagComposerEnvFilter, "filter", "", "Server-side filter expression")
-	composerEnvListCmd.Flags().Int64Var(&flagComposerEnvPageSize, "page-size", 0, "Maximum results per page")
+	s.composerEnvListCmd.Flags().StringVar(&s.flagComposerEnvFilter, "filter", "", "Server-side filter expression")
+	s.composerEnvListCmd.Flags().Int64Var(&s.flagComposerEnvPageSize, "page-size", 0, "Maximum results per page")
 
-	composerEnvCheckUpgradeCmd.Flags().StringVar(&flagComposerEnvImageVersion, "image-version", "",
+	s.composerEnvCheckUpgradeCmd.Flags().StringVar(&s.flagComposerEnvImageVersion, "image-version", "",
 		"Target Composer/Airflow image version to check (required)")
-	_ = composerEnvCheckUpgradeCmd.MarkFlagRequired("image-version")
+	_ = s.composerEnvCheckUpgradeCmd.MarkFlagRequired("image-version")
 
-	composerEnvListWorkloadsCmd.Flags().StringVar(&flagComposerEnvFilter, "filter", "", "Server-side filter expression")
-	composerEnvListWorkloadsCmd.Flags().Int64Var(&flagComposerEnvPageSize, "page-size", 0, "Maximum results per page")
+	s.composerEnvListWorkloadsCmd.Flags().StringVar(&s.flagComposerEnvFilter, "filter", "", "Server-side filter expression")
+	s.composerEnvListWorkloadsCmd.Flags().Int64Var(&s.flagComposerEnvPageSize, "page-size", 0, "Maximum results per page")
 
-	composerEnvRunCmd.Flags().StringSliceVar(&flagComposerEnvRunParams, "parameters", nil,
+	s.composerEnvRunCmd.Flags().StringSliceVar(&s.flagComposerEnvRunParams, "parameters", nil,
 		"Additional Airflow CLI arguments (repeatable)")
-	composerEnvRunCmd.Flags().DurationVar(&flagComposerEnvRunTimeout, "timeout", 5*time.Minute,
+	s.composerEnvRunCmd.Flags().DurationVar(&s.flagComposerEnvRunTimeout, "timeout", 5*time.Minute,
 		"Maximum time to wait for the Airflow command to finish")
 
-	composerEnvListPackagesCmd.Flags().BoolVar(&flagComposerEnvRunTree, "tree", false,
+	s.composerEnvListPackagesCmd.Flags().BoolVar(&s.flagComposerEnvRunTree, "tree", false,
 		"Show the pipdeptree output instead of a flat pip list")
-	composerEnvListPackagesCmd.Flags().DurationVar(&flagComposerEnvRunTimeout, "timeout", 5*time.Minute,
+	s.composerEnvListPackagesCmd.Flags().DurationVar(&s.flagComposerEnvRunTimeout, "timeout", 5*time.Minute,
 		"Maximum time to wait for the Airflow command to finish")
 
-	composerEnvCmd.AddCommand(all...)
-	composerEnvCmd.AddCommand(composerEnvSnapshotsCmd, composerEnvStorageCmd, composerEnvCMCmd, composerEnvSecretsCmd)
-	composerCmd.AddCommand(composerEnvCmd)
+	s.composerEnvCmd.AddCommand(all...)
+	s.composerEnvCmd.AddCommand(s.composerEnvSnapshotsCmd, s.composerEnvStorageCmd, s.composerEnvCMCmd, s.composerEnvSecretsCmd)
+	s.composerCmd.AddCommand(s.composerEnvCmd)
 }
 
-func composerEnvParent() (string, error) {
-	project, err := resolveProject()
+func (s *composerCmds) composerEnvParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return composerLocationParent(project, flagComposerEnvLocation), nil
+	return composerLocationParent(project, s.flagComposerEnvLocation), nil
 }
 
-func composerEnvResolvedName(id string) (string, error) {
-	project, err := resolveProject()
+func (s *composerCmds) composerEnvResolvedName(id string) (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return composerEnvName(project, flagComposerEnvLocation, id), nil
+	return composerEnvName(project, s.flagComposerEnvLocation, id), nil
 }
 
-// flagComposerEnvDevelopmentMode is --enable-development-mode on `create`
-// (gcloud-python 583.0.0), which sets Environment.mode=DEVELOPMENT.
-var flagComposerEnvDevelopmentMode bool
-
-func init() {
-	composerEnvCreateCmd.Flags().BoolVar(&flagComposerEnvDevelopmentMode, "enable-development-mode", false,
+func (s *composerCmds) initComposerEnvironments2() {
+	s.composerEnvCreateCmd.Flags().BoolVar(&s.flagComposerEnvDevelopmentMode, "enable-development-mode", false,
 		"Enable development mode for the environment. Development mode constrains the "+
 			"environment configuration but allows environment hibernation; use it only for test environments.")
 }
@@ -194,21 +103,21 @@ func applyComposerDevelopmentMode(env *composer.Environment, enable bool) {
 	}
 }
 
-func runComposerEnvCreate(cmd *cobra.Command, args []string) error {
-	parent, err := composerEnvParent()
+func (s *composerCmds) runComposerEnvCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.composerEnvParent()
 	if err != nil {
 		return err
 	}
 	body := &composer.Environment{}
-	if err := loadYAMLOrJSONInto(flagComposerEnvConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagComposerEnvConfigFile, body); err != nil {
 		return err
 	}
 	if body.Name == "" {
 		body.Name = fmt.Sprintf("%s/environments/%s", parent, args[0])
 	}
-	applyComposerDevelopmentMode(body, flagComposerEnvDevelopmentMode)
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	applyComposerDevelopmentMode(body, s.flagComposerEnvDevelopmentMode)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -216,17 +125,17 @@ func runComposerEnvCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating environment: %w", err)
 	}
-	fmt.Printf("Create request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagComposerEnvFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvDelete(cmd *cobra.Command, args []string) error {
-	name, err := composerEnvResolvedName(args[0])
+func (s *composerCmds) runComposerEnvDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.composerEnvResolvedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -234,17 +143,17 @@ func runComposerEnvDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting environment: %w", err)
 	}
-	fmt.Printf("Delete request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagComposerEnvFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvDescribe(cmd *cobra.Command, args []string) error {
-	name, err := composerEnvResolvedName(args[0])
+func (s *composerCmds) runComposerEnvDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.composerEnvResolvedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -252,7 +161,7 @@ func runComposerEnvDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing environment: %w", err)
 	}
-	return emitFormatted(got, flagComposerEnvFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagComposerEnvFormat)
 }
 
 // errComposerNoLocations is gcloud's error when `environments list` has
@@ -262,14 +171,14 @@ var errComposerNoLocations = errors.New(
 
 // composerEnvListLocations returns --locations (or the hidden --location),
 // else the composer/location property.
-func composerEnvListLocations() ([]string, error) {
-	if len(flagComposerEnvListLocations) > 0 {
-		return flagComposerEnvListLocations, nil
+func (s *composerCmds) composerEnvListLocations() ([]string, error) {
+	if len(s.flagComposerEnvListLocations) > 0 {
+		return s.flagComposerEnvListLocations, nil
 	}
-	if flagComposerEnvLocation != "" {
-		return []string{flagComposerEnvLocation}, nil
+	if s.flagComposerEnvLocation != "" {
+		return []string{s.flagComposerEnvLocation}, nil
 	}
-	location, err := config.Property("composer", "location")
+	location, err := s.inv.env.Property("composer", "location")
 	if err != nil {
 		return nil, fmt.Errorf("reading composer/location: %w", err)
 	}
@@ -313,12 +222,12 @@ func listComposerEnvs(ctx context.Context, parents []string, page composerEnvPag
 	return all, nil
 }
 
-func runComposerEnvList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *composerCmds) runComposerEnvList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	locations, err := composerEnvListLocations()
+	locations, err := s.composerEnvListLocations()
 	if err != nil {
 		return err
 	}
@@ -326,43 +235,43 @@ func runComposerEnvList(cmd *cobra.Command, args []string) error {
 	for i, loc := range locations {
 		parents[i] = fmt.Sprintf("projects/%s/locations/%s", project, loc)
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
 	page := func(ctx context.Context, parent, pageToken string) (*composer.ListEnvironmentsResponse, error) {
 		call := svc.Projects.Locations.Environments.List(parent).Context(ctx)
-		if flagComposerEnvPageSize > 0 {
-			call = call.PageSize(flagComposerEnvPageSize)
+		if s.flagComposerEnvPageSize > 0 {
+			call = call.PageSize(s.flagComposerEnvPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
 		return call.Do()
 	}
-	all, err := listComposerEnvs(ctx, parents, page, flagComposerEnvFilter, flagComposerEnvListLimit)
+	all, err := listComposerEnvs(ctx, parents, page, s.flagComposerEnvFilter, s.flagComposerEnvListLimit)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(all, flagComposerEnvFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvUpdate(cmd *cobra.Command, args []string) error {
-	name, err := composerEnvResolvedName(args[0])
+func (s *composerCmds) runComposerEnvUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.composerEnvResolvedName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &composer.Environment{}
-	if err := loadYAMLOrJSONInto(flagComposerEnvConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagComposerEnvConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagComposerEnvUpdateMask
+	mask := s.flagComposerEnvUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -374,37 +283,37 @@ func runComposerEnvUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating environment: %w", err)
 	}
-	fmt.Printf("Update request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagComposerEnvFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvCheckUpgrade(cmd *cobra.Command, args []string) error {
-	name, err := composerEnvResolvedName(args[0])
+func (s *composerCmds) runComposerEnvCheckUpgrade(cmd *cobra.Command, args []string) error {
+	name, err := s.composerEnvResolvedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Environments.CheckUpgrade(name, &composer.CheckUpgradeRequest{
-		ImageVersion: flagComposerEnvImageVersion,
+		ImageVersion: s.flagComposerEnvImageVersion,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("checking upgrade: %w", err)
 	}
-	fmt.Printf("Check-upgrade request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagComposerEnvFormat)
+	fmt.Fprintf(s.inv.stdout, "Check-upgrade request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvDatabaseFailover(cmd *cobra.Command, args []string) error {
-	name, err := composerEnvResolvedName(args[0])
+func (s *composerCmds) runComposerEnvDatabaseFailover(cmd *cobra.Command, args []string) error {
+	name, err := s.composerEnvResolvedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -412,17 +321,17 @@ func runComposerEnvDatabaseFailover(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("triggering database failover: %w", err)
 	}
-	fmt.Printf("Failover request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagComposerEnvFormat)
+	fmt.Fprintf(s.inv.stdout, "Failover request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvFetchDatabaseProperties(cmd *cobra.Command, args []string) error {
-	name, err := composerEnvResolvedName(args[0])
+func (s *composerCmds) runComposerEnvFetchDatabaseProperties(cmd *cobra.Command, args []string) error {
+	name, err := s.composerEnvResolvedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -430,16 +339,16 @@ func runComposerEnvFetchDatabaseProperties(cmd *cobra.Command, args []string) er
 	if err != nil {
 		return fmt.Errorf("fetching database properties: %w", err)
 	}
-	return emitFormatted(resp, flagComposerEnvFormat)
+	return emitFormattedTo(s.inv.stdout, resp, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvRestartWebServer(cmd *cobra.Command, args []string) error {
-	name, err := composerEnvResolvedName(args[0])
+func (s *composerCmds) runComposerEnvRestartWebServer(cmd *cobra.Command, args []string) error {
+	name, err := s.composerEnvResolvedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -447,17 +356,17 @@ func runComposerEnvRestartWebServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("restarting web server: %w", err)
 	}
-	fmt.Printf("Restart request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagComposerEnvFormat)
+	fmt.Fprintf(s.inv.stdout, "Restart request issued for environment [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvListWorkloads(cmd *cobra.Command, args []string) error {
-	name, err := composerEnvResolvedName(args[0])
+func (s *composerCmds) runComposerEnvListWorkloads(cmd *cobra.Command, args []string) error {
+	name, err := s.composerEnvResolvedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -465,11 +374,11 @@ func runComposerEnvListWorkloads(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Environments.Workloads.List(name).Context(ctx)
-		if flagComposerEnvFilter != "" {
-			call = call.Filter(flagComposerEnvFilter)
+		if s.flagComposerEnvFilter != "" {
+			call = call.Filter(s.flagComposerEnvFilter)
 		}
-		if flagComposerEnvPageSize > 0 {
-			call = call.PageSize(flagComposerEnvPageSize)
+		if s.flagComposerEnvPageSize > 0 {
+			call = call.PageSize(s.flagComposerEnvPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -484,18 +393,18 @@ func runComposerEnvListWorkloads(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagComposerEnvFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvListUpgrades(cmd *cobra.Command, args []string) error {
+func (s *composerCmds) runComposerEnvListUpgrades(cmd *cobra.Command, args []string) error {
 	// Use the Environment's config.softwareConfig.imageVersion as the reference
 	// and issue a CheckUpgrade that returns the set of supported target versions.
-	name, err := composerEnvResolvedName(args[0])
+	name, err := s.composerEnvResolvedName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return err
 	}
@@ -513,13 +422,13 @@ func runComposerEnvListUpgrades(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("checking upgrade: %w", err)
 	}
-	return emitFormatted(op, flagComposerEnvFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagComposerEnvFormat)
 }
 
-func runComposerEnvListPackages(cmd *cobra.Command, args []string) error {
+func (s *composerCmds) runComposerEnvListPackages(cmd *cobra.Command, args []string) error {
 	subcmd := "list"
 	params := []string{}
-	if flagComposerEnvRunTree {
+	if s.flagComposerEnvRunTree {
 		// pipdeptree is invoked via `airflow info` on Composer 2+, but the
 		// canonical Python impl runs `python -m pipdeptree --warn` on the worker.
 		// The Airflow-command surface doesn't expose pipdeptree directly, so we
@@ -527,36 +436,36 @@ func runComposerEnvListPackages(cmd *cobra.Command, args []string) error {
 		// to get the dependency graph.
 		params = append(params, "--tree")
 	}
-	out, err := runAirflowCommand(args[0], "info", subcmd, params, flagComposerEnvRunTimeout)
+	out, err := s.runAirflowCommand(args[0], "info", subcmd, params, s.flagComposerEnvRunTimeout)
 	if err != nil {
 		return err
 	}
-	fmt.Println(out)
+	fmt.Fprintln(s.inv.stdout, out)
 	return nil
 }
 
-func runComposerEnvRun(cmd *cobra.Command, args []string) error {
+func (s *composerCmds) runComposerEnvRun(cmd *cobra.Command, args []string) error {
 	subcommand := args[1]
 	trailing := args[2:]
 	// Merge --parameters and trailing args, preserving order.
-	params := append([]string{}, flagComposerEnvRunParams...)
+	params := append([]string{}, s.flagComposerEnvRunParams...)
 	params = append(params, trailing...)
-	out, err := runAirflowCommand(args[0], "airflow", subcommand, params, flagComposerEnvRunTimeout)
+	out, err := s.runAirflowCommand(args[0], "airflow", subcommand, params, s.flagComposerEnvRunTimeout)
 	if err != nil {
 		return err
 	}
-	fmt.Println(out)
+	fmt.Fprintln(s.inv.stdout, out)
 	return nil
 }
 
-func runAirflowCommand(envID, command, subcommand string, parameters []string, timeout time.Duration) (string, error) {
-	name, err := composerEnvResolvedName(envID)
+func (s *composerCmds) runAirflowCommand(envID, command, subcommand string, parameters []string, timeout time.Duration) (string, error) {
+	name, err := s.composerEnvResolvedName(envID)
 	if err != nil {
 		return "", err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(s.inv.context(), timeout)
 	defer cancel()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -603,7 +512,7 @@ func runAirflowCommand(envID, command, subcommand string, parameters []string, t
 				ExecutionId:  resp.ExecutionId,
 				Pod:          resp.Pod,
 				PodNamespace: resp.PodNamespace,
-			}).Context(context.Background()).Do()
+			}).Context(s.inv.context()).Do()
 			return lines.String(), fmt.Errorf("timed out waiting for airflow command: %w", ctx.Err())
 		case <-time.After(backoff):
 		}

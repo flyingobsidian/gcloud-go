@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	storage "google.golang.org/api/storage/v1"
 )
@@ -20,84 +19,63 @@ import (
 // prefix <bucket>/{dags|data|plugins}/. This implementation talks directly to
 // GCS using the environment's config.dagGcsPrefix to derive bucket + prefix.
 
-var composerEnvStorageCmd = &cobra.Command{Use: "storage", Short: "Manage files in a Composer environment's Cloud Storage bucket"}
-
-var (
-	composerEnvStorageDagsCmd    = &cobra.Command{Use: "dags", Short: "Manage the DAGs folder"}
-	composerEnvStorageDataCmd    = &cobra.Command{Use: "data", Short: "Manage the data folder"}
-	composerEnvStoragePluginsCmd = &cobra.Command{Use: "plugins", Short: "Manage the plugins folder"}
-)
-
-var (
-	flagComposerStEnvironment string
-	flagComposerStSource      string
-	flagComposerStDestination string
-	flagComposerStSubdir      string
-)
-
 type composerStorageOp struct {
 	kind     string // "dags", "data", "plugins"
 	parent   *cobra.Command
 	flagsSet bool
 }
 
-var composerStorageKinds = []*composerStorageOp{
-	{kind: "dags", parent: composerEnvStorageDagsCmd},
-	{kind: "data", parent: composerEnvStorageDataCmd},
-	{kind: "plugins", parent: composerEnvStoragePluginsCmd},
-}
-
-func init() {
-	for _, k := range composerStorageKinds {
+func (s *composerCmds) initComposerEnvironmentsStorage() {
+	for _, k := range s.composerStorageKinds {
 		importCmd := &cobra.Command{
 			Use: "import", Short: fmt.Sprintf("Upload local files into the environment's %s folder", k.kind),
-			Args: cobra.NoArgs, RunE: composerStorageImportFn(k.kind),
+			Args: cobra.NoArgs, RunE: s.composerStorageImportFn(k.kind),
 		}
 		exportCmd := &cobra.Command{
 			Use: "export", Short: fmt.Sprintf("Download files from the environment's %s folder", k.kind),
-			Args: cobra.NoArgs, RunE: composerStorageExportFn(k.kind),
+			Args: cobra.NoArgs, RunE: s.composerStorageExportFn(k.kind),
 		}
 		listCmd := &cobra.Command{
 			Use: "list", Short: fmt.Sprintf("List files in the environment's %s folder", k.kind),
-			Args: cobra.NoArgs, RunE: composerStorageListFn(k.kind),
+			Args: cobra.NoArgs, RunE: s.composerStorageListFn(k.kind),
 		}
 		deleteCmd := &cobra.Command{
 			Use: "delete", Short: fmt.Sprintf("Delete files from the environment's %s folder", k.kind),
-			Args: cobra.NoArgs, RunE: composerStorageDeleteFn(k.kind),
+			Args: cobra.NoArgs, RunE: s.composerStorageDeleteFn(k.kind),
 		}
 
 		for _, c := range []*cobra.Command{importCmd, exportCmd, listCmd, deleteCmd} {
-			c.Flags().StringVar(&flagComposerEnvLocation, "location", "", "Composer location (required)")
+			c.Flags().StringVar(&s.flagComposerEnvLocation, "location", "", "Composer location (required)")
 			_ = c.MarkFlagRequired("location")
-			c.Flags().StringVar(&flagComposerStEnvironment, "environment", "",
+			c.Flags().StringVar(&s.flagComposerStEnvironment, "environment", "",
 				"Composer environment ID (required)")
 			_ = c.MarkFlagRequired("environment")
-			c.Flags().StringVar(&flagComposerStSubdir, "subdir", "",
+			c.Flags().StringVar(&s.flagComposerStSubdir, "subdir", "",
 				"Optional subdirectory within the folder")
-			c.Flags().StringVar(&flagComposerEnvFormat, "format", "", "Output format")
+			c.Flags().StringVar(&s.flagComposerEnvFormat, "format", "", "Output format")
 		}
-		importCmd.Flags().StringVar(&flagComposerStSource, "source", "",
+		importCmd.Flags().StringVar(&s.flagComposerStSource, "source", "",
 			"Local file or directory to upload (required)")
 		_ = importCmd.MarkFlagRequired("source")
-		importCmd.Flags().StringVar(&flagComposerStDestination, "destination", "",
+		importCmd.Flags().StringVar(&s.flagComposerStDestination, "destination", "",
 			"Optional destination path within the folder")
 
-		exportCmd.Flags().StringVar(&flagComposerStDestination, "destination", "",
+		exportCmd.Flags().StringVar(&s.flagComposerStDestination, "destination", "",
 			"Local directory to write downloaded files into (required)")
 		_ = exportCmd.MarkFlagRequired("destination")
 
 		k.parent.AddCommand(importCmd, exportCmd, listCmd, deleteCmd)
-		composerEnvStorageCmd.AddCommand(k.parent)
+		s.composerEnvStorageCmd.AddCommand(k.parent)
 	}
 }
 
-func composerEnvBucketAndPrefix(kind string) (bucket string, prefix string, err error) {
-	name, err := composerEnvResolvedName(flagComposerStEnvironment)
+func (s *composerCmds) composerEnvBucketAndPrefix(kind string) (bucket string, prefix string, err error) {
+	name, err := s.composerEnvResolvedName(s.flagComposerStEnvironment)
 	if err != nil {
 		return "", "", err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ComposerService(ctx, flagAccount)
+	ctx := s.inv.context()
+	svc, err := s.inv.clients().Composer(ctx)
 	if err != nil {
 		return "", "", err
 	}
@@ -106,7 +84,7 @@ func composerEnvBucketAndPrefix(kind string) (bucket string, prefix string, err 
 		return "", "", fmt.Errorf("describing environment: %w", err)
 	}
 	if env.Config == nil || env.Config.DagGcsPrefix == "" {
-		return "", "", fmt.Errorf("environment [%s] has no DAG GCS prefix set", flagComposerStEnvironment)
+		return "", "", fmt.Errorf("environment [%s] has no DAG GCS prefix set", s.flagComposerStEnvironment)
 	}
 	// dagGcsPrefix format: gs://BUCKET/dags
 	raw := strings.TrimPrefix(env.Config.DagGcsPrefix, "gs://")
@@ -117,28 +95,28 @@ func composerEnvBucketAndPrefix(kind string) (bucket string, prefix string, err 
 	bucket = raw[:slash]
 	// substitute the kind for the trailing "dags" segment
 	prefix = kind
-	if flagComposerStSubdir != "" {
-		prefix = prefix + "/" + strings.TrimPrefix(flagComposerStSubdir, "/")
+	if s.flagComposerStSubdir != "" {
+		prefix = prefix + "/" + strings.TrimPrefix(s.flagComposerStSubdir, "/")
 	}
 	return bucket, prefix, nil
 }
 
-func composerStorageImportFn(kind string) func(*cobra.Command, []string) error {
+func (s *composerCmds) composerStorageImportFn(kind string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		bucket, prefix, err := composerEnvBucketAndPrefix(kind)
+		bucket, prefix, err := s.composerEnvBucketAndPrefix(kind)
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
-		st, err := gcp.StorageService(ctx, flagAccount)
+		ctx := cmd.Context()
+		st, err := s.inv.clients().Storage(ctx)
 		if err != nil {
 			return err
 		}
-		return uploadPathToPrefix(ctx, st, bucket, prefix, flagComposerStSource, flagComposerStDestination)
+		return s.uploadPathToPrefix(ctx, st, bucket, prefix, s.flagComposerStSource, s.flagComposerStDestination)
 	}
 }
 
-func uploadPathToPrefix(ctx context.Context, st *storage.Service, bucket, prefix, src, dst string) error {
+func (s *composerCmds) uploadPathToPrefix(ctx context.Context, st *storage.Service, bucket, prefix, src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", src, err)
@@ -156,15 +134,15 @@ func uploadPathToPrefix(ctx context.Context, st *storage.Service, bucket, prefix
 				return err
 			}
 			objName := joinGCS(prefix, dst, rel)
-			return uploadOne(ctx, st, bucket, objName, p)
+			return s.uploadOne(ctx, st, bucket, objName, p)
 		})
 	}
 	name := filepath.Base(src)
 	objName := joinGCS(prefix, dst, name)
-	return uploadOne(ctx, st, bucket, objName, src)
+	return s.uploadOne(ctx, st, bucket, objName, src)
 }
 
-func uploadOne(ctx context.Context, st *storage.Service, bucket, object, localPath string) error {
+func (s *composerCmds) uploadOne(ctx context.Context, st *storage.Service, bucket, object, localPath string) error {
 	f, err := os.Open(localPath)
 	if err != nil {
 		return fmt.Errorf("opening %s: %w", localPath, err)
@@ -173,7 +151,7 @@ func uploadOne(ctx context.Context, st *storage.Service, bucket, object, localPa
 	if _, err := st.Objects.Insert(bucket, &storage.Object{Name: object}).Media(f).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("uploading %s to gs://%s/%s: %w", localPath, bucket, object, err)
 	}
-	fmt.Printf("Uploaded %s -> gs://%s/%s\n", localPath, bucket, object)
+	fmt.Fprintf(s.inv.stdout, "Uploaded %s -> gs://%s/%s\n", localPath, bucket, object)
 	return nil
 }
 
@@ -225,17 +203,17 @@ func composerPathInsideDir(path, dir string) bool {
 	return strings.HasPrefix(real, strings.TrimSuffix(realDir, string(filepath.Separator))+string(filepath.Separator))
 }
 
-func composerStorageExportFn(kind string) func(*cobra.Command, []string) error {
+func (s *composerCmds) composerStorageExportFn(kind string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		bucket, prefix, err := composerEnvBucketAndPrefix(kind)
+		bucket, prefix, err := s.composerEnvBucketAndPrefix(kind)
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(flagComposerStDestination, 0755); err != nil {
+		if err := os.MkdirAll(s.flagComposerStDestination, 0755); err != nil {
 			return fmt.Errorf("creating destination: %w", err)
 		}
-		ctx := context.Background()
-		st, err := gcp.StorageService(ctx, flagAccount)
+		ctx := cmd.Context()
+		st, err := s.inv.clients().Storage(ctx)
 		if err != nil {
 			return err
 		}
@@ -254,13 +232,13 @@ func composerStorageExportFn(kind string) func(*cobra.Command, []string) error {
 				if rel == "" {
 					continue
 				}
-				target := filepath.Join(flagComposerStDestination, rel)
+				target := filepath.Join(s.flagComposerStDestination, rel)
 				// Object names are controlled by whoever can write to the
 				// bucket; skip any that would land outside --destination
 				// via '..' segments or existing symlinks (gcloud-python 589.0.0).
-				if !composerPathInsideDir(target, flagComposerStDestination) {
-					fmt.Fprintf(os.Stderr, "WARNING: Skipping export of [gs://%s/%s] because it would be written outside of the destination directory [%s].\n",
-						bucket, o.Name, flagComposerStDestination)
+				if !composerPathInsideDir(target, s.flagComposerStDestination) {
+					fmt.Fprintf(s.inv.stderr, "WARNING: Skipping export of [gs://%s/%s] because it would be written outside of the destination directory [%s].\n",
+						bucket, o.Name, s.flagComposerStDestination)
 					continue
 				}
 				if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
@@ -285,7 +263,7 @@ func composerStorageExportFn(kind string) func(*cobra.Command, []string) error {
 				if err != nil {
 					return fmt.Errorf("writing %s: %w", target, err)
 				}
-				fmt.Printf("Downloaded gs://%s/%s -> %s\n", bucket, o.Name, target)
+				fmt.Fprintf(s.inv.stdout, "Downloaded gs://%s/%s -> %s\n", bucket, o.Name, target)
 			}
 			if resp.NextPageToken == "" {
 				break
@@ -296,14 +274,14 @@ func composerStorageExportFn(kind string) func(*cobra.Command, []string) error {
 	}
 }
 
-func composerStorageListFn(kind string) func(*cobra.Command, []string) error {
+func (s *composerCmds) composerStorageListFn(kind string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		bucket, prefix, err := composerEnvBucketAndPrefix(kind)
+		bucket, prefix, err := s.composerEnvBucketAndPrefix(kind)
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
-		st, err := gcp.StorageService(ctx, flagAccount)
+		ctx := cmd.Context()
+		st, err := s.inv.clients().Storage(ctx)
 		if err != nil {
 			return err
 		}
@@ -326,24 +304,24 @@ func composerStorageListFn(kind string) func(*cobra.Command, []string) error {
 			}
 			pageToken = resp.NextPageToken
 		}
-		if flagComposerEnvFormat != "" {
-			return emitFormatted(items, flagComposerEnvFormat)
+		if s.flagComposerEnvFormat != "" {
+			return emitFormattedTo(s.inv.stdout, items, s.flagComposerEnvFormat)
 		}
 		for _, item := range items {
-			fmt.Println(item)
+			fmt.Fprintln(s.inv.stdout, item)
 		}
 		return nil
 	}
 }
 
-func composerStorageDeleteFn(kind string) func(*cobra.Command, []string) error {
+func (s *composerCmds) composerStorageDeleteFn(kind string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		bucket, prefix, err := composerEnvBucketAndPrefix(kind)
+		bucket, prefix, err := s.composerEnvBucketAndPrefix(kind)
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
-		st, err := gcp.StorageService(ctx, flagAccount)
+		ctx := cmd.Context()
+		st, err := s.inv.clients().Storage(ctx)
 		if err != nil {
 			return err
 		}
@@ -362,7 +340,7 @@ func composerStorageDeleteFn(kind string) func(*cobra.Command, []string) error {
 				if err := st.Objects.Delete(bucket, o.Name).Context(ctx).Do(); err != nil {
 					return fmt.Errorf("deleting %s: %w", o.Name, err)
 				}
-				fmt.Printf("Deleted gs://%s/%s\n", bucket, o.Name)
+				fmt.Fprintf(s.inv.stdout, "Deleted gs://%s/%s\n", bucket, o.Name)
 				count++
 			}
 			if resp.NextPageToken == "" {
@@ -370,7 +348,7 @@ func composerStorageDeleteFn(kind string) func(*cobra.Command, []string) error {
 			}
 			pageToken = resp.NextPageToken
 		}
-		fmt.Printf("Deleted %d objects.\n", count)
+		fmt.Fprintf(s.inv.stdout, "Deleted %d objects.\n", count)
 		return nil
 	}
 }
