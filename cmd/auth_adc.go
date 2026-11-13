@@ -22,18 +22,6 @@ func (s *authCmds) initAuthAdc() {
 	s.authCmd.AddCommand(s.authApplicationDefaultCmd)
 }
 
-// adcFilePath returns the well-known ADC file path.
-func adcFilePath() string {
-	// GOOGLE_APPLICATION_CREDENTIALS takes precedence in client libraries,
-	// but the well-known path is what ADC login writes to.
-	configDir := os.Getenv("CLOUDSDK_CONFIG")
-	if configDir == "" {
-		home, _ := os.UserHomeDir()
-		configDir = filepath.Join(home, ".config", "gcloud")
-	}
-	return filepath.Join(configDir, "application_default_credentials.json")
-}
-
 func (s *authCmds) runAuthADCSetQuotaProject(cmd *cobra.Command, args []string) error {
 	quotaProject := args[0]
 	adcPath := s.inv.adcFilePath()

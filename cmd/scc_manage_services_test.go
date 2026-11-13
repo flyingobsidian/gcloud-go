@@ -506,7 +506,7 @@ func TestSccManageServicesUpdate(t *testing.T) {
 	sccManageServicesTestSetup(t, server, grp)
 
 	// Take the prompt out of the way: in a non-interactive test context
-	// promptYesNo(_, true) already defaults to yes, but flagQuiet keeps
+	// inv.confirm(_, true) already defaults to yes, but --quiet keeps
 	// it explicit and independent of tty detection quirks.
 	saveQuiet := grp.inv.flags.quiet
 	grp.inv.flags.quiet = true

@@ -41,7 +41,7 @@ func TestRootCmdInvocationsAreIndependent(t *testing.T) {
 	for i := range 20 {
 		wg.Go(func() {
 			inv, stdout, _ := newTestInvocation(t, nil, "")
-			root := newRootCmd(inv, false)
+			root := newRootCmd(inv)
 			root.AddCommand(&cobra.Command{
 				Use: "probe",
 				RunE: func(c *cobra.Command, _ []string) error {
@@ -147,34 +147,5 @@ func TestInvocationHTTPDebugWriter(t *testing.T) {
 	c := inv.clients()
 	if c.DebugOut != stderr || c.Account != "user@example.com" || c.Tokens != inv.tokens {
 		t.Errorf("clients() = %+v, want stderr logging, the --account and the invocation's tokens", c)
-	}
-}
-
-func TestRootCmdSetsLegacyGlobals(t *testing.T) {
-	saved := flagProject
-	t.Cleanup(func() { flagProject = saved })
-
-	inv, _, _ := newTestInvocation(t, nil, "")
-	root := newRootCmd(inv, true)
-	var seen string
-	probe := &cobra.Command{
-		Use: "legacy-probe",
-		Run: func(*cobra.Command, []string) { seen = flagProject },
-	}
-	root.AddCommand(probe)
-	root.SetArgs([]string{"legacy-probe", "--project", "legacy-project"})
-	if err := root.Execute(); err != nil {
-		t.Fatal(err)
-	}
-	if seen != "legacy-project" {
-		t.Errorf("flagProject = %q in a legacy command, want %q", seen, "legacy-project")
-	}
-}
-
-// Every command group is migrated (#2070): none is left on the legacy
-// rootCmd for newRootCmd to adopt.
-func TestNoLegacyGroupsLeft(t *testing.T) {
-	for _, c := range rootCmd.Commands() {
-		t.Errorf("command group %q is still registered on the legacy rootCmd", c.Name())
 	}
 }

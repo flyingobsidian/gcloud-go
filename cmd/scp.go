@@ -124,7 +124,7 @@ func (s *computeCmds) runSCP(cmd *cobra.Command, args []string) error {
 	useOSLogin := proj != nil && ioslogin.IsEnabled(inst, proj)
 
 	if !s.flagSCPPlain && s.flagSCPKeyFile == "" {
-		keyPath := googleSSHKeyPath()
+		keyPath := s.inv.googleSSHKeyPath()
 		keyGenerated := false
 		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 			keyPath, err = s.generateSSHKey(keyPath)
@@ -235,7 +235,7 @@ func (s *computeCmds) runSCP(cmd *cobra.Command, args []string) error {
 		// Use gcloud's default SSH key unless overridden.
 		keyFile := s.flagSCPKeyFile
 		if keyFile == "" {
-			keyFile = googleSSHKeyPath()
+			keyFile = s.inv.googleSSHKeyPath()
 		}
 		if keyFile != "" {
 			if _, err := os.Stat(keyFile); err == nil {
@@ -244,12 +244,12 @@ func (s *computeCmds) runSCP(cmd *cobra.Command, args []string) error {
 		}
 
 		// Use gcloud's known_hosts file.
-		if knownHosts := googleKnownHostsPath(); knownHosts != "" {
+		if knownHosts := s.inv.googleKnownHostsPath(); knownHosts != "" {
 			scpArgs = append(scpArgs, "-o", "UserKnownHostsFile="+knownHosts)
 		}
 
 		// Match gcloud Python behavior: verify host key if host is already known.
-		if knownHostsHasHost(host) {
+		if s.inv.knownHostsHasHost(host) {
 			scpArgs = append(scpArgs, "-o", "StrictHostKeyChecking=yes")
 		} else {
 			scpArgs = append(scpArgs, "-o", "StrictHostKeyChecking=no")

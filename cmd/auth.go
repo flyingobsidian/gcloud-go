@@ -67,7 +67,7 @@ func (s *authCmds) runAuthLoginCredFile() error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 	props.Core.Account = account
-	if err := props.Save(); err != nil {
+	if err := s.inv.env.Save(props); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
@@ -196,7 +196,7 @@ func (s *authCmds) runAuthLoginBrowser() error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 	props.Core.Account = account
-	if err := props.Save(); err != nil {
+	if err := s.inv.env.Save(props); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
@@ -325,7 +325,7 @@ func (s *authCmds) runAuthRevoke(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("loading config: %w", err)
 		}
 		props.Core.Account = ""
-		if err := props.Save(); err != nil {
+		if err := s.inv.env.Save(props); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
 		return nil
@@ -361,7 +361,7 @@ func (s *authCmds) runAuthRevoke(cmd *cobra.Command, args []string) error {
 	for _, account := range accounts {
 		if props.Core.Account == account {
 			props.Core.Account = ""
-			if err := props.Save(); err != nil {
+			if err := s.inv.env.Save(props); err != nil {
 				return fmt.Errorf("saving config: %w", err)
 			}
 			break
@@ -387,7 +387,7 @@ func (s *authCmds) runAuthActivateServiceAccount(cmd *cobra.Command, args []stri
 		return fmt.Errorf("loading config: %w", err)
 	}
 	props.Core.Account = account
-	if err := props.Save(); err != nil {
+	if err := s.inv.env.Save(props); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
 

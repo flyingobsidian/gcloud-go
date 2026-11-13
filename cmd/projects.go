@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"path"
 	"strings"
 
@@ -513,12 +512,6 @@ func (inv *invocation) emitWithPipeline(v any) error {
 	return emitPipeline(inv.stdout, v, inv.flags.flatten, inv.flags.filter, inv.flags.format)
 }
 
-// emitWithPipeline is invocation.emitWithPipeline for command groups not yet
-// migrated to invocation (#2070).
-func emitWithPipeline(v any) error {
-	return emitPipeline(os.Stdout, v, flagFlatten, flagFilter, flagFormat)
-}
-
 // emitPipeline writes v to w through --flatten, --filter and --format.
 func emitPipeline(w io.Writer, v any, flatten []string, filterExpr, format string) error {
 	// Fast path: no pipeline modifiers → keep the historical yaml dump so
@@ -546,7 +539,7 @@ func emitPipeline(w io.Writer, v any, flatten []string, filterExpr, format strin
 		records = kept
 	}
 
-	// If --flatten was applied, hand the record list to emitFormatted so
+	// If --flatten was applied, hand the record list to emitFormattedTo so
 	// table/csv/etc. render one row per record. Without --flatten we pass
 	// through the original single value so scalar top-level policies still
 	// render sensibly.

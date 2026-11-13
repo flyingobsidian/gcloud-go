@@ -19,7 +19,7 @@ import (
 // New tests should use newTestInvocation or newFakeAPIInvocation instead.
 func legacyTestInvocation() *invocation {
 	env := config.OSEnv()
-	return &invocation{
+	inv := &invocation{
 		stdin:  osStdin{},
 		stdout: osStdout{},
 		stderr: osStderr{},
@@ -29,8 +29,45 @@ func legacyTestInvocation() *invocation {
 		restTokenSource: func(ctx context.Context, scopes ...string) (oauth2.TokenSource, error) {
 			return restTokenSource(ctx, scopes...)
 		},
-		restUserProject: func() string { return restUserProject() },
 	}
+	inv.restUserProject = func() string {
+		if restUserProject != nil {
+			return restUserProject()
+		}
+		return inv.billingProject()
+	}
+	return inv
+}
+
+// restTokenSource and restUserProject supply the credentials and billing
+// project of legacyTestInvocation's REST clients; a nil restUserProject means
+// the invocation's own billing project. Tests override them with
+// SetRestTokenSourceForTest and SetRestUserProjectForTest, so those tests
+// must not run in parallel.
+var (
+	restTokenSource = func(ctx context.Context, scopes ...string) (oauth2.TokenSource, error) {
+		return auth.NewTokenProvider(config.OSEnv()).TokenSource(ctx, "", scopes...)
+	}
+	restUserProject func() string
+)
+
+// SetRestTokenSourceForTest makes legacyTestInvocation's REST clients use
+// ts. The returned function restores the previous token source.
+func SetRestTokenSourceForTest(ts oauth2.TokenSource) (restore func()) {
+	prev := restTokenSource
+	restTokenSource = func(context.Context, ...string) (oauth2.TokenSource, error) {
+		return ts, nil
+	}
+	return func() { restTokenSource = prev }
+}
+
+// SetRestUserProjectForTest makes legacyTestInvocation's REST clients send
+// project as the billing project. The returned function restores the
+// previous one.
+func SetRestUserProjectForTest(project string) (restore func()) {
+	prev := restUserProject
+	restUserProject = func() string { return project }
+	return func() { restUserProject = prev }
 }
 
 type osStdin struct{}

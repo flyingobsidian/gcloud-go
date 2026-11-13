@@ -49,7 +49,7 @@ func (s *initCmds) runInit(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("loading config: %w", err)
 		}
 		props.Core.Project = projectID
-		if err := props.Save(); err != nil {
+		if err := s.inv.env.Save(props); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
 		fmt.Fprintf(s.inv.stderr, "Updated property [core/project] to [%s].\n", projectID)

@@ -99,7 +99,7 @@ func (g *secretsCmds) runSecretsGetIam(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (g *secretsCmds) runSecretsSetIam(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func (g *secretsCmds) secretsModifyIam(secretID string, mutate func(*secretmanag
 		return err
 	}
 	ctx := g.inv.context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -199,7 +199,7 @@ func (g *secretsCmds) runSecretsReplGet(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -236,7 +236,7 @@ func (g *secretsCmds) runSecretsReplPatch(secretID, mask string) error {
 		mask = joinMask(fields)
 	}
 	ctx := g.inv.context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -257,7 +257,7 @@ func (g *secretsCmds) runSecretsLocDescribe(cmd *cobra.Command, args []string) e
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -274,7 +274,7 @@ func (g *secretsCmds) runSecretsLocList(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -316,7 +316,7 @@ func (g *secretsCmds) runSecretsEnableManagedRotation(cmd *cobra.Command, args [
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -342,7 +342,7 @@ func (g *secretsCmds) runSecretsRotateSecret(cmd *cobra.Command, args []string) 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}

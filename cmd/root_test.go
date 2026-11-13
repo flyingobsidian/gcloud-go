@@ -25,7 +25,7 @@ func TestRootGlobalFlagsRegistered(t *testing.T) {
 		"zone",
 	}
 	for _, name := range want {
-		if newRootCmd(newOSInvocation(), false).PersistentFlags().Lookup(name) == nil {
+		if newRootCmd(newOSInvocation()).PersistentFlags().Lookup(name) == nil {
 			t.Errorf("persistent flag --%s not registered on rootCmd", name)
 		}
 	}

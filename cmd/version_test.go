@@ -7,7 +7,7 @@ import (
 
 func TestVersionCommandRegistered(t *testing.T) {
 	found := false
-	for _, c := range newRootCmd(legacyTestInvocation(), true).Commands() {
+	for _, c := range newRootCmd(legacyTestInvocation()).Commands() {
 		if c.Name() == "version" {
 			found = true
 			break

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -14,18 +13,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// emitFormatted renders v to stdout in one of the supported gcloud output
+// emitFormattedTo renders v to w in one of the supported gcloud output
 // formats: yaml (default), json, csv, table, text, value, config, get. The
 // columnar formats (csv/table/text/value/config/get) take a parenthesised
 // field list, e.g. table(projectId,state).
 //
 // This is the single implementation of gcloud-go's --format flag; all callers
 // route through here so behavior stays consistent across commands.
-func emitFormatted(v any, format string) error {
-	return emitFormattedTo(os.Stdout, v, format)
-}
-
-// emitFormattedTo is the io.Writer-taking form of emitFormatted, used by tests.
 func emitFormattedTo(w io.Writer, v any, format string) error {
 	name, fields, err := parseFormat(format)
 	if err != nil {
@@ -154,11 +148,6 @@ func emitYAML(w io.Writer, v any) error {
 	return err
 }
 
-// printJSON prints v to stdout as indented JSON.
-func printJSON(v any) error {
-	return emitJSON(os.Stdout, v)
-}
-
 // emitJSON prints an empty list (including a nil slice) as [], matching
 // gcloud-python, rather than encoding/json's null.
 func emitJSON(w io.Writer, v any) error {
@@ -200,14 +189,9 @@ func csvEscape(s string) string {
 	return s
 }
 
-// printTableHeading prints the heading line of a hand-rolled default table to
-// stdout. It prints nothing when rows is zero, matching gcloud-python's
+// printTableHeadingTo prints the heading line of a hand-rolled default table
+// to w. It prints nothing when rows is zero, matching gcloud-python's
 // TablePrinter, which omits the heading for an empty list.
-func printTableHeading(rows int, format string, a ...any) {
-	printTableHeadingTo(os.Stdout, rows, format, a...)
-}
-
-// printTableHeadingTo is printTableHeading writing to w.
 func printTableHeadingTo(w io.Writer, rows int, format string, a ...any) {
 	if rows == 0 {
 		return

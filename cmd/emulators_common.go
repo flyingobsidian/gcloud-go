@@ -29,7 +29,7 @@ func (s *emulatorsCmds) emulatorLookupPath(bin string, sdkSubdir string) (string
 		"/usr/lib/google-cloud-sdk",
 		"/opt/google-cloud-sdk",
 	}
-	if home, err := os.UserHomeDir(); err == nil {
+	if home, err := s.inv.env.HomeDir(); err == nil {
 		candidates = append(candidates, home+"/google-cloud-sdk")
 	}
 	for _, root := range candidates {

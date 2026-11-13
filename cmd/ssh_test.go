@@ -92,7 +92,8 @@ func TestBuildSSHOptsWithExistingKey(t *testing.T) {
 	keyFile := filepath.Join(tmp, "test_key")
 	os.WriteFile(keyFile, []byte("fake"), 0600)
 
-	opts := buildSSHOpts(keyFile, "10.0.0.1")
+	inv, _, _ := newTestInvocation(t, nil, "")
+	opts := inv.buildSSHOpts(keyFile, "10.0.0.1")
 	found := false
 	for i, o := range opts {
 		if o == "-i" && i+1 < len(opts) && opts[i+1] == keyFile {
@@ -117,7 +118,8 @@ func TestBuildSSHOptsWithExistingKey(t *testing.T) {
 }
 
 func TestBuildSSHOptsMissingKey(t *testing.T) {
-	opts := buildSSHOpts("/nonexistent/path/to/key", "10.0.0.1")
+	inv, _, _ := newTestInvocation(t, nil, "")
+	opts := inv.buildSSHOpts("/nonexistent/path/to/key", "10.0.0.1")
 	for i, o := range opts {
 		if o == "-i" && i+1 < len(opts) {
 			t.Error("buildSSHOpts with missing key should not include -i")

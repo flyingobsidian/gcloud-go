@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -75,16 +76,13 @@ func TestGetIamPolicyPipeline(t *testing.T) {
 		},
 	}
 
-	// Save & restore globals.
-	prevFlatten, prevFilter, prevFormat := flagFlatten, flagFilter, flagFormat
-	defer func() { flagFlatten, flagFilter, flagFormat = prevFlatten, prevFilter, prevFormat }()
+	inv, stdout, _ := newTestInvocation(t, nil, "")
+	inv.flags.flatten = []string{"bindings[].members"}
+	inv.flags.filter = `bindings.members:serviceAccount:MY_SA@MY_PROJECT.iam.gserviceaccount.com`
+	inv.flags.format = "table(bindings.role)"
 
-	flagFlatten = []string{"bindings[].members"}
-	flagFilter = `bindings.members:serviceAccount:MY_SA@MY_PROJECT.iam.gserviceaccount.com`
-	flagFormat = "table(bindings.role)"
-
-	var emitErr error
-	out := captureStdout(t, func() { emitErr = emitWithPipeline(policy) })
+	emitErr := inv.emitWithPipeline(policy)
+	out := stdout.String()
 	if emitErr != nil {
 		t.Fatalf("emitWithPipeline: %v", emitErr)
 	}
@@ -105,22 +103,21 @@ func TestGetIamPolicyPipeline(t *testing.T) {
 
 // TestGetIamPolicyNoPipeline confirms the fallback path (no --flatten/filter/
 // format flags) still produces a yaml dump byte-for-byte identical to
-// yamlEncode(policy) — protecting existing users.
+// emitYAML(policy) — protecting existing users.
 func TestGetIamPolicyNoPipeline(t *testing.T) {
 	policy := map[string]any{"bindings": []any{map[string]any{"role": "roles/A"}}}
 
-	prevFlatten, prevFilter, prevFormat := flagFlatten, flagFilter, flagFormat
-	defer func() { flagFlatten, flagFilter, flagFormat = prevFlatten, prevFilter, prevFormat }()
-	flagFlatten, flagFilter, flagFormat = nil, "", ""
-
-	var err1, err2 error
-	got := captureStdout(t, func() { err1 = emitWithPipeline(policy) })
-	want := captureStdout(t, func() { err2 = yamlEncode(policy) })
+	inv, stdout, _ := newTestInvocation(t, nil, "")
+	err1 := inv.emitWithPipeline(policy)
+	got := stdout.String()
+	var yamlOut bytes.Buffer
+	err2 := emitYAML(&yamlOut, policy)
+	want := yamlOut.String()
 	if err1 != nil || err2 != nil {
 		t.Fatalf("encode errors: pipeline=%v, yaml=%v", err1, err2)
 	}
 	if got != want {
-		t.Errorf("emitWithPipeline(no flags) output diverged from yamlEncode:\n--got--\n%s\n--want--\n%s", got, want)
+		t.Errorf("emitWithPipeline(no flags) output diverged from emitYAML:\n--got--\n%s\n--want--\n%s", got, want)
 	}
 }
 

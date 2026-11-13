@@ -27,7 +27,7 @@ func TestRestClientRefusesWithoutBillingProject(t *testing.T) {
 	restoreQP := SetRestUserProjectForTest("")
 	defer restoreQP()
 
-	c := newRESTClient(server.URL + "/v2")
+	c := legacyTestInvocation().rest(newRESTClient(server.URL + "/v2"))
 	err := c.do(context.Background(), http.MethodGet, "/organizations/1/findings", nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected do() to refuse the call with no billing project")
@@ -62,7 +62,7 @@ func TestRestClientSendsBillingProject(t *testing.T) {
 	restoreQP := SetRestUserProjectForTest("qp-123")
 	defer restoreQP()
 
-	c := newRESTClient(server.URL + "/v2")
+	c := legacyTestInvocation().rest(newRESTClient(server.URL + "/v2"))
 	if err := c.do(context.Background(), http.MethodGet, "/organizations/1/findings", nil, nil, nil); err != nil {
 		t.Fatalf("do(): %v", err)
 	}
@@ -102,11 +102,10 @@ func TestPaginateLogsProgress(t *testing.T) {
 	defer restoreQP()
 
 	var debug bytes.Buffer
-	saveOut, saveVerbosity := httpDebugOut, flagVerbosity
-	httpDebugOut, flagVerbosity = &debug, "debug"
-	defer func() { httpDebugOut, flagVerbosity = saveOut, saveVerbosity }()
+	inv := legacyTestInvocation()
+	inv.stderr, inv.flags.verbosity = &debug, "debug"
 
-	c := newRESTClient(server.URL + "/v2")
+	c := inv.rest(newRESTClient(server.URL + "/v2"))
 	all, err := c.paginate(context.Background(), "/organizations/1/findings", nil, "listFindingsResults", 2)
 	if err != nil {
 		t.Fatalf("paginate: %v", err)
@@ -145,11 +144,10 @@ func TestPaginateOmitsAbsentTotalSize(t *testing.T) {
 	defer restoreQP()
 
 	var debug bytes.Buffer
-	saveOut, saveVerbosity := httpDebugOut, flagVerbosity
-	httpDebugOut, flagVerbosity = &debug, "debug"
-	defer func() { httpDebugOut, flagVerbosity = saveOut, saveVerbosity }()
+	inv := legacyTestInvocation()
+	inv.stderr, inv.flags.verbosity = &debug, "debug"
 
-	c := newRESTClient(server.URL + "/v1")
+	c := inv.rest(newRESTClient(server.URL + "/v1"))
 	if _, err := c.paginate(context.Background(), "/things", nil, "items", 0); err != nil {
 		t.Fatalf("paginate: %v", err)
 	}
@@ -174,11 +172,10 @@ func TestPaginateQuietByDefault(t *testing.T) {
 	defer restoreQP()
 
 	var debug bytes.Buffer
-	saveOut, saveVerbosity, saveLogHTTP := httpDebugOut, flagVerbosity, flagLogHTTP
-	httpDebugOut, flagVerbosity, flagLogHTTP = &debug, "warning", false
-	defer func() { httpDebugOut, flagVerbosity, flagLogHTTP = saveOut, saveVerbosity, saveLogHTTP }()
+	inv := legacyTestInvocation()
+	inv.stderr = &debug
 
-	c := newRESTClient(server.URL + "/v1")
+	c := inv.rest(newRESTClient(server.URL + "/v1"))
 	if _, err := c.paginate(context.Background(), "/things", nil, "items", 0); err != nil {
 		t.Fatalf("paginate: %v", err)
 	}

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -43,7 +42,7 @@ type infoResult struct {
 func (s *infoCmds) runInfo(cmd *cobra.Command, args []string) error {
 	configDir := s.inv.env.Getenv("CLOUDSDK_CONFIG")
 	if configDir == "" {
-		home, _ := os.UserHomeDir()
+		home, _ := s.inv.env.HomeDir()
 		configDir = filepath.Join(home, ".config", "gcloud")
 	}
 

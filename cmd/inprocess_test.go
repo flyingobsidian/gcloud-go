@@ -4,7 +4,7 @@ import "testing"
 
 func TestHasPositional(t *testing.T) {
 	inv, _, _ := newTestInvocation(t, nil, "")
-	root := newRootCmd(inv, false)
+	root := newRootCmd(inv)
 	tests := []struct {
 		args []string
 		want bool

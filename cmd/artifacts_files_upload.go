@@ -100,7 +100,7 @@ func (s *artifactsCmds) runArtifactsFilesUpload(cmd *cobra.Command, args []strin
 		return nil
 	}
 
-	dir := filepath.Clean(expandHome(s.flagArtFilesUpSourceDir))
+	dir := filepath.Clean(s.inv.expandHome(s.flagArtFilesUpSourceDir))
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 		return errors.New("Specified path is not an existing directory.")
 	}
@@ -121,13 +121,13 @@ func (s *artifactsCmds) runArtifactsFilesUpload(cmd *cobra.Command, args []strin
 	})
 }
 
-// expandHome expands a leading "~" to the user's home directory, like
+// expandHome expands a leading "~" to the invocation's home directory, like
 // Python's os.path.expanduser.
-func expandHome(p string) string {
+func (inv *invocation) expandHome(p string) string {
 	if p != "~" && !strings.HasPrefix(p, "~/") {
 		return p
 	}
-	home, err := os.UserHomeDir()
+	home, err := inv.env.HomeDir()
 	if err != nil {
 		return p
 	}

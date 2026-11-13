@@ -58,7 +58,7 @@ func TestFormatCLIErrorGoogleapi(t *testing.T) {
 	}
 	wrapped := fmt.Errorf("deleting secret: %w", apiErr)
 
-	got := FormatCLIError(del, wrapped)
+	got := formatCLIError(del, wrapped, "")
 	prefix := "ERROR: (gcloud.secrets.delete) NOT_FOUND: Secret [projects/1234/secrets/test-secret-e1c17dbb] not found."
 	if !strings.HasPrefix(got, prefix) {
 		t.Errorf("FormatCLIError got:\n%s\nwant prefix:\n%s", got, prefix)
@@ -83,7 +83,7 @@ func TestFormatCLIErrorNonAPI(t *testing.T) {
 	secrets.AddCommand(create)
 
 	err := errors.New("no active account")
-	got := FormatCLIError(create, err)
+	got := formatCLIError(create, err, "")
 	want := "ERROR: (gcloud.secrets.create) no active account."
 	if !strings.HasPrefix(got, want) {
 		t.Errorf("FormatCLIError non-API got:\n%s\nwant prefix:\n%s", got, want)
@@ -94,7 +94,7 @@ func TestFormatCLIErrorUnknownStatus(t *testing.T) {
 	// An HTTP code with no gRPC mapping should still produce a clean message
 	// (no dangling "STATUS:" prefix).
 	apiErr := &googleapi.Error{Code: 418, Message: "I'm a teapot"}
-	got := FormatCLIError(nil, apiErr)
+	got := formatCLIError(nil, apiErr, "")
 	if !strings.HasPrefix(got, "ERROR: (gcloud) I'm a teapot.") {
 		t.Errorf("unknown status output = %q", got)
 	}
@@ -104,12 +104,10 @@ func TestFormatCLIErrorUnknownStatus(t *testing.T) {
 }
 
 func TestFormatCLIErrorAuthContextCredFile(t *testing.T) {
-	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/creds.json")
-	prevAccount := flagAccount
-	flagAccount = "sa@example.iam.gserviceaccount.com"
-	t.Cleanup(func() { flagAccount = prevAccount })
+	inv, _, _ := newTestInvocation(t, map[string]string{"GOOGLE_APPLICATION_CREDENTIALS": "/tmp/creds.json"}, "")
+	inv.flags.account = "sa@example.iam.gserviceaccount.com"
 
-	got := FormatCLIError(nil, &googleapi.Error{Code: 404, Message: "nope"})
+	got := inv.formatError(nil, &googleapi.Error{Code: 404, Message: "nope"})
 	if !strings.Contains(got, "using the credentials in /tmp/creds.json") {
 		t.Errorf("expected credential_file_override context, got: %s", got)
 	}
@@ -122,12 +120,10 @@ func TestFormatCLIErrorAuthContextCredFile(t *testing.T) {
 }
 
 func TestFormatCLIErrorAuthContextAccount(t *testing.T) {
-	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
-	prevAccount := flagAccount
-	flagAccount = "user@example.com"
-	t.Cleanup(func() { flagAccount = prevAccount })
+	inv, _, _ := newTestInvocation(t, map[string]string{"GOOGLE_APPLICATION_CREDENTIALS": ""}, "")
+	inv.flags.account = "user@example.com"
 
-	got := FormatCLIError(nil, &googleapi.Error{Code: 404, Message: "nope"})
+	got := inv.formatError(nil, &googleapi.Error{Code: 404, Message: "nope"})
 	if !strings.Contains(got, "[core/account]") {
 		t.Errorf("expected [core/account] property tag, got: %s", got)
 	}

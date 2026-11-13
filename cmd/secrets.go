@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/flyingobsidian/gcloud-go/internal/secrets"
 	"github.com/spf13/cobra"
 	secretmanager "google.golang.org/api/secretmanager/v1"
@@ -126,25 +125,6 @@ func (g *secretsCmds) initSecrets() {
 
 }
 
-func resolveProject() (string, error) {
-	props, err := config.Load()
-	if err != nil {
-		return "", err
-	}
-	project := config.Resolve(flagProject, "CLOUDSDK_CORE_PROJECT", props.Core.Project)
-	if project == "" {
-		if !IsInteractive() {
-			return "", fmt.Errorf("project is required; set via --project flag, CLOUDSDK_CORE_PROJECT env, or config")
-		}
-		fmt.Print("Enter project: ")
-		fmt.Scanln(&project)
-		if project == "" {
-			return "", fmt.Errorf("project is required")
-		}
-	}
-	return project, nil
-}
-
 // --- Command implementations ---
 
 func (g *secretsCmds) runSecretsVersionsAccess(cmd *cobra.Command, args []string) error {
@@ -155,7 +135,7 @@ func (g *secretsCmds) runSecretsVersionsAccess(cmd *cobra.Command, args []string
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -196,7 +176,7 @@ func (g *secretsCmds) runSecretsVersionsList(cmd *cobra.Command, args []string) 
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -246,7 +226,7 @@ func (g *secretsCmds) runSecretsCreate(cmd *cobra.Command, args []string) error 
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -311,7 +291,7 @@ func (g *secretsCmds) runSecretsVersionsAdd(cmd *cobra.Command, args []string) e
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -332,7 +312,7 @@ func (g *secretsCmds) runSecretsList(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -404,7 +384,7 @@ func (g *secretsCmds) runSecretsDescribe(cmd *cobra.Command, args []string) erro
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -426,7 +406,7 @@ func (g *secretsCmds) runSecretsVersionsDescribe(cmd *cobra.Command, args []stri
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -448,7 +428,7 @@ func (g *secretsCmds) runSecretsVersionsDisable(cmd *cobra.Command, args []strin
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -472,7 +452,7 @@ func (g *secretsCmds) runSecretsVersionsEnable(cmd *cobra.Command, args []string
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -508,7 +488,7 @@ func (g *secretsCmds) runSecretsVersionsDestroy(cmd *cobra.Command, args []strin
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -532,7 +512,7 @@ func (g *secretsCmds) runSecretsUpdate(cmd *cobra.Command, args []string) error 
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}
@@ -628,7 +608,7 @@ func (g *secretsCmds) runSecretsDelete(cmd *cobra.Command, args []string) error 
 	}
 
 	ctx := cmd.Context()
-	svc, err := secrets.NewService(ctx, g.inv.flags.account)
+	svc, err := g.inv.clients().SecretManager(ctx)
 	if err != nil {
 		return err
 	}

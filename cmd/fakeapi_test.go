@@ -67,7 +67,7 @@ func newFakeAPIFactory(t *testing.T, api http.Handler) func() (*invocation, *byt
 // runInvocation runs args on a root command for inv without the legacy
 // command groups, as RunInProcess does.
 func runInvocation(inv *invocation, args ...string) error {
-	root := newRootCmd(inv, false)
+	root := newRootCmd(inv)
 	root.SetArgs(args)
 	inv.ctx = context.Background()
 	return root.ExecuteContext(inv.ctx)

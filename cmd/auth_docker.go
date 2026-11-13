@@ -92,7 +92,7 @@ func (s *authCmds) dockerConfigPath() (string, error) {
 	if p := s.inv.env.Getenv("DOCKER_CONFIG"); p != "" {
 		return filepath.Join(p, "config.json"), nil
 	}
-	home, err := os.UserHomeDir()
+	home, err := s.inv.env.HomeDir()
 	if err != nil {
 		return "", fmt.Errorf("determining home directory: %w", err)
 	}

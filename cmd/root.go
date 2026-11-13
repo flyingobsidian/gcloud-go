@@ -4,55 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"runtime"
 
-	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
-// Values of the global flags, for command groups not yet migrated to
-// invocation (#2070). See globalFlags.setLegacyGlobals.
-var (
-	flagProject           string
-	flagZone              string
-	flagAccount           string
-	flagQuiet             bool
-	flagAccessTokenFile   string
-	flagBillingProject    string
-	flagConfiguration     string
-	flagFlagsFile         string
-	flagFilter            string
-	flagFlatten           []string
-	flagFormat            string
-	flagImpersonateSA     string
-	flagLogHTTP           bool
-	flagTraceToken        string
-	flagUserOutputEnabled = true
-	flagVerbosity         = "warning"
-)
-
-// IsInteractive returns true when stdin is a terminal (used for interactive prompts).
-func IsInteractive() bool {
-	return isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd())
-}
-
-// rootCmd collects the command groups that have not been migrated to
-// invocation yet (#2070): their init functions add them here and
-// newRootCmd adopts them into the CLI's root. It is never executed itself.
-var rootCmd = &cobra.Command{Use: "gcloud"}
-
 // newRootCmd returns the root command for inv, with the global flags bound
-// to inv.flags and the migrated command groups (see migratedGroups). With
-// legacy set it also adopts the unmigrated command groups
-// registered on rootCmd and copies the global flags into the package
-// variables they read; that is only safe when the process runs a single
-// invocation, as the CLI does.
-func newRootCmd(inv *invocation, legacy bool) *cobra.Command {
+// to inv.flags and the command groups (see migratedGroups).
+func newRootCmd(inv *invocation) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "gcloud",
 		Short:         "Lightweight gcloud CLI replacement",
@@ -103,12 +66,6 @@ func newRootCmd(inv *invocation, legacy bool) *cobra.Command {
 	root.SetVersionTemplate(versionTemplate())
 
 	root.AddCommand(migratedGroups(inv)...)
-	if legacy {
-		root.PersistentPreRun = func(*cobra.Command, []string) { f.setLegacyGlobals() }
-		for _, c := range rootCmd.Commands() {
-			root.AddCommand(c)
-		}
-	}
 	return root
 }
 
@@ -124,7 +81,7 @@ func versionTemplate() string {
 // enable it (see invocation.offerEnableAPI), the command is run once more.
 func Main(ctx context.Context, args []string) int {
 	inv := newOSInvocation()
-	root := newRootCmd(inv, true)
+	root := newRootCmd(inv)
 	root.SetArgs(args)
 	inv.ctx = ctx
 	executed, err := root.ExecuteContextC(ctx)
@@ -142,13 +99,4 @@ func Main(ctx context.Context, args []string) int {
 	}
 	fmt.Fprintln(inv.stderr, inv.formatError(executed, err))
 	return 1
-}
-
-// Execute runs gcloud-go with the process's arguments, standard streams and
-// environment, and returns the resolved subcommand along with any error.
-// Callers use the returned *cobra.Command to render the dotted-path error
-// prefix ("gcloud.secrets.delete") that Python gcloud uses. Like Main it must
-// be called at most once per process; prefer Main.
-func Execute() (*cobra.Command, error) {
-	return newRootCmd(newOSInvocation(), true).ExecuteContextC(context.Background())
 }

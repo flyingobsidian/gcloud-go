@@ -27,7 +27,7 @@ region = us-central1
 		t.Fatal(err)
 	}
 
-	props, err := Load()
+	props, err := OSEnv().Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
 	}
@@ -60,7 +60,7 @@ project = proj
 `
 	os.WriteFile(filepath.Join(configsDir, "config_default"), []byte(ini), 0600)
 
-	props, err := Load()
+	props, err := OSEnv().Load()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ project = staging-proj
 `
 	os.WriteFile(filepath.Join(configsDir, "config_staging"), []byte(ini), 0600)
 
-	props, err := Load()
+	props, err := OSEnv().Load()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ account = prod@example.com
 `
 	os.WriteFile(filepath.Join(configsDir, "config_prod"), []byte(ini), 0600)
 
-	props, err := Load()
+	props, err := OSEnv().Load()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestLoadNonexistent(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CLOUDSDK_CONFIG", filepath.Join(dir, "nonexistent"))
 
-	props, err := Load()
+	props, err := OSEnv().Load()
 	if err != nil {
 		t.Fatalf("Load() error for missing file: %v", err)
 	}
@@ -149,11 +149,11 @@ func TestSaveAndReload(t *testing.T) {
 			Zone: "us-central1-a",
 		},
 	}
-	if err := props.Save(); err != nil {
+	if err := OSEnv().Save(props); err != nil {
 		t.Fatalf("Save() error: %v", err)
 	}
 
-	loaded, err := Load()
+	loaded, err := OSEnv().Load()
 	if err != nil {
 		t.Fatalf("Load() after Save() error: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestResolve(t *testing.T) {
 			if tt.envVal != "" {
 				t.Setenv(tt.envKey, tt.envVal)
 			}
-			got := Resolve(tt.flag, tt.envKey, tt.configVal)
+			got := OSEnv().Resolve(tt.flag, tt.envKey, tt.configVal)
 			if got != tt.want {
 				t.Errorf("Resolve() = %q, want %q", got, tt.want)
 			}
@@ -199,7 +199,7 @@ func TestResolve(t *testing.T) {
 func TestConfigDir(t *testing.T) {
 	t.Run("from env", func(t *testing.T) {
 		t.Setenv("CLOUDSDK_CONFIG", "/custom/path")
-		dir, err := ConfigDir()
+		dir, err := OSEnv().ConfigDir()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -211,7 +211,7 @@ func TestConfigDir(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		t.Setenv("CLOUDSDK_CONFIG", "")
 		os.Unsetenv("CLOUDSDK_CONFIG")
-		dir, err := ConfigDir()
+		dir, err := OSEnv().ConfigDir()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -227,21 +227,21 @@ func TestDeleteActiveConfigurationResetsToDefault(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CLOUDSDK_CONFIG", dir)
 
-	if err := CreateConfiguration("temp"); err != nil {
+	if err := OSEnv().CreateConfiguration("temp"); err != nil {
 		t.Fatalf("CreateConfiguration: %v", err)
 	}
-	if err := ActivateConfiguration("temp"); err != nil {
+	if err := OSEnv().ActivateConfiguration("temp"); err != nil {
 		t.Fatalf("ActivateConfiguration: %v", err)
 	}
-	if got := ActiveConfigName(); got != "temp" {
+	if got := OSEnv().ActiveConfigName(); got != "temp" {
 		t.Fatalf("active config = %q, want temp", got)
 	}
 
-	if err := DeleteConfiguration("temp"); err != nil {
+	if err := OSEnv().DeleteConfiguration("temp"); err != nil {
 		t.Fatalf("DeleteConfiguration returned error: %v", err)
 	}
 
-	if got := ActiveConfigName(); got != "default" {
+	if got := OSEnv().ActiveConfigName(); got != "default" {
 		t.Errorf("active config after delete = %q, want default", got)
 	}
 }

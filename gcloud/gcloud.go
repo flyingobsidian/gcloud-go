@@ -15,10 +15,10 @@
 // Commands run in-process never prompt and never change project settings
 // (such as enabling an API) as a side effect.
 //
-// Command groups are being moved off process-wide state one at a time
-// (https://github.com/flyingobsidian/gcloud-go/issues/2070). Until a group
-// has moved, Run returns ErrNotInProcess for its commands; callers can run
-// the gcloud-go binary for those instead.
+// Every gcloud-go command runs in-process, and runs concurrently with others
+// (https://github.com/flyingobsidian/gcloud-go/issues/2070). Run returns
+// ErrNotInProcess only for commands gcloud-go does not have; callers can run
+// another gcloud for those instead.
 package gcloud
 
 import (
@@ -35,8 +35,8 @@ import (
 
 const modulePath = "github.com/flyingobsidian/gcloud-go"
 
-// ErrNotInProcess is returned by Runner.Run for commands that cannot run
-// in-process yet.
+// ErrNotInProcess is returned by Runner.Run for commands that gcloud-go does
+// not have.
 var ErrNotInProcess = cmd.ErrNotInProcess
 
 // CommandError is returned by Runner.Run when a command ran and failed.
@@ -93,8 +93,8 @@ type Invocation struct {
 
 // Run runs one command and returns when it has finished or ctx is done.
 //
-// It returns nil on success, ErrNotInProcess for commands that cannot run
-// in-process yet, a *CommandError when the command failed, a *PanicError
+// It returns nil on success, ErrNotInProcess for commands that gcloud-go
+// does not have, a *CommandError when the command failed, a *PanicError
 // when it panicked, or another error when the arguments could not be parsed.
 func (r *Runner) Run(ctx context.Context, inv Invocation) error {
 	return cmd.RunInProcess(ctx, cmd.InProcess{

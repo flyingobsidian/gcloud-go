@@ -94,28 +94,6 @@ func isTerminal(r io.Reader) bool {
 	return isatty.IsTerminal(f.Fd()) || isatty.IsCygwinTerminal(f.Fd())
 }
 
-// setLegacyGlobals copies the global flag values into the package variables
-// that command groups not yet migrated to invocation still read. Only the
-// CLI calls it: it runs one invocation per process.
-func (f *globalFlags) setLegacyGlobals() {
-	flagProject = f.project
-	flagZone = f.zone
-	flagAccount = f.account
-	flagQuiet = f.quiet
-	flagAccessTokenFile = f.accessTokenFile
-	flagBillingProject = f.billingProject
-	flagConfiguration = f.configuration
-	flagFlagsFile = f.flagsFile
-	flagFilter = f.filter
-	flagFlatten = f.flatten
-	flagFormat = f.format
-	flagImpersonateSA = f.impersonateSA
-	flagLogHTTP = f.logHTTP
-	flagTraceToken = f.traceToken
-	flagUserOutputEnabled = f.userOutputEnabled
-	flagVerbosity = f.verbosity
-}
-
 // properties returns the active gcloud configuration, read at most once per
 // invocation.
 func (inv *invocation) properties() (*config.Properties, error) {
@@ -243,7 +221,7 @@ func (inv *invocation) context() context.Context {
 	return inv.ctx
 }
 
-// formatOutput is formatOutput writing to the invocation's stdout.
+// formatOutput is formatOutputTo writing to the invocation's stdout.
 func (inv *invocation) formatOutput(v any, format string) error {
 	return formatOutputTo(inv.stdout, v, format)
 }

@@ -115,6 +115,7 @@ import (
 	redis "google.golang.org/api/redis/v1"
 	runv1 "google.golang.org/api/run/v1"
 	runv2 "google.golang.org/api/run/v2"
+	secretmanager "google.golang.org/api/secretmanager/v1"
 	securesourcemanager "google.golang.org/api/securesourcemanager/v1"
 	securitycenter "google.golang.org/api/securitycenter/v1"
 	securityposture "google.golang.org/api/securityposture/v1"
@@ -178,6 +179,11 @@ func (c *Clients) Dataplex(ctx context.Context) (*dataplex.Service, error) {
 // Compute returns a client for the Compute Engine API.
 func (c *Clients) Compute(ctx context.Context) (*compute.Service, error) {
 	return newService(ctx, c, compute.NewService)
+}
+
+// SecretManager returns a client for the Secret Manager API.
+func (c *Clients) SecretManager(ctx context.Context) (*secretmanager.Service, error) {
+	return newService(ctx, c, secretmanager.NewService)
 }
 
 // OSLogin returns a client for the OSLogin API.

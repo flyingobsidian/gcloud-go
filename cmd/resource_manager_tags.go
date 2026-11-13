@@ -612,16 +612,3 @@ func (inv *invocation) printListResults(v any, format string, tableFn func()) er
 	tableFn()
 	return nil
 }
-
-// printListResults is the legacy form of inv.printListResults that writes to
-// the process stdout, for groups not yet migrated (#2070).
-func printListResults(v any, format string, tableFn func()) error {
-	switch format {
-	case "json":
-		return printJSON(v)
-	case "yaml":
-		return yamlEncode(v)
-	}
-	tableFn()
-	return nil
-}

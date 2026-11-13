@@ -14,13 +14,13 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// ErrNotInProcess is returned by RunInProcess for commands in groups that
-// still keep state in package globals (#2070). Run those with the gcloud-go
-// binary instead.
-var ErrNotInProcess = errors.New("command cannot run in-process yet")
+// ErrNotInProcess is returned by RunInProcess for commands that gcloud-go
+// does not have: no command group matches the command name. Every command
+// gcloud-go has can run in-process.
+var ErrNotInProcess = errors.New("command cannot run in-process")
 
-// migratedGroups returns the command groups that keep all their state in
-// inv, built for inv. Only these can run in-process.
+// migratedGroups returns all the top-level command groups, built for inv.
+// Each keeps all its state in inv (#2070).
 func migratedGroups(inv *invocation) []*cobra.Command {
 	return []*cobra.Command{
 		newOrganizationsCmd(inv),
@@ -207,7 +207,7 @@ func (e *PanicError) Error() string { return fmt.Sprintf("command panicked: %v",
 // to call concurrently: each run has its own command tree, flags, streams
 // and environment. It never prompts and never offers to enable APIs.
 //
-// It returns ErrNotInProcess for commands that cannot run in-process yet,
+// It returns ErrNotInProcess for commands that gcloud-go does not have,
 // a *CommandError if the command ran and failed, a *PanicError if the
 // command panicked, or another error if the arguments could not be parsed.
 func RunInProcess(ctx context.Context, p InProcess) (err error) {
@@ -233,13 +233,13 @@ func RunInProcess(ctx context.Context, p InProcess) (err error) {
 		inv.stderr = io.Discard
 	}
 
-	root := newRootCmd(inv, false)
+	root := newRootCmd(inv)
 	args := p.Args
 	if args == nil {
 		args = []string{}
 	}
 	if found, rest, err := root.Find(args); found == root && (err != nil || hasPositional(root, rest)) {
-		// No migrated group matched the command name.
+		// No command group matched the command name.
 		return ErrNotInProcess
 	}
 	root.SetArgs(args)

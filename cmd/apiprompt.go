@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -87,12 +86,6 @@ func apiNotEnabledService(err error) string {
 		return m[1]
 	}
 	return ""
-}
-
-// promptYesNo is invocation.confirm for command groups not yet migrated to
-// invocation (#2070): it uses --quiet and the process's standard streams.
-func promptYesNo(text string, dflt bool) bool {
-	return confirm(os.Stdin, os.Stderr, IsInteractive() && !flagQuiet, text, dflt)
 }
 
 // confirm asks the user for confirmation on w with the given text and
