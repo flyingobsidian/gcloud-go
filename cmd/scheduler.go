@@ -294,7 +294,7 @@ func runSchedulerJobsDescribe(ctx context.Context, inv *invocation, f *scheduler
 		return fmt.Errorf("describing scheduler job: %w", err)
 	}
 
-	return emitFormattedTo(inv.stdout, job, "json")
+	return inv.emit(job)
 }
 
 func runSchedulerJobsPause(ctx context.Context, inv *invocation, f *schedulerJobFlags, jobID string) error {
