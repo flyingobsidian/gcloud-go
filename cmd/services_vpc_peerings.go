@@ -1,112 +1,48 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	sn "google.golang.org/api/servicenetworking/v1"
 )
 
-var servicesVpcPeeringsCmd = &cobra.Command{
-	Use:   "vpc-peerings",
-	Short: "Manage VPC peerings to services",
-}
-
-var vpcPeeringConnectCmd = &cobra.Command{
-	Use:   "connect",
-	Short: "Create a peering connection between a consumer network and a service",
-	Args:  cobra.NoArgs,
-	RunE:  runVpcPeeringConnect,
-}
-
-var vpcPeeringListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List VPC peering connections for a service",
-	Args:  cobra.NoArgs,
-	RunE:  runVpcPeeringList,
-}
-
-var vpcPeeringUpdateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update reserved ranges on a VPC peering connection",
-	Args:  cobra.NoArgs,
-	RunE:  runVpcPeeringUpdate,
-}
-
-var vpcPeeringDeleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "Delete a VPC peering connection",
-	Args:  cobra.NoArgs,
-	RunE:  runVpcPeeringDelete,
-}
-
-var vpcPeeringEnableVpcSCCmd = &cobra.Command{
-	Use:   "enable-vpc-service-controls",
-	Short: "Enable VPC Service Controls on a peering connection",
-	Args:  cobra.NoArgs,
-	RunE:  makeVpcSCToggle(true),
-}
-
-var vpcPeeringDisableVpcSCCmd = &cobra.Command{
-	Use:   "disable-vpc-service-controls",
-	Short: "Disable VPC Service Controls on a peering connection",
-	Args:  cobra.NoArgs,
-	RunE:  makeVpcSCToggle(false),
-}
-
-var vpcPeeringGetVpcSCCmd = &cobra.Command{
-	Use:   "get-vpc-service-controls",
-	Short: "Get VPC Service Controls status on a peering connection",
-	Args:  cobra.NoArgs,
-	RunE:  runVpcPeeringGetVpcSC,
-}
-
-var (
-	flagVpcPeeringService    string
-	flagVpcPeeringNetwork    string
-	flagVpcPeeringRanges     []string
-	flagVpcPeeringForce      bool
-	flagVpcPeeringListFormat string
-)
-
-func init() {
+func (g *servicesCmds) initServicesVpcPeerings() {
 	scopeFlags := func(c *cobra.Command) {
-		c.Flags().StringVar(&flagVpcPeeringService, "service", "servicenetworking.googleapis.com", "Peered service (default: servicenetworking.googleapis.com)")
-		c.Flags().StringVar(&flagVpcPeeringNetwork, "network", "", "Consumer VPC network name (required)")
+		c.Flags().StringVar(&g.flagVpcPeeringService, "service", "servicenetworking.googleapis.com", "Peered service (default: servicenetworking.googleapis.com)")
+		c.Flags().StringVar(&g.flagVpcPeeringNetwork, "network", "", "Consumer VPC network name (required)")
 		c.MarkFlagRequired("network")
 	}
-	scopeFlags(vpcPeeringConnectCmd)
-	vpcPeeringConnectCmd.Flags().StringSliceVar(&flagVpcPeeringRanges, "ranges", nil, "Reserved IP ranges to use for the peering (required)")
-	vpcPeeringConnectCmd.Flags().BoolVar(&flagVpcPeeringForce, "force", false, "Overwrite existing ranges on the peering")
-	vpcPeeringConnectCmd.MarkFlagRequired("ranges")
+	scopeFlags(g.vpcPeeringConnectCmd)
+	g.vpcPeeringConnectCmd.Flags().StringSliceVar(&g.flagVpcPeeringRanges, "ranges", nil, "Reserved IP ranges to use for the peering (required)")
+	g.vpcPeeringConnectCmd.Flags().BoolVar(&g.flagVpcPeeringForce, "force", false, "Overwrite existing ranges on the peering")
+	g.vpcPeeringConnectCmd.MarkFlagRequired("ranges")
 
-	scopeFlags(vpcPeeringListCmd)
-	vpcPeeringListCmd.Flags().StringVar(&flagVpcPeeringListFormat, "format", "", "Output format (json, yaml, or table)")
+	scopeFlags(g.vpcPeeringListCmd)
+	g.vpcPeeringListCmd.Flags().StringVar(&g.flagVpcPeeringListFormat, "format", "", "Output format (json, yaml, or table)")
 
-	scopeFlags(vpcPeeringUpdateCmd)
-	vpcPeeringUpdateCmd.Flags().StringSliceVar(&flagVpcPeeringRanges, "ranges", nil, "Reserved IP ranges to use for the peering (required)")
-	vpcPeeringUpdateCmd.Flags().BoolVar(&flagVpcPeeringForce, "force", false, "Overwrite existing ranges on the peering")
-	vpcPeeringUpdateCmd.MarkFlagRequired("ranges")
+	scopeFlags(g.vpcPeeringUpdateCmd)
+	g.vpcPeeringUpdateCmd.Flags().StringSliceVar(&g.flagVpcPeeringRanges, "ranges", nil, "Reserved IP ranges to use for the peering (required)")
+	g.vpcPeeringUpdateCmd.Flags().BoolVar(&g.flagVpcPeeringForce, "force", false, "Overwrite existing ranges on the peering")
+	g.vpcPeeringUpdateCmd.MarkFlagRequired("ranges")
 
-	scopeFlags(vpcPeeringDeleteCmd)
+	scopeFlags(g.vpcPeeringDeleteCmd)
 
-	for _, c := range []*cobra.Command{vpcPeeringEnableVpcSCCmd, vpcPeeringDisableVpcSCCmd, vpcPeeringGetVpcSCCmd} {
+	for _, c := range []*cobra.Command{g.vpcPeeringEnableVpcSCCmd, g.vpcPeeringDisableVpcSCCmd, g.vpcPeeringGetVpcSCCmd} {
 		scopeFlags(c)
 	}
 
-	servicesVpcPeeringsCmd.AddCommand(
-		vpcPeeringConnectCmd,
-		vpcPeeringListCmd,
-		vpcPeeringUpdateCmd,
-		vpcPeeringDeleteCmd,
-		vpcPeeringEnableVpcSCCmd,
-		vpcPeeringDisableVpcSCCmd,
-		vpcPeeringGetVpcSCCmd,
+	g.servicesVpcPeeringsCmd.AddCommand(
+		g.vpcPeeringConnectCmd,
+		g.vpcPeeringListCmd,
+		g.vpcPeeringUpdateCmd,
+		g.vpcPeeringDeleteCmd,
+		g.vpcPeeringEnableVpcSCCmd,
+		g.vpcPeeringDisableVpcSCCmd,
+		g.vpcPeeringGetVpcSCCmd,
 	)
-	servicesCmd.AddCommand(servicesVpcPeeringsCmd)
+	g.servicesCmd.AddCommand(g.servicesVpcPeeringsCmd)
 }
 
 // serviceParent returns the service resource path used by the peering API:
@@ -127,108 +63,108 @@ func consumerNetwork(project, network string) string {
 	return fmt.Sprintf("projects/%s/global/networks/%s", project, network)
 }
 
-func runVpcPeeringConnect(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runVpcPeeringConnect(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceNetworkingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceNetworking(ctx)
 	if err != nil {
 		return err
 	}
-	net := consumerNetwork(project, flagVpcPeeringNetwork)
-	op, err := svc.Services.Connections.Create(serviceParent(flagVpcPeeringService), &sn.Connection{
+	net := consumerNetwork(project, g.flagVpcPeeringNetwork)
+	op, err := svc.Services.Connections.Create(serviceParent(g.flagVpcPeeringService), &sn.Connection{
 		Network:               net,
-		ReservedPeeringRanges: flagVpcPeeringRanges,
+		ReservedPeeringRanges: g.flagVpcPeeringRanges,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("connecting VPC peering: %w", err)
 	}
-	fmt.Printf("VPC peering connect in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(g.inv.stdout, "VPC peering connect in progress (operation: %s).\n", op.Name)
+	return g.inv.yaml(op)
 }
 
-func runVpcPeeringList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runVpcPeeringList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceNetworkingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceNetworking(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Services.Connections.List(serviceParent(flagVpcPeeringService)).Network(consumerNetwork(project, flagVpcPeeringNetwork)).Context(ctx).Do()
+	resp, err := svc.Services.Connections.List(serviceParent(g.flagVpcPeeringService)).Network(consumerNetwork(project, g.flagVpcPeeringNetwork)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing VPC peerings: %w", err)
 	}
-	return printListResults(resp.Connections, flagVpcPeeringListFormat, func() {
-		printTableHeading(len(resp.Connections), "%-30s %-40s %s\n", "PEERING", "NETWORK", "RESERVED_RANGES")
+	return g.inv.printListResults(resp.Connections, g.flagVpcPeeringListFormat, func() {
+		printTableHeadingTo(g.inv.stdout, len(resp.Connections), "%-30s %-40s %s\n", "PEERING", "NETWORK", "RESERVED_RANGES")
 		for _, c := range resp.Connections {
-			fmt.Printf("%-30s %-40s %s\n", c.Peering, c.Network, strings.Join(c.ReservedPeeringRanges, ","))
+			fmt.Fprintf(g.inv.stdout, "%-30s %-40s %s\n", c.Peering, c.Network, strings.Join(c.ReservedPeeringRanges, ","))
 		}
 	})
 }
 
-func runVpcPeeringUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runVpcPeeringUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceNetworkingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceNetworking(ctx)
 	if err != nil {
 		return err
 	}
 	// The API refers to connections as
 	// `services/{service}/connections/{network}`; use "-" per the docs.
-	name := serviceParent(flagVpcPeeringService) + "/connections/-"
+	name := serviceParent(g.flagVpcPeeringService) + "/connections/-"
 	op, err := svc.Services.Connections.Patch(name, &sn.Connection{
-		Network:               consumerNetwork(project, flagVpcPeeringNetwork),
-		ReservedPeeringRanges: flagVpcPeeringRanges,
-	}).Force(flagVpcPeeringForce).Context(ctx).Do()
+		Network:               consumerNetwork(project, g.flagVpcPeeringNetwork),
+		ReservedPeeringRanges: g.flagVpcPeeringRanges,
+	}).Force(g.flagVpcPeeringForce).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating VPC peering: %w", err)
 	}
-	fmt.Printf("VPC peering update in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(g.inv.stdout, "VPC peering update in progress (operation: %s).\n", op.Name)
+	return g.inv.yaml(op)
 }
 
-func runVpcPeeringDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runVpcPeeringDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceNetworkingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceNetworking(ctx)
 	if err != nil {
 		return err
 	}
-	name := serviceParent(flagVpcPeeringService) + "/connections/-"
+	name := serviceParent(g.flagVpcPeeringService) + "/connections/-"
 	op, err := svc.Services.Connections.DeleteConnection(name, &sn.DeleteConnectionRequest{
-		ConsumerNetwork: consumerNetwork(project, flagVpcPeeringNetwork),
+		ConsumerNetwork: consumerNetwork(project, g.flagVpcPeeringNetwork),
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting VPC peering: %w", err)
 	}
-	fmt.Printf("VPC peering delete in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(g.inv.stdout, "VPC peering delete in progress (operation: %s).\n", op.Name)
+	return g.inv.yaml(op)
 }
 
-func makeVpcSCToggle(enable bool) func(*cobra.Command, []string) error {
+func (g *servicesCmds) makeVpcSCToggle(enable bool) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		project, err := resolveProject()
+		project, err := g.inv.project()
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
-		svc, err := gcp.ServiceNetworkingService(ctx, flagAccount)
+		ctx := cmd.Context()
+		svc, err := g.inv.clients().ServiceNetworking(ctx)
 		if err != nil {
 			return err
 		}
-		parent := serviceParent(flagVpcPeeringService)
-		net := consumerNetwork(project, flagVpcPeeringNetwork)
+		parent := serviceParent(g.flagVpcPeeringService)
+		net := consumerNetwork(project, g.flagVpcPeeringNetwork)
 		if enable {
 			op, err := svc.Services.EnableVpcServiceControls(parent, &sn.EnableVpcServiceControlsRequest{
 				ConsumerNetwork: net,
@@ -236,8 +172,8 @@ func makeVpcSCToggle(enable bool) func(*cobra.Command, []string) error {
 			if err != nil {
 				return fmt.Errorf("enabling VPC service controls: %w", err)
 			}
-			fmt.Printf("Enable VPC service controls in progress (operation: %s).\n", op.Name)
-			return yamlEncode(op)
+			fmt.Fprintf(g.inv.stdout, "Enable VPC service controls in progress (operation: %s).\n", op.Name)
+			return g.inv.yaml(op)
 		}
 		op, err := svc.Services.DisableVpcServiceControls(parent, &sn.DisableVpcServiceControlsRequest{
 			ConsumerNetwork: net,
@@ -245,28 +181,28 @@ func makeVpcSCToggle(enable bool) func(*cobra.Command, []string) error {
 		if err != nil {
 			return fmt.Errorf("disabling VPC service controls: %w", err)
 		}
-		fmt.Printf("Disable VPC service controls in progress (operation: %s).\n", op.Name)
-		return yamlEncode(op)
+		fmt.Fprintf(g.inv.stdout, "Disable VPC service controls in progress (operation: %s).\n", op.Name)
+		return g.inv.yaml(op)
 	}
 }
 
-func runVpcPeeringGetVpcSC(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runVpcPeeringGetVpcSC(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceNetworkingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceNetworking(ctx)
 	if err != nil {
 		return err
 	}
 	// The name for the getter is
 	// `services/{service}/projects/{project}/networks/{network}/vpcServiceControls`.
 	name := fmt.Sprintf("%s/projects/%s/networks/%s/vpcServiceControls",
-		serviceParent(flagVpcPeeringService), project, flagVpcPeeringNetwork)
+		serviceParent(g.flagVpcPeeringService), project, g.flagVpcPeeringNetwork)
 	resp, err := svc.Services.Projects.Global.Networks.GetVpcServiceControls(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("getting VPC service controls: %w", err)
 	}
-	return yamlEncode(resp)
+	return g.inv.yaml(resp)
 }

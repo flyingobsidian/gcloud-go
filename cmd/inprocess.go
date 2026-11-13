@@ -112,6 +112,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newServiceExtensionsCmd(inv),
 		newIapCmd(inv),
 		newApphubCmd(inv),
+		newServicesCmd(inv),
 	}
 }
 

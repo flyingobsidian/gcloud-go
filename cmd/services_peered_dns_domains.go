@@ -1,64 +1,29 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	sn "google.golang.org/api/servicenetworking/v1"
 )
 
-var servicesPeeredDNSCmd = &cobra.Command{
-	Use:   "peered-dns-domains",
-	Short: "Manage peered DNS domains for private service connections",
-}
-
-var peeredDNSCreateCmd = &cobra.Command{
-	Use:   "create NAME",
-	Short: "Create a peered DNS domain",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runPeeredDNSCreate,
-}
-
-var peeredDNSDeleteCmd = &cobra.Command{
-	Use:   "delete NAME",
-	Short: "Delete a peered DNS domain",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runPeeredDNSDelete,
-}
-
-var peeredDNSListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List peered DNS domains",
-	Args:  cobra.NoArgs,
-	RunE:  runPeeredDNSList,
-}
-
-var (
-	flagPeeredDNSService    string
-	flagPeeredDNSNetwork    string
-	flagPeeredDNSDnsSuffix  string
-	flagPeeredDNSListFormat string
-)
-
-func init() {
+func (g *servicesCmds) initServicesPeeredDnsDomains() {
 	scopeFlags := func(c *cobra.Command) {
-		c.Flags().StringVar(&flagPeeredDNSService, "service", "servicenetworking.googleapis.com", "Peered service (default: servicenetworking.googleapis.com)")
-		c.Flags().StringVar(&flagPeeredDNSNetwork, "network", "", "Consumer VPC network name (required)")
+		c.Flags().StringVar(&g.flagPeeredDNSService, "service", "servicenetworking.googleapis.com", "Peered service (default: servicenetworking.googleapis.com)")
+		c.Flags().StringVar(&g.flagPeeredDNSNetwork, "network", "", "Consumer VPC network name (required)")
 		c.MarkFlagRequired("network")
 	}
-	scopeFlags(peeredDNSCreateCmd)
-	peeredDNSCreateCmd.Flags().StringVar(&flagPeeredDNSDnsSuffix, "dns-suffix", "", "DNS suffix (must end with a trailing dot) (required)")
-	peeredDNSCreateCmd.MarkFlagRequired("dns-suffix")
+	scopeFlags(g.peeredDNSCreateCmd)
+	g.peeredDNSCreateCmd.Flags().StringVar(&g.flagPeeredDNSDnsSuffix, "dns-suffix", "", "DNS suffix (must end with a trailing dot) (required)")
+	g.peeredDNSCreateCmd.MarkFlagRequired("dns-suffix")
 
-	scopeFlags(peeredDNSDeleteCmd)
-	scopeFlags(peeredDNSListCmd)
-	peeredDNSListCmd.Flags().StringVar(&flagPeeredDNSListFormat, "format", "", "Output format (json, yaml, or table)")
+	scopeFlags(g.peeredDNSDeleteCmd)
+	scopeFlags(g.peeredDNSListCmd)
+	g.peeredDNSListCmd.Flags().StringVar(&g.flagPeeredDNSListFormat, "format", "", "Output format (json, yaml, or table)")
 
-	servicesPeeredDNSCmd.AddCommand(peeredDNSCreateCmd, peeredDNSDeleteCmd, peeredDNSListCmd)
-	servicesCmd.AddCommand(servicesPeeredDNSCmd)
+	g.servicesPeeredDNSCmd.AddCommand(g.peeredDNSCreateCmd, g.peeredDNSDeleteCmd, g.peeredDNSListCmd)
+	g.servicesCmd.AddCommand(g.servicesPeeredDNSCmd)
 }
 
 // peeredDNSParent returns the peered DNS parent resource path:
@@ -73,66 +38,66 @@ func peeredDNSParent(service, project, network string) string {
 	return fmt.Sprintf("%s/projects/%s/global/networks/%s", svc, project, network)
 }
 
-func runPeeredDNSCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runPeeredDNSCreate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceNetworkingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceNetworking(ctx)
 	if err != nil {
 		return err
 	}
-	parent := peeredDNSParent(flagPeeredDNSService, project, flagPeeredDNSNetwork)
+	parent := peeredDNSParent(g.flagPeeredDNSService, project, g.flagPeeredDNSNetwork)
 	op, err := svc.Services.Projects.Global.Networks.PeeredDnsDomains.Create(parent, &sn.PeeredDnsDomain{
 		Name:      args[0],
-		DnsSuffix: flagPeeredDNSDnsSuffix,
+		DnsSuffix: g.flagPeeredDNSDnsSuffix,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating peered DNS domain: %w", err)
 	}
-	fmt.Printf("Create peered DNS domain in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(g.inv.stdout, "Create peered DNS domain in progress (operation: %s).\n", op.Name)
+	return g.inv.yaml(op)
 }
 
-func runPeeredDNSDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runPeeredDNSDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceNetworkingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceNetworking(ctx)
 	if err != nil {
 		return err
 	}
-	name := peeredDNSParent(flagPeeredDNSService, project, flagPeeredDNSNetwork) + "/peeredDnsDomains/" + args[0]
+	name := peeredDNSParent(g.flagPeeredDNSService, project, g.flagPeeredDNSNetwork) + "/peeredDnsDomains/" + args[0]
 	op, err := svc.Services.Projects.Global.Networks.PeeredDnsDomains.Delete(name).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting peered DNS domain: %w", err)
 	}
-	fmt.Printf("Delete peered DNS domain in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(g.inv.stdout, "Delete peered DNS domain in progress (operation: %s).\n", op.Name)
+	return g.inv.yaml(op)
 }
 
-func runPeeredDNSList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runPeeredDNSList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceNetworkingService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceNetworking(ctx)
 	if err != nil {
 		return err
 	}
-	parent := peeredDNSParent(flagPeeredDNSService, project, flagPeeredDNSNetwork)
+	parent := peeredDNSParent(g.flagPeeredDNSService, project, g.flagPeeredDNSNetwork)
 	resp, err := svc.Services.Projects.Global.Networks.PeeredDnsDomains.List(parent).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing peered DNS domains: %w", err)
 	}
-	return printListResults(resp.PeeredDnsDomains, flagPeeredDNSListFormat, func() {
-		printTableHeading(len(resp.PeeredDnsDomains), "%-30s %s\n", "NAME", "DNS_SUFFIX")
+	return g.inv.printListResults(resp.PeeredDnsDomains, g.flagPeeredDNSListFormat, func() {
+		printTableHeadingTo(g.inv.stdout, len(resp.PeeredDnsDomains), "%-30s %s\n", "NAME", "DNS_SUFFIX")
 		for _, d := range resp.PeeredDnsDomains {
-			fmt.Printf("%-30s %s\n", d.Name, d.DnsSuffix)
+			fmt.Fprintf(g.inv.stdout, "%-30s %s\n", d.Name, d.DnsSuffix)
 		}
 	})
 }

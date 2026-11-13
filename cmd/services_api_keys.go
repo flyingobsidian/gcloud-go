@@ -1,93 +1,11 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	apikeys "google.golang.org/api/apikeys/v2"
-)
-
-var servicesAPIKeysCmd = &cobra.Command{
-	Use:   "api-keys",
-	Short: "Manage API keys",
-}
-
-var apiKeyCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create an API key",
-	Args:  cobra.NoArgs,
-	RunE:  runAPIKeyCreate,
-}
-
-var apiKeyDeleteCmd = &cobra.Command{
-	Use:   "delete KEY_ID_OR_NAME",
-	Short: "Delete an API key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAPIKeyDelete,
-}
-
-var apiKeyDescribeCmd = &cobra.Command{
-	Use:   "describe KEY_ID_OR_NAME",
-	Short: "Describe an API key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAPIKeyDescribe,
-}
-
-var apiKeyListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List API keys",
-	Args:  cobra.NoArgs,
-	RunE:  runAPIKeyList,
-}
-
-var apiKeyLookupCmd = &cobra.Command{
-	Use:   "lookup KEY_STRING",
-	Short: "Look up the resource name of an API key from its key string",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAPIKeyLookup,
-}
-
-var apiKeyGetKeyStringCmd = &cobra.Command{
-	Use:   "get-key-string KEY_ID_OR_NAME",
-	Short: "Get the string of an API key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAPIKeyGetKeyString,
-}
-
-var apiKeyUpdateCmd = &cobra.Command{
-	Use:   "update KEY_ID_OR_NAME",
-	Short: "Update an API key",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAPIKeyUpdate,
-}
-
-var apiKeyUndeleteCmd = &cobra.Command{
-	Use:   "undelete KEY_ID_OR_NAME",
-	Short: "Undelete an API key deleted within the last 30 days",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runAPIKeyUndelete,
-}
-
-var (
-	flagAPIKeyDisplayName            string
-	flagAPIKeyAnnotations            map[string]string
-	flagAPIKeyAllowedIPs             []string
-	flagAPIKeyAllowedReferrers       []string
-	flagAPIKeyAllowedBundleIDs       []string
-	flagAPIKeyAllowedAndroidPackages []string
-	flagAPIKeyAllowedAndroidSHAs     []string
-	flagAPIKeyAPITargets             []string
-	flagAPIKeyAppendRestrictions     bool
-	flagAPIKeyServiceAccount         string
-	flagAPIKeyListShowDeleted        bool
-	flagAPIKeyListFormat             string
-	flagAPIKeyListPageSize           int64
-	flagAPIKeyListLimit              int64
-	flagAPIKeyCheckUsage             bool
-	flagAPIKeyNoCheckUsage           bool
 )
 
 // apiKeyCheckExistingUsage mirrors get_check_existing_usage_enum: CHECK
@@ -99,42 +17,42 @@ func apiKeyCheckExistingUsage(check, noCheck bool) string {
 	return "CHECK"
 }
 
-func init() {
+func (g *servicesCmds) initServicesApiKeys() {
 	restrictionFlags := func(c *cobra.Command) {
-		c.Flags().StringVar(&flagAPIKeyDisplayName, "display-name", "", "Human-readable display name for the key")
-		c.Flags().StringToStringVar(&flagAPIKeyAnnotations, "annotations", nil, "Annotations to attach to the key")
-		c.Flags().StringSliceVar(&flagAPIKeyAllowedIPs, "allowed-ips", nil, "IPv4/IPv6 addresses or CIDR ranges permitted to use the key")
-		c.Flags().StringSliceVar(&flagAPIKeyAllowedReferrers, "allowed-referrers", nil, "HTTP referrers permitted to use the key")
-		c.Flags().StringSliceVar(&flagAPIKeyAllowedBundleIDs, "allowed-bundle-ids", nil, "iOS bundle IDs permitted to use the key")
-		c.Flags().StringSliceVar(&flagAPIKeyAllowedAndroidPackages, "allowed-application", nil, "Android app package names permitted to use the key")
-		c.Flags().StringSliceVar(&flagAPIKeyAllowedAndroidSHAs, "allowed-application-sha1", nil, "Android app SHA-1 fingerprints, paired with --allowed-application")
-		c.Flags().StringSliceVar(&flagAPIKeyAPITargets, "api-target", nil, "API restriction of the form SERVICE_NAME[:METHOD[:METHOD...]]")
-		c.Flags().StringVar(&flagAPIKeyServiceAccount, "service-account", "", "Service account email to bind the key to")
+		c.Flags().StringVar(&g.flagAPIKeyDisplayName, "display-name", "", "Human-readable display name for the key")
+		c.Flags().StringToStringVar(&g.flagAPIKeyAnnotations, "annotations", nil, "Annotations to attach to the key")
+		c.Flags().StringSliceVar(&g.flagAPIKeyAllowedIPs, "allowed-ips", nil, "IPv4/IPv6 addresses or CIDR ranges permitted to use the key")
+		c.Flags().StringSliceVar(&g.flagAPIKeyAllowedReferrers, "allowed-referrers", nil, "HTTP referrers permitted to use the key")
+		c.Flags().StringSliceVar(&g.flagAPIKeyAllowedBundleIDs, "allowed-bundle-ids", nil, "iOS bundle IDs permitted to use the key")
+		c.Flags().StringSliceVar(&g.flagAPIKeyAllowedAndroidPackages, "allowed-application", nil, "Android app package names permitted to use the key")
+		c.Flags().StringSliceVar(&g.flagAPIKeyAllowedAndroidSHAs, "allowed-application-sha1", nil, "Android app SHA-1 fingerprints, paired with --allowed-application")
+		c.Flags().StringSliceVar(&g.flagAPIKeyAPITargets, "api-target", nil, "API restriction of the form SERVICE_NAME[:METHOD[:METHOD...]]")
+		c.Flags().StringVar(&g.flagAPIKeyServiceAccount, "service-account", "", "Service account email to bind the key to")
 	}
-	restrictionFlags(apiKeyCreateCmd)
-	restrictionFlags(apiKeyUpdateCmd)
-	apiKeyUpdateCmd.Flags().BoolVar(&flagAPIKeyAppendRestrictions, "append", false,
+	restrictionFlags(g.apiKeyCreateCmd)
+	restrictionFlags(g.apiKeyUpdateCmd)
+	g.apiKeyUpdateCmd.Flags().BoolVar(&g.flagAPIKeyAppendRestrictions, "append", false,
 		"Merge new --allowed-application and --api-target restrictions with the "+
 			"key's existing restrictions instead of replacing them")
 
 	// --[no-]check-existing-usage added in gcloud-python 584.0.0 (#1942).
-	for _, c := range []*cobra.Command{apiKeyUpdateCmd, apiKeyDeleteCmd} {
-		c.Flags().BoolVar(&flagAPIKeyCheckUsage, "check-existing-usage", true,
+	for _, c := range []*cobra.Command{g.apiKeyUpdateCmd, g.apiKeyDeleteCmd} {
+		c.Flags().BoolVar(&g.flagAPIKeyCheckUsage, "check-existing-usage", true,
 			"Check existing usage before the key is changed; the request fails if the key has incompatible traffic in the last 7 days (defaults to true)")
-		c.Flags().BoolVar(&flagAPIKeyNoCheckUsage, "no-check-existing-usage", false, "Skip the existing usage check")
+		c.Flags().BoolVar(&g.flagAPIKeyNoCheckUsage, "no-check-existing-usage", false, "Skip the existing usage check")
 		c.MarkFlagsMutuallyExclusive("check-existing-usage", "no-check-existing-usage")
 	}
 
-	apiKeyListCmd.Flags().BoolVar(&flagAPIKeyListShowDeleted, "show-deleted", false, "Include deleted keys in results")
-	apiKeyListCmd.Flags().StringVar(&flagAPIKeyListFormat, "format", "", "Output format (json, yaml, or table)")
-	apiKeyListCmd.Flags().Int64Var(&flagAPIKeyListPageSize, "page-size", 0, "Page size for API pagination")
-	apiKeyListCmd.Flags().Int64Var(&flagAPIKeyListLimit, "limit", 0, "Maximum number of keys to list (0 = no limit)")
+	g.apiKeyListCmd.Flags().BoolVar(&g.flagAPIKeyListShowDeleted, "show-deleted", false, "Include deleted keys in results")
+	g.apiKeyListCmd.Flags().StringVar(&g.flagAPIKeyListFormat, "format", "", "Output format (json, yaml, or table)")
+	g.apiKeyListCmd.Flags().Int64Var(&g.flagAPIKeyListPageSize, "page-size", 0, "Page size for API pagination")
+	g.apiKeyListCmd.Flags().Int64Var(&g.flagAPIKeyListLimit, "limit", 0, "Maximum number of keys to list (0 = no limit)")
 
-	servicesAPIKeysCmd.AddCommand(
-		apiKeyCreateCmd, apiKeyDeleteCmd, apiKeyDescribeCmd, apiKeyListCmd,
-		apiKeyLookupCmd, apiKeyGetKeyStringCmd, apiKeyUpdateCmd, apiKeyUndeleteCmd,
+	g.servicesAPIKeysCmd.AddCommand(
+		g.apiKeyCreateCmd, g.apiKeyDeleteCmd, g.apiKeyDescribeCmd, g.apiKeyListCmd,
+		g.apiKeyLookupCmd, g.apiKeyGetKeyStringCmd, g.apiKeyUpdateCmd, g.apiKeyUndeleteCmd,
 	)
-	servicesCmd.AddCommand(servicesAPIKeysCmd)
+	g.servicesCmd.AddCommand(g.servicesAPIKeysCmd)
 }
 
 // apiKeyName normalizes a user-supplied key identifier to the full resource
@@ -172,35 +90,35 @@ func parseAPITargets(entries []string) []*apikeys.V2ApiTarget {
 
 // buildAPIKeyRestrictions assembles a V2Restrictions from the current flag
 // values, returning nil if no restriction fields were set.
-func buildAPIKeyRestrictions() *apikeys.V2Restrictions {
+func (g *servicesCmds) buildAPIKeyRestrictions() *apikeys.V2Restrictions {
 	r := &apikeys.V2Restrictions{}
 	set := false
-	if len(flagAPIKeyAllowedIPs) > 0 {
-		r.ServerKeyRestrictions = &apikeys.V2ServerKeyRestrictions{AllowedIps: flagAPIKeyAllowedIPs}
+	if len(g.flagAPIKeyAllowedIPs) > 0 {
+		r.ServerKeyRestrictions = &apikeys.V2ServerKeyRestrictions{AllowedIps: g.flagAPIKeyAllowedIPs}
 		set = true
 	}
-	if len(flagAPIKeyAllowedReferrers) > 0 {
-		r.BrowserKeyRestrictions = &apikeys.V2BrowserKeyRestrictions{AllowedReferrers: flagAPIKeyAllowedReferrers}
+	if len(g.flagAPIKeyAllowedReferrers) > 0 {
+		r.BrowserKeyRestrictions = &apikeys.V2BrowserKeyRestrictions{AllowedReferrers: g.flagAPIKeyAllowedReferrers}
 		set = true
 	}
-	if len(flagAPIKeyAllowedBundleIDs) > 0 {
-		r.IosKeyRestrictions = &apikeys.V2IosKeyRestrictions{AllowedBundleIds: flagAPIKeyAllowedBundleIDs}
+	if len(g.flagAPIKeyAllowedBundleIDs) > 0 {
+		r.IosKeyRestrictions = &apikeys.V2IosKeyRestrictions{AllowedBundleIds: g.flagAPIKeyAllowedBundleIDs}
 		set = true
 	}
-	if len(flagAPIKeyAllowedAndroidPackages) > 0 {
-		apps := make([]*apikeys.V2AndroidApplication, 0, len(flagAPIKeyAllowedAndroidPackages))
-		for i, pkg := range flagAPIKeyAllowedAndroidPackages {
+	if len(g.flagAPIKeyAllowedAndroidPackages) > 0 {
+		apps := make([]*apikeys.V2AndroidApplication, 0, len(g.flagAPIKeyAllowedAndroidPackages))
+		for i, pkg := range g.flagAPIKeyAllowedAndroidPackages {
 			app := &apikeys.V2AndroidApplication{PackageName: pkg}
-			if i < len(flagAPIKeyAllowedAndroidSHAs) {
-				app.Sha1Fingerprint = flagAPIKeyAllowedAndroidSHAs[i]
+			if i < len(g.flagAPIKeyAllowedAndroidSHAs) {
+				app.Sha1Fingerprint = g.flagAPIKeyAllowedAndroidSHAs[i]
 			}
 			apps = append(apps, app)
 		}
 		r.AndroidKeyRestrictions = &apikeys.V2AndroidKeyRestrictions{AllowedApplications: apps}
 		set = true
 	}
-	if len(flagAPIKeyAPITargets) > 0 {
-		r.ApiTargets = parseAPITargets(flagAPIKeyAPITargets)
+	if len(g.flagAPIKeyAPITargets) > 0 {
+		r.ApiTargets = parseAPITargets(g.flagAPIKeyAPITargets)
 		set = true
 	}
 	if !set {
@@ -303,59 +221,59 @@ func checkAPIKeyUpdateTargets(current *apikeys.V2Key, specifyingTarget bool) err
 	return errAPIKeyUpdateNeedsTarget
 }
 
-func runAPIKeyCreate(cmd *cobra.Command, args []string) error {
+func (g *servicesCmds) runAPIKeyCreate(cmd *cobra.Command, args []string) error {
 	if !cmd.Flags().Changed("api-target") {
 		return errAPIKeyCreateNeedsTarget
 	}
-	project, err := resolveProject()
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.APIKeysService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().APIKeys(ctx)
 	if err != nil {
 		return err
 	}
 	key := &apikeys.V2Key{
-		DisplayName:         flagAPIKeyDisplayName,
-		Annotations:         flagAPIKeyAnnotations,
-		Restrictions:        buildAPIKeyRestrictions(),
-		ServiceAccountEmail: flagAPIKeyServiceAccount,
+		DisplayName:         g.flagAPIKeyDisplayName,
+		Annotations:         g.flagAPIKeyAnnotations,
+		Restrictions:        g.buildAPIKeyRestrictions(),
+		ServiceAccountEmail: g.flagAPIKeyServiceAccount,
 	}
 	op, err := svc.Projects.Locations.Keys.Create(apiKeyParent(project), key).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating API key: %w", err)
 	}
-	fmt.Printf("Create API key in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(g.inv.stdout, "Create API key in progress (operation: %s).\n", op.Name)
+	return g.inv.yaml(op)
 }
 
-func runAPIKeyDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runAPIKeyDelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.APIKeysService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().APIKeys(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Keys.Delete(apiKeyName(project, args[0])).
-		CheckExistingUsage(apiKeyCheckExistingUsage(flagAPIKeyCheckUsage, flagAPIKeyNoCheckUsage)).Context(ctx).Do()
+		CheckExistingUsage(apiKeyCheckExistingUsage(g.flagAPIKeyCheckUsage, g.flagAPIKeyNoCheckUsage)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting API key: %w", err)
 	}
-	fmt.Printf("Delete API key in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(g.inv.stdout, "Delete API key in progress (operation: %s).\n", op.Name)
+	return g.inv.yaml(op)
 }
 
-func runAPIKeyDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runAPIKeyDescribe(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.APIKeysService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().APIKeys(ctx)
 	if err != nil {
 		return err
 	}
@@ -363,16 +281,16 @@ func runAPIKeyDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing API key: %w", err)
 	}
-	return yamlEncode(key)
+	return g.inv.yaml(key)
 }
 
-func runAPIKeyList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runAPIKeyList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.APIKeysService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().APIKeys(ctx)
 	if err != nil {
 		return err
 	}
@@ -380,9 +298,9 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 	var all []*apikeys.V2Key
 	pageToken := ""
 	for {
-		call := svc.Projects.Locations.Keys.List(apiKeyParent(project)).ShowDeleted(flagAPIKeyListShowDeleted).Context(ctx)
-		if flagAPIKeyListPageSize > 0 {
-			call = call.PageSize(flagAPIKeyListPageSize)
+		call := svc.Projects.Locations.Keys.List(apiKeyParent(project)).ShowDeleted(g.flagAPIKeyListShowDeleted).Context(ctx)
+		if g.flagAPIKeyListPageSize > 0 {
+			call = call.PageSize(g.flagAPIKeyListPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -392,8 +310,8 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("listing API keys: %w", err)
 		}
 		all = append(all, resp.Keys...)
-		if flagAPIKeyListLimit > 0 && int64(len(all)) >= flagAPIKeyListLimit {
-			all = all[:flagAPIKeyListLimit]
+		if g.flagAPIKeyListLimit > 0 && int64(len(all)) >= g.flagAPIKeyListLimit {
+			all = all[:g.flagAPIKeyListLimit]
 			break
 		}
 		if resp.NextPageToken == "" {
@@ -402,17 +320,17 @@ func runAPIKeyList(cmd *cobra.Command, args []string) error {
 		pageToken = resp.NextPageToken
 	}
 
-	return printListResults(all, flagAPIKeyListFormat, func() {
-		printTableHeading(len(all), "%-40s %-30s %s\n", "NAME", "DISPLAY_NAME", "CREATE_TIME")
+	return g.inv.printListResults(all, g.flagAPIKeyListFormat, func() {
+		printTableHeadingTo(g.inv.stdout, len(all), "%-40s %-30s %s\n", "NAME", "DISPLAY_NAME", "CREATE_TIME")
 		for _, k := range all {
-			fmt.Printf("%-40s %-30s %s\n", k.Name, k.DisplayName, k.CreateTime)
+			fmt.Fprintf(g.inv.stdout, "%-40s %-30s %s\n", k.Name, k.DisplayName, k.CreateTime)
 		}
 	})
 }
 
-func runAPIKeyLookup(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.APIKeysService(ctx, flagAccount)
+func (g *servicesCmds) runAPIKeyLookup(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().APIKeys(ctx)
 	if err != nil {
 		return err
 	}
@@ -420,16 +338,16 @@ func runAPIKeyLookup(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("looking up API key: %w", err)
 	}
-	return yamlEncode(resp)
+	return g.inv.yaml(resp)
 }
 
-func runAPIKeyGetKeyString(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runAPIKeyGetKeyString(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.APIKeysService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().APIKeys(ctx)
 	if err != nil {
 		return err
 	}
@@ -437,17 +355,17 @@ func runAPIKeyGetKeyString(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting API key string: %w", err)
 	}
-	fmt.Println(resp.KeyString)
+	fmt.Fprintln(g.inv.stdout, resp.KeyString)
 	return nil
 }
 
-func runAPIKeyUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runAPIKeyUpdate(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.APIKeysService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().APIKeys(ctx)
 	if err != nil {
 		return err
 	}
@@ -464,19 +382,19 @@ func runAPIKeyUpdate(cmd *cobra.Command, args []string) error {
 
 	var masks []string
 	if cmd.Flags().Changed("display-name") {
-		key.DisplayName = flagAPIKeyDisplayName
+		key.DisplayName = g.flagAPIKeyDisplayName
 		masks = append(masks, "display_name")
 	}
 	if cmd.Flags().Changed("annotations") {
-		key.Annotations = flagAPIKeyAnnotations
+		key.Annotations = g.flagAPIKeyAnnotations
 		masks = append(masks, "annotations")
 	}
 	if cmd.Flags().Changed("service-account") {
-		key.ServiceAccountEmail = flagAPIKeyServiceAccount
+		key.ServiceAccountEmail = g.flagAPIKeyServiceAccount
 		masks = append(masks, "service_account_email")
 	}
-	if r := buildAPIKeyRestrictions(); r != nil {
-		if flagAPIKeyAppendRestrictions {
+	if r := g.buildAPIKeyRestrictions(); r != nil {
+		if g.flagAPIKeyAppendRestrictions {
 			r = mergeAPIKeyRestrictions(current.Restrictions, r)
 		}
 		key.Restrictions = r
@@ -487,21 +405,21 @@ func runAPIKeyUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	op, err := svc.Projects.Locations.Keys.Patch(name, key).UpdateMask(strings.Join(masks, ",")).
-		CheckExistingUsage(apiKeyCheckExistingUsage(flagAPIKeyCheckUsage, flagAPIKeyNoCheckUsage)).Context(ctx).Do()
+		CheckExistingUsage(apiKeyCheckExistingUsage(g.flagAPIKeyCheckUsage, g.flagAPIKeyNoCheckUsage)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating API key: %w", err)
 	}
-	fmt.Printf("Update API key in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(g.inv.stdout, "Update API key in progress (operation: %s).\n", op.Name)
+	return g.inv.yaml(op)
 }
 
-func runAPIKeyUndelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *servicesCmds) runAPIKeyUndelete(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.APIKeysService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().APIKeys(ctx)
 	if err != nil {
 		return err
 	}
@@ -509,6 +427,6 @@ func runAPIKeyUndelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("undeleting API key: %w", err)
 	}
-	fmt.Printf("Undelete API key in progress (operation: %s).\n", op.Name)
-	return yamlEncode(op)
+	fmt.Fprintf(g.inv.stdout, "Undelete API key in progress (operation: %s).\n", op.Name)
+	return g.inv.yaml(op)
 }

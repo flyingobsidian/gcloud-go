@@ -8,10 +8,11 @@ import (
 )
 
 func TestAPIKeyCreateRequiresAPITarget(t *testing.T) {
-	if apiKeyCreateCmd.Flags().Changed("api-target") {
+	grp := newServicesCmds(legacyTestInvocation())
+	if grp.apiKeyCreateCmd.Flags().Changed("api-target") {
 		t.Skip("api-target already set by another test")
 	}
-	if err := runAPIKeyCreate(apiKeyCreateCmd, nil); err != errAPIKeyCreateNeedsTarget {
+	if err := grp.runAPIKeyCreate(grp.apiKeyCreateCmd, nil); err != errAPIKeyCreateNeedsTarget {
 		t.Fatalf("runAPIKeyCreate without --api-target = %v, want %v", err, errAPIKeyCreateNeedsTarget)
 	}
 }
@@ -44,13 +45,15 @@ func TestCheckAPIKeyUpdateTargets(t *testing.T) {
 }
 
 func TestAPIKeyUpdateHasNoClearRestrictions(t *testing.T) {
-	if apiKeyUpdateCmd.Flags().Lookup("clear-restrictions") != nil {
+	grp := newServicesCmds(legacyTestInvocation())
+	if grp.apiKeyUpdateCmd.Flags().Lookup("clear-restrictions") != nil {
 		t.Error("--clear-restrictions was removed in gcloud-python 586.0.0")
 	}
 }
 
 func TestAPIKeyCheckExistingUsage(t *testing.T) {
-	for _, c := range []*cobra.Command{apiKeyUpdateCmd, apiKeyDeleteCmd} {
+	grp := newServicesCmds(legacyTestInvocation())
+	for _, c := range []*cobra.Command{grp.apiKeyUpdateCmd, grp.apiKeyDeleteCmd} {
 		for _, f := range []string{"check-existing-usage", "no-check-existing-usage"} {
 			if c.Flags().Lookup(f) == nil {
 				t.Errorf("--%s missing on api-keys %s", f, c.Name())
