@@ -32,6 +32,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newStorageCmd(inv),
 		newWorkflowsCmd(inv),
 		newTasksCmd(inv),
+		newLustreCmd(inv),
 	}
 }
 
