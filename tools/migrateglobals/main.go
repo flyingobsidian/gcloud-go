@@ -140,6 +140,9 @@ func main() {
 		idx  int
 		init ast.Expr
 		doc  string
+		// dependent vars are initialized from other moved vars, so they
+		// are set after them.
+		dependent bool
 	}
 	moved := map[types.Object]*mvar{}
 	var movedOrder []*mvar
@@ -171,6 +174,7 @@ func main() {
 		})
 	}
 	var initFuncs []*ast.FuncDecl
+	var others []*mvar // group vars not moved (yet)
 	funcs := map[types.Object]*ast.FuncDecl{}
 	for _, f := range pkg.Syntax {
 		if !inGroup(f.Pos()) {
@@ -211,6 +215,14 @@ func main() {
 							mv := &mvar{obj: obj, spec: vs, decl: d, idx: i, init: init, doc: doc}
 							moved[obj] = mv
 							movedOrder = append(movedOrder, mv)
+						} else if init != nil && len(vs.Values) == len(vs.Names) {
+							doc := ""
+							if vs.Doc != nil {
+								doc = vs.Doc.Text()
+							} else if len(d.Specs) == 1 && d.Doc != nil {
+								doc = d.Doc.Text()
+							}
+							others = append(others, &mvar{obj: obj, spec: vs, decl: d, idx: i, init: init, doc: doc})
 						}
 					}
 				}
@@ -223,6 +235,29 @@ func main() {
 					continue
 				}
 				funcs[info.Defs[d.Name]] = d
+			}
+		}
+	}
+
+	// Vars initialized from moved vars move too.
+	for changed := true; changed; {
+		changed = false
+		for _, mv := range others {
+			if moved[mv.obj] != nil {
+				continue
+			}
+			uses := false
+			ast.Inspect(mv.init, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok && moved[info.Uses[id]] != nil {
+					uses = true
+				}
+				return true
+			})
+			if uses {
+				mv.dependent = true
+				moved[mv.obj] = mv
+				movedOrder = append(movedOrder, mv)
+				changed = true
 			}
 		}
 	}
@@ -563,14 +598,14 @@ func main() {
 							t = c + ".Context()"
 						}
 						add(n.Pos(), edit{off(n.Pos()), off(n.End()), t, true})
-					case (strings.HasSuffix(p, "internal/gcp") && legacy[s] != "" || strings.HasSuffix(p, "internal/compute") && s == "NewService") && len(n.Args) == 2:
+					case (strings.HasSuffix(p, "internal/gcp") && legacy[s] != "" || strings.HasSuffix(p, "internal/compute") && s == "NewService") && len(n.Args) >= 2:
 						m := legacy[s]
 						if s == "NewService" {
 							m = "Compute"
 						}
 						add(fun.Pos(), edit{off(fun.Pos()), off(fun.End()), R + ".inv.clients()." + m, false})
 						if id, ok := n.Args[1].(*ast.Ident); ok && id.Name == "flagAccount" {
-							add(n.Args[0].End(), edit{off(n.Args[0].End()), off(n.Rparen), "", true})
+							add(n.Args[0].End(), edit{off(n.Args[0].End()), off(n.Args[1].End()), "", true})
 						} else {
 							fmt.Printf("WARN non-flagAccount account arg at %s\n", fset.Position(n.Pos()))
 						}
@@ -769,10 +804,12 @@ func main() {
 		}
 		fmt.Fprintf(&fields, "\t%s %s\n", mv.obj.Name(), types.TypeString(mv.obj.Type(), qual))
 	}
-	for _, p := range order {
-		for _, mv := range movedOrder {
-			if fileOf(mv.obj.Pos()) == p && mv.init != nil {
-				fmt.Fprintf(&ctor, "\t%s.%s = %s\n", R, mv.obj.Name(), initText[mv])
+	for _, dependent := range []bool{false, true} {
+		for _, p := range order {
+			for _, mv := range movedOrder {
+				if fileOf(mv.obj.Pos()) == p && mv.init != nil && mv.dependent == dependent {
+					fmt.Fprintf(&ctor, "\t%s.%s = %s\n", R, mv.obj.Name(), initText[mv])
+				}
 			}
 		}
 	}
@@ -841,7 +878,7 @@ func lineEnd(b []byte, i int) int {
 	return i
 }
 
-var legacyRE = regexp.MustCompile(`func (\w+)\(ctx context\.Context, account string\) \([^)]*\) \{\n\treturn legacyClients\(account\)\.(\w+)\(ctx\)`)
+var legacyRE = regexp.MustCompile(`func (\w+)\(ctx context\.Context, account(?: string)?(?:, \w+ string)?\) \([^)]*\) \{\n\treturn legacyClients\(account\)\.(\w+)\(ctx[,)]`)
 
 func legacyServiceMap(dir string) map[string]string {
 	b, err := os.ReadFile(filepath.Join(dir, "internal/gcp/legacy.go"))
