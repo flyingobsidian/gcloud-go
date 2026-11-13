@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
@@ -11,98 +10,57 @@ import (
 
 // --- gcloud colab runtimes (#1498) ---
 
-var colabRTCmd = &cobra.Command{Use: "runtimes", Short: "Manage Colab Enterprise runtimes"}
-
 var (
-	flagColabRTRegion     string
-	flagColabRTFormat     string
-	flagColabRTConfigFile string
-	flagColabRTFilter     string
-	flagColabRTOrderBy    string
-	flagColabRTPageSize   int64
-	flagColabRTReadMask   string
 	flagColabRTAssignUser string
-	flagColabRTVersionID  string
 )
 
-var (
-	colabRTCreateCmd = &cobra.Command{
-		Use: "create", Short: "Create (assign) a Colab Enterprise notebook runtime",
-		Args: cobra.NoArgs, RunE: runColabRTCreate,
-	}
-	colabRTDeleteCmd = &cobra.Command{
-		Use: "delete RUNTIME", Short: "Delete a notebook runtime",
-		Args: cobra.ExactArgs(1), RunE: runColabRTDelete,
-	}
-	colabRTDescribeCmd = &cobra.Command{
-		Use: "describe RUNTIME", Short: "Describe a notebook runtime",
-		Args: cobra.ExactArgs(1), RunE: runColabRTDescribe,
-	}
-	colabRTListCmd = &cobra.Command{
-		Use: "list", Short: "List notebook runtimes",
-		Args: cobra.NoArgs, RunE: runColabRTList,
-	}
-	colabRTStartCmd = &cobra.Command{
-		Use: "start RUNTIME", Short: "Start a notebook runtime",
-		Args: cobra.ExactArgs(1), RunE: runColabRTStart,
-	}
-	colabRTStopCmd = &cobra.Command{
-		Use: "stop RUNTIME", Short: "Stop a notebook runtime",
-		Args: cobra.ExactArgs(1), RunE: runColabRTStop,
-	}
-	colabRTUpgradeCmd = &cobra.Command{
-		Use: "upgrade RUNTIME", Short: "Upgrade a notebook runtime",
-		Args: cobra.ExactArgs(1), RunE: runColabRTUpgrade,
-	}
-)
-
-func init() {
+func (s *colabCmds) initColabRuntimes() {
 	all := []*cobra.Command{
-		colabRTCreateCmd, colabRTDeleteCmd, colabRTDescribeCmd, colabRTListCmd,
-		colabRTStartCmd, colabRTStopCmd, colabRTUpgradeCmd,
+		s.colabRTCreateCmd, s.colabRTDeleteCmd, s.colabRTDescribeCmd, s.colabRTListCmd,
+		s.colabRTStartCmd, s.colabRTStopCmd, s.colabRTUpgradeCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagColabRTRegion, "region", "", "Region where the runtime lives (required)")
+		c.Flags().StringVar(&s.flagColabRTRegion, "region", "", "Region where the runtime lives (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagColabRTFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagColabRTFormat, "format", "", "Output format")
 	}
-	colabRTCreateCmd.Flags().StringVar(&flagColabRTConfigFile, "config-file", "",
+	s.colabRTCreateCmd.Flags().StringVar(&s.flagColabRTConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the AssignNotebookRuntimeRequest body (required)")
-	_ = colabRTCreateCmd.MarkFlagRequired("config-file")
-	colabRTListCmd.Flags().StringVar(&flagColabRTFilter, "filter", "", "Server-side filter expression")
-	colabRTListCmd.Flags().StringVar(&flagColabRTOrderBy, "order-by", "", "Order-by expression")
-	colabRTListCmd.Flags().Int64Var(&flagColabRTPageSize, "page-size", 0, "Maximum results per page")
-	colabRTListCmd.Flags().StringVar(&flagColabRTReadMask, "read-mask", "", "Field mask for reads")
-	colabRTUpgradeCmd.Flags().StringVar(&flagColabRTVersionID, "version-id", "",
+	_ = s.colabRTCreateCmd.MarkFlagRequired("config-file")
+	s.colabRTListCmd.Flags().StringVar(&s.flagColabRTFilter, "filter", "", "Server-side filter expression")
+	s.colabRTListCmd.Flags().StringVar(&s.flagColabRTOrderBy, "order-by", "", "Order-by expression")
+	s.colabRTListCmd.Flags().Int64Var(&s.flagColabRTPageSize, "page-size", 0, "Maximum results per page")
+	s.colabRTListCmd.Flags().StringVar(&s.flagColabRTReadMask, "read-mask", "", "Field mask for reads")
+	s.colabRTUpgradeCmd.Flags().StringVar(&s.flagColabRTVersionID, "version-id", "",
 		"Optional runtime version ID to upgrade to")
 
-	colabRTCmd.AddCommand(all...)
-	colabCmd.AddCommand(colabRTCmd)
+	s.colabRTCmd.AddCommand(all...)
+	s.colabCmd.AddCommand(s.colabRTCmd)
 }
 
-func colabRTParent() (string, error) {
-	return colabParent(flagColabRTRegion)
+func (s *colabCmds) colabRTParent() (string, error) {
+	return s.colabParent(s.flagColabRTRegion)
 }
 
-func colabRTName(id string) (string, error) {
-	parent, err := colabRTParent()
+func (s *colabCmds) colabRTName(id string) (string, error) {
+	parent, err := s.colabRTParent()
 	if err != nil {
 		return "", err
 	}
 	return colabChild("notebookRuntimes", id, parent), nil
 }
 
-func runColabRTCreate(cmd *cobra.Command, args []string) error {
-	parent, err := colabRTParent()
+func (s *colabCmds) runColabRTCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.colabRTParent()
 	if err != nil {
 		return err
 	}
 	req := &aiplatform.GoogleCloudAiplatformV1AssignNotebookRuntimeRequest{}
-	if err := loadYAMLOrJSONInto(flagColabRTConfigFile, req); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagColabRTConfigFile, req); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -110,17 +68,17 @@ func runColabRTCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("assigning notebook runtime: %w", err)
 	}
-	fmt.Printf("Assign request issued for runtime (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagColabRTFormat)
+	fmt.Fprintf(s.inv.stdout, "Assign request issued for runtime (operation: %s).\n", op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagColabRTFormat)
 }
 
-func runColabRTDelete(cmd *cobra.Command, args []string) error {
-	name, err := colabRTName(args[0])
+func (s *colabCmds) runColabRTDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -128,17 +86,17 @@ func runColabRTDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting notebook runtime: %w", err)
 	}
-	fmt.Printf("Delete request issued for runtime [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagColabRTFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for runtime [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagColabRTFormat)
 }
 
-func runColabRTDescribe(cmd *cobra.Command, args []string) error {
-	name, err := colabRTName(args[0])
+func (s *colabCmds) runColabRTDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -146,16 +104,16 @@ func runColabRTDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing notebook runtime: %w", err)
 	}
-	return emitFormatted(got, flagColabRTFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagColabRTFormat)
 }
 
-func runColabRTList(cmd *cobra.Command, args []string) error {
-	parent, err := colabRTParent()
+func (s *colabCmds) runColabRTList(cmd *cobra.Command, args []string) error {
+	parent, err := s.colabRTParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -163,17 +121,17 @@ func runColabRTList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.NotebookRuntimes.List(parent).Context(ctx)
-		if flagColabRTFilter != "" {
-			call = call.Filter(flagColabRTFilter)
+		if s.flagColabRTFilter != "" {
+			call = call.Filter(s.flagColabRTFilter)
 		}
-		if flagColabRTOrderBy != "" {
-			call = call.OrderBy(flagColabRTOrderBy)
+		if s.flagColabRTOrderBy != "" {
+			call = call.OrderBy(s.flagColabRTOrderBy)
 		}
-		if flagColabRTPageSize > 0 {
-			call = call.PageSize(flagColabRTPageSize)
+		if s.flagColabRTPageSize > 0 {
+			call = call.PageSize(s.flagColabRTPageSize)
 		}
-		if flagColabRTReadMask != "" {
-			call = call.ReadMask(flagColabRTReadMask)
+		if s.flagColabRTReadMask != "" {
+			call = call.ReadMask(s.flagColabRTReadMask)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -188,16 +146,16 @@ func runColabRTList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagColabRTFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagColabRTFormat)
 }
 
-func runColabRTStart(cmd *cobra.Command, args []string) error {
-	name, err := colabRTName(args[0])
+func (s *colabCmds) runColabRTStart(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -205,17 +163,17 @@ func runColabRTStart(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("starting notebook runtime: %w", err)
 	}
-	fmt.Printf("Start request issued for runtime [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagColabRTFormat)
+	fmt.Fprintf(s.inv.stdout, "Start request issued for runtime [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagColabRTFormat)
 }
 
-func runColabRTStop(cmd *cobra.Command, args []string) error {
-	name, err := colabRTName(args[0])
+func (s *colabCmds) runColabRTStop(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -223,17 +181,17 @@ func runColabRTStop(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("stopping notebook runtime: %w", err)
 	}
-	fmt.Printf("Stop request issued for runtime [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagColabRTFormat)
+	fmt.Fprintf(s.inv.stdout, "Stop request issued for runtime [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagColabRTFormat)
 }
 
-func runColabRTUpgrade(cmd *cobra.Command, args []string) error {
-	name, err := colabRTName(args[0])
+func (s *colabCmds) runColabRTUpgrade(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTRegion)
 	if err != nil {
 		return err
 	}
@@ -241,6 +199,6 @@ func runColabRTUpgrade(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("upgrading notebook runtime: %w", err)
 	}
-	fmt.Printf("Upgrade request issued for runtime [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagColabRTFormat)
+	fmt.Fprintf(s.inv.stdout, "Upgrade request issued for runtime [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagColabRTFormat)
 }

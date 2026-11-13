@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/flyingobsidian/gcloud-go/internal/gcp"
@@ -11,116 +10,62 @@ import (
 
 // --- gcloud colab runtime-templates (#1499) ---
 
-var colabRTTCmd = &cobra.Command{Use: "runtime-templates", Short: "Manage Colab Enterprise runtime templates"}
-
 var (
-	flagColabRTTRegion     string
-	flagColabRTTFormat     string
-	flagColabRTTConfigFile string
 	flagColabRTTUpdateMask string
-	flagColabRTTFilter     string
-	flagColabRTTOrderBy    string
-	flagColabRTTPageSize   int64
-	flagColabRTTReadMask   string
-
-	flagColabRTTIamMember   string
-	flagColabRTTIamRole     string
-	flagColabRTTIamCondExpr string
-	flagColabRTTIamCondT    string
-	flagColabRTTIamCondD    string
-	flagColabRTTIamAllCond  bool
 )
 
-var (
-	colabRTTCreateCmd = &cobra.Command{
-		Use: "create RUNTIME_TEMPLATE", Short: "Create a runtime template",
-		Args: cobra.ExactArgs(1), RunE: runColabRTTCreate,
-	}
-	colabRTTDeleteCmd = &cobra.Command{
-		Use: "delete RUNTIME_TEMPLATE", Short: "Delete a runtime template",
-		Args: cobra.ExactArgs(1), RunE: runColabRTTDelete,
-	}
-	colabRTTDescribeCmd = &cobra.Command{
-		Use: "describe RUNTIME_TEMPLATE", Short: "Describe a runtime template",
-		Args: cobra.ExactArgs(1), RunE: runColabRTTDescribe,
-	}
-	colabRTTListCmd = &cobra.Command{
-		Use: "list", Short: "List runtime templates",
-		Args: cobra.NoArgs, RunE: runColabRTTList,
-	}
-	colabRTTGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy RUNTIME_TEMPLATE", Short: "Get the IAM policy for a runtime template",
-		Args: cobra.ExactArgs(1), RunE: runColabRTTGetIam,
-	}
-	colabRTTSetIamCmd = &cobra.Command{
-		Use:   "set-iam-policy RUNTIME_TEMPLATE POLICY_FILE",
-		Short: "Set the IAM policy for a runtime template",
-		Args:  cobra.ExactArgs(2), RunE: runColabRTTSetIam,
-	}
-	colabRTTAddIamCmd = &cobra.Command{
-		Use:   "add-iam-policy-binding RUNTIME_TEMPLATE",
-		Short: "Add an IAM policy binding to a runtime template",
-		Args:  cobra.ExactArgs(1), RunE: runColabRTTAddIam,
-	}
-	colabRTTRemoveIamCmd = &cobra.Command{
-		Use:   "remove-iam-policy-binding RUNTIME_TEMPLATE",
-		Short: "Remove an IAM policy binding from a runtime template",
-		Args:  cobra.ExactArgs(1), RunE: runColabRTTRemoveIam,
-	}
-)
-
-func init() {
+func (s *colabCmds) initColabRuntimeTemplates() {
 	all := []*cobra.Command{
-		colabRTTCreateCmd, colabRTTDeleteCmd, colabRTTDescribeCmd, colabRTTListCmd,
-		colabRTTGetIamCmd, colabRTTSetIamCmd, colabRTTAddIamCmd, colabRTTRemoveIamCmd,
+		s.colabRTTCreateCmd, s.colabRTTDeleteCmd, s.colabRTTDescribeCmd, s.colabRTTListCmd,
+		s.colabRTTGetIamCmd, s.colabRTTSetIamCmd, s.colabRTTAddIamCmd, s.colabRTTRemoveIamCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagColabRTTRegion, "region", "", "Region where the runtime template lives (required)")
+		c.Flags().StringVar(&s.flagColabRTTRegion, "region", "", "Region where the runtime template lives (required)")
 		_ = c.MarkFlagRequired("region")
-		c.Flags().StringVar(&flagColabRTTFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagColabRTTFormat, "format", "", "Output format")
 	}
-	colabRTTCreateCmd.Flags().StringVar(&flagColabRTTConfigFile, "config-file", "",
+	s.colabRTTCreateCmd.Flags().StringVar(&s.flagColabRTTConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the NotebookRuntimeTemplate body (required)")
-	_ = colabRTTCreateCmd.MarkFlagRequired("config-file")
-	colabRTTListCmd.Flags().StringVar(&flagColabRTTFilter, "filter", "", "Server-side filter expression")
-	colabRTTListCmd.Flags().StringVar(&flagColabRTTOrderBy, "order-by", "", "Order-by expression")
-	colabRTTListCmd.Flags().Int64Var(&flagColabRTTPageSize, "page-size", 0, "Maximum results per page")
-	colabRTTListCmd.Flags().StringVar(&flagColabRTTReadMask, "read-mask", "", "Field mask for reads")
+	_ = s.colabRTTCreateCmd.MarkFlagRequired("config-file")
+	s.colabRTTListCmd.Flags().StringVar(&s.flagColabRTTFilter, "filter", "", "Server-side filter expression")
+	s.colabRTTListCmd.Flags().StringVar(&s.flagColabRTTOrderBy, "order-by", "", "Order-by expression")
+	s.colabRTTListCmd.Flags().Int64Var(&s.flagColabRTTPageSize, "page-size", 0, "Maximum results per page")
+	s.colabRTTListCmd.Flags().StringVar(&s.flagColabRTTReadMask, "read-mask", "", "Field mask for reads")
 
-	for _, c := range []*cobra.Command{colabRTTAddIamCmd, colabRTTRemoveIamCmd} {
-		colabIamMemberFlags(c, &flagColabRTTIamMember, &flagColabRTTIamRole,
-			&flagColabRTTIamCondExpr, &flagColabRTTIamCondT, &flagColabRTTIamCondD)
+	for _, c := range []*cobra.Command{s.colabRTTAddIamCmd, s.colabRTTRemoveIamCmd} {
+		colabIamMemberFlags(c, &s.flagColabRTTIamMember, &s.flagColabRTTIamRole,
+			&s.flagColabRTTIamCondExpr, &s.flagColabRTTIamCondT, &s.flagColabRTTIamCondD)
 	}
-	colabRTTRemoveIamCmd.Flags().BoolVar(&flagColabRTTIamAllCond, "all", false,
+	s.colabRTTRemoveIamCmd.Flags().BoolVar(&s.flagColabRTTIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	colabRTTCmd.AddCommand(all...)
-	colabCmd.AddCommand(colabRTTCmd)
+	s.colabRTTCmd.AddCommand(all...)
+	s.colabCmd.AddCommand(s.colabRTTCmd)
 }
 
-func colabRTTParent() (string, error) {
-	return colabParent(flagColabRTTRegion)
+func (s *colabCmds) colabRTTParent() (string, error) {
+	return s.colabParent(s.flagColabRTTRegion)
 }
 
-func colabRTTName(id string) (string, error) {
-	parent, err := colabRTTParent()
+func (s *colabCmds) colabRTTName(id string) (string, error) {
+	parent, err := s.colabRTTParent()
 	if err != nil {
 		return "", err
 	}
 	return colabChild("notebookRuntimeTemplates", id, parent), nil
 }
 
-func runColabRTTCreate(cmd *cobra.Command, args []string) error {
-	parent, err := colabRTTParent()
+func (s *colabCmds) runColabRTTCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.colabRTTParent()
 	if err != nil {
 		return err
 	}
 	body := &aiplatform.GoogleCloudAiplatformV1NotebookRuntimeTemplate{}
-	if err := loadYAMLOrJSONInto(flagColabRTTConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagColabRTTConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTTRegion)
 	if err != nil {
 		return err
 	}
@@ -128,17 +73,17 @@ func runColabRTTCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating runtime template: %w", err)
 	}
-	fmt.Printf("Create request issued for runtime template [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagColabRTTFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for runtime template [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagColabRTTFormat)
 }
 
-func runColabRTTDelete(cmd *cobra.Command, args []string) error {
-	name, err := colabRTTName(args[0])
+func (s *colabCmds) runColabRTTDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTTRegion)
 	if err != nil {
 		return err
 	}
@@ -146,17 +91,17 @@ func runColabRTTDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting runtime template: %w", err)
 	}
-	fmt.Printf("Delete request issued for runtime template [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagColabRTTFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for runtime template [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagColabRTTFormat)
 }
 
-func runColabRTTDescribe(cmd *cobra.Command, args []string) error {
-	name, err := colabRTTName(args[0])
+func (s *colabCmds) runColabRTTDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTTRegion)
 	if err != nil {
 		return err
 	}
@@ -164,16 +109,16 @@ func runColabRTTDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing runtime template: %w", err)
 	}
-	return emitFormatted(got, flagColabRTTFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagColabRTTFormat)
 }
 
-func runColabRTTList(cmd *cobra.Command, args []string) error {
-	parent, err := colabRTTParent()
+func (s *colabCmds) runColabRTTList(cmd *cobra.Command, args []string) error {
+	parent, err := s.colabRTTParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTTRegion)
 	if err != nil {
 		return err
 	}
@@ -181,17 +126,17 @@ func runColabRTTList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.NotebookRuntimeTemplates.List(parent).Context(ctx)
-		if flagColabRTTFilter != "" {
-			call = call.Filter(flagColabRTTFilter)
+		if s.flagColabRTTFilter != "" {
+			call = call.Filter(s.flagColabRTTFilter)
 		}
-		if flagColabRTTOrderBy != "" {
-			call = call.OrderBy(flagColabRTTOrderBy)
+		if s.flagColabRTTOrderBy != "" {
+			call = call.OrderBy(s.flagColabRTTOrderBy)
 		}
-		if flagColabRTTPageSize > 0 {
-			call = call.PageSize(flagColabRTTPageSize)
+		if s.flagColabRTTPageSize > 0 {
+			call = call.PageSize(s.flagColabRTTPageSize)
 		}
-		if flagColabRTTReadMask != "" {
-			call = call.ReadMask(flagColabRTTReadMask)
+		if s.flagColabRTTReadMask != "" {
+			call = call.ReadMask(s.flagColabRTTReadMask)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -206,16 +151,16 @@ func runColabRTTList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagColabRTTFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagColabRTTFormat)
 }
 
-func runColabRTTGetIam(cmd *cobra.Command, args []string) error {
-	name, err := colabRTTName(args[0])
+func (s *colabCmds) runColabRTTGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTTRegion)
 	if err != nil {
 		return err
 	}
@@ -224,11 +169,11 @@ func runColabRTTGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagColabRTTFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagColabRTTFormat)
 }
 
-func runColabRTTSetIam(cmd *cobra.Command, args []string) error {
-	name, err := colabRTTName(args[0])
+func (s *colabCmds) runColabRTTSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTTName(args[0])
 	if err != nil {
 		return err
 	}
@@ -237,8 +182,8 @@ func runColabRTTSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTTRegion)
 	if err != nil {
 		return err
 	}
@@ -246,17 +191,17 @@ func runColabRTTSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	writeUpdatedIam(fmt.Sprintf("runtime template [%s]", args[0]))
-	return emitFormatted(updated, flagColabRTTFormat)
+	s.writeUpdatedIam(fmt.Sprintf("runtime template [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagColabRTTFormat)
 }
 
-func runColabRTTAddIam(cmd *cobra.Command, args []string) error {
-	name, err := colabRTTName(args[0])
+func (s *colabCmds) runColabRTTAddIam(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTTRegion)
 	if err != nil {
 		return err
 	}
@@ -265,24 +210,24 @@ func runColabRTTAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	colabAddBinding(policy, flagColabRTTIamRole, flagColabRTTIamMember,
-		colabBuildCondition(flagColabRTTIamCondExpr, flagColabRTTIamCondT, flagColabRTTIamCondD))
+	colabAddBinding(policy, s.flagColabRTTIamRole, s.flagColabRTTIamMember,
+		colabBuildCondition(s.flagColabRTTIamCondExpr, s.flagColabRTTIamCondT, s.flagColabRTTIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Locations.NotebookRuntimeTemplates.SetIamPolicy(name, &aiplatform.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	writeUpdatedIam(fmt.Sprintf("runtime template [%s]", args[0]))
-	return emitFormatted(updated, flagColabRTTFormat)
+	s.writeUpdatedIam(fmt.Sprintf("runtime template [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagColabRTTFormat)
 }
 
-func runColabRTTRemoveIam(cmd *cobra.Command, args []string) error {
-	name, err := colabRTTName(args[0])
+func (s *colabCmds) runColabRTTRemoveIam(cmd *cobra.Command, args []string) error {
+	name, err := s.colabRTTName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.AIPlatformService(ctx, flagAccount, flagColabRTTRegion)
+	ctx := cmd.Context()
+	svc, err := gcp.AIPlatformService(ctx, s.inv.flags.account, s.flagColabRTTRegion)
 	if err != nil {
 		return err
 	}
@@ -291,14 +236,14 @@ func runColabRTTRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !colabRemoveBinding(policy, flagColabRTTIamRole, flagColabRTTIamMember,
-		colabBuildCondition(flagColabRTTIamCondExpr, flagColabRTTIamCondT, flagColabRTTIamCondD), flagColabRTTIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagColabRTTIamRole, flagColabRTTIamMember)
+	if !colabRemoveBinding(policy, s.flagColabRTTIamRole, s.flagColabRTTIamMember,
+		colabBuildCondition(s.flagColabRTTIamCondExpr, s.flagColabRTTIamCondT, s.flagColabRTTIamCondD), s.flagColabRTTIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagColabRTTIamRole, s.flagColabRTTIamMember)
 	}
 	updated, err := svc.Projects.Locations.NotebookRuntimeTemplates.SetIamPolicy(name, &aiplatform.GoogleIamV1SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	writeUpdatedIam(fmt.Sprintf("runtime template [%s]", args[0]))
-	return emitFormatted(updated, flagColabRTTFormat)
+	s.writeUpdatedIam(fmt.Sprintf("runtime template [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagColabRTTFormat)
 }

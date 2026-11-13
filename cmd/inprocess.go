@@ -106,6 +106,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newNetworkManagementCmd(inv),
 		newCertificateManagerCmd(inv),
 		newBmsCmd(inv),
+		newColabCmd(inv),
 	}
 }
 
