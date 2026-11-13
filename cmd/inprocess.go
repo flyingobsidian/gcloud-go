@@ -60,6 +60,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newTelcoAutomationCmd(inv),
 		newWorkspaceAddOnsCmd(inv),
 		newBatchCmd(inv),
+		newIdsCmd(inv),
 	}
 }
 
