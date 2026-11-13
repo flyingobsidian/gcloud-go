@@ -9,8 +9,9 @@ import (
 )
 
 func TestAuditManagerSubcommands(t *testing.T) {
-	assertSubcommands(t, auditManagerSchedulesCmd, []string{"create", "list", "update"})
-	for _, c := range auditManagerOperationsCmd.Commands() {
+	grp := newAuditManagerCmds(legacyTestInvocation())
+	assertSubcommands(t, grp.auditManagerSchedulesCmd, []string{"create", "list", "update"})
+	for _, c := range grp.auditManagerOperationsCmd.Commands() {
 		if c.Name() == "describe" && c.RunE == nil {
 			t.Error("operations describe has no RunE")
 		}
@@ -18,13 +19,14 @@ func TestAuditManagerSubcommands(t *testing.T) {
 }
 
 func TestAuditManagerBuildSchedule(t *testing.T) {
+	grp := newAuditManagerCmds(legacyTestInvocation())
 	defer func() {
-		flagAMReportFormat, flagAMFrequency, flagAMGcsURI, flagAMFramework = "", "", "", ""
-		flagAMStartTime, flagAMTimeZone = "", ""
+		grp.flagAMReportFormat, grp.flagAMFrequency, grp.flagAMGcsURI, grp.flagAMFramework = "", "", "", ""
+		grp.flagAMStartTime, grp.flagAMTimeZone = "", ""
 	}()
-	flagAMReportFormat, flagAMFrequency = "ODF", "Weekly"
-	flagAMGcsURI, flagAMFramework, flagAMStartTime, flagAMTimeZone = "gs://b", "fedramp_moderate", "2026-03-01T00:00:00Z", "Europe/London"
-	got, err := auditManagerBuildSchedule()
+	grp.flagAMReportFormat, grp.flagAMFrequency = "ODF", "Weekly"
+	grp.flagAMGcsURI, grp.flagAMFramework, grp.flagAMStartTime, grp.flagAMTimeZone = "gs://b", "fedramp_moderate", "2026-03-01T00:00:00Z", "Europe/London"
+	got, err := grp.auditManagerBuildSchedule()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,8 +34,8 @@ func TestAuditManagerBuildSchedule(t *testing.T) {
 		got.ScheduleConfig.TimeZone != "Europe/London" || got.GcsUri != "gs://b" {
 		t.Errorf("schedule = %+v %+v", got, got.ScheduleConfig)
 	}
-	flagAMFrequency = "hourly"
-	if _, err := auditManagerBuildSchedule(); err == nil ||
+	grp.flagAMFrequency = "hourly"
+	if _, err := grp.auditManagerBuildSchedule(); err == nil ||
 		!strings.Contains(err.Error(), "Valid choices are [annually, daily, monthly, quarterly, weekly]") {
 		t.Errorf("bad frequency: %v", err)
 	}

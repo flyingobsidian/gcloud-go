@@ -72,6 +72,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newVectorSearchCmd(inv),
 		newEmulatorsCmd(inv),
 		newDatastoreCmd(inv),
+		newAuditManagerCmd(inv),
 	}
 }
 
