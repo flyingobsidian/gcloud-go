@@ -83,6 +83,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newRecommenderCmd(inv),
 		newLookerCmd(inv),
 		newDeveloperConnectCmd(inv),
+		newDatalineageCmd(inv),
 	}
 }
 

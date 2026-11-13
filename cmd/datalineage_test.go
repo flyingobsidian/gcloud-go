@@ -7,7 +7,8 @@ import (
 )
 
 func datalineageSubgroup(name string) *cobra.Command {
-	for _, c := range datalineageCmd.Commands() {
+	grp := newDatalineageCmds(legacyTestInvocation())
+	for _, c := range grp.datalineageCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
