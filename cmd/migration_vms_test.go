@@ -7,7 +7,8 @@ import (
 )
 
 func migrationVMsSubgroup(name string) *cobra.Command {
-	for _, c := range migrationVMsCmd.Commands() {
+	grp := newMigrationCmds(legacyTestInvocation())
+	for _, c := range grp.migrationVMsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
