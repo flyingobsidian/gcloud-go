@@ -1,79 +1,44 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservices "google.golang.org/api/networkservices/v1"
 )
 
 // --- gcloud service-extensions authz-extensions (#1042) ---
 
-var seAuthzExtensionsCmd = &cobra.Command{Use: "authz-extensions", Short: "Manage AuthzExtension resources"}
-
-var (
-	flagSeAuthzLocation    string
-	flagSeAuthzFormat      string
-	flagSeAuthzDestination string
-	flagSeAuthzSource      string
-	flagSeAuthzPageSize    int64
-)
-
-var (
-	seAuthzDeleteCmd = &cobra.Command{
-		Use: "delete RESOURCE", Short: "Delete an AuthzExtension",
-		Args: cobra.ExactArgs(1), RunE: runSeAuthzDelete,
-	}
-	seAuthzDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe an AuthzExtension",
-		Args: cobra.ExactArgs(1), RunE: runSeAuthzDescribe,
-	}
-	seAuthzExportCmd = &cobra.Command{
-		Use: "export RESOURCE", Short: "Export an AuthzExtension to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runSeAuthzExport,
-	}
-	seAuthzImportCmd = &cobra.Command{
-		Use: "import RESOURCE", Short: "Import an AuthzExtension from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runSeAuthzImport,
-	}
-	seAuthzListCmd = &cobra.Command{
-		Use: "list", Short: "List AuthzExtensions in a location",
-		Args: cobra.NoArgs, RunE: runSeAuthzList,
-	}
-)
-
-func init() {
+func (s *serviceExtensionsCmds) initServiceExtensionsAuthzExtensions() {
 	all := []*cobra.Command{
-		seAuthzDeleteCmd, seAuthzDescribeCmd,
-		seAuthzExportCmd, seAuthzImportCmd,
-		seAuthzListCmd,
+		s.seAuthzDeleteCmd, s.seAuthzDescribeCmd,
+		s.seAuthzExportCmd, s.seAuthzImportCmd,
+		s.seAuthzListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSeAuthzLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagSeAuthzLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagSeAuthzFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSeAuthzFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(seAuthzExportCmd, &flagSeAuthzDestination)
-	nsBindImportFlags(seAuthzImportCmd, &flagSeAuthzSource)
-	seAuthzListCmd.Flags().Int64Var(&flagSeAuthzPageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(s.seAuthzExportCmd, &s.flagSeAuthzDestination)
+	nsBindImportFlags(s.seAuthzImportCmd, &s.flagSeAuthzSource)
+	s.seAuthzListCmd.Flags().Int64Var(&s.flagSeAuthzPageSize, "page-size", 0, "Maximum results per page")
 
-	seAuthzExtensionsCmd.AddCommand(all...)
-	serviceExtensionsCmd.AddCommand(seAuthzExtensionsCmd)
+	s.seAuthzExtensionsCmd.AddCommand(all...)
+	s.serviceExtensionsCmd.AddCommand(s.seAuthzExtensionsCmd)
 }
 
-func seAuthzName(id string) (string, error) {
-	return seResource(flagSeAuthzLocation, "authzExtensions", id)
+func (s *serviceExtensionsCmds) seAuthzName(id string) (string, error) {
+	return s.seResource(s.flagSeAuthzLocation, "authzExtensions", id)
 }
 
-func runSeAuthzDelete(cmd *cobra.Command, args []string) error {
-	name, err := seAuthzName(args[0])
+func (s *serviceExtensionsCmds) runSeAuthzDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.seAuthzName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -81,17 +46,17 @@ func runSeAuthzDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting authz extension: %w", err)
 	}
-	fmt.Printf("Delete authz extension [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSeAuthzFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete authz extension [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSeAuthzFormat)
 }
 
-func runSeAuthzDescribe(cmd *cobra.Command, args []string) error {
-	name, err := seAuthzName(args[0])
+func (s *serviceExtensionsCmds) runSeAuthzDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.seAuthzName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,16 +64,16 @@ func runSeAuthzDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing authz extension: %w", err)
 	}
-	return emitFormatted(got, flagSeAuthzFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSeAuthzFormat)
 }
 
-func runSeAuthzExport(cmd *cobra.Command, args []string) error {
-	name, err := seAuthzName(args[0])
+func (s *serviceExtensionsCmds) runSeAuthzExport(cmd *cobra.Command, args []string) error {
+	name, err := s.seAuthzName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -116,25 +81,25 @@ func runSeAuthzExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting authz extension: %w", err)
 	}
-	return saveAsYAML(flagSeAuthzDestination, got)
+	return saveAsYAML(s.flagSeAuthzDestination, got)
 }
 
-func runSeAuthzImport(cmd *cobra.Command, args []string) error {
-	parent, err := seLocationParent(flagSeAuthzLocation)
+func (s *serviceExtensionsCmds) runSeAuthzImport(cmd *cobra.Command, args []string) error {
+	parent, err := s.seLocationParent(s.flagSeAuthzLocation)
 	if err != nil {
 		return err
 	}
-	name, err := seAuthzName(args[0])
+	name, err := s.seAuthzName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &networkservices.AuthzExtension{}
-	if err := loadYAMLOrJSONInto(flagSeAuthzSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSeAuthzSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,24 +108,24 @@ func runSeAuthzImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating authz extension: %w", err)
 		}
-		fmt.Printf("Create authz extension [%s] initiated (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagSeAuthzFormat)
+		fmt.Fprintf(s.inv.stdout, "Create authz extension [%s] initiated (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagSeAuthzFormat)
 	}
 	op, err := svc.Projects.Locations.AuthzExtensions.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating authz extension: %w", err)
 	}
-	fmt.Printf("Update authz extension [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSeAuthzFormat)
+	fmt.Fprintf(s.inv.stdout, "Update authz extension [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSeAuthzFormat)
 }
 
-func runSeAuthzList(cmd *cobra.Command, args []string) error {
-	parent, err := seLocationParent(flagSeAuthzLocation)
+func (s *serviceExtensionsCmds) runSeAuthzList(cmd *cobra.Command, args []string) error {
+	parent, err := s.seLocationParent(s.flagSeAuthzLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -168,8 +133,8 @@ func runSeAuthzList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.AuthzExtensions.List(parent).Context(ctx)
-		if flagSeAuthzPageSize > 0 {
-			call = call.PageSize(flagSeAuthzPageSize)
+		if s.flagSeAuthzPageSize > 0 {
+			call = call.PageSize(s.flagSeAuthzPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -184,5 +149,5 @@ func runSeAuthzList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSeAuthzFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSeAuthzFormat)
 }

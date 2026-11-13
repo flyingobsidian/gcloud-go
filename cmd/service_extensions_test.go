@@ -7,7 +7,8 @@ import (
 )
 
 func seSubgroup(name string) *cobra.Command {
-	for _, c := range serviceExtensionsCmd.Commands() {
+	grp := newServiceExtensionsCmds(legacyTestInvocation())
+	for _, c := range grp.serviceExtensionsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

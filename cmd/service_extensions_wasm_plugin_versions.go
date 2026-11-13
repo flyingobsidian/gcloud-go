@@ -1,95 +1,64 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservices "google.golang.org/api/networkservices/v1"
 )
 
 // --- gcloud service-extensions wasm-plugin-versions (#1046) ---
 
-var seWasmPluginVersionsCmd = &cobra.Command{Use: "wasm-plugin-versions", Short: "Manage WasmPluginVersion resources"}
-
-var (
-	flagSeWasmVerLocation   string
-	flagSeWasmVerPlugin     string
-	flagSeWasmVerFormat     string
-	flagSeWasmVerConfigFile string
-	flagSeWasmVerPageSize   int64
-)
-
-var (
-	seWasmVerCreateCmd = &cobra.Command{
-		Use: "create VERSION", Short: "Create a WasmPluginVersion",
-		Args: cobra.ExactArgs(1), RunE: runSeWasmVerCreate,
-	}
-	seWasmVerDeleteCmd = &cobra.Command{
-		Use: "delete VERSION", Short: "Delete a WasmPluginVersion",
-		Args: cobra.ExactArgs(1), RunE: runSeWasmVerDelete,
-	}
-	seWasmVerDescribeCmd = &cobra.Command{
-		Use: "describe VERSION", Short: "Describe a WasmPluginVersion",
-		Args: cobra.ExactArgs(1), RunE: runSeWasmVerDescribe,
-	}
-	seWasmVerListCmd = &cobra.Command{
-		Use: "list", Short: "List WasmPluginVersions under a WasmPlugin",
-		Args: cobra.NoArgs, RunE: runSeWasmVerList,
-	}
-)
-
-func init() {
+func (s *serviceExtensionsCmds) initServiceExtensionsWasmPluginVersions() {
 	all := []*cobra.Command{
-		seWasmVerCreateCmd, seWasmVerDeleteCmd,
-		seWasmVerDescribeCmd, seWasmVerListCmd,
+		s.seWasmVerCreateCmd, s.seWasmVerDeleteCmd,
+		s.seWasmVerDescribeCmd, s.seWasmVerListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSeWasmVerLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagSeWasmVerLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagSeWasmVerPlugin, "plugin", "", "Parent WasmPlugin id (required)")
+		c.Flags().StringVar(&s.flagSeWasmVerPlugin, "plugin", "", "Parent WasmPlugin id (required)")
 		_ = c.MarkFlagRequired("plugin")
-		c.Flags().StringVar(&flagSeWasmVerFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSeWasmVerFormat, "format", "", "Output format")
 	}
-	seWasmVerCreateCmd.Flags().StringVar(&flagSeWasmVerConfigFile, "config-file", "", "YAML/JSON file with the WasmPluginVersion body (required)")
-	_ = seWasmVerCreateCmd.MarkFlagRequired("config-file")
-	seWasmVerListCmd.Flags().Int64Var(&flagSeWasmVerPageSize, "page-size", 0, "Maximum results per page")
+	s.seWasmVerCreateCmd.Flags().StringVar(&s.flagSeWasmVerConfigFile, "config-file", "", "YAML/JSON file with the WasmPluginVersion body (required)")
+	_ = s.seWasmVerCreateCmd.MarkFlagRequired("config-file")
+	s.seWasmVerListCmd.Flags().Int64Var(&s.flagSeWasmVerPageSize, "page-size", 0, "Maximum results per page")
 
-	seWasmPluginVersionsCmd.AddCommand(all...)
-	serviceExtensionsCmd.AddCommand(seWasmPluginVersionsCmd)
+	s.seWasmPluginVersionsCmd.AddCommand(all...)
+	s.serviceExtensionsCmd.AddCommand(s.seWasmPluginVersionsCmd)
 }
 
-func seWasmVerParent() (string, error) {
-	parent, err := seLocationParent(flagSeWasmVerLocation)
+func (s *serviceExtensionsCmds) seWasmVerParent() (string, error) {
+	parent, err := s.seLocationParent(s.flagSeWasmVerLocation)
 	if err != nil {
 		return "", err
 	}
-	if flagSeWasmVerPlugin == "" {
+	if s.flagSeWasmVerPlugin == "" {
 		return "", fmt.Errorf("--plugin is required")
 	}
-	return parent + "/wasmPlugins/" + flagSeWasmVerPlugin, nil
+	return parent + "/wasmPlugins/" + s.flagSeWasmVerPlugin, nil
 }
 
-func seWasmVerName(id string) (string, error) {
-	parent, err := seWasmVerParent()
+func (s *serviceExtensionsCmds) seWasmVerName(id string) (string, error) {
+	parent, err := s.seWasmVerParent()
 	if err != nil {
 		return "", err
 	}
 	return parent + "/versions/" + id, nil
 }
 
-func runSeWasmVerCreate(cmd *cobra.Command, args []string) error {
-	parent, err := seWasmVerParent()
+func (s *serviceExtensionsCmds) runSeWasmVerCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.seWasmVerParent()
 	if err != nil {
 		return err
 	}
 	body := &networkservices.WasmPluginVersion{}
-	if err := loadYAMLOrJSONInto(flagSeWasmVerConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSeWasmVerConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -97,17 +66,17 @@ func runSeWasmVerCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating wasm plugin version: %w", err)
 	}
-	fmt.Printf("Create wasm plugin version [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSeWasmVerFormat)
+	fmt.Fprintf(s.inv.stdout, "Create wasm plugin version [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSeWasmVerFormat)
 }
 
-func runSeWasmVerDelete(cmd *cobra.Command, args []string) error {
-	name, err := seWasmVerName(args[0])
+func (s *serviceExtensionsCmds) runSeWasmVerDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.seWasmVerName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,17 +84,17 @@ func runSeWasmVerDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting wasm plugin version: %w", err)
 	}
-	fmt.Printf("Delete wasm plugin version [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSeWasmVerFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete wasm plugin version [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSeWasmVerFormat)
 }
 
-func runSeWasmVerDescribe(cmd *cobra.Command, args []string) error {
-	name, err := seWasmVerName(args[0])
+func (s *serviceExtensionsCmds) runSeWasmVerDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.seWasmVerName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -133,16 +102,16 @@ func runSeWasmVerDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing wasm plugin version: %w", err)
 	}
-	return emitFormatted(got, flagSeWasmVerFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSeWasmVerFormat)
 }
 
-func runSeWasmVerList(cmd *cobra.Command, args []string) error {
-	parent, err := seWasmVerParent()
+func (s *serviceExtensionsCmds) runSeWasmVerList(cmd *cobra.Command, args []string) error {
+	parent, err := s.seWasmVerParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -150,8 +119,8 @@ func runSeWasmVerList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.WasmPlugins.Versions.List(parent).Context(ctx)
-		if flagSeWasmVerPageSize > 0 {
-			call = call.PageSize(flagSeWasmVerPageSize)
+		if s.flagSeWasmVerPageSize > 0 {
+			call = call.PageSize(s.flagSeWasmVerPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -166,5 +135,5 @@ func runSeWasmVerList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSeWasmVerFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSeWasmVerFormat)
 }

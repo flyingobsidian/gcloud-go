@@ -1,79 +1,44 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	networkservices "google.golang.org/api/networkservices/v1"
 )
 
 // --- gcloud service-extensions lb-edge-extensions (#1043) ---
 
-var seLbEdgeExtensionsCmd = &cobra.Command{Use: "lb-edge-extensions", Short: "Manage LbEdgeExtension resources"}
-
-var (
-	flagSeLbEdgeLocation    string
-	flagSeLbEdgeFormat      string
-	flagSeLbEdgeDestination string
-	flagSeLbEdgeSource      string
-	flagSeLbEdgePageSize    int64
-)
-
-var (
-	seLbEdgeDeleteCmd = &cobra.Command{
-		Use: "delete RESOURCE", Short: "Delete an LbEdgeExtension",
-		Args: cobra.ExactArgs(1), RunE: runSeLbEdgeDelete,
-	}
-	seLbEdgeDescribeCmd = &cobra.Command{
-		Use: "describe RESOURCE", Short: "Describe an LbEdgeExtension",
-		Args: cobra.ExactArgs(1), RunE: runSeLbEdgeDescribe,
-	}
-	seLbEdgeExportCmd = &cobra.Command{
-		Use: "export RESOURCE", Short: "Export an LbEdgeExtension to a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runSeLbEdgeExport,
-	}
-	seLbEdgeImportCmd = &cobra.Command{
-		Use: "import RESOURCE", Short: "Import an LbEdgeExtension from a YAML file",
-		Args: cobra.ExactArgs(1), RunE: runSeLbEdgeImport,
-	}
-	seLbEdgeListCmd = &cobra.Command{
-		Use: "list", Short: "List LbEdgeExtensions in a location",
-		Args: cobra.NoArgs, RunE: runSeLbEdgeList,
-	}
-)
-
-func init() {
+func (s *serviceExtensionsCmds) initServiceExtensionsLbEdgeExtensions() {
 	all := []*cobra.Command{
-		seLbEdgeDeleteCmd, seLbEdgeDescribeCmd,
-		seLbEdgeExportCmd, seLbEdgeImportCmd,
-		seLbEdgeListCmd,
+		s.seLbEdgeDeleteCmd, s.seLbEdgeDescribeCmd,
+		s.seLbEdgeExportCmd, s.seLbEdgeImportCmd,
+		s.seLbEdgeListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagSeLbEdgeLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagSeLbEdgeLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagSeLbEdgeFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagSeLbEdgeFormat, "format", "", "Output format")
 	}
-	nsBindExportFlags(seLbEdgeExportCmd, &flagSeLbEdgeDestination)
-	nsBindImportFlags(seLbEdgeImportCmd, &flagSeLbEdgeSource)
-	seLbEdgeListCmd.Flags().Int64Var(&flagSeLbEdgePageSize, "page-size", 0, "Maximum results per page")
+	nsBindExportFlags(s.seLbEdgeExportCmd, &s.flagSeLbEdgeDestination)
+	nsBindImportFlags(s.seLbEdgeImportCmd, &s.flagSeLbEdgeSource)
+	s.seLbEdgeListCmd.Flags().Int64Var(&s.flagSeLbEdgePageSize, "page-size", 0, "Maximum results per page")
 
-	seLbEdgeExtensionsCmd.AddCommand(all...)
-	serviceExtensionsCmd.AddCommand(seLbEdgeExtensionsCmd)
+	s.seLbEdgeExtensionsCmd.AddCommand(all...)
+	s.serviceExtensionsCmd.AddCommand(s.seLbEdgeExtensionsCmd)
 }
 
-func seLbEdgeName(id string) (string, error) {
-	return seResource(flagSeLbEdgeLocation, "lbEdgeExtensions", id)
+func (s *serviceExtensionsCmds) seLbEdgeName(id string) (string, error) {
+	return s.seResource(s.flagSeLbEdgeLocation, "lbEdgeExtensions", id)
 }
 
-func runSeLbEdgeDelete(cmd *cobra.Command, args []string) error {
-	name, err := seLbEdgeName(args[0])
+func (s *serviceExtensionsCmds) runSeLbEdgeDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.seLbEdgeName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -81,17 +46,17 @@ func runSeLbEdgeDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting lb edge extension: %w", err)
 	}
-	fmt.Printf("Delete lb edge extension [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSeLbEdgeFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete lb edge extension [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSeLbEdgeFormat)
 }
 
-func runSeLbEdgeDescribe(cmd *cobra.Command, args []string) error {
-	name, err := seLbEdgeName(args[0])
+func (s *serviceExtensionsCmds) runSeLbEdgeDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.seLbEdgeName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,16 +64,16 @@ func runSeLbEdgeDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing lb edge extension: %w", err)
 	}
-	return emitFormatted(got, flagSeLbEdgeFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagSeLbEdgeFormat)
 }
 
-func runSeLbEdgeExport(cmd *cobra.Command, args []string) error {
-	name, err := seLbEdgeName(args[0])
+func (s *serviceExtensionsCmds) runSeLbEdgeExport(cmd *cobra.Command, args []string) error {
+	name, err := s.seLbEdgeName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -116,25 +81,25 @@ func runSeLbEdgeExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("exporting lb edge extension: %w", err)
 	}
-	return saveAsYAML(flagSeLbEdgeDestination, got)
+	return saveAsYAML(s.flagSeLbEdgeDestination, got)
 }
 
-func runSeLbEdgeImport(cmd *cobra.Command, args []string) error {
-	parent, err := seLocationParent(flagSeLbEdgeLocation)
+func (s *serviceExtensionsCmds) runSeLbEdgeImport(cmd *cobra.Command, args []string) error {
+	parent, err := s.seLocationParent(s.flagSeLbEdgeLocation)
 	if err != nil {
 		return err
 	}
-	name, err := seLbEdgeName(args[0])
+	name, err := s.seLbEdgeName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &networkservices.LbEdgeExtension{}
-	if err := loadYAMLOrJSONInto(flagSeLbEdgeSource, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagSeLbEdgeSource, body); err != nil {
 		return err
 	}
 	body.Name = name
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,24 +108,24 @@ func runSeLbEdgeImport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating lb edge extension: %w", err)
 		}
-		fmt.Printf("Create lb edge extension [%s] initiated (operation: %s).\n", args[0], op.Name)
-		return emitFormatted(op, flagSeLbEdgeFormat)
+		fmt.Fprintf(s.inv.stdout, "Create lb edge extension [%s] initiated (operation: %s).\n", args[0], op.Name)
+		return emitFormattedTo(s.inv.stdout, op, s.flagSeLbEdgeFormat)
 	}
 	op, err := svc.Projects.Locations.LbEdgeExtensions.Patch(name, body).UpdateMask(joinMask(nonEmptyJSONFields(body))).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating lb edge extension: %w", err)
 	}
-	fmt.Printf("Update lb edge extension [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagSeLbEdgeFormat)
+	fmt.Fprintf(s.inv.stdout, "Update lb edge extension [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagSeLbEdgeFormat)
 }
 
-func runSeLbEdgeList(cmd *cobra.Command, args []string) error {
-	parent, err := seLocationParent(flagSeLbEdgeLocation)
+func (s *serviceExtensionsCmds) runSeLbEdgeList(cmd *cobra.Command, args []string) error {
+	parent, err := s.seLocationParent(s.flagSeLbEdgeLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.NetworkServicesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().NetworkServices(ctx)
 	if err != nil {
 		return err
 	}
@@ -168,8 +133,8 @@ func runSeLbEdgeList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.LbEdgeExtensions.List(parent).Context(ctx)
-		if flagSeLbEdgePageSize > 0 {
-			call = call.PageSize(flagSeLbEdgePageSize)
+		if s.flagSeLbEdgePageSize > 0 {
+			call = call.PageSize(s.flagSeLbEdgePageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -184,5 +149,5 @@ func runSeLbEdgeList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagSeLbEdgeFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagSeLbEdgeFormat)
 }
