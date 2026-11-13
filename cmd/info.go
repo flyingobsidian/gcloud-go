@@ -7,26 +7,13 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 )
 
-var infoCmd = &cobra.Command{
-	Use:   "info",
-	Short: "Display information about the current gcloud-go environment",
-	Args:  cobra.NoArgs,
-	RunE:  runInfo,
-}
+func (s *infoCmds) initInfo() {
+	s.infoCmd.Flags().StringVar(&s.flagInfoFormat, "format", "", "Output format (e.g. json, value(FIELD))")
+	s.infoCmd.Flags().BoolVar(&s.flagInfoAnonymize, "anonymize", false, "Anonymize sensitive information in output")
 
-var (
-	flagInfoFormat    string
-	flagInfoAnonymize bool
-)
-
-func init() {
-	infoCmd.Flags().StringVar(&flagInfoFormat, "format", "", "Output format (e.g. json, value(FIELD))")
-	infoCmd.Flags().BoolVar(&flagInfoAnonymize, "anonymize", false, "Anonymize sensitive information in output")
-	rootCmd.AddCommand(infoCmd)
 }
 
 type infoBasic struct {
@@ -53,14 +40,14 @@ type infoResult struct {
 	Config       infoConfig       `json:"config"`
 }
 
-func runInfo(cmd *cobra.Command, args []string) error {
-	configDir := os.Getenv("CLOUDSDK_CONFIG")
+func (s *infoCmds) runInfo(cmd *cobra.Command, args []string) error {
+	configDir := s.inv.env.Getenv("CLOUDSDK_CONFIG")
 	if configDir == "" {
 		home, _ := os.UserHomeDir()
 		configDir = filepath.Join(home, ".config", "gcloud")
 	}
 
-	props, _ := config.Load()
+	props, _ := s.inv.properties()
 
 	info := infoResult{
 		Basic: infoBasic{
@@ -82,33 +69,33 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if flagInfoAnonymize {
+	if s.flagInfoAnonymize {
 		info.Config.Account = "REDACTED"
 		info.Config.Project = "REDACTED"
 		info.Installation.ConfigDir = "REDACTED"
 	}
 
 	// Handle --format
-	if flagInfoFormat == "json" {
-		return printJSON(info)
+	if s.flagInfoFormat == "json" {
+		return s.inv.printJSON(info)
 	}
 
-	if strings.HasPrefix(flagInfoFormat, "value(") && strings.HasSuffix(flagInfoFormat, ")") {
-		field := flagInfoFormat[6 : len(flagInfoFormat)-1]
+	if strings.HasPrefix(s.flagInfoFormat, "value(") && strings.HasSuffix(s.flagInfoFormat, ")") {
+		field := s.flagInfoFormat[6 : len(s.flagInfoFormat)-1]
 		val := getInfoField(info, field)
-		fmt.Println(val)
+		fmt.Fprintln(s.inv.stdout, val)
 		return nil
 	}
 
 	// Default text output
-	fmt.Printf("gcloud-go [%s]\n\n", info.Basic.Version)
-	fmt.Printf("Platform: [%s, %s]\n", info.Basic.OperatingSystem, info.Basic.Architecture)
-	fmt.Printf("Go Version: [%s]\n", info.Basic.GoVersion)
-	fmt.Printf("Config Directory: [%s]\n", info.Installation.ConfigDir)
-	fmt.Printf("\nAccount: [%s]\n", info.Config.Account)
-	fmt.Printf("Project: [%s]\n", info.Config.Project)
-	fmt.Printf("Zone: [%s]\n", info.Config.Zone)
-	fmt.Printf("Region: [%s]\n", info.Config.Region)
+	fmt.Fprintf(s.inv.stdout, "gcloud-go [%s]\n\n", info.Basic.Version)
+	fmt.Fprintf(s.inv.stdout, "Platform: [%s, %s]\n", info.Basic.OperatingSystem, info.Basic.Architecture)
+	fmt.Fprintf(s.inv.stdout, "Go Version: [%s]\n", info.Basic.GoVersion)
+	fmt.Fprintf(s.inv.stdout, "Config Directory: [%s]\n", info.Installation.ConfigDir)
+	fmt.Fprintf(s.inv.stdout, "\nAccount: [%s]\n", info.Config.Account)
+	fmt.Fprintf(s.inv.stdout, "Project: [%s]\n", info.Config.Project)
+	fmt.Fprintf(s.inv.stdout, "Zone: [%s]\n", info.Config.Zone)
+	fmt.Fprintf(s.inv.stdout, "Region: [%s]\n", info.Config.Region)
 	return nil
 }
 
@@ -135,4 +122,32 @@ func getInfoField(info infoResult, field string) string {
 	default:
 		return ""
 	}
+}
+
+// infoCmds holds the commands and flag values of one invocation's "info"
+// command group, so invocations don't share state (#2070).
+type infoCmds struct {
+	inv *invocation
+
+	infoCmd           *cobra.Command
+	flagInfoFormat    string
+	flagInfoAnonymize bool
+}
+
+// newInfoCmd returns the "info" command group for inv.
+func newInfoCmd(inv *invocation) *cobra.Command {
+	return newInfoCmds(inv).infoCmd
+}
+
+// newInfoCmds builds the "info" command group for inv and returns its state.
+func newInfoCmds(inv *invocation) *infoCmds {
+	s := &infoCmds{inv: inv}
+	s.infoCmd = &cobra.Command{
+		Use:   "info",
+		Short: "Display information about the current gcloud-go environment",
+		Args:  cobra.NoArgs,
+		RunE:  s.runInfo,
+	}
+	s.initInfo()
+	return s
 }
