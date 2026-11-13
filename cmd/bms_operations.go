@@ -1,52 +1,36 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 )
 
 // --- gcloud bms operations (#1229) ---
 
-var bmsOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage bare metal long-running operations"}
-
-var (
-	flagBmsOpLocation string
-	flagBmsOpFormat   string
-)
-
-var (
-	bmsOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a bare metal long-running operation",
-		Args: cobra.ExactArgs(1), RunE: runBmsOpDescribe,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{bmsOpDescribeCmd}
+func (s *bmsCmds) initBmsOperations() {
+	all := []*cobra.Command{s.bmsOpDescribeCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagBmsOpLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagBmsOpLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagBmsOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBmsOpFormat, "format", "", "Output format")
 	}
 
-	bmsOperationsCmd.AddCommand(all...)
-	bmsCmd.AddCommand(bmsOperationsCmd)
+	s.bmsOperationsCmd.AddCommand(all...)
+	s.bmsCmd.AddCommand(s.bmsOperationsCmd)
 }
 
-func bmsOpName(id string) (string, error) {
-	return bmsResource(flagBmsOpLocation, "operations", id)
+func (s *bmsCmds) bmsOpName(id string) (string, error) {
+	return s.bmsResource(s.flagBmsOpLocation, "operations", id)
 }
 
-func runBmsOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := bmsOpName(args[0])
+func (s *bmsCmds) runBmsOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.bmsOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
@@ -54,5 +38,5 @@ func runBmsOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagBmsOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBmsOpFormat)
 }

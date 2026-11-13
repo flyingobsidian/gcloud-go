@@ -1,75 +1,43 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	baremetalsolution "google.golang.org/api/baremetalsolution/v2"
 )
 
 // --- gcloud bms nfs-shares (#1228) ---
 
-var bmsNfsSharesCmd = &cobra.Command{Use: "nfs-shares", Short: "Manage bare metal NFS shares"}
-
-var (
-	flagBmsNfsLocation   string
-	flagBmsNfsFormat     string
-	flagBmsNfsConfigFile string
-	flagBmsNfsUpdateMask string
-	flagBmsNfsNewName    string
-	flagBmsNfsPageSize   int64
-)
-
-var (
-	bmsNfsDescribeCmd = &cobra.Command{
-		Use: "describe NFS_SHARE", Short: "Describe an NFS share",
-		Args: cobra.ExactArgs(1), RunE: runBmsNfsDescribe,
-	}
-	bmsNfsListCmd = &cobra.Command{
-		Use: "list", Short: "List NFS shares in a location",
-		Args: cobra.NoArgs, RunE: runBmsNfsList,
-	}
-	bmsNfsUpdateCmd = &cobra.Command{
-		Use: "update NFS_SHARE", Short: "Update an NFS share",
-		Args: cobra.ExactArgs(1), RunE: runBmsNfsUpdate,
-	}
-	bmsNfsRenameCmd = &cobra.Command{
-		Use: "rename NFS_SHARE", Short: "Rename an NFS share",
-		Args: cobra.ExactArgs(1), RunE: runBmsNfsRename,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{bmsNfsDescribeCmd, bmsNfsListCmd, bmsNfsUpdateCmd, bmsNfsRenameCmd}
+func (s *bmsCmds) initBmsNfsShares() {
+	all := []*cobra.Command{s.bmsNfsDescribeCmd, s.bmsNfsListCmd, s.bmsNfsUpdateCmd, s.bmsNfsRenameCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagBmsNfsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagBmsNfsLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagBmsNfsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagBmsNfsFormat, "format", "", "Output format")
 	}
-	bmsNfsListCmd.Flags().Int64Var(&flagBmsNfsPageSize, "page-size", 0, "Maximum results per page")
-	bmsNfsUpdateCmd.Flags().StringVar(&flagBmsNfsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
-	_ = bmsNfsUpdateCmd.MarkFlagRequired("config-file")
-	bmsNfsUpdateCmd.Flags().StringVar(&flagBmsNfsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
-	bmsNfsRenameCmd.Flags().StringVar(&flagBmsNfsNewName, "new-name", "", "New NFS share id (required)")
-	_ = bmsNfsRenameCmd.MarkFlagRequired("new-name")
+	s.bmsNfsListCmd.Flags().Int64Var(&s.flagBmsNfsPageSize, "page-size", 0, "Maximum results per page")
+	s.bmsNfsUpdateCmd.Flags().StringVar(&s.flagBmsNfsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
+	_ = s.bmsNfsUpdateCmd.MarkFlagRequired("config-file")
+	s.bmsNfsUpdateCmd.Flags().StringVar(&s.flagBmsNfsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.bmsNfsRenameCmd.Flags().StringVar(&s.flagBmsNfsNewName, "new-name", "", "New NFS share id (required)")
+	_ = s.bmsNfsRenameCmd.MarkFlagRequired("new-name")
 
-	bmsNfsSharesCmd.AddCommand(all...)
-	bmsCmd.AddCommand(bmsNfsSharesCmd)
+	s.bmsNfsSharesCmd.AddCommand(all...)
+	s.bmsCmd.AddCommand(s.bmsNfsSharesCmd)
 }
 
-func bmsNfsName(id string) (string, error) {
-	return bmsResource(flagBmsNfsLocation, "nfsShares", id)
+func (s *bmsCmds) bmsNfsName(id string) (string, error) {
+	return s.bmsResource(s.flagBmsNfsLocation, "nfsShares", id)
 }
 
-func runBmsNfsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := bmsNfsName(args[0])
+func (s *bmsCmds) runBmsNfsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.bmsNfsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
@@ -77,16 +45,16 @@ func runBmsNfsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing nfs share: %w", err)
 	}
-	return emitFormatted(got, flagBmsNfsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBmsNfsFormat)
 }
 
-func runBmsNfsList(cmd *cobra.Command, args []string) error {
-	parent, err := bmsLocationParent(flagBmsNfsLocation)
+func (s *bmsCmds) runBmsNfsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.bmsLocationParent(s.flagBmsNfsLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
@@ -94,8 +62,8 @@ func runBmsNfsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.NfsShares.List(parent).Context(ctx)
-		if flagBmsNfsPageSize > 0 {
-			call = call.PageSize(flagBmsNfsPageSize)
+		if s.flagBmsNfsPageSize > 0 {
+			call = call.PageSize(s.flagBmsNfsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -110,25 +78,25 @@ func runBmsNfsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagBmsNfsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagBmsNfsFormat)
 }
 
-func runBmsNfsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := bmsNfsName(args[0])
+func (s *bmsCmds) runBmsNfsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.bmsNfsName(args[0])
 	if err != nil {
 		return err
 	}
 	body := &baremetalsolution.NfsShare{}
-	if err := loadYAMLOrJSONInto(flagBmsNfsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagBmsNfsConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagBmsNfsUpdateMask
+	mask := s.flagBmsNfsUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
@@ -140,24 +108,24 @@ func runBmsNfsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating nfs share: %w", err)
 	}
-	fmt.Printf("Update nfs share [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagBmsNfsFormat)
+	fmt.Fprintf(s.inv.stdout, "Update nfs share [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagBmsNfsFormat)
 }
 
-func runBmsNfsRename(cmd *cobra.Command, args []string) error {
-	name, err := bmsNfsName(args[0])
+func (s *bmsCmds) runBmsNfsRename(cmd *cobra.Command, args []string) error {
+	name, err := s.bmsNfsName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.BareMetalSolutionService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().BareMetalSolution(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.NfsShares.Rename(name, &baremetalsolution.RenameNfsShareRequest{NewNfsshareId: flagBmsNfsNewName}).Context(ctx).Do()
+	got, err := svc.Projects.Locations.NfsShares.Rename(name, &baremetalsolution.RenameNfsShareRequest{NewNfsshareId: s.flagBmsNfsNewName}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("renaming nfs share: %w", err)
 	}
-	fmt.Printf("Renamed nfs share [%s] to [%s].\n", args[0], flagBmsNfsNewName)
-	return emitFormatted(got, flagBmsNfsFormat)
+	fmt.Fprintf(s.inv.stdout, "Renamed nfs share [%s] to [%s].\n", args[0], s.flagBmsNfsNewName)
+	return emitFormattedTo(s.inv.stdout, got, s.flagBmsNfsFormat)
 }
