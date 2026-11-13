@@ -3,8 +3,9 @@ package cmd
 import "testing"
 
 func TestPolicyTroubleshootHasIam(t *testing.T) {
+	grp := newPolicyTroubleshootCmds(legacyTestInvocation())
 	found := false
-	for _, c := range policyTroubleshootCmd.Commands() {
+	for _, c := range grp.policyTroubleshootCmd.Commands() {
 		if c.Name() == "iam" {
 			found = true
 			if !c.HasFlags() {
