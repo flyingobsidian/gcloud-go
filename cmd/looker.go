@@ -3,18 +3,14 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	looker "google.golang.org/api/looker/v1"
 )
 
 // --- gcloud looker (#351) ---
-
-var lookerCmd = &cobra.Command{Use: "looker", Short: "Manage Looker"}
 
 func lkLocationParent(project, region string) string {
 	return fmt.Sprintf("projects/%s/locations/%s", project, region)
@@ -41,190 +37,95 @@ func lkWaitOp(ctx context.Context, svc *looker.Service, op *looker.Operation) (*
 	return op, nil
 }
 
-func lkFinishOp(ctx context.Context, svc *looker.Service, op *looker.Operation, verb, name string, async bool) error {
+func (s *lookerCmds) lkFinishOp(ctx context.Context, svc *looker.Service, op *looker.Operation, verb, name string, async bool) error {
 	if async {
-		fmt.Fprintf(os.Stderr, "%s in progress (operation: %s).\n", verb, op.Name)
-		return emitFormatted(op, "")
+		fmt.Fprintf(s.inv.stderr, "%s in progress (operation: %s).\n", verb, op.Name)
+		return emitFormattedTo(s.inv.stdout, op, "")
 	}
 	final, err := lkWaitOp(ctx, svc, op)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s [%s] completed.\n", verb, name)
+	fmt.Fprintf(s.inv.stderr, "%s [%s] completed.\n", verb, name)
 	if final.Response != nil {
-		return emitFormatted(final.Response, "")
+		return emitFormattedTo(s.inv.stdout, final.Response, "")
 	}
 	return nil
 }
 
-var (
-	flagLKRegion     string
-	flagLKInstance   string
-	flagLKConfigFile string
-	flagLKUpdateMask string
-	flagLKFormat     string
-	flagLKAsync      bool
-)
-
 // --- regions ---
-
-var lookerRegionsCmd = &cobra.Command{Use: "regions", Short: "Explore Looker regions"}
-
-var lookerRegionsListCmd = &cobra.Command{
-	Use: "list", Short: "List Looker regions", Args: cobra.NoArgs, RunE: runLKRegionsList,
-}
 
 // --- operations ---
 
-var lookerOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Looker operations"}
-
-var (
-	lkOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel an operation",
-		Args: cobra.ExactArgs(1), RunE: runLKOpCancel,
-	}
-	lkOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe an operation",
-		Args: cobra.ExactArgs(1), RunE: runLKOpDescribe,
-	}
-	lkOpListCmd = &cobra.Command{
-		Use: "list", Short: "List operations in a region",
-		Args: cobra.NoArgs, RunE: runLKOpList,
-	}
-)
-
 // --- instances ---
-
-var lookerInstancesCmd = &cobra.Command{Use: "instances", Short: "Manage Looker instances"}
-
-var (
-	lkInstCreateCmd = &cobra.Command{
-		Use: "create INSTANCE", Short: "Create an instance from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runLKInstCreate,
-	}
-	lkInstDeleteCmd = &cobra.Command{
-		Use: "delete INSTANCE", Short: "Delete an instance",
-		Args: cobra.ExactArgs(1), RunE: runLKInstDelete,
-	}
-	lkInstDescribeCmd = &cobra.Command{
-		Use: "describe INSTANCE", Short: "Describe an instance",
-		Args: cobra.ExactArgs(1), RunE: runLKInstDescribe,
-	}
-	lkInstListCmd = &cobra.Command{
-		Use: "list", Short: "List instances in a region",
-		Args: cobra.NoArgs, RunE: runLKInstList,
-	}
-	lkInstUpdateCmd = &cobra.Command{
-		Use: "update INSTANCE", Short: "Update an instance from a --config-file",
-		Args: cobra.ExactArgs(1), RunE: runLKInstUpdate,
-	}
-	lkInstRestartCmd = &cobra.Command{
-		Use: "restart INSTANCE", Short: "Restart an instance",
-		Args: cobra.ExactArgs(1), RunE: runLKInstRestart,
-	}
-	lkInstRestoreCmd = &cobra.Command{
-		Use: "restore INSTANCE", Short: "Restore an instance from a backup (--config-file with RestoreInstanceRequest)",
-		Args: cobra.ExactArgs(1), RunE: runLKInstRestore,
-	}
-	lkInstExportCmd = &cobra.Command{
-		Use: "export INSTANCE", Short: "Export an instance's data (--config-file with ExportInstanceRequest)",
-		Args: cobra.ExactArgs(1), RunE: runLKInstExport,
-	}
-	lkInstImportCmd = &cobra.Command{
-		Use: "import INSTANCE", Short: "Import data into an instance (--config-file with ImportInstanceRequest)",
-		Args: cobra.ExactArgs(1), RunE: runLKInstImport,
-	}
-)
 
 // --- backups (nested under instances) ---
 
-var lookerBackupsCmd = &cobra.Command{Use: "backups", Short: "Manage Looker instance backups"}
-
-var (
-	lkBackupCreateCmd = &cobra.Command{
-		Use: "create BACKUP", Short: "Create a backup for an instance",
-		Args: cobra.ExactArgs(1), RunE: runLKBackupCreate,
-	}
-	lkBackupDeleteCmd = &cobra.Command{
-		Use: "delete BACKUP", Short: "Delete a backup",
-		Args: cobra.ExactArgs(1), RunE: runLKBackupDelete,
-	}
-	lkBackupDescribeCmd = &cobra.Command{
-		Use: "describe BACKUP", Short: "Describe a backup",
-		Args: cobra.ExactArgs(1), RunE: runLKBackupDescribe,
-	}
-	lkBackupListCmd = &cobra.Command{
-		Use: "list", Short: "List backups for an instance",
-		Args: cobra.NoArgs, RunE: runLKBackupList,
-	}
-)
-
-func init() {
+func (s *lookerCmds) initLooker() {
 	// regions
-	lookerRegionsListCmd.Flags().StringVar(&flagLKFormat, "format", "", "Output format")
-	lookerRegionsCmd.AddCommand(lookerRegionsListCmd)
-	lookerCmd.AddCommand(lookerRegionsCmd)
+	s.lookerRegionsListCmd.Flags().StringVar(&s.flagLKFormat, "format", "", "Output format")
+	s.lookerRegionsCmd.AddCommand(s.lookerRegionsListCmd)
+	s.lookerCmd.AddCommand(s.lookerRegionsCmd)
 
 	// operations
-	for _, c := range []*cobra.Command{lkOpCancelCmd, lkOpDescribeCmd, lkOpListCmd} {
-		c.Flags().StringVar(&flagLKRegion, "region", "", "Region containing the operation (required)")
+	for _, c := range []*cobra.Command{s.lkOpCancelCmd, s.lkOpDescribeCmd, s.lkOpListCmd} {
+		c.Flags().StringVar(&s.flagLKRegion, "region", "", "Region containing the operation (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	lkOpDescribeCmd.Flags().StringVar(&flagLKFormat, "format", "", "Output format")
-	lkOpListCmd.Flags().StringVar(&flagLKFormat, "format", "", "Output format")
-	lookerOperationsCmd.AddCommand(lkOpCancelCmd, lkOpDescribeCmd, lkOpListCmd)
-	lookerCmd.AddCommand(lookerOperationsCmd)
+	s.lkOpDescribeCmd.Flags().StringVar(&s.flagLKFormat, "format", "", "Output format")
+	s.lkOpListCmd.Flags().StringVar(&s.flagLKFormat, "format", "", "Output format")
+	s.lookerOperationsCmd.AddCommand(s.lkOpCancelCmd, s.lkOpDescribeCmd, s.lkOpListCmd)
+	s.lookerCmd.AddCommand(s.lookerOperationsCmd)
 
 	// instances
-	instAll := []*cobra.Command{lkInstCreateCmd, lkInstDeleteCmd, lkInstDescribeCmd, lkInstListCmd, lkInstUpdateCmd,
-		lkInstRestartCmd, lkInstRestoreCmd, lkInstExportCmd, lkInstImportCmd}
+	instAll := []*cobra.Command{s.lkInstCreateCmd, s.lkInstDeleteCmd, s.lkInstDescribeCmd, s.lkInstListCmd, s.lkInstUpdateCmd,
+		s.lkInstRestartCmd, s.lkInstRestoreCmd, s.lkInstExportCmd, s.lkInstImportCmd}
 	for _, c := range instAll {
-		c.Flags().StringVar(&flagLKRegion, "region", "", "Region containing the instance (required)")
+		c.Flags().StringVar(&s.flagLKRegion, "region", "", "Region containing the instance (required)")
 		_ = c.MarkFlagRequired("region")
 	}
-	for _, c := range []*cobra.Command{lkInstCreateCmd, lkInstUpdateCmd, lkInstRestoreCmd, lkInstExportCmd, lkInstImportCmd} {
-		c.Flags().StringVar(&flagLKConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.lkInstCreateCmd, s.lkInstUpdateCmd, s.lkInstRestoreCmd, s.lkInstExportCmd, s.lkInstImportCmd} {
+		c.Flags().StringVar(&s.flagLKConfigFile, "config-file", "",
 			"Path to a JSON/YAML file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	lkInstUpdateCmd.Flags().StringVar(&flagLKUpdateMask, "update-mask", "",
+	s.lkInstUpdateCmd.Flags().StringVar(&s.flagLKUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	for _, c := range []*cobra.Command{lkInstCreateCmd, lkInstDeleteCmd, lkInstUpdateCmd, lkInstRestartCmd, lkInstRestoreCmd, lkInstExportCmd, lkInstImportCmd} {
-		c.Flags().BoolVar(&flagLKAsync, "async", false, "Return the long-running operation without waiting")
+	for _, c := range []*cobra.Command{s.lkInstCreateCmd, s.lkInstDeleteCmd, s.lkInstUpdateCmd, s.lkInstRestartCmd, s.lkInstRestoreCmd, s.lkInstExportCmd, s.lkInstImportCmd} {
+		c.Flags().BoolVar(&s.flagLKAsync, "async", false, "Return the long-running operation without waiting")
 	}
-	lkInstDescribeCmd.Flags().StringVar(&flagLKFormat, "format", "", "Output format")
-	lkInstListCmd.Flags().StringVar(&flagLKFormat, "format", "", "Output format")
-	lookerInstancesCmd.AddCommand(instAll...)
-	lookerCmd.AddCommand(lookerInstancesCmd)
+	s.lkInstDescribeCmd.Flags().StringVar(&s.flagLKFormat, "format", "", "Output format")
+	s.lkInstListCmd.Flags().StringVar(&s.flagLKFormat, "format", "", "Output format")
+	s.lookerInstancesCmd.AddCommand(instAll...)
+	s.lookerCmd.AddCommand(s.lookerInstancesCmd)
 
 	// backups
-	backupAll := []*cobra.Command{lkBackupCreateCmd, lkBackupDeleteCmd, lkBackupDescribeCmd, lkBackupListCmd}
+	backupAll := []*cobra.Command{s.lkBackupCreateCmd, s.lkBackupDeleteCmd, s.lkBackupDescribeCmd, s.lkBackupListCmd}
 	for _, c := range backupAll {
-		c.Flags().StringVar(&flagLKRegion, "region", "", "Region containing the instance (required)")
-		c.Flags().StringVar(&flagLKInstance, "instance", "", "Instance containing the backup (required)")
+		c.Flags().StringVar(&s.flagLKRegion, "region", "", "Region containing the instance (required)")
+		c.Flags().StringVar(&s.flagLKInstance, "instance", "", "Instance containing the backup (required)")
 		_ = c.MarkFlagRequired("region")
 		_ = c.MarkFlagRequired("instance")
 	}
-	for _, c := range []*cobra.Command{lkBackupCreateCmd, lkBackupDeleteCmd} {
-		c.Flags().BoolVar(&flagLKAsync, "async", false, "Return the long-running operation without waiting")
+	for _, c := range []*cobra.Command{s.lkBackupCreateCmd, s.lkBackupDeleteCmd} {
+		c.Flags().BoolVar(&s.flagLKAsync, "async", false, "Return the long-running operation without waiting")
 	}
-	lkBackupDescribeCmd.Flags().StringVar(&flagLKFormat, "format", "", "Output format")
-	lkBackupListCmd.Flags().StringVar(&flagLKFormat, "format", "", "Output format")
-	lookerBackupsCmd.AddCommand(backupAll...)
-	lookerCmd.AddCommand(lookerBackupsCmd)
+	s.lkBackupDescribeCmd.Flags().StringVar(&s.flagLKFormat, "format", "", "Output format")
+	s.lkBackupListCmd.Flags().StringVar(&s.flagLKFormat, "format", "", "Output format")
+	s.lookerBackupsCmd.AddCommand(backupAll...)
+	s.lookerCmd.AddCommand(s.lookerBackupsCmd)
 
-	rootCmd.AddCommand(lookerCmd)
 }
 
 // --- regions impl ---
 
-func runLKRegionsList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKRegionsList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
@@ -232,12 +133,12 @@ func runLKRegionsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing regions: %w", err)
 	}
-	if flagLKFormat != "" {
-		return emitFormatted(resp.Locations, flagLKFormat)
+	if s.flagLKFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Locations, s.flagLKFormat)
 	}
-	printTableHeading(len(resp.Locations), "%-20s %s\n", "REGION", "DISPLAY_NAME")
+	printTableHeadingTo(s.inv.stdout, len(resp.Locations), "%-20s %s\n", "REGION", "DISPLAY_NAME")
 	for _, l := range resp.Locations {
-		fmt.Printf("%-20s %s\n", l.LocationId, l.DisplayName)
+		fmt.Fprintf(s.inv.stdout, "%-20s %s\n", l.LocationId, l.DisplayName)
 	}
 	return nil
 }
@@ -248,60 +149,60 @@ func lkOpName(id, project, region string) string {
 	return lkChild("operations", id, lkLocationParent(project, region))
 }
 
-func runLKOpCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKOpCancel(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := svc.Projects.Locations.Operations.Cancel(lkOpName(args[0], project, flagLKRegion), &looker.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
+	if _, err := svc.Projects.Locations.Operations.Cancel(lkOpName(args[0], project, s.flagLKRegion), &looker.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancelled operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancelled operation [%s].\n", args[0])
 	return nil
 }
 
-func runLKOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKOpDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Operations.Get(lkOpName(args[0], project, flagLKRegion)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Operations.Get(lkOpName(args[0], project, s.flagLKRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(op, flagLKFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagLKFormat)
 }
 
-func runLKOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKOpList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Operations.List(lkLocationParent(project, flagLKRegion)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Operations.List(lkLocationParent(project, s.flagLKRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	if flagLKFormat != "" {
-		return emitFormatted(resp.Operations, flagLKFormat)
+	if s.flagLKFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Operations, s.flagLKFormat)
 	}
-	printTableHeading(len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(resp.Operations), "%-40s %s\n", "NAME", "DONE")
 	for _, o := range resp.Operations {
-		fmt.Printf("%-40s %v\n", path.Base(o.Name), o.Done)
+		fmt.Fprintf(s.inv.stdout, "%-40s %v\n", path.Base(o.Name), o.Done)
 	}
 	return nil
 }
@@ -312,190 +213,190 @@ func lkInstName(id, project, region string) string {
 	return lkChild("instances", id, lkLocationParent(project, region))
 }
 
-func runLKInstCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKInstCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	inst := &looker.Instance{}
-	if err := loadYAMLOrJSONInto(flagLKConfigFile, inst); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagLKConfigFile, inst); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Instances.Create(lkLocationParent(project, flagLKRegion), inst).
+	op, err := svc.Projects.Locations.Instances.Create(lkLocationParent(project, s.flagLKRegion), inst).
 		InstanceId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating instance: %w", err)
 	}
-	return lkFinishOp(ctx, svc, op, "Create instance", args[0], flagLKAsync)
+	return s.lkFinishOp(ctx, svc, op, "Create instance", args[0], s.flagLKAsync)
 }
 
-func runLKInstDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKInstDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Instances.Delete(lkInstName(args[0], project, flagLKRegion)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Instances.Delete(lkInstName(args[0], project, s.flagLKRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting instance: %w", err)
 	}
-	return lkFinishOp(ctx, svc, op, "Delete instance", args[0], flagLKAsync)
+	return s.lkFinishOp(ctx, svc, op, "Delete instance", args[0], s.flagLKAsync)
 }
 
-func runLKInstDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKInstDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Instances.Get(lkInstName(args[0], project, flagLKRegion)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Instances.Get(lkInstName(args[0], project, s.flagLKRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing instance: %w", err)
 	}
-	return emitFormatted(got, flagLKFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagLKFormat)
 }
 
-func runLKInstList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKInstList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Instances.List(lkLocationParent(project, flagLKRegion)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Instances.List(lkLocationParent(project, s.flagLKRegion)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing instances: %w", err)
 	}
-	if flagLKFormat != "" {
-		return emitFormatted(resp.Instances, flagLKFormat)
+	if s.flagLKFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.Instances, s.flagLKFormat)
 	}
-	printTableHeading(len(resp.Instances), "%-40s %s\n", "NAME", "STATE")
+	printTableHeadingTo(s.inv.stdout, len(resp.Instances), "%-40s %s\n", "NAME", "STATE")
 	for _, i := range resp.Instances {
-		fmt.Printf("%-40s %s\n", path.Base(i.Name), i.State)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(i.Name), i.State)
 	}
 	return nil
 }
 
-func runLKInstUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKInstUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	inst := &looker.Instance{}
-	if err := loadYAMLOrJSONInto(flagLKConfigFile, inst); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagLKConfigFile, inst); err != nil {
 		return err
 	}
-	mask := flagLKUpdateMask
+	mask := s.flagLKUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(inst))
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Instances.Patch(lkInstName(args[0], project, flagLKRegion), inst).
+	op, err := svc.Projects.Locations.Instances.Patch(lkInstName(args[0], project, s.flagLKRegion), inst).
 		UpdateMask(mask).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("updating instance: %w", err)
 	}
-	return lkFinishOp(ctx, svc, op, "Update instance", args[0], flagLKAsync)
+	return s.lkFinishOp(ctx, svc, op, "Update instance", args[0], s.flagLKAsync)
 }
 
-func runLKInstRestart(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKInstRestart(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Instances.Restart(lkInstName(args[0], project, flagLKRegion), &looker.RestartInstanceRequest{}).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Instances.Restart(lkInstName(args[0], project, s.flagLKRegion), &looker.RestartInstanceRequest{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("restarting instance: %w", err)
 	}
-	return lkFinishOp(ctx, svc, op, "Restart instance", args[0], flagLKAsync)
+	return s.lkFinishOp(ctx, svc, op, "Restart instance", args[0], s.flagLKAsync)
 }
 
-func runLKInstRestore(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKInstRestore(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	req := &looker.RestoreInstanceRequest{}
-	if err := loadYAMLOrJSONInto(flagLKConfigFile, req); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagLKConfigFile, req); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Instances.Restore(lkInstName(args[0], project, flagLKRegion), req).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Instances.Restore(lkInstName(args[0], project, s.flagLKRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("restoring instance: %w", err)
 	}
-	return lkFinishOp(ctx, svc, op, "Restore instance", args[0], flagLKAsync)
+	return s.lkFinishOp(ctx, svc, op, "Restore instance", args[0], s.flagLKAsync)
 }
 
-func runLKInstExport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKInstExport(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	req := &looker.ExportInstanceRequest{}
-	if err := loadYAMLOrJSONInto(flagLKConfigFile, req); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagLKConfigFile, req); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Instances.Export(lkInstName(args[0], project, flagLKRegion), req).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Instances.Export(lkInstName(args[0], project, s.flagLKRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("exporting instance: %w", err)
 	}
-	return lkFinishOp(ctx, svc, op, "Export instance", args[0], flagLKAsync)
+	return s.lkFinishOp(ctx, svc, op, "Export instance", args[0], s.flagLKAsync)
 }
 
-func runLKInstImport(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKInstImport(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	req := &looker.ImportInstanceRequest{}
-	if err := loadYAMLOrJSONInto(flagLKConfigFile, req); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagLKConfigFile, req); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Instances.Import(lkInstName(args[0], project, flagLKRegion), req).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Instances.Import(lkInstName(args[0], project, s.flagLKRegion), req).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("importing instance: %w", err)
 	}
-	return lkFinishOp(ctx, svc, op, "Import instance", args[0], flagLKAsync)
+	return s.lkFinishOp(ctx, svc, op, "Import instance", args[0], s.flagLKAsync)
 }
 
 // --- backups impl ---
@@ -508,79 +409,198 @@ func lkBackupName(id, project, region, instance string) string {
 	return lkChild("backups", id, lkBackupParent(project, region, instance))
 }
 
-func runLKBackupCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKBackupCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
 	// InstanceBackup.Create doesn't take an ID; the API assigns one. The
 	// positional BACKUP arg is accepted for CLI symmetry.
-	op, err := svc.Projects.Locations.Instances.Backups.Create(lkBackupParent(project, flagLKRegion, flagLKInstance), &looker.InstanceBackup{}).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Instances.Backups.Create(lkBackupParent(project, s.flagLKRegion, s.flagLKInstance), &looker.InstanceBackup{}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating backup: %w", err)
 	}
-	return lkFinishOp(ctx, svc, op, "Create backup", args[0], flagLKAsync)
+	return s.lkFinishOp(ctx, svc, op, "Create backup", args[0], s.flagLKAsync)
 }
 
-func runLKBackupDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKBackupDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	op, err := svc.Projects.Locations.Instances.Backups.Delete(lkBackupName(args[0], project, flagLKRegion, flagLKInstance)).Context(ctx).Do()
+	op, err := svc.Projects.Locations.Instances.Backups.Delete(lkBackupName(args[0], project, s.flagLKRegion, s.flagLKInstance)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting backup: %w", err)
 	}
-	return lkFinishOp(ctx, svc, op, "Delete backup", args[0], flagLKAsync)
+	return s.lkFinishOp(ctx, svc, op, "Delete backup", args[0], s.flagLKAsync)
 }
 
-func runLKBackupDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKBackupDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Projects.Locations.Instances.Backups.Get(lkBackupName(args[0], project, flagLKRegion, flagLKInstance)).Context(ctx).Do()
+	got, err := svc.Projects.Locations.Instances.Backups.Get(lkBackupName(args[0], project, s.flagLKRegion, s.flagLKInstance)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing backup: %w", err)
 	}
-	return emitFormatted(got, flagLKFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagLKFormat)
 }
 
-func runLKBackupList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *lookerCmds) runLKBackupList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.LookerService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Looker(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := svc.Projects.Locations.Instances.Backups.List(lkBackupParent(project, flagLKRegion, flagLKInstance)).Context(ctx).Do()
+	resp, err := svc.Projects.Locations.Instances.Backups.List(lkBackupParent(project, s.flagLKRegion, s.flagLKInstance)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("listing backups: %w", err)
 	}
-	if flagLKFormat != "" {
-		return emitFormatted(resp.InstanceBackups, flagLKFormat)
+	if s.flagLKFormat != "" {
+		return emitFormattedTo(s.inv.stdout, resp.InstanceBackups, s.flagLKFormat)
 	}
-	printTableHeading(len(resp.InstanceBackups), "%-40s %s\n", "NAME", "STATE")
+	printTableHeadingTo(s.inv.stdout, len(resp.InstanceBackups), "%-40s %s\n", "NAME", "STATE")
 	for _, b := range resp.InstanceBackups {
-		fmt.Printf("%-40s %s\n", path.Base(b.Name), b.State)
+		fmt.Fprintf(s.inv.stdout, "%-40s %s\n", path.Base(b.Name), b.State)
 	}
 	return nil
+}
+
+// lookerCmds holds the commands and flag values of one invocation's "looker"
+// command group, so invocations don't share state (#2070).
+type lookerCmds struct {
+	inv *invocation
+
+	lookerCmd            *cobra.Command
+	flagLKRegion         string
+	flagLKInstance       string
+	flagLKConfigFile     string
+	flagLKUpdateMask     string
+	flagLKFormat         string
+	flagLKAsync          bool
+	lookerRegionsCmd     *cobra.Command
+	lookerRegionsListCmd *cobra.Command
+	lookerOperationsCmd  *cobra.Command
+	lkOpCancelCmd        *cobra.Command
+	lkOpDescribeCmd      *cobra.Command
+	lkOpListCmd          *cobra.Command
+	lookerInstancesCmd   *cobra.Command
+	lkInstCreateCmd      *cobra.Command
+	lkInstDeleteCmd      *cobra.Command
+	lkInstDescribeCmd    *cobra.Command
+	lkInstListCmd        *cobra.Command
+	lkInstUpdateCmd      *cobra.Command
+	lkInstRestartCmd     *cobra.Command
+	lkInstRestoreCmd     *cobra.Command
+	lkInstExportCmd      *cobra.Command
+	lkInstImportCmd      *cobra.Command
+	lookerBackupsCmd     *cobra.Command
+	lkBackupCreateCmd    *cobra.Command
+	lkBackupDeleteCmd    *cobra.Command
+	lkBackupDescribeCmd  *cobra.Command
+	lkBackupListCmd      *cobra.Command
+}
+
+// newLookerCmd returns the "looker" command group for inv.
+func newLookerCmd(inv *invocation) *cobra.Command {
+	return newLookerCmds(inv).lookerCmd
+}
+
+// newLookerCmds builds the "looker" command group for inv and returns its state.
+func newLookerCmds(inv *invocation) *lookerCmds {
+	s := &lookerCmds{inv: inv}
+	s.lookerCmd = &cobra.Command{Use: "looker", Short: "Manage Looker"}
+	s.lookerRegionsCmd = &cobra.Command{Use: "regions", Short: "Explore Looker regions"}
+	s.lookerRegionsListCmd = &cobra.Command{
+		Use: "list", Short: "List Looker regions", Args: cobra.NoArgs, RunE: s.runLKRegionsList,
+	}
+	s.lookerOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Looker operations"}
+	s.lkOpCancelCmd = &cobra.Command{
+		Use: "cancel OPERATION", Short: "Cancel an operation",
+		Args: cobra.ExactArgs(1), RunE: s.runLKOpCancel,
+	}
+	s.lkOpDescribeCmd = &cobra.Command{
+		Use: "describe OPERATION", Short: "Describe an operation",
+		Args: cobra.ExactArgs(1), RunE: s.runLKOpDescribe,
+	}
+	s.lkOpListCmd = &cobra.Command{
+		Use: "list", Short: "List operations in a region",
+		Args: cobra.NoArgs, RunE: s.runLKOpList,
+	}
+	s.lookerInstancesCmd = &cobra.Command{Use: "instances", Short: "Manage Looker instances"}
+	s.lkInstCreateCmd = &cobra.Command{
+		Use: "create INSTANCE", Short: "Create an instance from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: s.runLKInstCreate,
+	}
+	s.lkInstDeleteCmd = &cobra.Command{
+		Use: "delete INSTANCE", Short: "Delete an instance",
+		Args: cobra.ExactArgs(1), RunE: s.runLKInstDelete,
+	}
+	s.lkInstDescribeCmd = &cobra.Command{
+		Use: "describe INSTANCE", Short: "Describe an instance",
+		Args: cobra.ExactArgs(1), RunE: s.runLKInstDescribe,
+	}
+	s.lkInstListCmd = &cobra.Command{
+		Use: "list", Short: "List instances in a region",
+		Args: cobra.NoArgs, RunE: s.runLKInstList,
+	}
+	s.lkInstUpdateCmd = &cobra.Command{
+		Use: "update INSTANCE", Short: "Update an instance from a --config-file",
+		Args: cobra.ExactArgs(1), RunE: s.runLKInstUpdate,
+	}
+	s.lkInstRestartCmd = &cobra.Command{
+		Use: "restart INSTANCE", Short: "Restart an instance",
+		Args: cobra.ExactArgs(1), RunE: s.runLKInstRestart,
+	}
+	s.lkInstRestoreCmd = &cobra.Command{
+		Use: "restore INSTANCE", Short: "Restore an instance from a backup (--config-file with RestoreInstanceRequest)",
+		Args: cobra.ExactArgs(1), RunE: s.runLKInstRestore,
+	}
+	s.lkInstExportCmd = &cobra.Command{
+		Use: "export INSTANCE", Short: "Export an instance's data (--config-file with ExportInstanceRequest)",
+		Args: cobra.ExactArgs(1), RunE: s.runLKInstExport,
+	}
+	s.lkInstImportCmd = &cobra.Command{
+		Use: "import INSTANCE", Short: "Import data into an instance (--config-file with ImportInstanceRequest)",
+		Args: cobra.ExactArgs(1), RunE: s.runLKInstImport,
+	}
+	s.lookerBackupsCmd = &cobra.Command{Use: "backups", Short: "Manage Looker instance backups"}
+	s.lkBackupCreateCmd = &cobra.Command{
+		Use: "create BACKUP", Short: "Create a backup for an instance",
+		Args: cobra.ExactArgs(1), RunE: s.runLKBackupCreate,
+	}
+	s.lkBackupDeleteCmd = &cobra.Command{
+		Use: "delete BACKUP", Short: "Delete a backup",
+		Args: cobra.ExactArgs(1), RunE: s.runLKBackupDelete,
+	}
+	s.lkBackupDescribeCmd = &cobra.Command{
+		Use: "describe BACKUP", Short: "Describe a backup",
+		Args: cobra.ExactArgs(1), RunE: s.runLKBackupDescribe,
+	}
+	s.lkBackupListCmd = &cobra.Command{
+		Use: "list", Short: "List backups for an instance",
+		Args: cobra.NoArgs, RunE: s.runLKBackupList,
+	}
+	s.initLooker()
+	return s
 }

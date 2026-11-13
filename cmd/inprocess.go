@@ -81,6 +81,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newParameterManagerCmd(inv),
 		newObservabilityCmd(inv),
 		newRecommenderCmd(inv),
+		newLookerCmd(inv),
 	}
 }
 
