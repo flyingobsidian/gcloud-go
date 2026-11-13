@@ -47,6 +47,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newTopicCmd(inv),
 		newSurveyCmd(inv),
 		newBetaCmd(inv),
+		newVersionCmd(inv),
 	}
 }
 
