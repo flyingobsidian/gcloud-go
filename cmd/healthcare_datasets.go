@@ -1,100 +1,51 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	healthcare "google.golang.org/api/healthcare/v1"
 )
 
 // --- gcloud healthcare datasets (#1221) ---
 
-var healthcareDatasetsCmd = &cobra.Command{Use: "datasets", Short: "Manage Cloud Healthcare datasets"}
-
-var (
-	flagHcDsLocation    string
-	flagHcDsFormat      string
-	flagHcDsConfigFile  string
-	flagHcDsUpdateMask  string
-	flagHcDsPageSize    int64
-	flagHcDsDestDataset string
-)
-
-var (
-	healthcareDsCreateCmd = &cobra.Command{
-		Use: "create DATASET", Short: "Create a healthcare dataset",
-		Args: cobra.ExactArgs(1), RunE: runHcDsCreate,
-	}
-	healthcareDsDeleteCmd = &cobra.Command{
-		Use: "delete DATASET", Short: "Delete a healthcare dataset",
-		Args: cobra.ExactArgs(1), RunE: runHcDsDelete,
-	}
-	healthcareDsDescribeCmd = &cobra.Command{
-		Use: "describe DATASET", Short: "Describe a healthcare dataset",
-		Args: cobra.ExactArgs(1), RunE: runHcDsDescribe,
-	}
-	healthcareDsListCmd = &cobra.Command{
-		Use: "list", Short: "List healthcare datasets in a location",
-		Args: cobra.NoArgs, RunE: runHcDsList,
-	}
-	healthcareDsUpdateCmd = &cobra.Command{
-		Use: "update DATASET", Short: "Update a healthcare dataset",
-		Args: cobra.ExactArgs(1), RunE: runHcDsUpdate,
-	}
-	healthcareDsGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy DATASET", Short: "Get the IAM policy for a healthcare dataset",
-		Args: cobra.ExactArgs(1), RunE: runHcDsGetIam,
-	}
-	healthcareDsSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy DATASET POLICY_FILE", Short: "Set the IAM policy for a healthcare dataset",
-		Args: cobra.ExactArgs(2), RunE: runHcDsSetIam,
-	}
-	healthcareDsDeidentifyCmd = &cobra.Command{
-		Use: "deidentify DATASET", Short: "De-identify a healthcare dataset into another dataset",
-		Args: cobra.ExactArgs(1), RunE: runHcDsDeidentify,
-	}
-)
-
-func init() {
+func (s *healthcareCmds) initHealthcareDatasets() {
 	all := []*cobra.Command{
-		healthcareDsCreateCmd, healthcareDsDeleteCmd, healthcareDsDescribeCmd,
-		healthcareDsListCmd, healthcareDsUpdateCmd, healthcareDsGetIamCmd,
-		healthcareDsSetIamCmd, healthcareDsDeidentifyCmd,
+		s.healthcareDsCreateCmd, s.healthcareDsDeleteCmd, s.healthcareDsDescribeCmd,
+		s.healthcareDsListCmd, s.healthcareDsUpdateCmd, s.healthcareDsGetIamCmd,
+		s.healthcareDsSetIamCmd, s.healthcareDsDeidentifyCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagHcDsLocation, "location", "", "Location (required)")
+		c.Flags().StringVar(&s.flagHcDsLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagHcDsFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagHcDsFormat, "format", "", "Output format")
 	}
-	healthcareDsCreateCmd.Flags().StringVar(&flagHcDsConfigFile, "config-file", "", "Optional YAML/JSON file with the Dataset body")
-	healthcareDsListCmd.Flags().Int64Var(&flagHcDsPageSize, "page-size", 0, "Maximum results per page")
-	healthcareDsUpdateCmd.Flags().StringVar(&flagHcDsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
-	_ = healthcareDsUpdateCmd.MarkFlagRequired("config-file")
-	healthcareDsUpdateCmd.Flags().StringVar(&flagHcDsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
-	healthcareDsDeidentifyCmd.Flags().StringVar(&flagHcDsConfigFile, "config-file", "", "YAML/JSON file with the DeidentifyDatasetRequest body (required)")
-	_ = healthcareDsDeidentifyCmd.MarkFlagRequired("config-file")
-	healthcareDsDeidentifyCmd.Flags().StringVar(&flagHcDsDestDataset, "destination-dataset", "", "Fully qualified destination dataset (overrides destinationDataset in the config file)")
+	s.healthcareDsCreateCmd.Flags().StringVar(&s.flagHcDsConfigFile, "config-file", "", "Optional YAML/JSON file with the Dataset body")
+	s.healthcareDsListCmd.Flags().Int64Var(&s.flagHcDsPageSize, "page-size", 0, "Maximum results per page")
+	s.healthcareDsUpdateCmd.Flags().StringVar(&s.flagHcDsConfigFile, "config-file", "", "YAML/JSON file with fields to update (required)")
+	_ = s.healthcareDsUpdateCmd.MarkFlagRequired("config-file")
+	s.healthcareDsUpdateCmd.Flags().StringVar(&s.flagHcDsUpdateMask, "update-mask", "", "Field mask (defaults to populated fields)")
+	s.healthcareDsDeidentifyCmd.Flags().StringVar(&s.flagHcDsConfigFile, "config-file", "", "YAML/JSON file with the DeidentifyDatasetRequest body (required)")
+	_ = s.healthcareDsDeidentifyCmd.MarkFlagRequired("config-file")
+	s.healthcareDsDeidentifyCmd.Flags().StringVar(&s.flagHcDsDestDataset, "destination-dataset", "", "Fully qualified destination dataset (overrides destinationDataset in the config file)")
 
-	healthcareDatasetsCmd.AddCommand(all...)
-	healthcareCmd.AddCommand(healthcareDatasetsCmd)
+	s.healthcareDatasetsCmd.AddCommand(all...)
+	s.healthcareCmd.AddCommand(s.healthcareDatasetsCmd)
 }
 
-func runHcDsCreate(cmd *cobra.Command, args []string) error {
-	parent, err := hcLocationParent(flagHcDsLocation)
+func (s *healthcareCmds) runHcDsCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.hcLocationParent(s.flagHcDsLocation)
 	if err != nil {
 		return err
 	}
 	body := &healthcare.Dataset{}
-	if flagHcDsConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagHcDsConfigFile, body); err != nil {
+	if s.flagHcDsConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagHcDsConfigFile, body); err != nil {
 			return err
 		}
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -102,34 +53,34 @@ func runHcDsCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating dataset: %w", err)
 	}
-	fmt.Printf("Created dataset [%s].\n", args[0])
-	return emitFormatted(got, flagHcDsFormat)
+	fmt.Fprintf(s.inv.stdout, "Created dataset [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagHcDsFormat)
 }
 
-func runHcDsDelete(cmd *cobra.Command, args []string) error {
-	name, err := hcDatasetName(flagHcDsLocation, args[0])
+func (s *healthcareCmds) runHcDsDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.hcDatasetName(s.flagHcDsLocation, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
 	if _, err := svc.Projects.Locations.Datasets.Delete(name).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("deleting dataset: %w", err)
 	}
-	fmt.Printf("Deleted dataset [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted dataset [%s].\n", args[0])
 	return nil
 }
 
-func runHcDsDescribe(cmd *cobra.Command, args []string) error {
-	name, err := hcDatasetName(flagHcDsLocation, args[0])
+func (s *healthcareCmds) runHcDsDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.hcDatasetName(s.flagHcDsLocation, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -137,16 +88,16 @@ func runHcDsDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing dataset: %w", err)
 	}
-	return emitFormatted(got, flagHcDsFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagHcDsFormat)
 }
 
-func runHcDsList(cmd *cobra.Command, args []string) error {
-	parent, err := hcLocationParent(flagHcDsLocation)
+func (s *healthcareCmds) runHcDsList(cmd *cobra.Command, args []string) error {
+	parent, err := s.hcLocationParent(s.flagHcDsLocation)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -154,8 +105,8 @@ func runHcDsList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Datasets.List(parent).Context(ctx)
-		if flagHcDsPageSize > 0 {
-			call = call.PageSize(flagHcDsPageSize)
+		if s.flagHcDsPageSize > 0 {
+			call = call.PageSize(s.flagHcDsPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -170,25 +121,25 @@ func runHcDsList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagHcDsFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagHcDsFormat)
 }
 
-func runHcDsUpdate(cmd *cobra.Command, args []string) error {
-	name, err := hcDatasetName(flagHcDsLocation, args[0])
+func (s *healthcareCmds) runHcDsUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.hcDatasetName(s.flagHcDsLocation, args[0])
 	if err != nil {
 		return err
 	}
 	body := &healthcare.Dataset{}
-	if err := loadYAMLOrJSONInto(flagHcDsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagHcDsConfigFile, body); err != nil {
 		return err
 	}
 	body.Name = name
-	mask := flagHcDsUpdateMask
+	mask := s.flagHcDsUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -200,17 +151,17 @@ func runHcDsUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating dataset: %w", err)
 	}
-	fmt.Printf("Updated dataset [%s].\n", args[0])
-	return emitFormatted(got, flagHcDsFormat)
+	fmt.Fprintf(s.inv.stdout, "Updated dataset [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagHcDsFormat)
 }
 
-func runHcDsGetIam(cmd *cobra.Command, args []string) error {
-	name, err := hcDatasetName(flagHcDsLocation, args[0])
+func (s *healthcareCmds) runHcDsGetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.hcDatasetName(s.flagHcDsLocation, args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -218,11 +169,11 @@ func runHcDsGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagHcDsFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagHcDsFormat)
 }
 
-func runHcDsSetIam(cmd *cobra.Command, args []string) error {
-	name, err := hcDatasetName(flagHcDsLocation, args[0])
+func (s *healthcareCmds) runHcDsSetIam(cmd *cobra.Command, args []string) error {
+	name, err := s.hcDatasetName(s.flagHcDsLocation, args[0])
 	if err != nil {
 		return err
 	}
@@ -231,8 +182,8 @@ func runHcDsSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -240,24 +191,24 @@ func runHcDsSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Updated IAM policy for dataset [%s].\n", args[0])
-	return emitFormatted(updated, flagHcDsFormat)
+	fmt.Fprintf(s.inv.stderr, "Updated IAM policy for dataset [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, updated, s.flagHcDsFormat)
 }
 
-func runHcDsDeidentify(cmd *cobra.Command, args []string) error {
-	src, err := hcDatasetName(flagHcDsLocation, args[0])
+func (s *healthcareCmds) runHcDsDeidentify(cmd *cobra.Command, args []string) error {
+	src, err := s.hcDatasetName(s.flagHcDsLocation, args[0])
 	if err != nil {
 		return err
 	}
 	body := &healthcare.DeidentifyDatasetRequest{}
-	if err := loadYAMLOrJSONInto(flagHcDsConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagHcDsConfigFile, body); err != nil {
 		return err
 	}
-	if flagHcDsDestDataset != "" {
-		body.DestinationDataset = flagHcDsDestDataset
+	if s.flagHcDsDestDataset != "" {
+		body.DestinationDataset = s.flagHcDsDestDataset
 	}
-	ctx := context.Background()
-	svc, err := gcp.HealthcareService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().Healthcare(ctx)
 	if err != nil {
 		return err
 	}
@@ -265,6 +216,6 @@ func runHcDsDeidentify(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deidentifying dataset: %w", err)
 	}
-	fmt.Printf("Deidentify dataset [%s] initiated (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagHcDsFormat)
+	fmt.Fprintf(s.inv.stdout, "Deidentify dataset [%s] initiated (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagHcDsFormat)
 }
