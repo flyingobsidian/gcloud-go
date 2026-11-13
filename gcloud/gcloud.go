@@ -45,6 +45,10 @@ var ErrNotInProcess = cmd.ErrNotInProcess
 // underlying cause, such as a *googleapi.Error.
 type CommandError = cmd.CommandError
 
+// PanicError is returned by Runner.Run when a command panicked. Run recovers
+// the panic so it doesn't take down the caller; Stack holds the trace.
+type PanicError = cmd.PanicError
+
 // Options configures a Runner. The zero value uses the process environment.
 type Options struct {
 	// Getenv returns the environment variables commands see, such as
@@ -90,8 +94,8 @@ type Invocation struct {
 // Run runs one command and returns when it has finished or ctx is done.
 //
 // It returns nil on success, ErrNotInProcess for commands that cannot run
-// in-process yet, a *CommandError when the command failed, or another error
-// when the arguments could not be parsed.
+// in-process yet, a *CommandError when the command failed, a *PanicError
+// when it panicked, or another error when the arguments could not be parsed.
 func (r *Runner) Run(ctx context.Context, inv Invocation) error {
 	return cmd.RunInProcess(ctx, cmd.InProcess{
 		Args:   inv.Args,
@@ -105,10 +109,15 @@ func (r *Runner) Run(ctx context.Context, inv Invocation) error {
 
 // ExitCode returns the process exit status the gcloud-go CLI would use for
 // err, as returned by Run: 0 for nil, the command's own status for commands
-// that pass through a subprocess's status (such as ssh), and 1 otherwise.
+// that pass through a subprocess's status (such as ssh), 2 for a panic as
+// with any Go program, and 1 otherwise.
 func ExitCode(err error) int {
 	if err == nil {
 		return 0
+	}
+	var panicErr *PanicError
+	if errors.As(err, &panicErr) {
+		return 2
 	}
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
