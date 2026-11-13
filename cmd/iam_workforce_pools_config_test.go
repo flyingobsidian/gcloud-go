@@ -6,8 +6,7 @@ import (
 	"testing"
 )
 
-func resetIamWpCcFlags() {
-	grp := newIamCmds(legacyTestInvocation())
+func resetIamWpCcFlags(grp *iamCmds) {
 	grp.flagIamWpCcOutputFile = ""
 	grp.flagIamWpCcUserProject = ""
 	grp.flagIamWpCcSubjectTokenType = ""
@@ -97,8 +96,8 @@ func TestStsBaseURL(t *testing.T) {
 
 func TestRunIamWpCreateCredConfigShortForm(t *testing.T) {
 	grp := newIamCmds(legacyTestInvocation())
-	resetIamWpCcFlags()
-	defer resetIamWpCcFlags()
+	resetIamWpCcFlags(grp)
+	defer resetIamWpCcFlags(grp)
 
 	out := t.TempDir() + "/wp-cred.json"
 	grp.flagIamWpCcOutputFile = out
@@ -138,8 +137,8 @@ func TestRunIamWpCreateCredConfigShortForm(t *testing.T) {
 
 func TestRunIamWpCreateCredConfigStsLocation(t *testing.T) {
 	grp := newIamCmds(legacyTestInvocation())
-	resetIamWpCcFlags()
-	defer resetIamWpCcFlags()
+	resetIamWpCcFlags(grp)
+	defer resetIamWpCcFlags(grp)
 
 	out := t.TempDir() + "/wp-cred.json"
 	grp.flagIamWpCcOutputFile = out

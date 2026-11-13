@@ -310,8 +310,7 @@ func TestSccManageLoadModuleConfig(t *testing.T) {
 // sccManageServicesTestSetup wires the shared REST client at an httptest
 // server, injects a synthetic OAuth token, and resets the manage-services
 // flag globals when the test ends.
-func sccManageServicesTestSetup(t *testing.T, server *httptest.Server) {
-	grp := newSccCmds(legacyTestInvocation())
+func sccManageServicesTestSetup(t *testing.T, server *httptest.Server, grp *sccCmds) {
 	t.Helper()
 
 	origRest := grp.sccManageRest
@@ -348,6 +347,7 @@ func sccManageServicesTestSetup(t *testing.T, server *httptest.Server) {
 
 func TestSccManageServicesDescribe(t *testing.T) {
 	grp := newSccCmds(legacyTestInvocation())
+	setContexts(grp.sccCmd)
 	var gotPath, gotMethod string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath, gotMethod = r.URL.Path, r.Method
@@ -363,7 +363,7 @@ func TestSccManageServicesDescribe(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	sccManageServicesTestSetup(t, server)
+	sccManageServicesTestSetup(t, server, grp)
 
 	// Abbreviation input should be normalised to the full name in the URL.
 	grp.flagSccOrg = "1"
@@ -392,6 +392,7 @@ func TestSccManageServicesDescribe(t *testing.T) {
 // which reduces the response to a modules map holding only the named keys.
 func TestSccManageServicesDescribeFilterModules(t *testing.T) {
 	grp := newSccCmds(legacyTestInvocation())
+	setContexts(grp.sccCmd)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -403,7 +404,7 @@ func TestSccManageServicesDescribeFilterModules(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	sccManageServicesTestSetup(t, server)
+	sccManageServicesTestSetup(t, server, grp)
 
 	grp.flagSccOrg = "1"
 	grp.flagSccFormat = "json"
@@ -432,7 +433,7 @@ func TestSccManageServicesDescribeRejectsUnknownService(t *testing.T) {
 		t.Error("HTTP server should not be reached for an invalid service")
 	}))
 	defer server.Close()
-	sccManageServicesTestSetup(t, server)
+	sccManageServicesTestSetup(t, server, grp)
 	grp.flagSccOrg = "1"
 
 	err := grp.runSccManageServicesDescribe(grp.sccManageServicesDescribeCmd, []string{"not-a-service"})
@@ -443,6 +444,7 @@ func TestSccManageServicesDescribeRejectsUnknownService(t *testing.T) {
 
 func TestSccManageServicesList(t *testing.T) {
 	grp := newSccCmds(legacyTestInvocation())
+	setContexts(grp.sccCmd)
 	var gotPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -463,7 +465,7 @@ func TestSccManageServicesList(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	sccManageServicesTestSetup(t, server)
+	sccManageServicesTestSetup(t, server, grp)
 
 	grp.flagSccFolder = "42"
 	out := captureStdout(t, func() {
@@ -488,6 +490,7 @@ func TestSccManageServicesList(t *testing.T) {
 
 func TestSccManageServicesUpdate(t *testing.T) {
 	grp := newSccCmds(legacyTestInvocation())
+	setContexts(grp.sccCmd)
 	var gotPath, gotMethod, gotQuery string
 	var gotBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -500,7 +503,7 @@ func TestSccManageServicesUpdate(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	sccManageServicesTestSetup(t, server)
+	sccManageServicesTestSetup(t, server, grp)
 
 	// Take the prompt out of the way: in a non-interactive test context
 	// promptYesNo(_, true) already defaults to yes, but flagQuiet keeps
@@ -557,6 +560,7 @@ func TestSccManageServicesUpdate(t *testing.T) {
 // prompt entirely, so it works fine without --quiet.
 func TestSccManageServicesUpdateValidateOnly(t *testing.T) {
 	grp := newSccCmds(legacyTestInvocation())
+	setContexts(grp.sccCmd)
 	var gotQuery string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.RawQuery
@@ -564,7 +568,7 @@ func TestSccManageServicesUpdateValidateOnly(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"name": "ok"})
 	}))
 	defer server.Close()
-	sccManageServicesTestSetup(t, server)
+	sccManageServicesTestSetup(t, server, grp)
 
 	grp.flagSccOrg = "1"
 	grp.flagSccManageEnablementState = "disabled"
@@ -591,7 +595,7 @@ func TestSccManageServicesUpdateRequiresAField(t *testing.T) {
 		t.Error("HTTP server should not be reached without --enablement-state or --module-config-file")
 	}))
 	defer server.Close()
-	sccManageServicesTestSetup(t, server)
+	sccManageServicesTestSetup(t, server, grp)
 
 	grp.flagSccOrg = "1"
 

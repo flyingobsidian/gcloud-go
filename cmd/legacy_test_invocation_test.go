@@ -6,6 +6,7 @@ import (
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"github.com/flyingobsidian/gcloud-go/internal/config"
+	"github.com/spf13/cobra"
 	"golang.org/x/oauth2"
 )
 
@@ -43,3 +44,12 @@ func (osStdout) Write(p []byte) (int, error) { return os.Stdout.Write(p) }
 type osStderr struct{}
 
 func (osStderr) Write(p []byte) (int, error) { return os.Stderr.Write(p) }
+
+// setContexts gives c and its subcommands a background context, for tests
+// that call run functions directly instead of executing the command.
+func setContexts(c *cobra.Command) {
+	c.SetContext(context.Background())
+	for _, sub := range c.Commands() {
+		setContexts(sub)
+	}
+}
