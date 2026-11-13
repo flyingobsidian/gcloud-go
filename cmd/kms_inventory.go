@@ -1,99 +1,61 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	kmsinventory "google.golang.org/api/kmsinventory/v1"
 )
 
 // --- gcloud kms inventory (#1104) ---
 
-var kmsInventoryCmd = &cobra.Command{
-	Use:   "inventory",
-	Short: "KMS inventory and key-tracking",
-}
-
-var (
-	flagKmsInvFormat        string
-	flagKmsInvPageSize      int64
-	flagKmsInvScope         string
-	flagKmsInvCryptoKey     string
-	flagKmsInvResourceTypes []string
-	flagKmsInvKey           string
-	flagKmsInvFallbackScope string
-)
-
-var kmsInvSummaryCmd = &cobra.Command{
-	Use:   "get-protected-resources-summary",
-	Short: "Get an aggregate summary of resources protected by a CryptoKey",
-	Args:  cobra.NoArgs,
-	RunE:  runKmsInvSummary,
-}
-
-var kmsInvListKeysCmd = &cobra.Command{
-	Use:   "list-keys",
-	Short: "List Cloud KMS keys in a project (from inventory snapshots)",
-	Args:  cobra.NoArgs,
-	RunE:  runKmsInvListKeys,
-}
-
-var kmsInvSearchCmd = &cobra.Command{
-	Use:   "search-protected-resources",
-	Short: "Search resources protected by a Cloud KMS CryptoKey",
-	Args:  cobra.NoArgs,
-	RunE:  runKmsInvSearch,
-}
-
-func init() {
-	for _, c := range []*cobra.Command{kmsInvSummaryCmd, kmsInvListKeysCmd, kmsInvSearchCmd} {
-		c.Flags().StringVar(&flagKmsInvFormat, "format", "", "Output format")
+func (s *kmsCmds) initKmsInventory() {
+	for _, c := range []*cobra.Command{s.kmsInvSummaryCmd, s.kmsInvListKeysCmd, s.kmsInvSearchCmd} {
+		c.Flags().StringVar(&s.flagKmsInvFormat, "format", "", "Output format")
 	}
 
-	kmsInvSummaryCmd.Flags().StringVar(&flagKmsInvKey, "crypto-key", "", "Fully-qualified CryptoKey resource name (required)")
-	kmsInvSummaryCmd.Flags().StringVar(&flagKmsInvFallbackScope, "fallback-scope", "", "Fallback scope: FALLBACK_SCOPE_PROJECT")
-	_ = kmsInvSummaryCmd.MarkFlagRequired("crypto-key")
+	s.kmsInvSummaryCmd.Flags().StringVar(&s.flagKmsInvKey, "crypto-key", "", "Fully-qualified CryptoKey resource name (required)")
+	s.kmsInvSummaryCmd.Flags().StringVar(&s.flagKmsInvFallbackScope, "fallback-scope", "", "Fallback scope: FALLBACK_SCOPE_PROJECT")
+	_ = s.kmsInvSummaryCmd.MarkFlagRequired("crypto-key")
 
-	kmsInvListKeysCmd.Flags().Int64Var(&flagKmsInvPageSize, "page-size", 0, "Page size (max 1000)")
+	s.kmsInvListKeysCmd.Flags().Int64Var(&s.flagKmsInvPageSize, "page-size", 0, "Page size (max 1000)")
 
-	kmsInvSearchCmd.Flags().StringVar(&flagKmsInvScope, "scope", "", "Scope: organizations/ORG or projects/PROJECT (required)")
-	kmsInvSearchCmd.Flags().StringVar(&flagKmsInvCryptoKey, "crypto-key", "", "Fully-qualified CryptoKey resource name (required)")
-	kmsInvSearchCmd.Flags().StringSliceVar(&flagKmsInvResourceTypes, "resource-types", nil, "Optional resource type filters")
-	kmsInvSearchCmd.Flags().Int64Var(&flagKmsInvPageSize, "page-size", 0, "Page size (max 500)")
-	_ = kmsInvSearchCmd.MarkFlagRequired("scope")
-	_ = kmsInvSearchCmd.MarkFlagRequired("crypto-key")
+	s.kmsInvSearchCmd.Flags().StringVar(&s.flagKmsInvScope, "scope", "", "Scope: organizations/ORG or projects/PROJECT (required)")
+	s.kmsInvSearchCmd.Flags().StringVar(&s.flagKmsInvCryptoKey, "crypto-key", "", "Fully-qualified CryptoKey resource name (required)")
+	s.kmsInvSearchCmd.Flags().StringSliceVar(&s.flagKmsInvResourceTypes, "resource-types", nil, "Optional resource type filters")
+	s.kmsInvSearchCmd.Flags().Int64Var(&s.flagKmsInvPageSize, "page-size", 0, "Page size (max 500)")
+	_ = s.kmsInvSearchCmd.MarkFlagRequired("scope")
+	_ = s.kmsInvSearchCmd.MarkFlagRequired("crypto-key")
 
-	kmsInventoryCmd.AddCommand(kmsInvSummaryCmd, kmsInvListKeysCmd, kmsInvSearchCmd)
-	kmsCmd.AddCommand(kmsInventoryCmd)
+	s.kmsInventoryCmd.AddCommand(s.kmsInvSummaryCmd, s.kmsInvListKeysCmd, s.kmsInvSearchCmd)
+	s.kmsCmd.AddCommand(s.kmsInventoryCmd)
 }
 
-func runKmsInvSummary(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.KMSInventoryService(ctx, flagAccount)
+func (s *kmsCmds) runKmsInvSummary(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMSInventory(ctx)
 	if err != nil {
 		return err
 	}
-	call := svc.Projects.Locations.KeyRings.CryptoKeys.GetProtectedResourcesSummary(flagKmsInvKey).Context(ctx)
-	if flagKmsInvFallbackScope != "" {
-		call = call.FallbackScope(flagKmsInvFallbackScope)
+	call := svc.Projects.Locations.KeyRings.CryptoKeys.GetProtectedResourcesSummary(s.flagKmsInvKey).Context(ctx)
+	if s.flagKmsInvFallbackScope != "" {
+		call = call.FallbackScope(s.flagKmsInvFallbackScope)
 	}
 	out, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("getting protected resources summary: %w", err)
 	}
-	return emitFormatted(out, flagKmsInvFormat)
+	return emitFormattedTo(s.inv.stdout, out, s.flagKmsInvFormat)
 }
 
-func runKmsInvListKeys(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *kmsCmds) runKmsInvListKeys(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.KMSInventoryService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMSInventory(ctx)
 	if err != nil {
 		return err
 	}
@@ -102,8 +64,8 @@ func runKmsInvListKeys(cmd *cobra.Command, args []string) error {
 	token := ""
 	for {
 		call := svc.Projects.CryptoKeys.List(parent).Context(ctx)
-		if flagKmsInvPageSize > 0 {
-			call = call.PageSize(flagKmsInvPageSize)
+		if s.flagKmsInvPageSize > 0 {
+			call = call.PageSize(s.flagKmsInvPageSize)
 		}
 		if token != "" {
 			call = call.PageToken(token)
@@ -118,27 +80,27 @@ func runKmsInvListKeys(cmd *cobra.Command, args []string) error {
 		}
 		token = resp.NextPageToken
 	}
-	return emitFormatted(all, flagKmsInvFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagKmsInvFormat)
 }
 
-func runKmsInvSearch(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := gcp.KMSInventoryService(ctx, flagAccount)
+func (s *kmsCmds) runKmsInvSearch(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().KMSInventory(ctx)
 	if err != nil {
 		return err
 	}
-	scope := flagKmsInvScope
+	scope := s.flagKmsInvScope
 	var all []*kmsinventory.GoogleCloudKmsInventoryV1ProtectedResource
 	token := ""
 	// Dispatch on scope prefix so we hit the right REST parent.
 	if strings.HasPrefix(scope, "projects/") {
 		for {
-			call := svc.Projects.ProtectedResources.Search(scope).CryptoKey(flagKmsInvCryptoKey).Context(ctx)
-			if len(flagKmsInvResourceTypes) > 0 {
-				call = call.ResourceTypes(flagKmsInvResourceTypes...)
+			call := svc.Projects.ProtectedResources.Search(scope).CryptoKey(s.flagKmsInvCryptoKey).Context(ctx)
+			if len(s.flagKmsInvResourceTypes) > 0 {
+				call = call.ResourceTypes(s.flagKmsInvResourceTypes...)
 			}
-			if flagKmsInvPageSize > 0 {
-				call = call.PageSize(flagKmsInvPageSize)
+			if s.flagKmsInvPageSize > 0 {
+				call = call.PageSize(s.flagKmsInvPageSize)
 			}
 			if token != "" {
 				call = call.PageToken(token)
@@ -155,12 +117,12 @@ func runKmsInvSearch(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		for {
-			call := svc.Organizations.ProtectedResources.Search(scope).CryptoKey(flagKmsInvCryptoKey).Context(ctx)
-			if len(flagKmsInvResourceTypes) > 0 {
-				call = call.ResourceTypes(flagKmsInvResourceTypes...)
+			call := svc.Organizations.ProtectedResources.Search(scope).CryptoKey(s.flagKmsInvCryptoKey).Context(ctx)
+			if len(s.flagKmsInvResourceTypes) > 0 {
+				call = call.ResourceTypes(s.flagKmsInvResourceTypes...)
 			}
-			if flagKmsInvPageSize > 0 {
-				call = call.PageSize(flagKmsInvPageSize)
+			if s.flagKmsInvPageSize > 0 {
+				call = call.PageSize(s.flagKmsInvPageSize)
 			}
 			if token != "" {
 				call = call.PageToken(token)
@@ -176,5 +138,5 @@ func runKmsInvSearch(cmd *cobra.Command, args []string) error {
 			token = resp.NextPageToken
 		}
 	}
-	return emitFormatted(all, flagKmsInvFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagKmsInvFormat)
 }
