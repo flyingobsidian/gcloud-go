@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"runtime/debug"
 	"strings"
 
 	"github.com/flyingobsidian/gcloud-go/internal/auth"
@@ -59,14 +61,31 @@ type CommandError struct {
 func (e *CommandError) Error() string { return e.text }
 func (e *CommandError) Unwrap() error { return e.Err }
 
+// PanicError is the error from a command that panicked while RunInProcess
+// ran it. The panic is recovered so that it doesn't take down the caller
+// (#2084). Panics in goroutines a command starts are not recovered.
+type PanicError struct {
+	// Value is the value passed to panic.
+	Value any
+	// Stack is the stack trace of the panicking goroutine.
+	Stack []byte
+}
+
+func (e *PanicError) Error() string { return fmt.Sprintf("command panicked: %v", e.Value) }
+
 // RunInProcess runs one gcloud-go command in the calling process. It is safe
 // to call concurrently: each run has its own command tree, flags, streams
 // and environment. It never prompts and never offers to enable APIs.
 //
 // It returns ErrNotInProcess for commands that cannot run in-process yet,
-// a *CommandError if the command ran and failed, or another error if the
-// arguments could not be parsed.
-func RunInProcess(ctx context.Context, p InProcess) error {
+// a *CommandError if the command ran and failed, a *PanicError if the
+// command panicked, or another error if the arguments could not be parsed.
+func RunInProcess(ctx context.Context, p InProcess) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = &PanicError{Value: r, Stack: debug.Stack()}
+		}
+	}()
 	inv := &invocation{
 		stdin:  p.Stdin,
 		stdout: p.Stdout,
