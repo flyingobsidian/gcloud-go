@@ -9,23 +9,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var authConfigureDockerCmd = &cobra.Command{
-	Use:   "configure-docker [REGISTRIES]",
-	Short: "Configure Docker to use gcloud as a credential helper",
-	Long: `Configure Docker to authenticate with Artifact Registry or Container Registry.
-Examples:
-  gcloud auth configure-docker
-  gcloud auth configure-docker europe-west1-docker.pkg.dev
-  gcloud auth configure-docker us-docker.pkg.dev,europe-west1-docker.pkg.dev`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runAuthConfigureDocker,
-}
-
-var flagIncludeArtifactRegistry bool
-
-func init() {
-	authConfigureDockerCmd.Flags().BoolVar(&flagIncludeArtifactRegistry, "include-artifact-registry", false, "Also add Artifact Registry domains")
-	authCmd.AddCommand(authConfigureDockerCmd)
+func (s *authCmds) initAuthDocker() {
+	s.authConfigureDockerCmd.Flags().BoolVar(&s.flagIncludeArtifactRegistry, "include-artifact-registry", false, "Also add Artifact Registry domains")
+	s.authCmd.AddCommand(s.authConfigureDockerCmd)
 }
 
 // dockerConfig represents ~/.docker/config.json
@@ -36,7 +22,7 @@ type dockerConfig struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
-func runAuthConfigureDocker(cmd *cobra.Command, args []string) error {
+func (s *authCmds) runAuthConfigureDocker(cmd *cobra.Command, args []string) error {
 	var registries []string
 	if len(args) > 0 && args[0] != "" {
 		// Split comma-separated registries.
@@ -53,7 +39,7 @@ func runAuthConfigureDocker(cmd *cobra.Command, args []string) error {
 			"staging-k8s.gcr.io",
 			"marketplace.gcr.io",
 		}
-		if flagIncludeArtifactRegistry {
+		if s.flagIncludeArtifactRegistry {
 			arRegions := []string{
 				"africa-south1", "asia-east1", "asia-east2", "asia-northeast1",
 				"asia-northeast2", "asia-northeast3", "asia-south1", "asia-south2",
@@ -73,7 +59,7 @@ func runAuthConfigureDocker(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	configPath, err := dockerConfigPath()
+	configPath, err := s.dockerConfigPath()
 	if err != nil {
 		return err
 	}
@@ -97,13 +83,13 @@ func runAuthConfigureDocker(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Docker configuration file updated: %s\n", configPath)
-	fmt.Printf("Added credential helper for: %v\n", registries)
+	fmt.Fprintf(s.inv.stdout, "Docker configuration file updated: %s\n", configPath)
+	fmt.Fprintf(s.inv.stdout, "Added credential helper for: %v\n", registries)
 	return nil
 }
 
-func dockerConfigPath() (string, error) {
-	if p := os.Getenv("DOCKER_CONFIG"); p != "" {
+func (s *authCmds) dockerConfigPath() (string, error) {
+	if p := s.inv.env.Getenv("DOCKER_CONFIG"); p != "" {
 		return filepath.Join(p, "config.json"), nil
 	}
 	home, err := os.UserHomeDir()

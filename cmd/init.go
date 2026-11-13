@@ -53,7 +53,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Delegate to the existing auth login flow so behavior stays consistent
 	// with `gcloud auth login`. runAuthLogin honours --cred-file when set,
 	// or opens the browser otherwise.
-	if err := runAuthLogin(cmd, nil); err != nil {
+	if err := newAuthCmds(newOSInvocation()).runAuthLogin(cmd, nil); err != nil {
 		return err
 	}
 

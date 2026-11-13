@@ -3,8 +3,9 @@ package cmd
 import "testing"
 
 func TestAuthHasPrintIdentityToken(t *testing.T) {
+	grp := newAuthCmds(legacyTestInvocation())
 	found := false
-	for _, c := range authCmd.Commands() {
+	for _, c := range grp.authCmd.Commands() {
 		if c.Name() == "print-identity-token" {
 			found = true
 			if c.RunE == nil {
