@@ -117,6 +117,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newMetastoreCmd(inv),
 		newBuildsCmd(inv),
 		newNotebooksCmd(inv),
+		newDataplexCmd(inv),
 	}
 }
 
