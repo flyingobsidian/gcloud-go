@@ -7,7 +7,8 @@ import (
 )
 
 func edgeCloudSubgroup(name string) *cobra.Command {
-	for _, c := range edgeCloudCmd.Commands() {
+	grp := newEdgeCloudCmds(legacyTestInvocation())
+	for _, c := range grp.edgeCloudCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
