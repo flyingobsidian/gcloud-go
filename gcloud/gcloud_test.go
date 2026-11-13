@@ -106,3 +106,31 @@ func TestRunMigratedGroupInProcess(t *testing.T) {
 		t.Errorf("Run = %v, want a *CommandError from gcloud.projects.describe (there are no credentials)", err)
 	}
 }
+
+// panicWriter panics on every write, standing in for a command that panics.
+type panicWriter struct{}
+
+func (panicWriter) Write([]byte) (int, error) { panic("boom") }
+
+// Guards #2084: a panicking command returns an error instead of taking down
+// the caller.
+func TestRunRecoversPanic(t *testing.T) {
+	r := testRunner(t)
+	err := r.Run(context.Background(), Invocation{Args: []string{"storage", "--help"}, Stdout: panicWriter{}})
+	var perr *PanicError
+	if !errors.As(err, &perr) {
+		t.Fatalf("Run = %v, want a *PanicError", err)
+	}
+	if perr.Value != "boom" {
+		t.Errorf("Value = %v, want boom", perr.Value)
+	}
+	if want := "command panicked: boom"; perr.Error() != want {
+		t.Errorf("Error() = %q, want %q", perr.Error(), want)
+	}
+	if len(perr.Stack) == 0 {
+		t.Error("Stack is empty")
+	}
+	if ExitCode(err) != 2 {
+		t.Errorf("ExitCode = %d, want 2", ExitCode(err))
+	}
+}
