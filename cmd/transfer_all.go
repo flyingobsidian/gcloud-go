@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	cloudresourcemanager "google.golang.org/api/cloudresourcemanager/v3"
 	storagetransfer "google.golang.org/api/storagetransfer/v1"
@@ -20,35 +19,7 @@ import (
 // --- Shared helpers for the Storage Transfer surface (#887-#891) ---
 
 var (
-	flagXferFormat        string
-	flagXferFilter        string
-	flagXferConfigFile    string
-	flagXferAsync         bool
-	flagXferPageSize      int64
-	flagXferDisplayName   string
-	flagXferBandwidthMbps int64
-	flagXferClearName     bool
-	flagXferClearBW       bool
-	flagXferJobName       string
-	flagXferJobDesc       string
-	flagXferSrcAgentPool  string
-	flagXferDstAgentPool  string
-	flagXferSrcCredsFile  string
-	flagXferSchedRepeats  string
-	flagXferJobStatus     string
-	flagXferPool          string
-	flagXferCredsFile     string
-	flagXferCount         int
-	flagXferIDPrefix      string
-	flagXferLogsDirectory string
-	flagXferMemlockLimit  int64
-	flagXferMountDirs     []string
-	flagXferProxy         string
-	flagXferS3Compatible  bool
-	flagXferAgentID       string
-	flagXferAgentAll      bool
-	flagXferUninstall     bool
-	flagXferAddMissing    bool
+	flagXferPageSize int64
 )
 
 // xferAgentPoolName returns the fully-qualified agent-pool resource name.
@@ -77,237 +48,137 @@ func xferOpName(name string) string {
 	return "transferOperations/" + name
 }
 
-func xferService(ctx context.Context) (*storagetransfer.Service, error) {
-	return gcp.StorageTransferService(ctx, flagAccount)
+func (s *transferCmds) xferService(ctx context.Context) (*storagetransfer.Service, error) {
+	return s.inv.clients().StorageTransfer(ctx)
 }
 
 // --- Subgroup command objects ---
 
-var (
-	xferAgentPoolsCmd = &cobra.Command{Use: "agent-pools", Short: "Manage on-premise transfer agent pools"}
-	xferAgentsCmd     = &cobra.Command{Use: "agents", Short: "Manage transfer agents"}
-	xferJobsCmd       = &cobra.Command{Use: "jobs", Short: "Manage transfer jobs"}
-	xferOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage transfer operations"}
-)
-
 // --- agent-pools ---
-
-var (
-	xferPoolCreateCmd = &cobra.Command{
-		Use: "create POOL", Short: "Create a Transfer Service agent pool",
-		Args: cobra.ExactArgs(1), RunE: runXferPoolCreate,
-	}
-	xferPoolDeleteCmd = &cobra.Command{
-		Use: "delete POOL", Short: "Delete a Transfer Service agent pool",
-		Args: cobra.ExactArgs(1), RunE: runXferPoolDelete,
-	}
-	xferPoolDescribeCmd = &cobra.Command{
-		Use: "describe POOL", Short: "Describe a Transfer Service agent pool",
-		Args: cobra.ExactArgs(1), RunE: runXferPoolDescribe,
-	}
-	xferPoolListCmd = &cobra.Command{
-		Use: "list", Short: "List Transfer Service agent pools",
-		Args: cobra.NoArgs, RunE: runXferPoolList,
-	}
-	xferPoolUpdateCmd = &cobra.Command{
-		Use: "update POOL", Short: "Update a Transfer Service agent pool",
-		Args: cobra.ExactArgs(1), RunE: runXferPoolUpdate,
-	}
-)
 
 // --- agents ---
 
-var (
-	xferAgentInstallCmd = &cobra.Command{
-		Use: "install", Short: "Install Transfer Service agents locally (Docker)",
-		Args: cobra.NoArgs, RunE: runXferAgentInstall,
-	}
-	xferAgentDeleteCmd = &cobra.Command{
-		Use: "delete", Short: "Stop and remove locally installed transfer agent containers",
-		Args: cobra.NoArgs, RunE: runXferAgentDelete,
-	}
-)
-
 // --- jobs ---
-
-var (
-	xferJobCreateCmd = &cobra.Command{
-		Use: "create SOURCE DESTINATION", Short: "Create a Transfer Service transfer job",
-		Args: cobra.ExactArgs(2), RunE: runXferJobCreate,
-	}
-	xferJobDeleteCmd = &cobra.Command{
-		Use: "delete JOB", Short: "Delete a Transfer Service transfer job",
-		Args: cobra.ExactArgs(1), RunE: runXferJobDelete,
-	}
-	xferJobDescribeCmd = &cobra.Command{
-		Use: "describe JOB", Short: "Describe a Transfer Service transfer job",
-		Args: cobra.ExactArgs(1), RunE: runXferJobDescribe,
-	}
-	xferJobListCmd = &cobra.Command{
-		Use: "list", Short: "List Transfer Service transfer jobs",
-		Args: cobra.NoArgs, RunE: runXferJobList,
-	}
-	xferJobUpdateCmd = &cobra.Command{
-		Use: "update JOB", Short: "Update a Transfer Service transfer job",
-		Args: cobra.ExactArgs(1), RunE: runXferJobUpdate,
-	}
-	xferJobRunCmd = &cobra.Command{
-		Use: "run JOB", Short: "Run a Transfer Service transfer job now",
-		Args: cobra.ExactArgs(1), RunE: runXferJobRun,
-	}
-	xferJobMonitorCmd = &cobra.Command{
-		Use: "monitor JOB", Short: "Monitor the latest operation for a transfer job",
-		Args: cobra.ExactArgs(1), RunE: runXferJobMonitor,
-	}
-)
 
 // --- operations ---
 
-var (
-	xferOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a Transfer Service transfer operation",
-		Args: cobra.ExactArgs(1), RunE: runXferOpCancel,
-	}
-	xferOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Transfer Service transfer operation",
-		Args: cobra.ExactArgs(1), RunE: runXferOpDescribe,
-	}
-	xferOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Transfer Service transfer operations",
-		Args: cobra.NoArgs, RunE: runXferOpList,
-	}
-	xferOpPauseCmd = &cobra.Command{
-		Use: "pause OPERATION", Short: "Pause a Transfer Service transfer operation",
-		Args: cobra.ExactArgs(1), RunE: runXferOpPause,
-	}
-	xferOpResumeCmd = &cobra.Command{
-		Use: "resume OPERATION", Short: "Resume a Transfer Service transfer operation",
-		Args: cobra.ExactArgs(1), RunE: runXferOpResume,
-	}
-)
-
 // --- authorize ---
 
-var xferAuthorizeCmd = &cobra.Command{
-	Use: "authorize", Short: "Authorize an account for all Transfer Service features",
-	Args: cobra.NoArgs, RunE: runXferAuthorize,
-}
-
-func init() {
+func (s *transferCmds) initTransferAll() {
 	// Common flags.
 	addFmt := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagXferFormat, "format", "", "Output format")
+			c.Flags().StringVar(&s.flagXferFormat, "format", "", "Output format")
 		}
 	}
 	addFilter := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagXferFilter, "filter", "", "Server-side list filter")
+			c.Flags().StringVar(&s.flagXferFilter, "filter", "", "Server-side list filter")
 		}
 	}
 
 	// agent-pools flags
-	xferPoolCreateCmd.Flags().StringVar(&flagXferDisplayName, "display-name", "", "Human-readable display name")
-	xferPoolCreateCmd.Flags().Int64Var(&flagXferBandwidthMbps, "bandwidth-limit", 0, "Bandwidth limit in MB/s (0 for none)")
-	xferPoolCreateCmd.Flags().BoolVar(&flagXferAsync, "no-async", false, "Block until pool is created")
-	xferPoolCreateCmd.Flags().StringVar(&flagXferConfigFile, "config-file", "", "Optional JSON/YAML AgentPool body override")
-	xferPoolUpdateCmd.Flags().StringVar(&flagXferDisplayName, "display-name", "", "Update the display name")
-	xferPoolUpdateCmd.Flags().Int64Var(&flagXferBandwidthMbps, "bandwidth-limit", 0, "Update the bandwidth limit in MB/s")
-	xferPoolUpdateCmd.Flags().BoolVar(&flagXferClearName, "clear-display-name", false, "Remove the display name")
-	xferPoolUpdateCmd.Flags().BoolVar(&flagXferClearBW, "clear-bandwidth-limit", false, "Remove the bandwidth limit")
-	addFmt(xferPoolCreateCmd, xferPoolDescribeCmd, xferPoolListCmd, xferPoolUpdateCmd)
-	addFilter(xferPoolListCmd)
-	xferAgentPoolsCmd.AddCommand(xferPoolCreateCmd, xferPoolDeleteCmd, xferPoolDescribeCmd, xferPoolListCmd, xferPoolUpdateCmd)
-	transferCmd.AddCommand(xferAgentPoolsCmd)
+	s.xferPoolCreateCmd.Flags().StringVar(&s.flagXferDisplayName, "display-name", "", "Human-readable display name")
+	s.xferPoolCreateCmd.Flags().Int64Var(&s.flagXferBandwidthMbps, "bandwidth-limit", 0, "Bandwidth limit in MB/s (0 for none)")
+	s.xferPoolCreateCmd.Flags().BoolVar(&s.flagXferAsync, "no-async", false, "Block until pool is created")
+	s.xferPoolCreateCmd.Flags().StringVar(&s.flagXferConfigFile, "config-file", "", "Optional JSON/YAML AgentPool body override")
+	s.xferPoolUpdateCmd.Flags().StringVar(&s.flagXferDisplayName, "display-name", "", "Update the display name")
+	s.xferPoolUpdateCmd.Flags().Int64Var(&s.flagXferBandwidthMbps, "bandwidth-limit", 0, "Update the bandwidth limit in MB/s")
+	s.xferPoolUpdateCmd.Flags().BoolVar(&s.flagXferClearName, "clear-display-name", false, "Remove the display name")
+	s.xferPoolUpdateCmd.Flags().BoolVar(&s.flagXferClearBW, "clear-bandwidth-limit", false, "Remove the bandwidth limit")
+	addFmt(s.xferPoolCreateCmd, s.xferPoolDescribeCmd, s.xferPoolListCmd, s.xferPoolUpdateCmd)
+	addFilter(s.xferPoolListCmd)
+	s.xferAgentPoolsCmd.AddCommand(s.xferPoolCreateCmd, s.xferPoolDeleteCmd, s.xferPoolDescribeCmd, s.xferPoolListCmd, s.xferPoolUpdateCmd)
+	s.transferCmd.AddCommand(s.xferAgentPoolsCmd)
 
 	// agents flags
-	xferAgentInstallCmd.Flags().StringVar(&flagXferPool, "pool", "", "Agent pool to associate with the new agent(s) (required)")
-	_ = xferAgentInstallCmd.MarkFlagRequired("pool")
-	xferAgentInstallCmd.Flags().StringVar(&flagXferCredsFile, "creds-file", "", "Path to a service-account credentials file to mount into the container")
-	xferAgentInstallCmd.Flags().IntVar(&flagXferCount, "count", 1, "Number of agent containers to start")
-	xferAgentInstallCmd.Flags().StringVar(&flagXferIDPrefix, "id-prefix", "", "Optional prefix for the agent ID")
-	xferAgentInstallCmd.Flags().StringVar(&flagXferLogsDirectory, "logs-directory", "/tmp", "Directory to mount for agent logs")
-	xferAgentInstallCmd.Flags().Int64Var(&flagXferMemlockLimit, "memlock-limit", 64000000, "Container memlock ulimit")
-	xferAgentInstallCmd.Flags().StringSliceVar(&flagXferMountDirs, "mount-directories", nil, "Directories to bind-mount into the container")
-	xferAgentInstallCmd.Flags().StringVar(&flagXferProxy, "proxy", "", "HTTPS proxy URL")
-	xferAgentInstallCmd.Flags().BoolVar(&flagXferS3Compatible, "s3-compatible-mode", false, "Enable S3-compatible source mode (deprecated)")
-	_ = xferAgentInstallCmd.Flags().MarkDeprecated("s3-compatible-mode",
+	s.xferAgentInstallCmd.Flags().StringVar(&s.flagXferPool, "pool", "", "Agent pool to associate with the new agent(s) (required)")
+	_ = s.xferAgentInstallCmd.MarkFlagRequired("pool")
+	s.xferAgentInstallCmd.Flags().StringVar(&s.flagXferCredsFile, "creds-file", "", "Path to a service-account credentials file to mount into the container")
+	s.xferAgentInstallCmd.Flags().IntVar(&s.flagXferCount, "count", 1, "Number of agent containers to start")
+	s.xferAgentInstallCmd.Flags().StringVar(&s.flagXferIDPrefix, "id-prefix", "", "Optional prefix for the agent ID")
+	s.xferAgentInstallCmd.Flags().StringVar(&s.flagXferLogsDirectory, "logs-directory", "/tmp", "Directory to mount for agent logs")
+	s.xferAgentInstallCmd.Flags().Int64Var(&s.flagXferMemlockLimit, "memlock-limit", 64000000, "Container memlock ulimit")
+	s.xferAgentInstallCmd.Flags().StringSliceVar(&s.flagXferMountDirs, "mount-directories", nil, "Directories to bind-mount into the container")
+	s.xferAgentInstallCmd.Flags().StringVar(&s.flagXferProxy, "proxy", "", "HTTPS proxy URL")
+	s.xferAgentInstallCmd.Flags().BoolVar(&s.flagXferS3Compatible, "s3-compatible-mode", false, "Enable S3-compatible source mode (deprecated)")
+	_ = s.xferAgentInstallCmd.Flags().MarkDeprecated("s3-compatible-mode",
 		"Transfer Service now auto-detects S3-compatible sources; this flag is a no-op.")
-	xferAgentDeleteCmd.Flags().StringVar(&flagXferAgentID, "id", "", "Container ID to stop (either --id or --all is required)")
-	xferAgentDeleteCmd.Flags().BoolVar(&flagXferAgentAll, "all", false, "Stop all local tsop-agent containers")
-	xferAgentDeleteCmd.Flags().BoolVar(&flagXferUninstall, "uninstall", false, "Also remove the container image after stopping")
-	xferAgentsCmd.AddCommand(xferAgentInstallCmd, xferAgentDeleteCmd)
-	transferCmd.AddCommand(xferAgentsCmd)
+	s.xferAgentDeleteCmd.Flags().StringVar(&s.flagXferAgentID, "id", "", "Container ID to stop (either --id or --all is required)")
+	s.xferAgentDeleteCmd.Flags().BoolVar(&s.flagXferAgentAll, "all", false, "Stop all local tsop-agent containers")
+	s.xferAgentDeleteCmd.Flags().BoolVar(&s.flagXferUninstall, "uninstall", false, "Also remove the container image after stopping")
+	s.xferAgentsCmd.AddCommand(s.xferAgentInstallCmd, s.xferAgentDeleteCmd)
+	s.transferCmd.AddCommand(s.xferAgentsCmd)
 
 	// jobs flags
-	xferJobCreateCmd.Flags().StringVar(&flagXferJobName, "name", "", "Unique job identifier (auto-generated when empty)")
-	xferJobCreateCmd.Flags().StringVar(&flagXferJobDesc, "description", "", "Optional job description")
-	xferJobCreateCmd.Flags().StringVar(&flagXferSrcAgentPool, "source-agent-pool", "", "Source POSIX/HDFS agent pool")
-	xferJobCreateCmd.Flags().StringVar(&flagXferDstAgentPool, "destination-agent-pool", "", "Destination POSIX agent pool")
-	xferJobCreateCmd.Flags().StringVar(&flagXferSrcCredsFile, "source-creds-file", "", "Path to source credentials file")
-	xferJobCreateCmd.Flags().StringVar(&flagXferSchedRepeats, "schedule-repeats-every", "", "Recurrence interval (e.g. 1d, 12h); omit for one-time transfer")
-	xferJobCreateCmd.Flags().BoolVar(&flagXferAsync, "no-async", false, "Wait for the first operation to finish")
-	xferJobCreateCmd.Flags().StringVar(&flagXferConfigFile, "config-file", "", "JSON/YAML TransferJob body override")
-	xferJobUpdateCmd.Flags().StringVar(&flagXferJobStatus, "status", "", "Job status (enabled, disabled, deleted)")
-	xferJobUpdateCmd.Flags().StringVar(&flagXferJobDesc, "description", "", "Update job description")
-	xferJobUpdateCmd.Flags().StringVar(&flagXferConfigFile, "config-file", "", "JSON/YAML TransferJob body override")
-	xferJobRunCmd.Flags().BoolVar(&flagXferAsync, "no-async", false, "Wait for the operation to finish")
-	addFmt(xferJobCreateCmd, xferJobDescribeCmd, xferJobListCmd, xferJobUpdateCmd, xferJobRunCmd, xferJobMonitorCmd)
-	addFilter(xferJobListCmd)
-	xferJobsCmd.AddCommand(xferJobCreateCmd, xferJobDeleteCmd, xferJobDescribeCmd, xferJobListCmd,
-		xferJobUpdateCmd, xferJobRunCmd, xferJobMonitorCmd)
-	transferCmd.AddCommand(xferJobsCmd)
+	s.xferJobCreateCmd.Flags().StringVar(&s.flagXferJobName, "name", "", "Unique job identifier (auto-generated when empty)")
+	s.xferJobCreateCmd.Flags().StringVar(&s.flagXferJobDesc, "description", "", "Optional job description")
+	s.xferJobCreateCmd.Flags().StringVar(&s.flagXferSrcAgentPool, "source-agent-pool", "", "Source POSIX/HDFS agent pool")
+	s.xferJobCreateCmd.Flags().StringVar(&s.flagXferDstAgentPool, "destination-agent-pool", "", "Destination POSIX agent pool")
+	s.xferJobCreateCmd.Flags().StringVar(&s.flagXferSrcCredsFile, "source-creds-file", "", "Path to source credentials file")
+	s.xferJobCreateCmd.Flags().StringVar(&s.flagXferSchedRepeats, "schedule-repeats-every", "", "Recurrence interval (e.g. 1d, 12h); omit for one-time transfer")
+	s.xferJobCreateCmd.Flags().BoolVar(&s.flagXferAsync, "no-async", false, "Wait for the first operation to finish")
+	s.xferJobCreateCmd.Flags().StringVar(&s.flagXferConfigFile, "config-file", "", "JSON/YAML TransferJob body override")
+	s.xferJobUpdateCmd.Flags().StringVar(&s.flagXferJobStatus, "status", "", "Job status (enabled, disabled, deleted)")
+	s.xferJobUpdateCmd.Flags().StringVar(&s.flagXferJobDesc, "description", "", "Update job description")
+	s.xferJobUpdateCmd.Flags().StringVar(&s.flagXferConfigFile, "config-file", "", "JSON/YAML TransferJob body override")
+	s.xferJobRunCmd.Flags().BoolVar(&s.flagXferAsync, "no-async", false, "Wait for the operation to finish")
+	addFmt(s.xferJobCreateCmd, s.xferJobDescribeCmd, s.xferJobListCmd, s.xferJobUpdateCmd, s.xferJobRunCmd, s.xferJobMonitorCmd)
+	addFilter(s.xferJobListCmd)
+	s.xferJobsCmd.AddCommand(s.xferJobCreateCmd, s.xferJobDeleteCmd, s.xferJobDescribeCmd, s.xferJobListCmd,
+		s.xferJobUpdateCmd, s.xferJobRunCmd, s.xferJobMonitorCmd)
+	s.transferCmd.AddCommand(s.xferJobsCmd)
 
 	// operations flags
-	addFmt(xferOpDescribeCmd, xferOpListCmd)
-	addFilter(xferOpListCmd)
-	xferOperationsCmd.AddCommand(xferOpCancelCmd, xferOpDescribeCmd, xferOpListCmd, xferOpPauseCmd, xferOpResumeCmd)
-	transferCmd.AddCommand(xferOperationsCmd)
+	addFmt(s.xferOpDescribeCmd, s.xferOpListCmd)
+	addFilter(s.xferOpListCmd)
+	s.xferOperationsCmd.AddCommand(s.xferOpCancelCmd, s.xferOpDescribeCmd, s.xferOpListCmd, s.xferOpPauseCmd, s.xferOpResumeCmd)
+	s.transferCmd.AddCommand(s.xferOperationsCmd)
 
 	// authorize
-	xferAuthorizeCmd.Flags().StringVar(&flagXferCredsFile, "creds-file", "", "Path to a service-account credentials file to authorize (defaults to logged-in gcloud account)")
-	xferAuthorizeCmd.Flags().BoolVar(&flagXferAddMissing, "add-missing", false, "Grant any missing IAM roles instead of just reporting them")
-	transferCmd.AddCommand(xferAuthorizeCmd)
+	s.xferAuthorizeCmd.Flags().StringVar(&s.flagXferCredsFile, "creds-file", "", "Path to a service-account credentials file to authorize (defaults to logged-in gcloud account)")
+	s.xferAuthorizeCmd.Flags().BoolVar(&s.flagXferAddMissing, "add-missing", false, "Grant any missing IAM roles instead of just reporting them")
+	s.transferCmd.AddCommand(s.xferAuthorizeCmd)
 }
 
 // --- agent-pools impl ---
 
-func runXferPoolCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferPoolCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
 	body := &storagetransfer.AgentPool{Name: xferAgentPoolName(project, args[0])}
-	if flagXferConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagXferConfigFile, body); err != nil {
+	if s.flagXferConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagXferConfigFile, body); err != nil {
 			return err
 		}
 	}
-	if flagXferDisplayName != "" {
-		body.DisplayName = flagXferDisplayName
+	if s.flagXferDisplayName != "" {
+		body.DisplayName = s.flagXferDisplayName
 	}
-	if flagXferBandwidthMbps > 0 {
-		body.BandwidthLimit = &storagetransfer.BandwidthLimit{LimitMbps: flagXferBandwidthMbps}
+	if s.flagXferBandwidthMbps > 0 {
+		body.BandwidthLimit = &storagetransfer.BandwidthLimit{LimitMbps: s.flagXferBandwidthMbps}
 	}
 	call := svc.Projects.AgentPools.Create(project, body).AgentPoolId(args[0]).Context(ctx)
 	created, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("creating agent pool: %w", err)
 	}
-	if flagXferAsync {
-		fmt.Fprintf(os.Stderr, "Waiting for agent pool %q to be CREATED...\n", args[0])
+	if s.flagXferAsync {
+		fmt.Fprintf(s.inv.stderr, "Waiting for agent pool %q to be CREATED...\n", args[0])
 		final, err := xferWaitPool(ctx, svc, xferAgentPoolName(project, args[0]))
 		if err != nil {
 			return err
 		}
-		return emitFormatted(final, flagXferFormat)
+		return emitFormattedTo(s.inv.stdout, final, s.flagXferFormat)
 	}
-	return emitFormatted(created, flagXferFormat)
+	return emitFormattedTo(s.inv.stdout, created, s.flagXferFormat)
 }
 
 func xferWaitPool(ctx context.Context, svc *storagetransfer.Service, name string) (*storagetransfer.AgentPool, error) {
@@ -326,13 +197,13 @@ func xferWaitPool(ctx context.Context, svc *storagetransfer.Service, name string
 	}
 }
 
-func runXferPoolDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferPoolDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -340,17 +211,17 @@ func runXferPoolDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting agent pool: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Deleted agent pool [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stderr, "Deleted agent pool [%s].\n", args[0])
 	return nil
 }
 
-func runXferPoolDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferPoolDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -358,16 +229,16 @@ func runXferPoolDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing agent pool: %w", err)
 	}
-	return emitFormatted(got, flagXferFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagXferFormat)
 }
 
-func runXferPoolList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferPoolList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -375,8 +246,8 @@ func runXferPoolList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.AgentPools.List(project).Context(ctx)
-		if flagXferFilter != "" {
-			call = call.Filter(flagXferFilter)
+		if s.flagXferFilter != "" {
+			call = call.Filter(s.flagXferFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -391,38 +262,38 @@ func runXferPoolList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagXferFormat != "" {
-		return emitFormatted(all, flagXferFormat)
+	if s.flagXferFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagXferFormat)
 	}
-	printTableHeading(len(all), "%-40s %-16s %s\n", "NAME", "STATE", "DISPLAY_NAME")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-16s %s\n", "NAME", "STATE", "DISPLAY_NAME")
 	for _, p := range all {
-		fmt.Printf("%-40s %-16s %s\n", path.Base(p.Name), p.State, p.DisplayName)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-16s %s\n", path.Base(p.Name), p.State, p.DisplayName)
 	}
 	return nil
 }
 
-func runXferPoolUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferPoolUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
 	name := xferAgentPoolName(project, args[0])
 	body := &storagetransfer.AgentPool{}
 	var mask []string
-	if flagXferBandwidthMbps > 0 || flagXferClearBW {
+	if s.flagXferBandwidthMbps > 0 || s.flagXferClearBW {
 		mask = append(mask, "bandwidth_limit")
-		if flagXferBandwidthMbps > 0 {
-			body.BandwidthLimit = &storagetransfer.BandwidthLimit{LimitMbps: flagXferBandwidthMbps}
+		if s.flagXferBandwidthMbps > 0 {
+			body.BandwidthLimit = &storagetransfer.BandwidthLimit{LimitMbps: s.flagXferBandwidthMbps}
 		}
 	}
-	if flagXferDisplayName != "" || flagXferClearName {
+	if s.flagXferDisplayName != "" || s.flagXferClearName {
 		mask = append(mask, "display_name")
-		body.DisplayName = flagXferDisplayName
+		body.DisplayName = s.flagXferDisplayName
 	}
 	call := svc.Projects.AgentPools.Patch(name, body).Context(ctx)
 	if len(mask) > 0 {
@@ -432,38 +303,38 @@ func runXferPoolUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating agent pool: %w", err)
 	}
-	return emitFormatted(got, flagXferFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagXferFormat)
 }
 
 // --- agents impl ---
 
 const xferAgentImage = "gcr.io/cloud-ingest/tsop-agent:latest"
 
-func runXferAgentInstall(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferAgentInstall(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	if flagXferCount < 1 {
+	if s.flagXferCount < 1 {
 		return fmt.Errorf("--count must be >= 1")
 	}
 	if _, err := exec.LookPath("docker"); err != nil {
 		return fmt.Errorf("docker not found on PATH: install Docker before running this command (see https://docs.docker.com/engine/install/)")
 	}
 	// Verify the agent pool exists (mirrors python behavior).
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
-	pool, err := svc.Projects.AgentPools.Get(xferAgentPoolName(project, flagXferPool)).Context(ctx).Do()
+	pool, err := svc.Projects.AgentPools.Get(xferAgentPoolName(project, s.flagXferPool)).Context(ctx).Do()
 	if err != nil {
-		return fmt.Errorf("looking up agent pool %q: %w", flagXferPool, err)
+		return fmt.Errorf("looking up agent pool %q: %w", s.flagXferPool, err)
 	}
 	if pool.State != "CREATED" {
-		return fmt.Errorf("agent pool %q is not in state CREATED (state=%s)", flagXferPool, pool.State)
+		return fmt.Errorf("agent pool %q is not in state CREATED (state=%s)", s.flagXferPool, pool.State)
 	}
-	credsPath := flagXferCredsFile
+	credsPath := s.flagXferCredsFile
 	if credsPath != "" {
 		if abs, err := filepath.Abs(credsPath); err == nil {
 			credsPath = abs
@@ -472,80 +343,80 @@ func runXferAgentInstall(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("credentials file not found: %w", err)
 		}
 	}
-	logsDir := flagXferLogsDirectory
+	logsDir := s.flagXferLogsDirectory
 	if abs, err := filepath.Abs(logsDir); err == nil {
 		logsDir = abs
 	}
-	fmt.Fprintln(os.Stderr, "[1/3] Credentials found")
-	fmt.Fprintln(os.Stderr, "[2/3] Docker found")
-	for i := 0; i < flagXferCount; i++ {
-		containerCmd := xferBuildAgentDockerCmd(project, credsPath, logsDir, i)
-		fmt.Fprintf(os.Stderr, "Running: %s\n", strings.Join(containerCmd, " "))
+	fmt.Fprintln(s.inv.stderr, "[1/3] Credentials found")
+	fmt.Fprintln(s.inv.stderr, "[2/3] Docker found")
+	for i := 0; i < s.flagXferCount; i++ {
+		containerCmd := s.xferBuildAgentDockerCmd(project, credsPath, logsDir, i)
+		fmt.Fprintf(s.inv.stderr, "Running: %s\n", strings.Join(containerCmd, " "))
 		run := exec.Command(containerCmd[0], containerCmd[1:]...)
-		run.Stdout = os.Stderr
-		run.Stderr = os.Stderr
+		run.Stdout = s.inv.stderr
+		run.Stderr = s.inv.stderr
 		if err := run.Run(); err != nil {
 			return fmt.Errorf("docker run failed: %w", err)
 		}
 	}
-	fmt.Fprintln(os.Stderr, "[3/3] Agent installation complete")
-	fmt.Fprintf(os.Stderr, "Check status at https://console.cloud.google.com/transfer/on-premises/agent-pools/pool/%s/agents?project=%s\n",
-		flagXferPool, project)
+	fmt.Fprintln(s.inv.stderr, "[3/3] Agent installation complete")
+	fmt.Fprintf(s.inv.stderr, "Check status at https://console.cloud.google.com/transfer/on-premises/agent-pools/pool/%s/agents?project=%s\n",
+		s.flagXferPool, project)
 	return nil
 }
 
-func xferBuildAgentDockerCmd(project, credsPath, logsDir string, idx int) []string {
+func (s *transferCmds) xferBuildAgentDockerCmd(project, credsPath, logsDir string, idx int) []string {
 	c := []string{"docker", "run",
-		"--ulimit", fmt.Sprintf("memlock=%d", flagXferMemlockLimit),
+		"--ulimit", fmt.Sprintf("memlock=%d", s.flagXferMemlockLimit),
 		"--rm", "-d",
 	}
-	if flagXferProxy != "" {
-		c = append(c, "--env", "HTTPS_PROXY="+flagXferProxy)
+	if s.flagXferProxy != "" {
+		c = append(c, "--env", "HTTPS_PROXY="+s.flagXferProxy)
 	}
-	if len(flagXferMountDirs) == 0 {
+	if len(s.flagXferMountDirs) == 0 {
 		c = append(c, "-v=/:/transfer_root")
 	} else {
 		c = append(c, "-v="+logsDir+":/tmp")
 		if credsPath != "" {
 			c = append(c, "-v="+credsPath+":"+credsPath)
 		}
-		for _, d := range flagXferMountDirs {
+		for _, d := range s.flagXferMountDirs {
 			c = append(c, "-v="+d+":"+d)
 		}
 	}
 	c = append(c, xferAgentImage,
-		"--agent-pool="+flagXferPool,
+		"--agent-pool="+s.flagXferPool,
 		"--log-dir="+logsDir,
 		"--project-id="+project,
 	)
 	if credsPath != "" {
 		c = append(c, "--creds-file="+credsPath)
 	}
-	if len(flagXferMountDirs) == 0 {
+	if len(s.flagXferMountDirs) == 0 {
 		c = append(c, "--enable-mount-directory")
 	}
-	if flagXferIDPrefix != "" {
+	if s.flagXferIDPrefix != "" {
 		suffix := ""
-		if flagXferCount > 1 {
+		if s.flagXferCount > 1 {
 			suffix = fmt.Sprintf("%d", idx)
 		}
-		c = append(c, "--agent-id-prefix="+flagXferIDPrefix+suffix)
+		c = append(c, "--agent-id-prefix="+s.flagXferIDPrefix+suffix)
 	}
-	if flagXferS3Compatible {
+	if s.flagXferS3Compatible {
 		c = append(c, "--enable-s3")
 	}
 	return c
 }
 
-func runXferAgentDelete(cmd *cobra.Command, args []string) error {
-	if !flagXferAgentAll && flagXferAgentID == "" {
+func (s *transferCmds) runXferAgentDelete(cmd *cobra.Command, args []string) error {
+	if !s.flagXferAgentAll && s.flagXferAgentID == "" {
 		return fmt.Errorf("either --id or --all is required")
 	}
 	if _, err := exec.LookPath("docker"); err != nil {
 		return fmt.Errorf("docker not found on PATH: %w", err)
 	}
 	targets := []string{}
-	if flagXferAgentAll {
+	if s.flagXferAgentAll {
 		out, err := exec.Command("docker", "ps", "-q", "--filter", "ancestor="+xferAgentImage).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("listing agent containers: %w: %s", err, string(out))
@@ -557,23 +428,23 @@ func runXferAgentDelete(cmd *cobra.Command, args []string) error {
 			}
 		}
 		if len(targets) == 0 {
-			fmt.Fprintln(os.Stderr, "No local transfer-agent containers found.")
+			fmt.Fprintln(s.inv.stderr, "No local transfer-agent containers found.")
 			return nil
 		}
 	} else {
-		targets = append(targets, flagXferAgentID)
+		targets = append(targets, s.flagXferAgentID)
 	}
 	for _, id := range targets {
-		fmt.Fprintf(os.Stderr, "Stopping container %s...\n", id)
+		fmt.Fprintf(s.inv.stderr, "Stopping container %s...\n", id)
 		out, err := exec.Command("docker", "stop", id).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("stopping container %s: %w: %s", id, err, string(out))
 		}
 	}
-	if flagXferUninstall {
+	if s.flagXferUninstall {
 		out, err := exec.Command("docker", "rmi", xferAgentImage).CombinedOutput()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not remove image %s: %v: %s\n", xferAgentImage, err, string(out))
+			fmt.Fprintf(s.inv.stderr, "warning: could not remove image %s: %v: %s\n", xferAgentImage, err, string(out))
 		}
 	}
 	return nil
@@ -581,36 +452,36 @@ func runXferAgentDelete(cmd *cobra.Command, args []string) error {
 
 // --- jobs impl ---
 
-func runXferJobCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferJobCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
 	job := &storagetransfer.TransferJob{ProjectId: project}
-	if flagXferConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagXferConfigFile, job); err != nil {
+	if s.flagXferConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagXferConfigFile, job); err != nil {
 			return err
 		}
 	}
 	if job.TransferSpec == nil {
 		job.TransferSpec = &storagetransfer.TransferSpec{}
 	}
-	if err := xferPopulateSpec(job.TransferSpec, args[0], args[1], project); err != nil {
+	if err := s.xferPopulateSpec(job.TransferSpec, args[0], args[1], project); err != nil {
 		return err
 	}
-	if flagXferJobDesc != "" {
-		job.Description = flagXferJobDesc
+	if s.flagXferJobDesc != "" {
+		job.Description = s.flagXferJobDesc
 	}
-	if flagXferJobName != "" {
-		job.Name = xferJobName(flagXferJobName)
+	if s.flagXferJobName != "" {
+		job.Name = xferJobName(s.flagXferJobName)
 	}
-	if flagXferSchedRepeats != "" {
-		d, err := time.ParseDuration(strings.Replace(flagXferSchedRepeats, "d", "*24h", 1))
+	if s.flagXferSchedRepeats != "" {
+		d, err := time.ParseDuration(strings.Replace(s.flagXferSchedRepeats, "d", "*24h", 1))
 		if err != nil {
 			return fmt.Errorf("invalid --schedule-repeats-every: %w", err)
 		}
@@ -626,27 +497,27 @@ func runXferJobCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating transfer job: %w", err)
 	}
-	if flagXferAsync {
-		fmt.Fprintf(os.Stderr, "Created job: %s\n", created.Name)
+	if s.flagXferAsync {
+		fmt.Fprintf(s.inv.stderr, "Created job: %s\n", created.Name)
 	}
-	return emitFormatted(created, flagXferFormat)
+	return emitFormattedTo(s.inv.stdout, created, s.flagXferFormat)
 }
 
 // xferPopulateSpec fills common source/destination fields into spec based on
 // URL-shaped positional arguments (gs://, s3://, http(s)://, posix:///,
 // hdfs://). Existing values from --config-file are preserved.
-func xferPopulateSpec(spec *storagetransfer.TransferSpec, source, dest, project string) error {
+func (s *transferCmds) xferPopulateSpec(spec *storagetransfer.TransferSpec, source, dest, project string) error {
 	if err := xferApplyEndpoint(spec, source, true); err != nil {
 		return err
 	}
 	if err := xferApplyEndpoint(spec, dest, false); err != nil {
 		return err
 	}
-	if flagXferSrcAgentPool != "" {
-		spec.SourceAgentPoolName = xferAgentPoolName(project, flagXferSrcAgentPool)
+	if s.flagXferSrcAgentPool != "" {
+		spec.SourceAgentPoolName = xferAgentPoolName(project, s.flagXferSrcAgentPool)
 	}
-	if flagXferDstAgentPool != "" {
-		spec.SinkAgentPoolName = xferAgentPoolName(project, flagXferDstAgentPool)
+	if s.flagXferDstAgentPool != "" {
+		spec.SinkAgentPoolName = xferAgentPoolName(project, s.flagXferDstAgentPool)
 	}
 	return nil
 }
@@ -707,13 +578,13 @@ func splitBucketPrefix(s string) (string, string) {
 	return s[:i], s[i+1:] + "/"
 }
 
-func runXferJobDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferJobDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -724,16 +595,16 @@ func runXferJobDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("re-fetching transfer job after delete: %w", err)
 	}
-	return emitFormatted(got, flagXferFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagXferFormat)
 }
 
-func runXferJobDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferJobDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -741,23 +612,23 @@ func runXferJobDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing transfer job: %w", err)
 	}
-	return emitFormatted(got, flagXferFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagXferFormat)
 }
 
-func runXferJobList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferJobList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
 	// The Storage Transfer API requires a projectId filter (JSON string).
 	filter := fmt.Sprintf(`{"projectId":"%s"}`, project)
-	if flagXferFilter != "" {
-		filter = flagXferFilter
+	if s.flagXferFilter != "" {
+		filter = s.flagXferFilter
 	}
 	var all []*storagetransfer.TransferJob
 	pageToken := ""
@@ -776,40 +647,40 @@ func runXferJobList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagXferFormat != "" {
-		return emitFormatted(all, flagXferFormat)
+	if s.flagXferFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagXferFormat)
 	}
-	printTableHeading(len(all), "%-40s %-10s %s\n", "NAME", "STATUS", "DESCRIPTION")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-40s %-10s %s\n", "NAME", "STATUS", "DESCRIPTION")
 	for _, j := range all {
-		fmt.Printf("%-40s %-10s %s\n", strings.TrimPrefix(j.Name, "transferJobs/"), j.Status, j.Description)
+		fmt.Fprintf(s.inv.stdout, "%-40s %-10s %s\n", strings.TrimPrefix(j.Name, "transferJobs/"), j.Status, j.Description)
 	}
 	return nil
 }
 
-func runXferJobUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferJobUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
 	job := &storagetransfer.TransferJob{ProjectId: project}
 	var mask []string
-	if flagXferConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagXferConfigFile, job); err != nil {
+	if s.flagXferConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagXferConfigFile, job); err != nil {
 			return err
 		}
 		mask = nonEmptyJSONFields(job)
 	}
-	if flagXferJobStatus != "" {
-		job.Status = strings.ToUpper(flagXferJobStatus)
+	if s.flagXferJobStatus != "" {
+		job.Status = strings.ToUpper(s.flagXferJobStatus)
 		mask = append(mask, "status")
 	}
-	if flagXferJobDesc != "" {
-		job.Description = flagXferJobDesc
+	if s.flagXferJobDesc != "" {
+		job.Description = s.flagXferJobDesc
 		mask = append(mask, "description")
 	}
 	req := &storagetransfer.UpdateTransferJobRequest{
@@ -821,7 +692,7 @@ func runXferJobUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating transfer job: %w", err)
 	}
-	return emitFormatted(got, flagXferFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagXferFormat)
 }
 
 func dedupe(in []string) []string {
@@ -837,13 +708,13 @@ func dedupe(in []string) []string {
 	return out
 }
 
-func runXferJobRun(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferJobRun(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -852,14 +723,14 @@ func runXferJobRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("running transfer job: %w", err)
 	}
-	if flagXferAsync {
+	if s.flagXferAsync {
 		final, err := xferWaitOp(ctx, svc, op.Name)
 		if err != nil {
 			return err
 		}
-		return emitFormatted(final, flagXferFormat)
+		return emitFormattedTo(s.inv.stdout, final, s.flagXferFormat)
 	}
-	return emitFormatted(op, flagXferFormat)
+	return emitFormattedTo(s.inv.stdout, op, s.flagXferFormat)
 }
 
 func xferWaitOp(ctx context.Context, svc *storagetransfer.Service, name string) (*storagetransfer.Operation, error) {
@@ -878,13 +749,13 @@ func xferWaitOp(ctx context.Context, svc *storagetransfer.Service, name string) 
 	}
 }
 
-func runXferJobMonitor(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferJobMonitor(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -900,13 +771,13 @@ func runXferJobMonitor(cmd *cobra.Command, args []string) error {
 			time.Sleep(3 * time.Second)
 		}
 	}
-	fmt.Fprintf(os.Stderr, "Monitoring operation: %s\n", opName)
+	fmt.Fprintf(s.inv.stderr, "Monitoring operation: %s\n", opName)
 	for {
 		got, err := svc.TransferOperations.Get(opName).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("polling operation: %w", err)
 		}
-		if err := emitFormatted(got, flagXferFormat); err != nil {
+		if err := emitFormattedTo(s.inv.stdout, got, s.flagXferFormat); err != nil {
 			return err
 		}
 		if got.Done {
@@ -918,9 +789,9 @@ func runXferJobMonitor(cmd *cobra.Command, args []string) error {
 
 // --- operations impl ---
 
-func runXferOpCancel(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+func (s *transferCmds) runXferOpCancel(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -929,13 +800,13 @@ func runXferOpCancel(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Cancel requested for operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stderr, "Cancel requested for operation [%s].\n", args[0])
 	return nil
 }
 
-func runXferOpDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+func (s *transferCmds) runXferOpDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -943,22 +814,22 @@ func runXferOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagXferFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagXferFormat)
 }
 
-func runXferOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferOpList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
 	filter := fmt.Sprintf(`{"projectId":"%s"}`, project)
-	if flagXferFilter != "" {
-		filter = flagXferFilter
+	if s.flagXferFilter != "" {
+		filter = s.flagXferFilter
 	}
 	var all []*storagetransfer.Operation
 	pageToken := ""
@@ -977,19 +848,19 @@ func runXferOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagXferFormat != "" {
-		return emitFormatted(all, flagXferFormat)
+	if s.flagXferFormat != "" {
+		return emitFormattedTo(s.inv.stdout, all, s.flagXferFormat)
 	}
-	printTableHeading(len(all), "%-60s %-6s\n", "NAME", "DONE")
+	printTableHeadingTo(s.inv.stdout, len(all), "%-60s %-6s\n", "NAME", "DONE")
 	for _, op := range all {
-		fmt.Printf("%-60s %-6t\n", op.Name, op.Done)
+		fmt.Fprintf(s.inv.stdout, "%-60s %-6t\n", op.Name, op.Done)
 	}
 	return nil
 }
 
-func runXferOpPause(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+func (s *transferCmds) runXferOpPause(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -998,13 +869,13 @@ func runXferOpPause(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("pausing operation: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Paused operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stderr, "Paused operation [%s].\n", args[0])
 	return nil
 }
 
-func runXferOpResume(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := xferService(ctx)
+func (s *transferCmds) runXferOpResume(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
@@ -1013,7 +884,7 @@ func runXferOpResume(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resuming operation: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Resumed operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stderr, "Resumed operation [%s].\n", args[0])
 	return nil
 }
 
@@ -1033,22 +904,22 @@ var (
 	}
 )
 
-func runXferAuthorize(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *transferCmds) runXferAuthorize(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	xfer, err := xferService(ctx)
+	ctx := cmd.Context()
+	xfer, err := s.xferService(ctx)
 	if err != nil {
 		return err
 	}
-	crm, err := gcp.CloudResourceManagerService(ctx, flagAccount)
+	crm, err := s.inv.clients().CloudResourceManager(ctx)
 	if err != nil {
 		return err
 	}
 
-	accountEmail, isSA, err := xferResolveAuthorizeAccount(ctx)
+	accountEmail, isSA, err := s.xferResolveAuthorizeAccount(ctx)
 	if err != nil {
 		return err
 	}
@@ -1061,7 +932,7 @@ func runXferAuthorize(cmd *cobra.Command, args []string) error {
 	}
 
 	missingUser := xferMissingRoles(policy, userMember, xferExpectedUserRoles)
-	fmt.Fprintf(os.Stderr, "User %s missing roles: %v\n", accountEmail, missingUser)
+	fmt.Fprintf(s.inv.stderr, "User %s missing roles: %v\n", accountEmail, missingUser)
 
 	p4sa, err := xfer.GoogleServiceAccounts.Get(project).Context(ctx).Do()
 	if err != nil {
@@ -1069,7 +940,7 @@ func runXferAuthorize(cmd *cobra.Command, args []string) error {
 	}
 	p4saMember := xferIamMemberFor(p4sa.AccountEmail, true)
 	missingP4SA := xferMissingRoles(policy, p4saMember, xferExpectedP4SARoles)
-	fmt.Fprintf(os.Stderr, "Transfer service account %s missing roles: %v\n", p4sa.AccountEmail, missingP4SA)
+	fmt.Fprintf(s.inv.stderr, "Transfer service account %s missing roles: %v\n", p4sa.AccountEmail, missingP4SA)
 
 	toAdd := map[string][]string{
 		userMember: missingUser,
@@ -1077,11 +948,11 @@ func runXferAuthorize(cmd *cobra.Command, args []string) error {
 	}
 	total := len(missingUser) + len(missingP4SA)
 	if total == 0 {
-		fmt.Fprintln(os.Stderr, "No missing roles.")
+		fmt.Fprintln(s.inv.stderr, "No missing roles.")
 		return nil
 	}
-	if !flagXferAddMissing {
-		fmt.Fprintln(os.Stderr, "Re-run with --add-missing to grant the missing roles.")
+	if !s.flagXferAddMissing {
+		fmt.Fprintln(s.inv.stderr, "Re-run with --add-missing to grant the missing roles.")
 		return nil
 	}
 	for member, roles := range toAdd {
@@ -1093,14 +964,14 @@ func runXferAuthorize(cmd *cobra.Command, args []string) error {
 		&cloudresourcemanager.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("granting missing roles: %w", err)
 	}
-	fmt.Fprintln(os.Stderr, "Missing roles granted. Permissions can take up to 7 minutes to propagate.")
+	fmt.Fprintln(s.inv.stderr, "Missing roles granted. Permissions can take up to 7 minutes to propagate.")
 	return nil
 }
 
-func xferResolveAuthorizeAccount(ctx context.Context) (string, bool, error) {
+func (s *transferCmds) xferResolveAuthorizeAccount(ctx context.Context) (string, bool, error) {
 	// If --creds-file supplied, parse client_email/type from JSON body.
-	if flagXferCredsFile != "" {
-		data, err := os.ReadFile(flagXferCredsFile)
+	if s.flagXferCredsFile != "" {
+		data, err := os.ReadFile(s.flagXferCredsFile)
 		if err != nil {
 			return "", false, fmt.Errorf("reading --creds-file: %w", err)
 		}
@@ -1113,8 +984,8 @@ func xferResolveAuthorizeAccount(ctx context.Context) (string, bool, error) {
 		}
 		return parsed.ClientEmail, parsed.Type == "service_account", nil
 	}
-	if flagAccount != "" {
-		return flagAccount, strings.HasSuffix(flagAccount, ".gserviceaccount.com"), nil
+	if s.inv.flags.account != "" {
+		return s.inv.flags.account, strings.HasSuffix(s.inv.flags.account, ".gserviceaccount.com"), nil
 	}
 	return "", false, fmt.Errorf("no --creds-file supplied and --account is empty: specify --creds-file or --account")
 }
