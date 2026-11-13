@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,230 +11,187 @@ import (
 
 // --- gcloud pam grants (#963) ---
 
-var pamGrantsCmd = &cobra.Command{Use: "grants", Short: "Manage Privileged Access Manager grants"}
-
-var (
-	flagPAMGrantLocation    string
-	flagPAMGrantEntitlement string
-	flagPAMGrantFormat      string
-	flagPAMGrantConfigFile  string
-	flagPAMGrantReason      string
-	flagPAMGrantCallerRel   string
-	flagPAMGrantPageSize    int64
-)
-
-var (
-	pamGrantApproveCmd = &cobra.Command{
-		Use: "approve GRANT", Short: "Approve a Privileged Access Manager grant",
-		Args: cobra.ExactArgs(1), RunE: runPAMGrantApprove,
-	}
-	pamGrantCreateCmd = &cobra.Command{
-		Use: "create GRANT", Short: "Create a Privileged Access Manager grant",
-		Args: cobra.ExactArgs(1), RunE: runPAMGrantCreate,
-	}
-	pamGrantDenyCmd = &cobra.Command{
-		Use: "deny GRANT", Short: "Deny a Privileged Access Manager grant",
-		Args: cobra.ExactArgs(1), RunE: runPAMGrantDeny,
-	}
-	pamGrantDescribeCmd = &cobra.Command{
-		Use: "describe GRANT", Short: "Describe a Privileged Access Manager grant",
-		Args: cobra.ExactArgs(1), RunE: runPAMGrantDescribe,
-	}
-	pamGrantListCmd = &cobra.Command{
-		Use: "list", Short: "List Privileged Access Manager grants",
-		Args: cobra.NoArgs, RunE: runPAMGrantList,
-	}
-	pamGrantRevokeCmd = &cobra.Command{
-		Use: "revoke GRANT", Short: "Revoke a Privileged Access Manager grant",
-		Args: cobra.ExactArgs(1), RunE: runPAMGrantRevoke,
-	}
-	pamGrantSearchCmd = &cobra.Command{
-		Use: "search", Short: "Search Privileged Access Manager grants for the caller",
-		Args: cobra.NoArgs, RunE: runPAMGrantSearch,
-	}
-)
-
-func init() {
+func (s *pamCmds) initPamGrants() {
 	all := []*cobra.Command{
-		pamGrantApproveCmd, pamGrantCreateCmd, pamGrantDenyCmd, pamGrantDescribeCmd,
-		pamGrantListCmd, pamGrantRevokeCmd, pamGrantSearchCmd,
+		s.pamGrantApproveCmd, s.pamGrantCreateCmd, s.pamGrantDenyCmd, s.pamGrantDescribeCmd,
+		s.pamGrantListCmd, s.pamGrantRevokeCmd, s.pamGrantSearchCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagPAMGrantLocation, "location", "",
+		c.Flags().StringVar(&s.flagPAMGrantLocation, "location", "",
 			"Location of the parent entitlement (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagPAMGrantFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagPAMGrantFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{pamGrantCreateCmd, pamGrantListCmd, pamGrantSearchCmd} {
-		c.Flags().StringVar(&flagPAMGrantEntitlement, "entitlement", "",
+	for _, c := range []*cobra.Command{s.pamGrantCreateCmd, s.pamGrantListCmd, s.pamGrantSearchCmd} {
+		c.Flags().StringVar(&s.flagPAMGrantEntitlement, "entitlement", "",
 			"Parent entitlement ID (required)")
 		_ = c.MarkFlagRequired("entitlement")
 	}
 	// GRANT-taking commands also accept --entitlement so a bare grant ID can be
 	// combined with the location + entitlement to form the full resource path.
 	for _, c := range []*cobra.Command{
-		pamGrantApproveCmd, pamGrantDenyCmd, pamGrantDescribeCmd, pamGrantRevokeCmd,
+		s.pamGrantApproveCmd, s.pamGrantDenyCmd, s.pamGrantDescribeCmd, s.pamGrantRevokeCmd,
 	} {
-		c.Flags().StringVar(&flagPAMGrantEntitlement, "entitlement", "",
+		c.Flags().StringVar(&s.flagPAMGrantEntitlement, "entitlement", "",
 			"Parent entitlement ID (required unless a full grant resource name is passed)")
 	}
-	pamGrantCreateCmd.Flags().StringVar(&flagPAMGrantConfigFile, "config-file", "",
+	s.pamGrantCreateCmd.Flags().StringVar(&s.flagPAMGrantConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the grant body (required)")
-	_ = pamGrantCreateCmd.MarkFlagRequired("config-file")
+	_ = s.pamGrantCreateCmd.MarkFlagRequired("config-file")
 
-	for _, c := range []*cobra.Command{pamGrantApproveCmd, pamGrantDenyCmd, pamGrantRevokeCmd} {
-		c.Flags().StringVar(&flagPAMGrantReason, "reason", "",
+	for _, c := range []*cobra.Command{s.pamGrantApproveCmd, s.pamGrantDenyCmd, s.pamGrantRevokeCmd} {
+		c.Flags().StringVar(&s.flagPAMGrantReason, "reason", "",
 			"Optional reason to record on the request")
 	}
-	pamGrantSearchCmd.Flags().StringVar(&flagPAMGrantCallerRel, "caller-relationship", "HAD_CREATED",
+	s.pamGrantSearchCmd.Flags().StringVar(&s.flagPAMGrantCallerRel, "caller-relationship", "HAD_CREATED",
 		"Caller relationship: HAD_CREATED, CAN_APPROVE, or HAD_APPROVED")
-	pamGrantListCmd.Flags().Int64Var(&flagPAMGrantPageSize, "page-size", 0, "Maximum results per page")
-	pamGrantSearchCmd.Flags().Int64Var(&flagPAMGrantPageSize, "page-size", 0, "Maximum results per page")
+	s.pamGrantListCmd.Flags().Int64Var(&s.flagPAMGrantPageSize, "page-size", 0, "Maximum results per page")
+	s.pamGrantSearchCmd.Flags().Int64Var(&s.flagPAMGrantPageSize, "page-size", 0, "Maximum results per page")
 
-	pamGrantsCmd.AddCommand(all...)
-	pamCmd.AddCommand(pamGrantsCmd)
+	s.pamGrantsCmd.AddCommand(all...)
+	s.pamCmd.AddCommand(s.pamGrantsCmd)
 }
 
-func pamGrantEntitlementParent() (string, error) {
-	if strings.HasPrefix(flagPAMGrantEntitlement, "projects/") ||
-		strings.HasPrefix(flagPAMGrantEntitlement, "folders/") ||
-		strings.HasPrefix(flagPAMGrantEntitlement, "organizations/") {
-		return flagPAMGrantEntitlement, nil
+func (s *pamCmds) pamGrantEntitlementParent() (string, error) {
+	if strings.HasPrefix(s.flagPAMGrantEntitlement, "projects/") ||
+		strings.HasPrefix(s.flagPAMGrantEntitlement, "folders/") ||
+		strings.HasPrefix(s.flagPAMGrantEntitlement, "organizations/") {
+		return s.flagPAMGrantEntitlement, nil
 	}
-	if flagPAMGrantEntitlement == "" {
+	if s.flagPAMGrantEntitlement == "" {
 		return "", fmt.Errorf("--entitlement is required")
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s/entitlements/%s", project, flagPAMGrantLocation, flagPAMGrantEntitlement), nil
+	return fmt.Sprintf("projects/%s/locations/%s/entitlements/%s", project, s.flagPAMGrantLocation, s.flagPAMGrantEntitlement), nil
 }
 
-func pamGrantName(id string) (string, error) {
+func (s *pamCmds) pamGrantName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") ||
 		strings.HasPrefix(id, "folders/") ||
 		strings.HasPrefix(id, "organizations/") {
 		return id, nil
 	}
-	parent, err := pamGrantEntitlementParent()
+	parent, err := s.pamGrantEntitlementParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/grants/%s", parent, id), nil
 }
 
-func pamGrantReasonBody() map[string]any {
+func (s *pamCmds) pamGrantReasonBody() map[string]any {
 	body := map[string]any{}
-	if flagPAMGrantReason != "" {
-		body["reason"] = flagPAMGrantReason
+	if s.flagPAMGrantReason != "" {
+		body["reason"] = s.flagPAMGrantReason
 	}
 	return body
 }
 
-func runPAMGrantApprove(cmd *cobra.Command, args []string) error {
-	name, err := pamGrantName(args[0])
+func (s *pamCmds) runPAMGrantApprove(cmd *cobra.Command, args []string) error {
+	name, err := s.pamGrantName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := pamRest.do(ctx, http.MethodPost, "/"+name+":approve", nil, pamGrantReasonBody(), &got); err != nil {
+	if err := s.inv.rest(pamRest).do(ctx, http.MethodPost, "/"+name+":approve", nil, s.pamGrantReasonBody(), &got); err != nil {
 		return fmt.Errorf("approving grant: %w", err)
 	}
-	fmt.Printf("Approved grant [%s].\n", args[0])
-	return emitFormatted(got, flagPAMGrantFormat)
+	fmt.Fprintf(s.inv.stdout, "Approved grant [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagPAMGrantFormat)
 }
 
-func runPAMGrantCreate(cmd *cobra.Command, args []string) error {
-	parent, err := pamGrantEntitlementParent()
+func (s *pamCmds) runPAMGrantCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.pamGrantEntitlementParent()
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagPAMGrantConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagPAMGrantConfigFile, &body); err != nil {
 		return err
 	}
 	q := url.Values{}
 	q.Set("grantId", args[0])
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := pamRest.do(ctx, http.MethodPost, "/"+parent+"/grants", q, body, &got); err != nil {
+	if err := s.inv.rest(pamRest).do(ctx, http.MethodPost, "/"+parent+"/grants", q, body, &got); err != nil {
 		return fmt.Errorf("creating grant: %w", err)
 	}
-	fmt.Printf("Created grant [%s].\n", args[0])
-	return emitFormatted(got, flagPAMGrantFormat)
+	fmt.Fprintf(s.inv.stdout, "Created grant [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagPAMGrantFormat)
 }
 
-func runPAMGrantDeny(cmd *cobra.Command, args []string) error {
-	name, err := pamGrantName(args[0])
+func (s *pamCmds) runPAMGrantDeny(cmd *cobra.Command, args []string) error {
+	name, err := s.pamGrantName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := pamRest.do(ctx, http.MethodPost, "/"+name+":deny", nil, pamGrantReasonBody(), &got); err != nil {
+	if err := s.inv.rest(pamRest).do(ctx, http.MethodPost, "/"+name+":deny", nil, s.pamGrantReasonBody(), &got); err != nil {
 		return fmt.Errorf("denying grant: %w", err)
 	}
-	fmt.Printf("Denied grant [%s].\n", args[0])
-	return emitFormatted(got, flagPAMGrantFormat)
+	fmt.Fprintf(s.inv.stdout, "Denied grant [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagPAMGrantFormat)
 }
 
-func runPAMGrantDescribe(cmd *cobra.Command, args []string) error {
-	name, err := pamGrantName(args[0])
+func (s *pamCmds) runPAMGrantDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.pamGrantName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := pamRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(pamRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing grant: %w", err)
 	}
-	return emitFormatted(got, flagPAMGrantFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagPAMGrantFormat)
 }
 
-func runPAMGrantList(cmd *cobra.Command, args []string) error {
-	parent, err := pamGrantEntitlementParent()
+func (s *pamCmds) runPAMGrantList(cmd *cobra.Command, args []string) error {
+	parent, err := s.pamGrantEntitlementParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	items, err := pamRest.paginate(ctx, "/"+parent+"/grants", nil, "grants", flagPAMGrantPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(pamRest).paginate(ctx, "/"+parent+"/grants", nil, "grants", s.flagPAMGrantPageSize)
 	if err != nil {
 		return fmt.Errorf("listing grants: %w", err)
 	}
-	return emitFormatted(items, flagPAMGrantFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagPAMGrantFormat)
 }
 
-func runPAMGrantRevoke(cmd *cobra.Command, args []string) error {
-	name, err := pamGrantName(args[0])
+func (s *pamCmds) runPAMGrantRevoke(cmd *cobra.Command, args []string) error {
+	name, err := s.pamGrantName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := pamRest.do(ctx, http.MethodPost, "/"+name+":revoke", nil, pamGrantReasonBody(), &got); err != nil {
+	if err := s.inv.rest(pamRest).do(ctx, http.MethodPost, "/"+name+":revoke", nil, s.pamGrantReasonBody(), &got); err != nil {
 		return fmt.Errorf("revoking grant: %w", err)
 	}
-	fmt.Printf("Revoked grant [%s].\n", args[0])
-	return emitFormatted(got, flagPAMGrantFormat)
+	fmt.Fprintf(s.inv.stdout, "Revoked grant [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, got, s.flagPAMGrantFormat)
 }
 
-func runPAMGrantSearch(cmd *cobra.Command, args []string) error {
-	parent, err := pamGrantEntitlementParent()
+func (s *pamCmds) runPAMGrantSearch(cmd *cobra.Command, args []string) error {
+	parent, err := s.pamGrantEntitlementParent()
 	if err != nil {
 		return err
 	}
-	rel := flagPAMGrantCallerRel
+	rel := s.flagPAMGrantCallerRel
 	if rel == "" {
 		rel = "HAD_CREATED"
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	base := url.Values{}
 	base.Set("callerRelationship", rel)
-	items, err := pamRest.paginate(ctx, "/"+parent+":searchGrants", base, "grants", flagPAMGrantPageSize)
+	items, err := s.inv.rest(pamRest).paginate(ctx, "/"+parent+":searchGrants", base, "grants", s.flagPAMGrantPageSize)
 	if err != nil {
 		return fmt.Errorf("searching grants: %w", err)
 	}
-	return emitFormatted(items, flagPAMGrantFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagPAMGrantFormat)
 }

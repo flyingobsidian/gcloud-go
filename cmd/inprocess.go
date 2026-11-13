@@ -93,6 +93,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newDomainsCmd(inv),
 		newEdgeCacheCmd(inv),
 		newSourceManagerCmd(inv),
+		newPamCmd(inv),
 	}
 }
 

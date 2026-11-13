@@ -7,7 +7,8 @@ import (
 )
 
 func pamSubgroup(name string) *cobra.Command {
-	for _, c := range pamCmd.Commands() {
+	grp := newPamCmds(legacyTestInvocation())
+	for _, c := range grp.pamCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -51,8 +52,9 @@ func TestPamCallerAccessValue(t *testing.T) {
 }
 
 func TestPamEntNamePassesThroughFullyQualified(t *testing.T) {
+	grp := newPamCmds(legacyTestInvocation())
 	full := "projects/x/locations/global/entitlements/y"
-	got, err := pamEntName(full)
+	got, err := grp.pamEntName(full)
 	if err != nil {
 		t.Fatalf("pamEntName: %v", err)
 	}

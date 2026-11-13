@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -24,139 +23,90 @@ import (
 // google.golang.org/api Go client, so this command surface talks directly to
 // https://privilegedaccessmanager.googleapis.com/v1.
 
-var pamEntitlementsCmd = &cobra.Command{
-	Use:   "entitlements",
-	Short: "Manage Privileged Access Manager entitlements",
-}
-
-var (
-	flagPAMFolder           string
-	flagPAMOrganization     string
-	flagPAMLocation         string
-	flagPAMEntitlementFile  string
-	flagPAMDestination      string
-	flagPAMCallerAccessType string
-	flagPAMFormat           string
-	flagPAMFilter           string
-	flagPAMOrderBy          string
-	flagPAMPageSize         int64
-)
-
-var (
-	pamEntCreateCmd = &cobra.Command{
-		Use: "create ENTITLEMENT", Short: "Create a Privileged Access Manager entitlement",
-		Args: cobra.ExactArgs(1), RunE: runPAMEntCreate,
-	}
-	pamEntDeleteCmd = &cobra.Command{
-		Use: "delete ENTITLEMENT", Short: "Delete a Privileged Access Manager entitlement",
-		Args: cobra.ExactArgs(1), RunE: runPAMEntDelete,
-	}
-	pamEntDescribeCmd = &cobra.Command{
-		Use: "describe ENTITLEMENT", Short: "Show details of a Privileged Access Manager entitlement",
-		Args: cobra.ExactArgs(1), RunE: runPAMEntDescribe,
-	}
-	pamEntExportCmd = &cobra.Command{
-		Use: "export ENTITLEMENT", Short: "Export a Privileged Access Manager entitlement to a local YAML file",
-		Args: cobra.ExactArgs(1), RunE: runPAMEntExport,
-	}
-	pamEntListCmd = &cobra.Command{
-		Use: "list", Short: "List Privileged Access Manager entitlements under a parent",
-		Args: cobra.NoArgs, RunE: runPAMEntList,
-	}
-	pamEntSearchCmd = &cobra.Command{
-		Use: "search", Short: "Search Privileged Access Manager entitlements you can request/approve",
-		Args: cobra.NoArgs, RunE: runPAMEntSearch,
-	}
-	pamEntUpdateCmd = &cobra.Command{
-		Use: "update ENTITLEMENT", Short: "Update an existing Privileged Access Manager entitlement",
-		Args: cobra.ExactArgs(1), RunE: runPAMEntUpdate,
-	}
-)
-
-func init() {
+func (s *pamCmds) initPamEntitlements() {
 	all := []*cobra.Command{
-		pamEntCreateCmd, pamEntDeleteCmd, pamEntDescribeCmd, pamEntExportCmd,
-		pamEntListCmd, pamEntSearchCmd, pamEntUpdateCmd,
+		s.pamEntCreateCmd, s.pamEntDeleteCmd, s.pamEntDescribeCmd, s.pamEntExportCmd,
+		s.pamEntListCmd, s.pamEntSearchCmd, s.pamEntUpdateCmd,
 	}
 	for _, c := range all {
-		addPAMScopeFlags(c)
-		c.Flags().StringVar(&flagPAMLocation, "location", "global",
+		s.addPAMScopeFlags(c)
+		c.Flags().StringVar(&s.flagPAMLocation, "location", "global",
 			"Location that owns the entitlements (e.g. \"global\")")
 	}
-	for _, c := range []*cobra.Command{pamEntCreateCmd, pamEntUpdateCmd} {
-		c.Flags().StringVar(&flagPAMEntitlementFile, "entitlement-file", "",
+	for _, c := range []*cobra.Command{s.pamEntCreateCmd, s.pamEntUpdateCmd} {
+		c.Flags().StringVar(&s.flagPAMEntitlementFile, "entitlement-file", "",
 			"Path to a YAML/JSON file containing the entitlement configuration (required)")
 		_ = c.MarkFlagRequired("entitlement-file")
 	}
-	pamEntExportCmd.Flags().StringVar(&flagPAMDestination, "destination", "",
+	s.pamEntExportCmd.Flags().StringVar(&s.flagPAMDestination, "destination", "",
 		"Path to the local YAML file to write (defaults to stdout)")
-	pamEntSearchCmd.Flags().StringVar(&flagPAMCallerAccessType, "caller-access-type", "",
+	s.pamEntSearchCmd.Flags().StringVar(&s.flagPAMCallerAccessType, "caller-access-type", "",
 		"Search access type: grant-requester or grant-approver (required)")
-	_ = pamEntSearchCmd.MarkFlagRequired("caller-access-type")
-	pamEntListCmd.Flags().StringVar(&flagPAMFilter, "filter", "", "Server-side filter expression")
-	pamEntListCmd.Flags().StringVar(&flagPAMOrderBy, "order-by", "", "Server-side ordering hint")
-	pamEntListCmd.Flags().Int64Var(&flagPAMPageSize, "page-size", 0, "Maximum number of results per page")
-	pamEntSearchCmd.Flags().Int64Var(&flagPAMPageSize, "page-size", 0, "Maximum number of results per page")
-	for _, c := range []*cobra.Command{pamEntCreateCmd, pamEntDeleteCmd, pamEntDescribeCmd, pamEntListCmd, pamEntSearchCmd, pamEntUpdateCmd} {
-		c.Flags().StringVar(&flagPAMFormat, "format", "", "Output format")
+	_ = s.pamEntSearchCmd.MarkFlagRequired("caller-access-type")
+	s.pamEntListCmd.Flags().StringVar(&s.flagPAMFilter, "filter", "", "Server-side filter expression")
+	s.pamEntListCmd.Flags().StringVar(&s.flagPAMOrderBy, "order-by", "", "Server-side ordering hint")
+	s.pamEntListCmd.Flags().Int64Var(&s.flagPAMPageSize, "page-size", 0, "Maximum number of results per page")
+	s.pamEntSearchCmd.Flags().Int64Var(&s.flagPAMPageSize, "page-size", 0, "Maximum number of results per page")
+	for _, c := range []*cobra.Command{s.pamEntCreateCmd, s.pamEntDeleteCmd, s.pamEntDescribeCmd, s.pamEntListCmd, s.pamEntSearchCmd, s.pamEntUpdateCmd} {
+		c.Flags().StringVar(&s.flagPAMFormat, "format", "", "Output format")
 	}
 
-	pamEntitlementsCmd.AddCommand(all...)
-	pamCmd.AddCommand(pamEntitlementsCmd)
+	s.pamEntitlementsCmd.AddCommand(all...)
+	s.pamCmd.AddCommand(s.pamEntitlementsCmd)
 }
 
-func addPAMScopeFlags(c *cobra.Command) {
-	c.Flags().StringVar(&flagPAMFolder, "folder", "",
+func (s *pamCmds) addPAMScopeFlags(c *cobra.Command) {
+	c.Flags().StringVar(&s.flagPAMFolder, "folder", "",
 		"Folder scope (alternative to --project/--organization)")
-	c.Flags().StringVar(&flagPAMOrganization, "organization", "",
+	c.Flags().StringVar(&s.flagPAMOrganization, "organization", "",
 		"Organization scope (alternative to --project/--folder)")
 }
 
 // pamScopeParent returns "projects/PROJECT", "folders/FOLDER" or "organizations/ORG".
-func pamScopeParent() (string, error) {
+func (s *pamCmds) pamScopeParent() (string, error) {
 	set := 0
-	if flagProject != "" {
+	if s.inv.flags.project != "" {
 		set++
 	}
-	if flagPAMFolder != "" {
+	if s.flagPAMFolder != "" {
 		set++
 	}
-	if flagPAMOrganization != "" {
+	if s.flagPAMOrganization != "" {
 		set++
 	}
 	if set > 1 {
 		return "", fmt.Errorf("only one of --project, --folder, --organization may be set")
 	}
-	if flagPAMFolder != "" {
-		return "folders/" + flagPAMFolder, nil
+	if s.flagPAMFolder != "" {
+		return "folders/" + s.flagPAMFolder, nil
 	}
-	if flagPAMOrganization != "" {
-		return "organizations/" + flagPAMOrganization, nil
+	if s.flagPAMOrganization != "" {
+		return "organizations/" + s.flagPAMOrganization, nil
 	}
-	project, err := resolveProject()
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
 	return "projects/" + project, nil
 }
 
-func pamEntParent() (string, error) {
-	scope, err := pamScopeParent()
+func (s *pamCmds) pamEntParent() (string, error) {
+	scope, err := s.pamScopeParent()
 	if err != nil {
 		return "", err
 	}
-	loc := flagPAMLocation
+	loc := s.flagPAMLocation
 	if loc == "" {
 		loc = "global"
 	}
 	return fmt.Sprintf("%s/locations/%s", scope, loc), nil
 }
 
-func pamEntName(id string) (string, error) {
+func (s *pamCmds) pamEntName(id string) (string, error) {
 	if strings.Contains(id, "/entitlements/") {
 		return id, nil
 	}
-	parent, err := pamEntParent()
+	parent, err := s.pamEntParent()
 	if err != nil {
 		return "", err
 	}
@@ -193,12 +143,12 @@ func pamLoadEntitlement(p string) (map[string]any, error) {
 	return normalised, nil
 }
 
-func runPAMEntCreate(cmd *cobra.Command, args []string) error {
-	parent, err := pamEntParent()
+func (s *pamCmds) runPAMEntCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.pamEntParent()
 	if err != nil {
 		return err
 	}
-	body, err := pamLoadEntitlement(flagPAMEntitlementFile)
+	body, err := pamLoadEntitlement(s.flagPAMEntitlementFile)
 	if err != nil {
 		return err
 	}
@@ -206,39 +156,39 @@ func runPAMEntCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	return pamHTTP(ctx, http.MethodPost, parent+"/entitlements",
-		"?entitlementId="+url.QueryEscape(args[0]), payload, flagPAMFormat)
+	ctx := cmd.Context()
+	return s.pamHTTP(ctx, http.MethodPost, parent+"/entitlements",
+		"?entitlementId="+url.QueryEscape(args[0]), payload, s.flagPAMFormat)
 }
 
-func runPAMEntDelete(cmd *cobra.Command, args []string) error {
-	name, err := pamEntName(args[0])
+func (s *pamCmds) runPAMEntDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.pamEntName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	// gcloud python routes delete through SetForceFieldInDeleteEntitlementRequest,
 	// which sets force=true on the request so grants under the entitlement are
 	// cleaned up alongside it.
-	return pamHTTP(ctx, http.MethodDelete, name, "?force=true", nil, flagPAMFormat)
+	return s.pamHTTP(ctx, http.MethodDelete, name, "?force=true", nil, s.flagPAMFormat)
 }
 
-func runPAMEntDescribe(cmd *cobra.Command, args []string) error {
-	name, err := pamEntName(args[0])
+func (s *pamCmds) runPAMEntDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.pamEntName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	return pamHTTP(ctx, http.MethodGet, name, "", nil, flagPAMFormat)
+	ctx := cmd.Context()
+	return s.pamHTTP(ctx, http.MethodGet, name, "", nil, s.flagPAMFormat)
 }
 
-func runPAMEntExport(cmd *cobra.Command, args []string) error {
-	name, err := pamEntName(args[0])
+func (s *pamCmds) runPAMEntExport(cmd *cobra.Command, args []string) error {
+	name, err := s.pamEntName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	body, err := pamHTTPRaw(ctx, http.MethodGet, name, "", nil)
+	ctx := cmd.Context()
+	body, err := s.pamHTTPRaw(ctx, http.MethodGet, name, "", nil)
 	if err != nil {
 		return err
 	}
@@ -250,40 +200,40 @@ func runPAMEntExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("encoding entitlement as YAML: %w", err)
 	}
-	if flagPAMDestination == "" {
-		_, err := os.Stdout.Write(yamlBytes)
+	if s.flagPAMDestination == "" {
+		_, err := s.inv.stdout.Write(yamlBytes)
 		return err
 	}
-	if err := os.WriteFile(flagPAMDestination, yamlBytes, 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", flagPAMDestination, err)
+	if err := os.WriteFile(s.flagPAMDestination, yamlBytes, 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", s.flagPAMDestination, err)
 	}
-	fmt.Printf("Exported entitlement [%s] to %s.\n", path.Base(name), flagPAMDestination)
+	fmt.Fprintf(s.inv.stdout, "Exported entitlement [%s] to %s.\n", path.Base(name), s.flagPAMDestination)
 	return nil
 }
 
-func runPAMEntList(cmd *cobra.Command, args []string) error {
-	parent, err := pamEntParent()
+func (s *pamCmds) runPAMEntList(cmd *cobra.Command, args []string) error {
+	parent, err := s.pamEntParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var all []any
 	pageToken := ""
 	for {
 		q := url.Values{}
-		if flagPAMFilter != "" {
-			q.Set("filter", flagPAMFilter)
+		if s.flagPAMFilter != "" {
+			q.Set("filter", s.flagPAMFilter)
 		}
-		if flagPAMOrderBy != "" {
-			q.Set("orderBy", flagPAMOrderBy)
+		if s.flagPAMOrderBy != "" {
+			q.Set("orderBy", s.flagPAMOrderBy)
 		}
-		if flagPAMPageSize > 0 {
-			q.Set("pageSize", fmt.Sprintf("%d", flagPAMPageSize))
+		if s.flagPAMPageSize > 0 {
+			q.Set("pageSize", fmt.Sprintf("%d", s.flagPAMPageSize))
 		}
 		if pageToken != "" {
 			q.Set("pageToken", pageToken)
 		}
-		body, err := pamHTTPRaw(ctx, http.MethodGet, parent+"/entitlements", pamQuery(q), nil)
+		body, err := s.pamHTTPRaw(ctx, http.MethodGet, parent+"/entitlements", pamQuery(q), nil)
 		if err != nil {
 			return err
 		}
@@ -300,31 +250,31 @@ func runPAMEntList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = page.NextPageToken
 	}
-	return emitFormatted(all, flagPAMFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagPAMFormat)
 }
 
-func runPAMEntSearch(cmd *cobra.Command, args []string) error {
-	parent, err := pamEntParent()
+func (s *pamCmds) runPAMEntSearch(cmd *cobra.Command, args []string) error {
+	parent, err := s.pamEntParent()
 	if err != nil {
 		return err
 	}
-	enum, err := pamCallerAccessValue(flagPAMCallerAccessType)
+	enum, err := pamCallerAccessValue(s.flagPAMCallerAccessType)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var all []any
 	pageToken := ""
 	for {
 		q := url.Values{}
 		q.Set("callerAccessType", enum)
-		if flagPAMPageSize > 0 {
-			q.Set("pageSize", fmt.Sprintf("%d", flagPAMPageSize))
+		if s.flagPAMPageSize > 0 {
+			q.Set("pageSize", fmt.Sprintf("%d", s.flagPAMPageSize))
 		}
 		if pageToken != "" {
 			q.Set("pageToken", pageToken)
 		}
-		body, err := pamHTTPRaw(ctx, http.MethodGet, parent+"/entitlements:search", pamQuery(q), nil)
+		body, err := s.pamHTTPRaw(ctx, http.MethodGet, parent+"/entitlements:search", pamQuery(q), nil)
 		if err != nil {
 			return err
 		}
@@ -341,15 +291,15 @@ func runPAMEntSearch(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = page.NextPageToken
 	}
-	return emitFormatted(all, flagPAMFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagPAMFormat)
 }
 
-func runPAMEntUpdate(cmd *cobra.Command, args []string) error {
-	name, err := pamEntName(args[0])
+func (s *pamCmds) runPAMEntUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.pamEntName(args[0])
 	if err != nil {
 		return err
 	}
-	body, err := pamLoadEntitlement(flagPAMEntitlementFile)
+	body, err := pamLoadEntitlement(s.flagPAMEntitlementFile)
 	if err != nil {
 		return err
 	}
@@ -364,8 +314,8 @@ func runPAMEntUpdate(cmd *cobra.Command, args []string) error {
 		keys = append(keys, k)
 	}
 	q := "?updateMask=" + url.QueryEscape(strings.Join(keys, ","))
-	ctx := context.Background()
-	return pamHTTP(ctx, http.MethodPatch, name, q, payload, flagPAMFormat)
+	ctx := cmd.Context()
+	return s.pamHTTP(ctx, http.MethodPatch, name, q, payload, s.flagPAMFormat)
 }
 
 func pamQuery(q url.Values) string {
@@ -377,8 +327,8 @@ func pamQuery(q url.Values) string {
 
 // pamHTTP issues an authenticated JSON request against the Privileged Access
 // Manager REST API and emits the decoded body in the requested format.
-func pamHTTP(ctx context.Context, method, name, query string, payload []byte, format string) error {
-	body, err := pamHTTPRaw(ctx, method, name, query, payload)
+func (s *pamCmds) pamHTTP(ctx context.Context, method, name, query string, payload []byte, format string) error {
+	body, err := s.pamHTTPRaw(ctx, method, name, query, payload)
 	if err != nil {
 		return err
 	}
@@ -388,14 +338,14 @@ func pamHTTP(ctx context.Context, method, name, query string, payload []byte, fo
 	var out any
 	if err := json.Unmarshal(body, &out); err != nil {
 		// Non-JSON response: emit it as-is.
-		_, werr := os.Stdout.Write(body)
+		_, werr := s.inv.stdout.Write(body)
 		return werr
 	}
-	return emitFormatted(out, format)
+	return emitFormattedTo(s.inv.stdout, out, format)
 }
 
-func pamHTTPRaw(ctx context.Context, method, name, query string, payload []byte) ([]byte, error) {
-	ts, err := gcp.PlatformTokenSource(ctx, flagAccount)
+func (s *pamCmds) pamHTTPRaw(ctx context.Context, method, name, query string, payload []byte) ([]byte, error) {
+	ts, err := s.inv.clients().PlatformTokenSource(ctx)
 	if err != nil {
 		return nil, err
 	}
