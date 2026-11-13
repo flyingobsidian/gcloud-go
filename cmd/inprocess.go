@@ -63,6 +63,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newIdsCmd(inv),
 		newTranscoderCmd(inv),
 		newBiglakeCmd(inv),
+		newBqCmd(inv),
 	}
 }
 
