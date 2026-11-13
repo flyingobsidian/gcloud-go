@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -17,180 +16,139 @@ import (
 // google.golang.org/api client, so this command surface uses the shared
 // restClient (see netmgmtMonRest in network_management.go).
 
-var netmgmtMonCmd = &cobra.Command{
-	Use:   "network-monitoring-providers",
-	Short: "Manage Network Monitoring providers",
-}
-
-var (
-	flagNMMonLocation   string
-	flagNMMonFormat     string
-	flagNMMonConfigFile string
-	flagNMMonPageSize   int64
-)
-
-var (
-	netmgmtMonCreateCmd = &cobra.Command{
-		Use: "create PROVIDER", Short: "Create a network monitoring provider",
-		Args: cobra.ExactArgs(1), RunE: runNMMonCreate,
-	}
-	netmgmtMonDeleteCmd = &cobra.Command{
-		Use: "delete PROVIDER", Short: "Delete a network monitoring provider",
-		Args: cobra.ExactArgs(1), RunE: runNMMonDelete,
-	}
-	netmgmtMonDescribeCmd = &cobra.Command{
-		Use: "describe PROVIDER", Short: "Describe a network monitoring provider",
-		Args: cobra.ExactArgs(1), RunE: runNMMonDescribe,
-	}
-	netmgmtMonGenMPConfigCmd = &cobra.Command{
-		Use:   "generate-monitoring-point-config PROVIDER",
-		Short: "Generate a monitoring point config for a network monitoring provider",
-		Args:  cobra.ExactArgs(1), RunE: runNMMonGenMPConfig,
-	}
-	netmgmtMonGenAccessTokenCmd = &cobra.Command{
-		Use:   "generate-provider-access-token PROVIDER",
-		Short: "Generate a provider access token for a network monitoring provider",
-		Args:  cobra.ExactArgs(1), RunE: runNMMonGenAccessToken,
-	}
-	netmgmtMonListCmd = &cobra.Command{
-		Use: "list", Short: "List network monitoring providers",
-		Args: cobra.NoArgs, RunE: runNMMonList,
-	}
-)
-
-func init() {
+func (s *networkManagementCmds) initNetworkManagementNetworkMonitoringProviders() {
 	all := []*cobra.Command{
-		netmgmtMonCreateCmd, netmgmtMonDeleteCmd, netmgmtMonDescribeCmd,
-		netmgmtMonGenMPConfigCmd, netmgmtMonGenAccessTokenCmd, netmgmtMonListCmd,
+		s.netmgmtMonCreateCmd, s.netmgmtMonDeleteCmd, s.netmgmtMonDescribeCmd,
+		s.netmgmtMonGenMPConfigCmd, s.netmgmtMonGenAccessTokenCmd, s.netmgmtMonListCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagNMMonLocation, "location", "",
+		c.Flags().StringVar(&s.flagNMMonLocation, "location", "",
 			"Network monitoring provider location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagNMMonFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagNMMonFormat, "format", "", "Output format")
 	}
 	for _, c := range []*cobra.Command{
-		netmgmtMonCreateCmd, netmgmtMonGenMPConfigCmd, netmgmtMonGenAccessTokenCmd,
+		s.netmgmtMonCreateCmd, s.netmgmtMonGenMPConfigCmd, s.netmgmtMonGenAccessTokenCmd,
 	} {
-		c.Flags().StringVar(&flagNMMonConfigFile, "config-file", "",
+		c.Flags().StringVar(&s.flagNMMonConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	netmgmtMonListCmd.Flags().Int64Var(&flagNMMonPageSize, "page-size", 0, "Maximum results per page")
+	s.netmgmtMonListCmd.Flags().Int64Var(&s.flagNMMonPageSize, "page-size", 0, "Maximum results per page")
 
-	netmgmtMonCmd.AddCommand(all...)
-	networkManagementCmd.AddCommand(netmgmtMonCmd)
+	s.netmgmtMonCmd.AddCommand(all...)
+	s.networkManagementCmd.AddCommand(s.netmgmtMonCmd)
 }
 
-func nmMonParent() (string, error) {
-	project, err := resolveProject()
+func (s *networkManagementCmds) nmMonParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagNMMonLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagNMMonLocation), nil
 }
 
-func nmMonName(id string) (string, error) {
+func (s *networkManagementCmds) nmMonName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := nmMonParent()
+	parent, err := s.nmMonParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/networkMonitoringProviders/%s", parent, id), nil
 }
 
-func runNMMonCreate(cmd *cobra.Command, args []string) error {
-	parent, err := nmMonParent()
+func (s *networkManagementCmds) runNMMonCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.nmMonParent()
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagNMMonConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNMMonConfigFile, &body); err != nil {
 		return err
 	}
 	q := url.Values{}
 	q.Set("networkMonitoringProviderId", args[0])
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := netmgmtMonRest.do(ctx, http.MethodPost, "/"+parent+"/networkMonitoringProviders", q, body, &op); err != nil {
+	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodPost, "/"+parent+"/networkMonitoringProviders", q, body, &op); err != nil {
 		return fmt.Errorf("creating network monitoring provider: %w", err)
 	}
-	fmt.Printf("Create request issued for network monitoring provider [%s].\n", args[0])
-	return emitFormatted(op, flagNMMonFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for network monitoring provider [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagNMMonFormat)
 }
 
-func runNMMonDelete(cmd *cobra.Command, args []string) error {
-	name, err := nmMonName(args[0])
+func (s *networkManagementCmds) runNMMonDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.nmMonName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := netmgmtMonRest.do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting network monitoring provider: %w", err)
 	}
-	fmt.Printf("Delete request issued for network monitoring provider [%s].\n", args[0])
-	return emitFormatted(op, flagNMMonFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for network monitoring provider [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagNMMonFormat)
 }
 
-func runNMMonDescribe(cmd *cobra.Command, args []string) error {
-	name, err := nmMonName(args[0])
+func (s *networkManagementCmds) runNMMonDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.nmMonName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := netmgmtMonRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing network monitoring provider: %w", err)
 	}
-	return emitFormatted(got, flagNMMonFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNMMonFormat)
 }
 
-func runNMMonGenMPConfig(cmd *cobra.Command, args []string) error {
-	name, err := nmMonName(args[0])
+func (s *networkManagementCmds) runNMMonGenMPConfig(cmd *cobra.Command, args []string) error {
+	name, err := s.nmMonName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagNMMonConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNMMonConfigFile, &body); err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := netmgmtMonRest.do(ctx, http.MethodPost, "/"+name+":generateMonitoringPointConfig", nil, body, &got); err != nil {
+	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodPost, "/"+name+":generateMonitoringPointConfig", nil, body, &got); err != nil {
 		return fmt.Errorf("generating monitoring point config: %w", err)
 	}
-	return emitFormatted(got, flagNMMonFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNMMonFormat)
 }
 
-func runNMMonGenAccessToken(cmd *cobra.Command, args []string) error {
-	name, err := nmMonName(args[0])
+func (s *networkManagementCmds) runNMMonGenAccessToken(cmd *cobra.Command, args []string) error {
+	name, err := s.nmMonName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagNMMonConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagNMMonConfigFile, &body); err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := netmgmtMonRest.do(ctx, http.MethodPost, "/"+name+":generateProviderAccessToken", nil, body, &got); err != nil {
+	if err := s.inv.rest(netmgmtMonRest).do(ctx, http.MethodPost, "/"+name+":generateProviderAccessToken", nil, body, &got); err != nil {
 		return fmt.Errorf("generating provider access token: %w", err)
 	}
-	return emitFormatted(got, flagNMMonFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagNMMonFormat)
 }
 
-func runNMMonList(cmd *cobra.Command, args []string) error {
-	parent, err := nmMonParent()
+func (s *networkManagementCmds) runNMMonList(cmd *cobra.Command, args []string) error {
+	parent, err := s.nmMonParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	items, err := netmgmtMonRest.paginate(ctx, "/"+parent+"/networkMonitoringProviders", nil, "networkMonitoringProviders", flagNMMonPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(netmgmtMonRest).paginate(ctx, "/"+parent+"/networkMonitoringProviders", nil, "networkMonitoringProviders", s.flagNMMonPageSize)
 	if err != nil {
 		return fmt.Errorf("listing network monitoring providers: %w", err)
 	}
-	return emitFormatted(items, flagNMMonFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagNMMonFormat)
 }
