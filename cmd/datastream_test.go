@@ -7,7 +7,8 @@ import (
 )
 
 func datastreamSubgroup(name string) *cobra.Command {
-	for _, c := range datastreamCmd.Commands() {
+	grp := newDatastreamCmds(legacyTestInvocation())
+	for _, c := range grp.datastreamCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
