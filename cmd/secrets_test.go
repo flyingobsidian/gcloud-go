@@ -8,10 +8,11 @@ import (
 )
 
 func TestReadDataFileStdin(t *testing.T) {
+	grp := newSecretsCmds(legacyTestInvocation())
 	// We can't easily test stdin reading in unit tests,
 	// but we can test that "-" is recognized as stdin.
 	// Just verify the function signature compiles.
-	_ = readDataFile
+	_ = grp.readDataFile
 }
 
 func TestResolveProject(t *testing.T) {
@@ -39,8 +40,9 @@ func TestResolveProjectMissing(t *testing.T) {
 }
 
 func TestSecretsCommandTree(t *testing.T) {
+	grp := newSecretsCmds(legacyTestInvocation())
 	// Verify all secrets subcommands are registered.
-	sub := secretsCmd.Commands()
+	sub := grp.secretsCmd.Commands()
 	names := make(map[string]bool)
 	for _, c := range sub {
 		names[c.Name()] = true
@@ -52,7 +54,7 @@ func TestSecretsCommandTree(t *testing.T) {
 	}
 
 	// Check versions subcommands.
-	versionsSub := secretsVersionsCmd.Commands()
+	versionsSub := grp.secretsVersionsCmd.Commands()
 	vNames := make(map[string]bool)
 	for _, c := range versionsSub {
 		vNames[c.Name()] = true
@@ -65,6 +67,7 @@ func TestSecretsCommandTree(t *testing.T) {
 }
 
 func TestReadDataFile(t *testing.T) {
+	grp := newSecretsCmds(legacyTestInvocation())
 	// Write a temp file and read it back.
 	path := t.TempDir() + "/data.txt"
 	want := "secret-data-123"
@@ -72,7 +75,7 @@ func TestReadDataFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := readDataFile(path)
+	got, err := grp.readDataFile(path)
 	if err != nil {
 		t.Fatalf("readDataFile() error: %v", err)
 	}
@@ -82,7 +85,8 @@ func TestReadDataFile(t *testing.T) {
 }
 
 func TestReadDataFileNotFound(t *testing.T) {
-	_, err := readDataFile("/nonexistent/path")
+	grp := newSecretsCmds(legacyTestInvocation())
+	_, err := grp.readDataFile("/nonexistent/path")
 	if err == nil {
 		t.Error("readDataFile() expected error for missing file")
 	}
@@ -93,7 +97,8 @@ func writeTestFile(path, content string) error {
 }
 
 func secretsSubgroup(name string) *cobra.Command {
-	for _, c := range secretsCmd.Commands() {
+	grp := newSecretsCmds(legacyTestInvocation())
+	for _, c := range grp.secretsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -102,8 +107,9 @@ func secretsSubgroup(name string) *cobra.Command {
 }
 
 func TestSecretsIamCommands(t *testing.T) {
+	grp := newSecretsCmds(legacyTestInvocation())
 	names := make(map[string]bool)
-	for _, c := range secretsCmd.Commands() {
+	for _, c := range grp.secretsCmd.Commands() {
 		names[c.Name()] = true
 	}
 	for _, want := range []string{"add-iam-policy-binding", "get-iam-policy", "remove-iam-policy-binding", "set-iam-policy"} {
@@ -130,8 +136,9 @@ func TestSecretsLocationsSubcommands(t *testing.T) {
 }
 
 func TestSecretsHasManagedRotationCommands(t *testing.T) {
+	grp := newSecretsCmds(legacyTestInvocation())
 	names := make(map[string]bool)
-	for _, c := range secretsCmd.Commands() {
+	for _, c := range grp.secretsCmd.Commands() {
 		names[c.Name()] = true
 	}
 	for _, want := range []string{"enable-managed-rotation", "rotate-secret"} {
@@ -142,14 +149,15 @@ func TestSecretsHasManagedRotationCommands(t *testing.T) {
 }
 
 func TestSecretsCreateHasSecretTypeFlag(t *testing.T) {
-	if flag := secretsCreateCmd.Flags().Lookup("secret-type"); flag == nil {
+	grp := newSecretsCmds(legacyTestInvocation())
+	if flag := grp.secretsCreateCmd.Flags().Lookup("secret-type"); flag == nil {
 		t.Error("secrets create missing --secret-type flag")
 	}
 }
 
 func TestSecretTypeEnum(t *testing.T) {
 	cases := map[string]string{
-		"":                                 "",
+		"":                                  "",
 		"cloud-sql-single-user-credentials": "CLOUD_SQL_SINGLE_USER_CREDENTIALS",
 		"CLOUD_SQL_SINGLE_USER_CREDENTIALS": "CLOUD_SQL_SINGLE_USER_CREDENTIALS",
 		"other":                             "OTHER",

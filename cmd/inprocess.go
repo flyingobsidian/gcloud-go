@@ -157,6 +157,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newRunCmd(inv),
 		newSccCmd(inv),
 		newArtifactsCmd(inv),
+		newSecretsCmd(inv),
 	}
 }
 
