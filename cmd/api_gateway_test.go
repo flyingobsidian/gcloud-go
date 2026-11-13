@@ -8,7 +8,8 @@ import (
 )
 
 func apiGatewaySubgroup(name string) *cobra.Command {
-	for _, c := range apiGatewayCmd.Commands() {
+	grp := newApiGatewayCmds(legacyTestInvocation())
+	for _, c := range grp.apiGatewayCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}
@@ -49,10 +50,11 @@ func TestApiGatewayOperationsSubcommands(t *testing.T) {
 }
 
 func TestAGGWCreateEnableStreaming(t *testing.T) {
-	if agGWCreateCmd.Flags().Lookup("enable-streaming") == nil {
+	grp := newApiGatewayCmds(legacyTestInvocation())
+	if grp.agGWCreateCmd.Flags().Lookup("enable-streaming") == nil {
 		t.Fatal("gateways create missing --enable-streaming")
 	}
-	if agGWUpdateCmd.Flags().Lookup("enable-streaming") != nil {
+	if grp.agGWUpdateCmd.Flags().Lookup("enable-streaming") != nil {
 		t.Error("--enable-streaming is create-only")
 	}
 	gw := &apigateway.ApigatewayGateway{}
