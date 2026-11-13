@@ -3,7 +3,7 @@ package cmd
 import "testing"
 
 func TestFeedbackCommandRegistered(t *testing.T) {
-	for _, c := range newRootCmd(legacyTestInvocation(), true).Commands() {
+	for _, c := range newRootCmd(legacyTestInvocation()).Commands() {
 		if c.Name() == "feedback" {
 			if c.Flags().Lookup("log-file") == nil {
 				t.Error("--log-file flag not registered on feedback")

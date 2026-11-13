@@ -16,7 +16,7 @@ import (
 // the JSON round-tripped form of v.
 //
 // The returned records are JSON-shaped (map[string]any), safe for
-// emitFormatted to consume for --format="table(...)" and similar.
+// emitFormattedTo to consume for --format="table(...)" and similar.
 func flattenRecords(v any, specs []string) ([]map[string]any, error) {
 	base, err := toJSONMap(v)
 	if err != nil {

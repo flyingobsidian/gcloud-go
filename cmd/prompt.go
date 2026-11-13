@@ -5,22 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 )
-
-// promptContinue mirrors gcloud-python's
-// `console_io.PromptContinue(message, cancel_on_no=True, cancel_string=...)`
-// with the default answer of Yes. It writes the message and a
-// "Do you want to continue (Y/n)?" prompt to stderr, and returns an error
-// carrying cancelString when the user answers no. With --quiet, or when stdin
-// is not a terminal, it returns nil without prompting.
-func promptContinue(message, cancelString string) error {
-	if flagQuiet || !IsInteractive() {
-		return nil
-	}
-	return promptContinueIO(os.Stdin, os.Stderr, message, cancelString)
-}
 
 // promptContinueIO is the io-taking form of promptContinue, used by tests.
 func promptContinueIO(in io.Reader, out io.Writer, message, cancelString string) error {

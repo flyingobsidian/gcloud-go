@@ -9,7 +9,7 @@ import (
 
 // findRootSub returns a top-level cobra subcommand by name.
 func findRootSub(name string) *cobra.Command {
-	for _, c := range newRootCmd(legacyTestInvocation(), true).Commands() {
+	for _, c := range newRootCmd(legacyTestInvocation()).Commands() {
 		if c.Name() == name {
 			return c
 		}

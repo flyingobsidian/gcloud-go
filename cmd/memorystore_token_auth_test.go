@@ -73,7 +73,7 @@ func TestMemstoreCreateTAUAsync(t *testing.T) {
 	grp.flagMemstoreTAUUser, grp.flagMemstoreTAUAsync, grp.flagMemstoreTAUFormat = "alice", true, "json"
 	defer func() { grp.flagMemstoreTAUUser, grp.flagMemstoreTAUAsync, grp.flagMemstoreTAUFormat = "", false, "" }()
 	var op map[string]any
-	if err := memorystoreRest.do(context.Background(), http.MethodPost,
+	if err := grp.inv.rest(memorystoreRest).do(context.Background(), http.MethodPost,
 		"/projects/p/locations/l/instances/i:addTokenAuthUser", nil, map[string]any{"tokenAuthUser": grp.flagMemstoreTAUUser}, &op); err != nil {
 		t.Fatal(err)
 	}

@@ -25,5 +25,5 @@ func TestHelpFlagFitsEveryCommand(t *testing.T) {
 			walk(sub)
 		}
 	}
-	walk(newRootCmd(inv, true))
+	walk(newRootCmd(inv))
 }

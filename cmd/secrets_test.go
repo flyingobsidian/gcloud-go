@@ -17,25 +17,23 @@ func TestReadDataFileStdin(t *testing.T) {
 
 func TestResolveProject(t *testing.T) {
 	// Set project via flag.
-	flagProject = "test-project"
-	project, err := resolveProject()
+	inv, _, _ := newTestInvocation(t, nil, "")
+	inv.flags.project = "test-project"
+	project, err := inv.project()
 	if err != nil {
-		t.Fatalf("resolveProject() error: %v", err)
+		t.Fatalf("project() error: %v", err)
 	}
 	if project != "test-project" {
 		t.Errorf("project = %q, want test-project", project)
 	}
-	flagProject = "" // reset
 }
 
 func TestResolveProjectMissing(t *testing.T) {
-	flagProject = ""
-	t.Setenv("CLOUDSDK_CORE_PROJECT", "")
-	t.Setenv("CLOUDSDK_CONFIG", t.TempDir()) // empty config
+	inv, _, _ := newTestInvocation(t, nil, "") // empty config
 
-	_, err := resolveProject()
+	_, err := inv.project()
 	if err == nil {
-		t.Error("resolveProject() expected error when no project configured")
+		t.Error("project() expected error when no project configured")
 	}
 }
 

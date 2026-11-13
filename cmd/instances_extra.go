@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
-	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/flyingobsidian/gcloud-go/internal/gfilter"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/compute/v1"
@@ -503,29 +502,11 @@ func (s *computeCmds) formatInstanceList(instances []*compute.Instance) error {
 
 // --- Helpers ---
 
-func resolveRegion() (string, string, error) {
-	props, err := config.Load()
-	if err != nil {
-		return "", "", err
-	}
-	project := config.Resolve(flagProject, "CLOUDSDK_CORE_PROJECT", props.Core.Project)
-	region := config.Resolve("", "CLOUDSDK_COMPUTE_REGION", props.Compute.Region)
-	if project == "" {
-		return "", "", fmt.Errorf("project is required")
-	}
-	return project, region, nil
-}
-
-// formatOutput renders v to stdout for the compute-instance command family.
+// formatOutputTo renders v to w for the compute-instance command family.
 // It keeps the compute.Instance get(FIELD) alias table wired to
 // getInstanceField (which handles gcloud aliases like INTERNAL_IP), and
-// defers all other formatting to emitFormatted so there is a single
+// defers all other formatting to emitFormattedTo so there is a single
 // implementation of yaml/json/table/etc. across the codebase.
-func formatOutput(v any, format string) error {
-	return formatOutputTo(os.Stdout, v, format)
-}
-
-// formatOutputTo is formatOutput writing to w.
 func formatOutputTo(w io.Writer, v any, format string) error {
 	if isGetFormat(format) {
 		field := extractGetField(format)
@@ -564,12 +545,6 @@ func extractValueFields(format string) []string {
 		fields = append(fields, strings.TrimSpace(f))
 	}
 	return fields
-}
-
-// yamlEncode prints v as YAML to stdout. Thin wrapper around emitFormatted so
-// the yaml serialization logic lives in exactly one place (format.go).
-func yamlEncode(v any) error {
-	return emitFormatted(v, "yaml")
 }
 
 func isGetFormat(format string) bool {

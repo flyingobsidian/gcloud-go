@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
-	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -15,29 +14,6 @@ func (s *computeCmds) initInstances() {
 
 	s.instancesCmd.AddCommand(s.instancesStopCmd)
 	s.instancesCmd.AddCommand(s.instancesStartCmd)
-}
-
-func resolveProjectZone() (string, string, error) {
-	props, err := config.Load()
-	if err != nil {
-		return "", "", err
-	}
-	project := config.Resolve(flagProject, "CLOUDSDK_CORE_PROJECT", props.Core.Project)
-	zone := config.Resolve(flagZone, "CLOUDSDK_COMPUTE_ZONE", props.Compute.Zone)
-	if project == "" {
-		return "", "", fmt.Errorf("project is required; set via --project flag, CLOUDSDK_CORE_PROJECT env, or config")
-	}
-	if zone == "" {
-		if !IsInteractive() {
-			return "", "", fmt.Errorf("zone is required; set via --zone flag, CLOUDSDK_COMPUTE_ZONE env, or config")
-		}
-		fmt.Print("Enter zone (e.g. us-central1-a): ")
-		fmt.Scanln(&zone)
-		if zone == "" {
-			return "", "", fmt.Errorf("zone is required")
-		}
-	}
-	return project, zone, nil
 }
 
 func (s *computeCmds) runInstancesStop(cmd *cobra.Command, args []string) error {

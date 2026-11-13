@@ -67,7 +67,7 @@ func (s *computeCmds) runSSH(cmd *cobra.Command, args []string) error {
 
 	// Ensure SSH key exists (unless --plain or --ssh-key-file is set).
 	if !s.flagSSHPlain && s.flagSSHKeyFile == "" {
-		keyPath := googleSSHKeyPath()
+		keyPath := s.inv.googleSSHKeyPath()
 		keyGenerated := false
 		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 			keyPath, err = s.generateSSHKey(keyPath)
@@ -175,7 +175,7 @@ func (s *computeCmds) runSSH(cmd *cobra.Command, args []string) error {
 	if s.flagSSHPlain {
 		sshArgs = []string{}
 	} else {
-		sshArgs = buildSSHOpts(s.flagSSHKeyFile, host)
+		sshArgs = s.inv.buildSSHOpts(s.flagSSHKeyFile, host)
 	}
 
 	if s.flagSSHStrictHostKeyChecking != "" {
@@ -244,28 +244,32 @@ func parseUserInstance(arg string) (user, instance string) {
 	return "", arg
 }
 
-func googleSSHKeyPath() string {
-	home, err := os.UserHomeDir()
+// googleSSHKeyPath returns the path of gcloud's SSH key in the invocation's
+// home directory, or "" if that is unknown.
+func (inv *invocation) googleSSHKeyPath() string {
+	home, err := inv.env.HomeDir()
 	if err != nil {
 		return ""
 	}
 	return filepath.Join(home, ".ssh", "google_compute_engine")
 }
 
-func googleKnownHostsPath() string {
-	home, err := os.UserHomeDir()
+// googleKnownHostsPath returns the path of gcloud's known_hosts file in the
+// invocation's home directory, or "" if that is unknown.
+func (inv *invocation) googleKnownHostsPath() string {
+	home, err := inv.env.HomeDir()
 	if err != nil {
 		return ""
 	}
 	return filepath.Join(home, ".ssh", "google_compute_known_hosts")
 }
 
-func buildSSHOpts(keyFile, host string) []string {
+func (inv *invocation) buildSSHOpts(keyFile, host string) []string {
 	opts := []string{}
 
 	// Use gcloud's default SSH key unless overridden.
 	if keyFile == "" {
-		keyFile = googleSSHKeyPath()
+		keyFile = inv.googleSSHKeyPath()
 	}
 	if keyFile != "" {
 		if _, err := os.Stat(keyFile); err == nil {
@@ -274,14 +278,14 @@ func buildSSHOpts(keyFile, host string) []string {
 	}
 
 	// Use gcloud's known_hosts file.
-	knownHosts := googleKnownHostsPath()
+	knownHosts := inv.googleKnownHostsPath()
 	if knownHosts != "" {
 		opts = append(opts, "-o", "UserKnownHostsFile="+knownHosts)
 	}
 
 	// Match gcloud Python behavior: accept host key on first connect, verify
 	// on subsequent connections.
-	if knownHostsHasHost(host) {
+	if inv.knownHostsHasHost(host) {
 		opts = append(opts, "-o", "StrictHostKeyChecking=yes")
 	} else {
 		opts = append(opts, "-o", "StrictHostKeyChecking=no")
@@ -293,11 +297,11 @@ func buildSSHOpts(keyFile, host string) []string {
 
 // knownHostsHasHost reports whether the google_compute_known_hosts file
 // contains at least one entry for the given host.
-func knownHostsHasHost(host string) bool {
+func (inv *invocation) knownHostsHasHost(host string) bool {
 	if host == "" {
 		return false
 	}
-	khPath := googleKnownHostsPath()
+	khPath := inv.googleKnownHostsPath()
 	if khPath == "" {
 		return false
 	}

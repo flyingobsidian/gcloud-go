@@ -3,12 +3,14 @@
 gcloud-go is being made usable as a library ([#2070](https://github.com/flyingobsidian/gcloud-go/issues/2070)).
 A command group is *migrated* when it keeps all its state in an `invocation`
 (see `cmd/invocation.go`). Migrated groups can run in-process and
-concurrently through the public `gcloud` package. Unmigrated groups still run
-in the CLI, but `gcloud.Runner.Run` returns `ErrNotInProcess` for them.
+concurrently through the public `gcloud` package.
 
-Every command group is now migrated; `TestNoLegacyGroupsLeft` keeps it that
-way. New command groups must be written in the migrated form from the start.
-This document describes how the groups were migrated.
+Every command group is now migrated, and the process-wide path they used
+before has been removed: there is no global command tree, no `flag*`
+globals and no process-wide forms of the helpers in the table below, so code
+that uses them no longer compiles. New command groups must be written in the
+migrated form from the start. This document records how the groups were
+migrated; the "Before" column names helpers that no longer exist.
 
 `cmd/projects.go` is the reference example.
 
@@ -93,9 +95,8 @@ and compute on was migrated this way.
    | `flagProject`, `flagFormat`, `flagQuiet`, … | `inv.flags.project`, `inv.flags.format`, `inv.flags.quiet`, … |
    | `httpDebugWriter()` | `inv.httpDebugWriter()` (already applied by `inv.clients()`) |
 
-   When a shared helper writes to the process streams or reads globals, add
-   an `io.Writer` or `*invocation` form next to it, and keep the old form
-   for the groups that still use it.
+   When a shared helper writes to the process streams or reads globals, give
+   it an `io.Writer` or `*invocation` form.
 4. **Register the group** in `migratedGroups` (`cmd/inprocess.go`).
 5. **Fix tests** that set flag globals or use the old command vars. Build
    commands with `newXxxCmd(inv)` using `newTestInvocation`, or run them end
@@ -113,4 +114,4 @@ and compute on was migrated this way.
 grep -nE 'flag(Project|Zone|Account|Quiet|Format|Filter|Flatten|Verbosity|LogHTTP)\b|context\.Background|os\.(Stdout|Stderr|Stdin)|fmt\.Print|gcp\.[A-Za-z]+Service\(' cmd/<group>*.go
 ```
 
-prints nothing for the group's files, apart from deliberate legacy wrappers.
+prints nothing for the group's files.

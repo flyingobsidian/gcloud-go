@@ -10,26 +10,18 @@ import (
 )
 
 // TestResolveBillingProjectPriority walks the four-step priority chain from
-// #1740 by swapping CLOUDSDK_CONFIG at a per-case tmpdir and toggling
-// flagBillingProject.
+// #1740 with a per-case gcloud config directory and --billing-project value.
 func TestResolveBillingProjectPriority(t *testing.T) {
-	saveFlag := flagBillingProject
-	saveEnvCfg := os.Getenv("CLOUDSDK_CONFIG")
-	defer func() {
-		flagBillingProject = saveFlag
-		if saveEnvCfg == "" {
-			os.Unsetenv("CLOUDSDK_CONFIG")
-		} else {
-			os.Setenv("CLOUDSDK_CONFIG", saveEnvCfg)
-		}
-	}()
-
 	// Fresh gcloud config dir for each subtest.
 	newDir := func(t *testing.T) string {
 		t.Helper()
-		dir := t.TempDir()
-		t.Setenv("CLOUDSDK_CONFIG", dir)
-		return dir
+		return t.TempDir()
+	}
+	billingProject := func(t *testing.T, dir, flag string) string {
+		t.Helper()
+		inv, _, _ := newTestInvocation(t, map[string]string{"CLOUDSDK_CONFIG": dir}, "")
+		inv.flags.billingProject = flag
+		return inv.billingProject()
 	}
 
 	writeADC := func(t *testing.T, dir, project string) {
@@ -61,8 +53,7 @@ func TestResolveBillingProjectPriority(t *testing.T) {
 		dir := newDir(t)
 		writeCfg(t, dir, "cfg-project")
 		writeADC(t, dir, "adc-project")
-		flagBillingProject = "flag-project"
-		if got := resolveBillingProject(); got != "flag-project" {
+		if got := billingProject(t, dir, "flag-project"); got != "flag-project" {
 			t.Errorf("got %q, want flag-project", got)
 		}
 	})
@@ -71,8 +62,7 @@ func TestResolveBillingProjectPriority(t *testing.T) {
 		dir := newDir(t)
 		writeCfg(t, dir, "cfg-project")
 		writeADC(t, dir, "adc-project")
-		flagBillingProject = ""
-		if got := resolveBillingProject(); got != "cfg-project" {
+		if got := billingProject(t, dir, ""); got != "cfg-project" {
 			t.Errorf("got %q, want cfg-project", got)
 		}
 	})
@@ -80,16 +70,14 @@ func TestResolveBillingProjectPriority(t *testing.T) {
 	t.Run("ADC used when only ADC is set", func(t *testing.T) {
 		dir := newDir(t)
 		writeADC(t, dir, "adc-project")
-		flagBillingProject = ""
-		if got := resolveBillingProject(); got != "adc-project" {
+		if got := billingProject(t, dir, ""); got != "adc-project" {
 			t.Errorf("got %q, want adc-project", got)
 		}
 	})
 
 	t.Run("empty when nothing is set", func(t *testing.T) {
-		_ = newDir(t)
-		flagBillingProject = ""
-		if got := resolveBillingProject(); got != "" {
+		dir := newDir(t)
+		if got := billingProject(t, dir, ""); got != "" {
 			t.Errorf("got %q, want empty", got)
 		}
 	})
@@ -106,14 +94,14 @@ func TestBillingConfigSetGet(t *testing.T) {
 	if err := grp.runConfigSet(grp.configSetCmd, []string{"billing/quota_project", "qp-set"}); err != nil {
 		t.Fatalf("config set billing/quota_project: %v", err)
 	}
-	props, err := config.Load()
+	props, err := config.OSEnv().Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := props.Billing.QuotaProject; got != "qp-set" {
 		t.Errorf("Billing.QuotaProject = %q, want qp-set", got)
 	}
-	if got, err := config.Property("billing", "quota_project"); err != nil || got != "qp-set" {
+	if got, err := config.OSEnv().Property("billing", "quota_project"); err != nil || got != "qp-set" {
 		t.Errorf("Property(billing, quota_project) = %q, %v; want qp-set", got, err)
 	}
 }

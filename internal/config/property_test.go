@@ -34,7 +34,7 @@ func TestProperty(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(propertyEnvVar(tt.section, tt.key), tt.env)
-			got, err := Property(tt.section, tt.key)
+			got, err := OSEnv().Property(tt.section, tt.key)
 			if err != nil {
 				t.Fatalf("Property() error = %v", err)
 			}
@@ -48,7 +48,7 @@ func TestProperty(t *testing.T) {
 func TestPropertyMissingConfig(t *testing.T) {
 	t.Setenv("CLOUDSDK_CONFIG", t.TempDir())
 	t.Setenv("CLOUDSDK_ACTIVE_CONFIG_NAME", "default")
-	got, err := Property("workflows", "location")
+	got, err := OSEnv().Property("workflows", "location")
 	if err != nil || got != "" {
 		t.Errorf("Property() = %q, %v; want \"\", nil", got, err)
 	}

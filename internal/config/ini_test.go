@@ -38,12 +38,12 @@ func readFile(t *testing.T, path string) string {
 func TestSavePreservesUnknownSections(t *testing.T) {
 	path := writeActiveConfig(t, "[core]\nproject = a\n\n[workflows]\nlocation = europe-west2\n")
 
-	props, err := Load()
+	props, err := OSEnv().Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	props.Core.Project = "x"
-	if err := props.Save(); err != nil {
+	if err := OSEnv().Save(props); err != nil {
 		t.Fatal(err)
 	}
 
@@ -51,7 +51,7 @@ func TestSavePreservesUnknownSections(t *testing.T) {
 	if got := readFile(t, path); got != want {
 		t.Errorf("config file =\n%s\nwant\n%s", got, want)
 	}
-	if got, err := Property("workflows", "location"); err != nil || got != "europe-west2" {
+	if got, err := OSEnv().Property("workflows", "location"); err != nil || got != "europe-west2" {
 		t.Errorf("Property(workflows, location) = %q, %v; want europe-west2", got, err)
 	}
 }
@@ -59,7 +59,7 @@ func TestSavePreservesUnknownSections(t *testing.T) {
 func TestSetPropertyPreservesUnknownSections(t *testing.T) {
 	path := writeActiveConfig(t, "[workflows]\nlocation = europe-west2\n")
 
-	if err := SetProperty("core", "project", "x"); err != nil {
+	if err := OSEnv().SetProperty("core", "project", "x"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,13 +72,13 @@ func TestSetPropertyPreservesUnknownSections(t *testing.T) {
 func TestSaveUnsetsClearedFields(t *testing.T) {
 	path := writeActiveConfig(t, "# keep me\n[core]\naccount = a@example.com\nproject = p\n\n[builds]\nregion = us-east1\n")
 
-	props, err := Load()
+	props, err := OSEnv().Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	props.Core.Account = ""
 	props.Compute.Zone = "europe-west2-a"
-	if err := props.Save(); err != nil {
+	if err := OSEnv().Save(props); err != nil {
 		t.Fatal(err)
 	}
 
@@ -91,13 +91,13 @@ func TestSaveUnsetsClearedFields(t *testing.T) {
 func TestSetUnsetArbitraryProperty(t *testing.T) {
 	path := writeActiveConfig(t, "[core]\nproject = p\n\n[composer]\nlocation = us-central1\n")
 
-	if err := SetProperty("composer", "location", "europe-west1"); err != nil {
+	if err := OSEnv().SetProperty("composer", "location", "europe-west1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetProperty("core", "account", "a@example.com"); err != nil {
+	if err := OSEnv().SetProperty("core", "account", "a@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetProperty("workflows", "location", "europe-west2"); err != nil {
+	if err := OSEnv().SetProperty("workflows", "location", "europe-west2"); err != nil {
 		t.Fatal(err)
 	}
 	want := "[core]\nproject = p\naccount = a@example.com\n\n[composer]\nlocation = europe-west1\n\n[workflows]\nlocation = europe-west2\n"
@@ -105,10 +105,10 @@ func TestSetUnsetArbitraryProperty(t *testing.T) {
 		t.Errorf("after set, config file =\n%s\nwant\n%s", got, want)
 	}
 
-	if err := UnsetProperty("composer", "location"); err != nil {
+	if err := OSEnv().UnsetProperty("composer", "location"); err != nil {
 		t.Fatal(err)
 	}
-	if err := UnsetProperty("builds", "region"); err != nil {
+	if err := OSEnv().UnsetProperty("builds", "region"); err != nil {
 		t.Fatal(err)
 	}
 	// Python gcloud keeps the now-empty section header.
@@ -117,7 +117,7 @@ func TestSetUnsetArbitraryProperty(t *testing.T) {
 		t.Errorf("after unset, config file =\n%s\nwant\n%s", got, want)
 	}
 
-	got, err := FileProperties()
+	got, err := OSEnv().FileProperties()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestSetPropertyCreatesFile(t *testing.T) {
 	t.Setenv("CLOUDSDK_CONFIG", dir)
 	t.Setenv("CLOUDSDK_ACTIVE_CONFIG_NAME", "")
 
-	if err := SetProperty("workflows", "location", "europe-west2"); err != nil {
+	if err := OSEnv().SetProperty("workflows", "location", "europe-west2"); err != nil {
 		t.Fatal(err)
 	}
 	want := "[workflows]\nlocation = europe-west2\n"
@@ -143,7 +143,7 @@ func TestSetPropertyCreatesFile(t *testing.T) {
 func TestSetPropertyReplacesDuplicateKeys(t *testing.T) {
 	path := writeActiveConfig(t, "[core]\nproject = a\nproject = b\n")
 
-	if err := SetProperty("core", "project", "c"); err != nil {
+	if err := OSEnv().SetProperty("core", "project", "c"); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := readFile(t, path), "[core]\nproject = c\n"; got != want {
@@ -172,7 +172,7 @@ func TestValidatePropertyName(t *testing.T) {
 			t.Errorf("ValidatePropertyName(%q, %q) = %v, want ok=%v", tt.section, tt.key, err, tt.ok)
 		}
 	}
-	if err := SetProperty("core", "a/b", "x"); err == nil {
+	if err := OSEnv().SetProperty("core", "a/b", "x"); err == nil {
 		t.Error("SetProperty(core, a/b) succeeded, want error")
 	}
 }
@@ -181,7 +181,7 @@ func TestCreateConfigurationWritesEmptyFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CLOUDSDK_CONFIG", dir)
 
-	if err := CreateConfiguration("other"); err != nil {
+	if err := OSEnv().CreateConfiguration("other"); err != nil {
 		t.Fatal(err)
 	}
 	if got := readFile(t, filepath.Join(dir, "configurations", "config_other")); got != "" {

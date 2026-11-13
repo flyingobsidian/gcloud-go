@@ -1,28 +1,8 @@
 package secrets
 
 import (
-	"context"
 	"fmt"
-
-	"github.com/flyingobsidian/gcloud-go/internal/auth"
-	"google.golang.org/api/option"
-	secretmanager "google.golang.org/api/secretmanager/v1"
 )
-
-const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
-
-// NewService creates an authenticated Secret Manager API client.
-func NewService(ctx context.Context, account string) (*secretmanager.Service, error) {
-	ts, err := auth.TokenSource(ctx, account, cloudPlatformScope)
-	if err != nil {
-		return nil, fmt.Errorf("obtaining credentials: %w", err)
-	}
-	svc, err := secretmanager.NewService(ctx, option.WithTokenSource(ts))
-	if err != nil {
-		return nil, fmt.Errorf("creating secret manager service: %w", err)
-	}
-	return svc, nil
-}
 
 // SecretParent returns the parent resource for secrets in a project.
 func SecretParent(project, location string) string {

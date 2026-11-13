@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,30 +15,28 @@ import (
 // Verifies the heading is omitted for an empty list, matching gcloud-python's
 // TablePrinter (#1986).
 func TestPrintTableHeadingEmpty(t *testing.T) {
-	out := captureStdout(t, func() {
-		printTableHeading(0, "%-40s %s\n", "NAME", "STATUS")
-	})
-	if out != "" {
-		t.Errorf("printTableHeading(0, ...) printed %q, want nothing", out)
+	var b bytes.Buffer
+	printTableHeadingTo(&b, 0, "%-40s %s\n", "NAME", "STATUS")
+	if out := b.String(); out != "" {
+		t.Errorf("printTableHeadingTo(0, ...) printed %q, want nothing", out)
 	}
 }
 
 func TestPrintTableHeadingNonEmpty(t *testing.T) {
-	out := captureStdout(t, func() {
-		printTableHeading(2, "%-10s %s\n", "NAME", "STATUS")
-	})
-	if want := "NAME       STATUS\n"; out != want {
-		t.Errorf("printTableHeading(2, ...) printed %q, want %q", out, want)
+	var b bytes.Buffer
+	printTableHeadingTo(&b, 2, "%-10s %s\n", "NAME", "STATUS")
+	if out, want := b.String(), "NAME       STATUS\n"; out != want {
+		t.Errorf("printTableHeadingTo(2, ...) printed %q, want %q", out, want)
 	}
 }
 
 func TestPrintListResultsDefaultTableEmpty(t *testing.T) {
 	var all []*crm.TagKey
-	out := captureStdout(t, func() {
-		if err := printListResults(all, "", func() { printTagKeyTable(os.Stdout, all) }); err != nil {
-			t.Fatalf("printListResults: %v", err)
-		}
-	})
+	inv, stdout, _ := newTestInvocation(t, nil, "")
+	if err := inv.printListResults(all, "", func() { printTagKeyTable(inv.stdout, all) }); err != nil {
+		t.Fatalf("printListResults: %v", err)
+	}
+	out := stdout.String()
 	if out != "" {
 		t.Errorf("empty default table printed %q, want nothing", out)
 	}
@@ -45,11 +44,11 @@ func TestPrintListResultsDefaultTableEmpty(t *testing.T) {
 
 func TestPrintListResultsDefaultTableRows(t *testing.T) {
 	all := []*crm.TagKey{{Name: "tagKeys/123", ShortName: "env", NamespacedName: "123/env"}}
-	out := captureStdout(t, func() {
-		if err := printListResults(all, "", func() { printTagKeyTable(os.Stdout, all) }); err != nil {
-			t.Fatalf("printListResults: %v", err)
-		}
-	})
+	inv, stdout, _ := newTestInvocation(t, nil, "")
+	if err := inv.printListResults(all, "", func() { printTagKeyTable(inv.stdout, all) }); err != nil {
+		t.Fatalf("printListResults: %v", err)
+	}
+	out := stdout.String()
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	if len(lines) != 2 {
 		t.Fatalf("got %d lines, want heading plus one row:\n%s", len(lines), out)
@@ -64,11 +63,11 @@ func TestPrintListResultsDefaultTableRows(t *testing.T) {
 
 func TestPrintListResultsEmptyJSON(t *testing.T) {
 	var all []*crm.TagKey
-	out := captureStdout(t, func() {
-		if err := printListResults(all, "json", func() { printTagKeyTable(os.Stdout, all) }); err != nil {
-			t.Fatalf("printListResults: %v", err)
-		}
-	})
+	inv, stdout, _ := newTestInvocation(t, nil, "")
+	if err := inv.printListResults(all, "json", func() { printTagKeyTable(inv.stdout, all) }); err != nil {
+		t.Fatalf("printListResults: %v", err)
+	}
+	out := stdout.String()
 	if strings.TrimSpace(out) != "[]" {
 		t.Errorf("empty json printed %q, want []", out)
 	}
@@ -76,7 +75,7 @@ func TestPrintListResultsEmptyJSON(t *testing.T) {
 
 // Guards against new hand-rolled default tables that print their heading
 // unconditionally: a fmt.Printf/Println of an upper-case heading immediately
-// followed by a range loop over the rows must use printTableHeading instead.
+// followed by a range loop over the rows must use printTableHeadingTo instead.
 func TestNoUnguardedTableHeadings(t *testing.T) {
 	heading := regexp.MustCompile(`^\s*fmt\.(Printf|Println)\(.*"[A-Z][A-Z_ ]+"`)
 	loop := regexp.MustCompile(`^\s*for\s.*\brange\b`)
@@ -101,7 +100,7 @@ func TestNoUnguardedTableHeadings(t *testing.T) {
 			n++
 			line := sc.Text()
 			if loop.MatchString(line) && heading.MatchString(prev) {
-				t.Errorf("%s:%d: table heading printed without printTableHeading: %s", f, n-1, strings.TrimSpace(prev))
+				t.Errorf("%s:%d: table heading printed without printTableHeadingTo: %s", f, n-1, strings.TrimSpace(prev))
 			}
 			prev = line
 		}

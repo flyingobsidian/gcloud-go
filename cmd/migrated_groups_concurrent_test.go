@@ -44,7 +44,7 @@ func runIsolated(newInv func() (*invocation, *bytes.Buffer, *bytes.Buffer), args
 	inv, stdout, stderr := newInv()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	root := newRootCmd(inv, false)
+	root := newRootCmd(inv)
 	root.SetArgs(args)
 	inv.ctx = ctx
 	err := root.ExecuteContext(ctx)

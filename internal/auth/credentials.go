@@ -122,10 +122,3 @@ func scopeKey(scopes []string) string {
 	slices.Sort(s)
 	return strings.Join(slices.Compact(s), " ")
 }
-
-// TokenSource returns a token source from a new, uncached TokenProvider using
-// the process environment. It keeps unmigrated callers working (#2070) and
-// will be removed once they hold a TokenProvider.
-func TokenSource(ctx context.Context, account string, scopes ...string) (oauth2.TokenSource, error) {
-	return NewTokenProvider(config.OSEnv()).TokenSource(ctx, account, scopes...)
-}

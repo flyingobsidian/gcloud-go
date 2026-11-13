@@ -3,7 +3,7 @@ package cmd
 import "testing"
 
 func TestSurveyCommandRegistered(t *testing.T) {
-	for _, c := range newRootCmd(legacyTestInvocation(), true).Commands() {
+	for _, c := range newRootCmd(legacyTestInvocation()).Commands() {
 		if c.Name() == "survey" {
 			return
 		}

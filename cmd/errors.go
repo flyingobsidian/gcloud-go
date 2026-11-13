@@ -3,31 +3,11 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/config"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/googleapi"
 )
-
-// FormatCLIError renders err in the format the Python gcloud CLI uses for
-// top-level command failures:
-//
-//	ERROR: (gcloud.<dotted.command.path>) <STATUS>: <message> <auth-context>
-//
-// When err (or any wrapped error in its chain) is a *googleapi.Error, the
-// status is the canonical gRPC name for the HTTP code and the message is the
-// server-reported detail; the outer fmt.Errorf wrappers are discarded. For
-// any other error, we fall back to the error's own message.
-//
-// If cmd is nil, the parenthesised command path is "gcloud".
-//
-// It describes the credentials of the process environment and the legacy
-// --account global; invocation.formatError describes an invocation's.
-func FormatCLIError(cmd *cobra.Command, err error) string {
-	return formatCLIError(cmd, err, authContextMessage())
-}
 
 // formatCLIError is FormatCLIError with the trailing authentication sentence
 // (see authContextMessage) given as authContext; "" omits it.
@@ -106,15 +86,6 @@ func httpStatusName(code int) string {
 	return ""
 }
 
-// authContextMessage returns the trailing "This command is authenticated as..."
-// sentence gcloud appends to error output. Which sentence variant is used
-// depends on how credentials were resolved, matching credentials/store.py's
-// self.CredentialInfo(). Returns "" when no authentication context can be
-// determined.
-func authContextMessage() string {
-	return authContext(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"), activeAccount())
-}
-
 // authContext returns the authentication sentence for credentials read from
 // the file credFile (when not "") as account, or for the stored credentials
 // of account.
@@ -135,20 +106,6 @@ func authContext(credFile, account string) string {
 		)
 	}
 	return ""
-}
-
-// activeAccount returns the account the CLI would authenticate as: the value
-// of --account when set, else the [core/account] property from the gcloud
-// config, else "".
-func activeAccount() string {
-	if flagAccount != "" {
-		return flagAccount
-	}
-	props, err := config.Load()
-	if err != nil {
-		return ""
-	}
-	return props.Core.Account
 }
 
 // formatError is FormatCLIError for an error from a command run by inv: the

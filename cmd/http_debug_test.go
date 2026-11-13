@@ -12,9 +12,6 @@ import (
 )
 
 func TestHTTPDebugWriter(t *testing.T) {
-	saveVerbosity, saveLogHTTP := flagVerbosity, flagLogHTTP
-	defer func() { flagVerbosity, flagLogHTTP = saveVerbosity, saveLogHTTP }()
-
 	cases := []struct {
 		verbosity string
 		logHTTP   bool
@@ -27,8 +24,8 @@ func TestHTTPDebugWriter(t *testing.T) {
 		{"warning", true, true},
 	}
 	for _, tc := range cases {
-		flagVerbosity, flagLogHTTP = tc.verbosity, tc.logHTTP
-		if got := httpDebugWriter() != nil; got != tc.want {
+		inv := &invocation{stderr: &bytes.Buffer{}, flags: globalFlags{verbosity: tc.verbosity, logHTTP: tc.logHTTP}}
+		if got := inv.httpDebugWriter() != nil; got != tc.want {
 			t.Errorf("httpDebugWriter() enabled = %v for --verbosity=%s --log-http=%v, want %v",
 				got, tc.verbosity, tc.logHTTP, tc.want)
 		}

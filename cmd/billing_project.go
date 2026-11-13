@@ -6,8 +6,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-
-	"github.com/flyingobsidian/gcloud-go/internal/config"
 )
 
 // errNoBillingProject reports that api needs a billing / quota project but
@@ -29,29 +27,6 @@ func endpointHost(endpoint string) string {
 		return strings.TrimRight(endpoint, "/")
 	}
 	return u.Host
-}
-
-// resolveBillingProject returns the effective billing / quota project
-// identifier that should be sent in the `x-goog-user-project` header for
-// REST calls. Resolution order (matches gcloud-python):
-//
-//  1. --billing-project CLI flag (flagBillingProject)
-//  2. billing/quota_project from the active gcloud configuration
-//  3. quota_project_id inside the Application Default Credentials file
-//  4. "" if none of the above are set (callers decide whether that's fatal)
-//
-// Errors along the way are swallowed -- an unreadable config or ADC file
-// simply falls through to the next source.
-func resolveBillingProject() string {
-	if flagBillingProject != "" {
-		return flagBillingProject
-	}
-	if props, err := config.Load(); err == nil && props != nil {
-		if props.Billing.QuotaProject != "" {
-			return props.Billing.QuotaProject
-		}
-	}
-	return quotaProjectFromADC(adcFilePath())
 }
 
 // quotaProjectFromADC returns the quota_project_id field of the Application

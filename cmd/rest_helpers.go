@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"github.com/flyingobsidian/gcloud-go/internal/httplog"
 	"golang.org/x/oauth2"
 )
@@ -21,8 +20,9 @@ import (
 // aren't exposed by google.golang.org/api.
 type restClient struct {
 	endpoint string
-	// inv supplies credentials, the billing project and HTTP logging. nil
-	// means the process-wide ones, for groups not yet migrated (#2070).
+	// inv supplies credentials, the billing project and HTTP logging. A
+	// client from newRESTClient has none and only names an endpoint: bind
+	// it to an invocation with inv.rest before making calls.
 	inv *invocation
 }
 
@@ -46,9 +46,6 @@ func newRESTClient(endpoint string) *restClient {
 
 // tokenSource returns the token source for c's calls.
 func (c *restClient) tokenSource(ctx context.Context, scopes ...string) (oauth2.TokenSource, error) {
-	if c.inv == nil {
-		return restTokenSource(ctx, scopes...)
-	}
 	if c.inv.restTokenSource != nil {
 		return c.inv.restTokenSource(ctx, scopes...)
 	}
@@ -57,49 +54,12 @@ func (c *restClient) tokenSource(ctx context.Context, scopes ...string) (oauth2.
 
 // userProject returns the billing / quota project for c's calls.
 func (c *restClient) userProject() string {
-	if c.inv == nil {
-		return restUserProject()
-	}
 	return c.inv.quotaProject()
 }
 
 // debugWriter returns where c logs its calls, or nil.
 func (c *restClient) debugWriter() io.Writer {
-	if c.inv == nil {
-		return httpDebugWriter()
-	}
 	return c.inv.httpDebugWriter()
-}
-
-// restTokenSource is the function used to obtain an OAuth2 token source for
-// REST calls. Overridable by tests via SetRestTokenSourceForTest so unit
-// tests can run without real credentials.
-var restTokenSource = func(ctx context.Context, scopes ...string) (oauth2.TokenSource, error) {
-	return auth.TokenSource(ctx, flagAccount, scopes...)
-}
-
-// SetRestTokenSourceForTest overrides restTokenSource. Returns a restore
-// function that resets the previous value; callers use it in `defer`.
-func SetRestTokenSourceForTest(ts oauth2.TokenSource) (restore func()) {
-	prev := restTokenSource
-	restTokenSource = func(context.Context, ...string) (oauth2.TokenSource, error) {
-		return ts, nil
-	}
-	return func() { restTokenSource = prev }
-}
-
-// restUserProject is the function used to look up the billing / quota
-// project stamped into the x-goog-user-project header. Package-level so
-// tests can override without having to plumb configuration through
-// environments.
-var restUserProject = resolveBillingProject
-
-// SetRestUserProjectForTest replaces restUserProject with a constant value.
-// The returned function restores the previous behaviour.
-func SetRestUserProjectForTest(project string) (restore func()) {
-	prev := restUserProject
-	restUserProject = func() string { return project }
-	return func() { restUserProject = prev }
 }
 
 func (c *restClient) do(ctx context.Context, method, path string, query url.Values, body any, out any) error {
