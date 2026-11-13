@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,113 +10,86 @@ import (
 
 // --- gcloud memorystore operations (#980) ---
 
-var memstoreOpCmd = &cobra.Command{Use: "operations", Short: "Manage Memorystore operations"}
-
-var (
-	flagMemstoreOpLocation string
-	flagMemstoreOpFormat   string
-	flagMemstoreOpPageSize int64
-)
-
-var (
-	memstoreOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a Memorystore operation",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreOpCancel,
-	}
-	memstoreOpDeleteCmd = &cobra.Command{
-		Use: "delete OPERATION", Short: "Delete a Memorystore operation record",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreOpDelete,
-	}
-	memstoreOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Memorystore operation",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreOpDescribe,
-	}
-	memstoreOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Memorystore operations",
-		Args: cobra.NoArgs, RunE: runMemstoreOpList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{memstoreOpCancelCmd, memstoreOpDeleteCmd, memstoreOpDescribeCmd, memstoreOpListCmd}
+func (s *memorystoreCmds) initMemorystoreOperations() {
+	all := []*cobra.Command{s.memstoreOpCancelCmd, s.memstoreOpDeleteCmd, s.memstoreOpDescribeCmd, s.memstoreOpListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagMemstoreOpLocation, "location", "", "Memorystore location (required)")
+		c.Flags().StringVar(&s.flagMemstoreOpLocation, "location", "", "Memorystore location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagMemstoreOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagMemstoreOpFormat, "format", "", "Output format")
 	}
-	memstoreOpListCmd.Flags().Int64Var(&flagMemstoreOpPageSize, "page-size", 0, "Maximum results per page")
+	s.memstoreOpListCmd.Flags().Int64Var(&s.flagMemstoreOpPageSize, "page-size", 0, "Maximum results per page")
 
-	memstoreOpCmd.AddCommand(all...)
-	memorystoreCmd.AddCommand(memstoreOpCmd)
+	s.memstoreOpCmd.AddCommand(all...)
+	s.memorystoreCmd.AddCommand(s.memstoreOpCmd)
 }
 
-func memstoreOpParent() (string, error) {
-	project, err := resolveProject()
+func (s *memorystoreCmds) memstoreOpParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagMemstoreOpLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagMemstoreOpLocation), nil
 }
 
-func memstoreOpName(id string) (string, error) {
+func (s *memorystoreCmds) memstoreOpName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := memstoreOpParent()
+	parent, err := s.memstoreOpParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/operations/%s", parent, id), nil
 }
 
-func runMemstoreOpCancel(cmd *cobra.Command, args []string) error {
-	name, err := memstoreOpName(args[0])
+func (s *memorystoreCmds) runMemstoreOpCancel(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if err := memorystoreRest.do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
+	ctx := cmd.Context()
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":cancel", nil, map[string]any{}, nil); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancel request issued for operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancel request issued for operation [%s].\n", args[0])
 	return nil
 }
 
-func runMemstoreOpDelete(cmd *cobra.Command, args []string) error {
-	name, err := memstoreOpName(args[0])
+func (s *memorystoreCmds) runMemstoreOpDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	if err := memorystoreRest.do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
+	ctx := cmd.Context()
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, nil); err != nil {
 		return fmt.Errorf("deleting operation: %w", err)
 	}
-	fmt.Printf("Deleted operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Deleted operation [%s].\n", args[0])
 	return nil
 }
 
-func runMemstoreOpDescribe(cmd *cobra.Command, args []string) error {
-	name, err := memstoreOpName(args[0])
+func (s *memorystoreCmds) runMemstoreOpDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreOpName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagMemstoreOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreOpFormat)
 }
 
-func runMemstoreOpList(cmd *cobra.Command, args []string) error {
-	parent, err := memstoreOpParent()
+func (s *memorystoreCmds) runMemstoreOpList(cmd *cobra.Command, args []string) error {
+	parent, err := s.memstoreOpParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	items, err := memorystoreRest.paginate(ctx, "/"+parent+"/operations", nil, "operations", flagMemstoreOpPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+parent+"/operations", nil, "operations", s.flagMemstoreOpPageSize)
 	if err != nil {
 		return fmt.Errorf("listing operations: %w", err)
 	}
-	return emitFormatted(items, flagMemstoreOpFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagMemstoreOpFormat)
 }

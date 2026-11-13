@@ -12,10 +12,11 @@ import (
 )
 
 func TestMemorystoreTokenAuthCommands(t *testing.T) {
-	if findSub(memstoreInstCmd, "create-token-auth-user") == nil {
+	grp := newMemorystoreCmds(legacyTestInvocation())
+	if findSub(grp.memstoreInstCmd, "create-token-auth-user") == nil {
 		t.Error("memorystore instances create-token-auth-user missing")
 	}
-	tau := findSub(memstoreInstCmd, "token-auth-users")
+	tau := findSub(grp.memstoreInstCmd, "token-auth-users")
 	if tau == nil {
 		t.Fatal("memorystore instances token-auth-users missing")
 	}
@@ -53,6 +54,7 @@ func TestMemstoreTAUResource(t *testing.T) {
 }
 
 func TestMemstoreCreateTAUAsync(t *testing.T) {
+	grp := newMemorystoreCmds(legacyTestInvocation())
 	var gotPath, gotBody string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.Method + " " + r.URL.Path
@@ -68,11 +70,11 @@ func TestMemstoreCreateTAUAsync(t *testing.T) {
 	defer SetRestTokenSourceForTest(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}))()
 	defer SetRestUserProjectForTest("qp")()
 
-	flagMemstoreTAUUser, flagMemstoreTAUAsync, flagMemstoreTAUFormat = "alice", true, "json"
-	defer func() { flagMemstoreTAUUser, flagMemstoreTAUAsync, flagMemstoreTAUFormat = "", false, "" }()
+	grp.flagMemstoreTAUUser, grp.flagMemstoreTAUAsync, grp.flagMemstoreTAUFormat = "alice", true, "json"
+	defer func() { grp.flagMemstoreTAUUser, grp.flagMemstoreTAUAsync, grp.flagMemstoreTAUFormat = "", false, "" }()
 	var op map[string]any
 	if err := memorystoreRest.do(context.Background(), http.MethodPost,
-		"/projects/p/locations/l/instances/i:addTokenAuthUser", nil, map[string]any{"tokenAuthUser": flagMemstoreTAUUser}, &op); err != nil {
+		"/projects/p/locations/l/instances/i:addTokenAuthUser", nil, map[string]any{"tokenAuthUser": grp.flagMemstoreTAUUser}, &op); err != nil {
 		t.Fatal(err)
 	}
 	if gotPath != "POST /v1beta/projects/p/locations/l/instances/i:addTokenAuthUser" {
@@ -81,7 +83,7 @@ func TestMemstoreCreateTAUAsync(t *testing.T) {
 	if gotBody != `{"tokenAuthUser":"alice"}` {
 		t.Errorf("body = %q", gotBody)
 	}
-	final, err := memstoreTAUWait(context.Background(), op, "Request issued for: [i]")
+	final, err := grp.memstoreTAUWait(context.Background(), op, "Request issued for: [i]")
 	if err != nil || final != nil {
 		t.Errorf("async wait: %v %v", final, err)
 	}

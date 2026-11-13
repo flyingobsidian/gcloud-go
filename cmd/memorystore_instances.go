@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,110 +11,51 @@ import (
 
 // --- gcloud memorystore instances (#978) ---
 
-var memstoreInstCmd = &cobra.Command{Use: "instances", Short: "Manage Memorystore instances"}
-
-var (
-	flagMemstoreInstLocation   string
-	flagMemstoreInstFormat     string
-	flagMemstoreInstConfigFile string
-	flagMemstoreInstUpdateMask string
-	flagMemstoreInstPageSize   int64
-	flagMemstoreInstZDCZones   []string
-)
-
-var (
-	memstoreInstCreateCmd = &cobra.Command{
-		Use: "create INSTANCE", Short: "Create a Memorystore instance",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreInstCreate,
-	}
-	memstoreInstDeleteCmd = &cobra.Command{
-		Use: "delete INSTANCE", Short: "Delete a Memorystore instance",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreInstDelete,
-	}
-	memstoreInstDescribeCmd = &cobra.Command{
-		Use: "describe INSTANCE", Short: "Describe a Memorystore instance",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreInstDescribe,
-	}
-	memstoreInstListCmd = &cobra.Command{
-		Use: "list", Short: "List Memorystore instances",
-		Args: cobra.NoArgs, RunE: runMemstoreInstList,
-	}
-	memstoreInstUpdateCmd = &cobra.Command{
-		Use: "update INSTANCE", Short: "Update a Memorystore instance",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreInstUpdate,
-	}
-	memstoreInstBackupCmd = &cobra.Command{
-		Use: "backup INSTANCE", Short: "Trigger a backup for a Memorystore instance",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreInstBackup,
-	}
-	memstoreInstFinishMigrationCmd = &cobra.Command{
-		Use: "finish-migration INSTANCE", Short: "Finish an in-progress Memorystore migration",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreInstFinishMigration,
-	}
-	memstoreInstStartMigrationCmd = &cobra.Command{
-		Use: "start-migration INSTANCE", Short: "Start a Memorystore migration",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreInstStartMigration,
-	}
-	memstoreInstGetCACmd = &cobra.Command{
-		Use: "get-certificate-authority INSTANCE", Short: "Get the certificate authority for a Memorystore instance",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreInstGetCA,
-	}
-	memstoreInstGetSharedCACmd = &cobra.Command{
-		Use:   "get-shared-regional-certificate-authority",
-		Short: "Get the shared regional certificate authority for a Memorystore location",
-		Args:  cobra.NoArgs, RunE: runMemstoreInstGetSharedCA,
-	}
-	memstoreInstRescheduleMaintCmd = &cobra.Command{
-		Use: "reschedule-maintenance INSTANCE", Short: "Reschedule maintenance for a Memorystore instance",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreInstRescheduleMaint,
-	}
-)
-
-func init() {
+func (s *memorystoreCmds) initMemorystoreInstances() {
 	all := []*cobra.Command{
-		memstoreInstCreateCmd, memstoreInstDeleteCmd, memstoreInstDescribeCmd, memstoreInstListCmd, memstoreInstUpdateCmd,
-		memstoreInstBackupCmd, memstoreInstFinishMigrationCmd, memstoreInstStartMigrationCmd,
-		memstoreInstGetCACmd, memstoreInstGetSharedCACmd, memstoreInstRescheduleMaintCmd,
+		s.memstoreInstCreateCmd, s.memstoreInstDeleteCmd, s.memstoreInstDescribeCmd, s.memstoreInstListCmd, s.memstoreInstUpdateCmd,
+		s.memstoreInstBackupCmd, s.memstoreInstFinishMigrationCmd, s.memstoreInstStartMigrationCmd,
+		s.memstoreInstGetCACmd, s.memstoreInstGetSharedCACmd, s.memstoreInstRescheduleMaintCmd,
 	}
 	for _, c := range all {
-		c.Flags().StringVar(&flagMemstoreInstLocation, "location", "", "Memorystore location (required)")
+		c.Flags().StringVar(&s.flagMemstoreInstLocation, "location", "", "Memorystore location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagMemstoreInstFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagMemstoreInstFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{memstoreInstCreateCmd, memstoreInstUpdateCmd, memstoreInstStartMigrationCmd, memstoreInstRescheduleMaintCmd} {
-		c.Flags().StringVar(&flagMemstoreInstConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.memstoreInstCreateCmd, s.memstoreInstUpdateCmd, s.memstoreInstStartMigrationCmd, s.memstoreInstRescheduleMaintCmd} {
+		c.Flags().StringVar(&s.flagMemstoreInstConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
 	// backup and finish-migration accept optional config, defaulting to {}.
-	memstoreInstBackupCmd.Flags().StringVar(&flagMemstoreInstConfigFile, "config-file", "",
+	s.memstoreInstBackupCmd.Flags().StringVar(&s.flagMemstoreInstConfigFile, "config-file", "",
 		"Optional path to a YAML/JSON file with the backup request body")
-	memstoreInstFinishMigrationCmd.Flags().StringVar(&flagMemstoreInstConfigFile, "config-file", "",
+	s.memstoreInstFinishMigrationCmd.Flags().StringVar(&s.flagMemstoreInstConfigFile, "config-file", "",
 		"Optional path to a YAML/JSON file with the finish-migration request body")
-	memstoreInstUpdateCmd.Flags().StringVar(&flagMemstoreInstUpdateMask, "update-mask", "",
+	s.memstoreInstUpdateCmd.Flags().StringVar(&s.flagMemstoreInstUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	memstoreInstListCmd.Flags().Int64Var(&flagMemstoreInstPageSize, "page-size", 0, "Maximum results per page")
+	s.memstoreInstListCmd.Flags().Int64Var(&s.flagMemstoreInstPageSize, "page-size", 0, "Maximum results per page")
 	// --zone-distribution-config-zones added in gcloud-python 574.0.0.
-	memstoreInstCreateCmd.Flags().StringSliceVar(&flagMemstoreInstZDCZones, "zone-distribution-config-zones", nil,
+	s.memstoreInstCreateCmd.Flags().StringSliceVar(&s.flagMemstoreInstZDCZones, "zone-distribution-config-zones", nil,
 		"Zones for a MULTI_ZONE cluster (comma-separated); overrides zoneDistributionConfig.zones from --config-file")
 
-	memstoreInstCmd.AddCommand(all...)
-	memorystoreCmd.AddCommand(memstoreInstCmd)
+	s.memstoreInstCmd.AddCommand(all...)
+	s.memorystoreCmd.AddCommand(s.memstoreInstCmd)
 }
 
-func memstoreInstParent() (string, error) {
-	project, err := resolveProject()
+func (s *memorystoreCmds) memstoreInstParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagMemstoreInstLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagMemstoreInstLocation), nil
 }
 
-func memstoreInstName(id string) (string, error) {
+func (s *memorystoreCmds) memstoreInstName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := memstoreInstParent()
+	parent, err := s.memstoreInstParent()
 	if err != nil {
 		return "", err
 	}
@@ -124,36 +64,36 @@ func memstoreInstName(id string) (string, error) {
 
 // memstoreInstOptionalBody returns the parsed --config-file body, or {} if the flag
 // was not set. Used by RPCs where the body is optional.
-func memstoreInstOptionalBody() (map[string]any, error) {
+func (s *memorystoreCmds) memstoreInstOptionalBody() (map[string]any, error) {
 	body := map[string]any{}
-	if flagMemstoreInstConfigFile == "" {
+	if s.flagMemstoreInstConfigFile == "" {
 		return body, nil
 	}
-	if err := loadYAMLOrJSONInto(flagMemstoreInstConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMemstoreInstConfigFile, &body); err != nil {
 		return nil, err
 	}
 	return body, nil
 }
 
-func runMemstoreInstCreate(cmd *cobra.Command, args []string) error {
-	parent, err := memstoreInstParent()
+func (s *memorystoreCmds) runMemstoreInstCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.memstoreInstParent()
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMemstoreInstConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMemstoreInstConfigFile, &body); err != nil {
 		return err
 	}
-	applyZoneDistributionZonesToMap(body, flagMemstoreInstZDCZones)
+	applyZoneDistributionZonesToMap(body, s.flagMemstoreInstZDCZones)
 	q := url.Values{}
 	q.Set("instanceId", args[0])
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodPost, "/"+parent+"/instances", q, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+parent+"/instances", q, body, &op); err != nil {
 		return fmt.Errorf("creating instance: %w", err)
 	}
-	fmt.Printf("Create request issued for instance [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreInstFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for instance [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreInstFormat)
 }
 
 // applyZoneDistributionZonesToMap sets body.zoneDistributionConfig.zones from
@@ -175,56 +115,56 @@ func applyZoneDistributionZonesToMap(body map[string]any, zones []string) {
 	body["zoneDistributionConfig"] = zdc
 }
 
-func runMemstoreInstDelete(cmd *cobra.Command, args []string) error {
-	name, err := memstoreInstName(args[0])
+func (s *memorystoreCmds) runMemstoreInstDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreInstName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting instance: %w", err)
 	}
-	fmt.Printf("Delete request issued for instance [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreInstFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for instance [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreInstFormat)
 }
 
-func runMemstoreInstDescribe(cmd *cobra.Command, args []string) error {
-	name, err := memstoreInstName(args[0])
+func (s *memorystoreCmds) runMemstoreInstDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreInstName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing instance: %w", err)
 	}
-	return emitFormatted(got, flagMemstoreInstFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreInstFormat)
 }
 
-func runMemstoreInstList(cmd *cobra.Command, args []string) error {
-	parent, err := memstoreInstParent()
+func (s *memorystoreCmds) runMemstoreInstList(cmd *cobra.Command, args []string) error {
+	parent, err := s.memstoreInstParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	items, err := memorystoreRest.paginate(ctx, "/"+parent+"/instances", nil, "instances", flagMemstoreInstPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+parent+"/instances", nil, "instances", s.flagMemstoreInstPageSize)
 	if err != nil {
 		return fmt.Errorf("listing instances: %w", err)
 	}
-	return emitFormatted(items, flagMemstoreInstFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagMemstoreInstFormat)
 }
 
-func runMemstoreInstUpdate(cmd *cobra.Command, args []string) error {
-	name, err := memstoreInstName(args[0])
+func (s *memorystoreCmds) runMemstoreInstUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreInstName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMemstoreInstConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMemstoreInstConfigFile, &body); err != nil {
 		return err
 	}
-	mask := flagMemstoreInstUpdateMask
+	mask := s.flagMemstoreInstUpdateMask
 	if mask == "" {
 		mask = joinMask(dcTopLevelKeys(body))
 	}
@@ -232,109 +172,109 @@ func runMemstoreInstUpdate(cmd *cobra.Command, args []string) error {
 	if mask != "" {
 		q.Set("updateMask", mask)
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating instance: %w", err)
 	}
-	fmt.Printf("Update request issued for instance [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreInstFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for instance [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreInstFormat)
 }
 
-func runMemstoreInstBackup(cmd *cobra.Command, args []string) error {
-	name, err := memstoreInstName(args[0])
+func (s *memorystoreCmds) runMemstoreInstBackup(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreInstName(args[0])
 	if err != nil {
 		return err
 	}
-	body, err := memstoreInstOptionalBody()
+	body, err := s.memstoreInstOptionalBody()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodPost, "/"+name+":backup", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":backup", nil, body, &op); err != nil {
 		return fmt.Errorf("backing up instance: %w", err)
 	}
-	fmt.Printf("Backup request issued for instance [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreInstFormat)
+	fmt.Fprintf(s.inv.stdout, "Backup request issued for instance [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreInstFormat)
 }
 
-func runMemstoreInstFinishMigration(cmd *cobra.Command, args []string) error {
-	name, err := memstoreInstName(args[0])
+func (s *memorystoreCmds) runMemstoreInstFinishMigration(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreInstName(args[0])
 	if err != nil {
 		return err
 	}
-	body, err := memstoreInstOptionalBody()
+	body, err := s.memstoreInstOptionalBody()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodPost, "/"+name+":finishMigration", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":finishMigration", nil, body, &op); err != nil {
 		return fmt.Errorf("finishing migration for instance: %w", err)
 	}
-	fmt.Printf("Finish-migration request issued for instance [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreInstFormat)
+	fmt.Fprintf(s.inv.stdout, "Finish-migration request issued for instance [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreInstFormat)
 }
 
-func runMemstoreInstStartMigration(cmd *cobra.Command, args []string) error {
-	name, err := memstoreInstName(args[0])
+func (s *memorystoreCmds) runMemstoreInstStartMigration(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreInstName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMemstoreInstConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMemstoreInstConfigFile, &body); err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodPost, "/"+name+":startMigration", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":startMigration", nil, body, &op); err != nil {
 		return fmt.Errorf("starting migration for instance: %w", err)
 	}
-	fmt.Printf("Start-migration request issued for instance [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreInstFormat)
+	fmt.Fprintf(s.inv.stdout, "Start-migration request issued for instance [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreInstFormat)
 }
 
-func runMemstoreInstGetCA(cmd *cobra.Command, args []string) error {
-	name, err := memstoreInstName(args[0])
+func (s *memorystoreCmds) runMemstoreInstGetCA(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreInstName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodGet, "/"+name+"/certificateAuthority", nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name+"/certificateAuthority", nil, nil, &got); err != nil {
 		return fmt.Errorf("getting certificate authority: %w", err)
 	}
-	return emitFormatted(got, flagMemstoreInstFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreInstFormat)
 }
 
-func runMemstoreInstGetSharedCA(cmd *cobra.Command, args []string) error {
-	parent, err := memstoreInstParent()
+func (s *memorystoreCmds) runMemstoreInstGetSharedCA(cmd *cobra.Command, args []string) error {
+	parent, err := s.memstoreInstParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodGet, "/"+parent+":getSharedRegionalCertificateAuthority", nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+parent+":getSharedRegionalCertificateAuthority", nil, nil, &got); err != nil {
 		return fmt.Errorf("getting shared regional certificate authority: %w", err)
 	}
-	return emitFormatted(got, flagMemstoreInstFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreInstFormat)
 }
 
-func runMemstoreInstRescheduleMaint(cmd *cobra.Command, args []string) error {
-	name, err := memstoreInstName(args[0])
+func (s *memorystoreCmds) runMemstoreInstRescheduleMaint(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreInstName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMemstoreInstConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMemstoreInstConfigFile, &body); err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodPost, "/"+name+":rescheduleMaintenance", nil, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+name+":rescheduleMaintenance", nil, body, &op); err != nil {
 		return fmt.Errorf("rescheduling maintenance: %w", err)
 	}
-	fmt.Printf("Reschedule-maintenance request issued for instance [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreInstFormat)
+	fmt.Fprintf(s.inv.stdout, "Reschedule-maintenance request issued for instance [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreInstFormat)
 }

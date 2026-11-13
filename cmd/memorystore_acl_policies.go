@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,148 +11,115 @@ import (
 
 // --- gcloud memorystore acl-policies (#976) ---
 
-var memstoreACLCmd = &cobra.Command{Use: "acl-policies", Short: "Manage Memorystore ACL policies"}
-
-var (
-	flagMemstoreACLLocation   string
-	flagMemstoreACLFormat     string
-	flagMemstoreACLConfigFile string
-	flagMemstoreACLUpdateMask string
-	flagMemstoreACLPageSize   int64
-)
-
-var (
-	memstoreACLCreateCmd = &cobra.Command{
-		Use: "create ACL_POLICY", Short: "Create a Memorystore ACL policy",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreACLCreate,
-	}
-	memstoreACLDeleteCmd = &cobra.Command{
-		Use: "delete ACL_POLICY", Short: "Delete a Memorystore ACL policy",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreACLDelete,
-	}
-	memstoreACLDescribeCmd = &cobra.Command{
-		Use: "describe ACL_POLICY", Short: "Describe a Memorystore ACL policy",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreACLDescribe,
-	}
-	memstoreACLListCmd = &cobra.Command{
-		Use: "list", Short: "List Memorystore ACL policies",
-		Args: cobra.NoArgs, RunE: runMemstoreACLList,
-	}
-	memstoreACLUpdateCmd = &cobra.Command{
-		Use: "update ACL_POLICY", Short: "Update a Memorystore ACL policy",
-		Args: cobra.ExactArgs(1), RunE: runMemstoreACLUpdate,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{memstoreACLCreateCmd, memstoreACLDeleteCmd, memstoreACLDescribeCmd, memstoreACLListCmd, memstoreACLUpdateCmd}
+func (s *memorystoreCmds) initMemorystoreAclPolicies() {
+	all := []*cobra.Command{s.memstoreACLCreateCmd, s.memstoreACLDeleteCmd, s.memstoreACLDescribeCmd, s.memstoreACLListCmd, s.memstoreACLUpdateCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagMemstoreACLLocation, "location", "", "Memorystore location (required)")
+		c.Flags().StringVar(&s.flagMemstoreACLLocation, "location", "", "Memorystore location (required)")
 		_ = c.MarkFlagRequired("location")
-		c.Flags().StringVar(&flagMemstoreACLFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagMemstoreACLFormat, "format", "", "Output format")
 	}
-	for _, c := range []*cobra.Command{memstoreACLCreateCmd, memstoreACLUpdateCmd} {
-		c.Flags().StringVar(&flagMemstoreACLConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.memstoreACLCreateCmd, s.memstoreACLUpdateCmd} {
+		c.Flags().StringVar(&s.flagMemstoreACLConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the ACL policy body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	memstoreACLUpdateCmd.Flags().StringVar(&flagMemstoreACLUpdateMask, "update-mask", "",
+	s.memstoreACLUpdateCmd.Flags().StringVar(&s.flagMemstoreACLUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	memstoreACLListCmd.Flags().Int64Var(&flagMemstoreACLPageSize, "page-size", 0, "Maximum results per page")
+	s.memstoreACLListCmd.Flags().Int64Var(&s.flagMemstoreACLPageSize, "page-size", 0, "Maximum results per page")
 
-	memstoreACLCmd.AddCommand(all...)
-	memorystoreCmd.AddCommand(memstoreACLCmd)
+	s.memstoreACLCmd.AddCommand(all...)
+	s.memorystoreCmd.AddCommand(s.memstoreACLCmd)
 }
 
-func memstoreACLParent() (string, error) {
-	project, err := resolveProject()
+func (s *memorystoreCmds) memstoreACLParent() (string, error) {
+	project, err := s.inv.project()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("projects/%s/locations/%s", project, flagMemstoreACLLocation), nil
+	return fmt.Sprintf("projects/%s/locations/%s", project, s.flagMemstoreACLLocation), nil
 }
 
-func memstoreACLName(id string) (string, error) {
+func (s *memorystoreCmds) memstoreACLName(id string) (string, error) {
 	if strings.HasPrefix(id, "projects/") {
 		return id, nil
 	}
-	parent, err := memstoreACLParent()
+	parent, err := s.memstoreACLParent()
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s/aclPolicies/%s", parent, id), nil
 }
 
-func runMemstoreACLCreate(cmd *cobra.Command, args []string) error {
-	parent, err := memstoreACLParent()
+func (s *memorystoreCmds) runMemstoreACLCreate(cmd *cobra.Command, args []string) error {
+	parent, err := s.memstoreACLParent()
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMemstoreACLConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMemstoreACLConfigFile, &body); err != nil {
 		return err
 	}
 	q := url.Values{}
 	q.Set("aclPolicyId", args[0])
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodPost, "/"+parent+"/aclPolicies", q, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPost, "/"+parent+"/aclPolicies", q, body, &op); err != nil {
 		return fmt.Errorf("creating ACL policy: %w", err)
 	}
-	fmt.Printf("Create request issued for ACL policy [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreACLFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for ACL policy [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreACLFormat)
 }
 
-func runMemstoreACLDelete(cmd *cobra.Command, args []string) error {
-	name, err := memstoreACLName(args[0])
+func (s *memorystoreCmds) runMemstoreACLDelete(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreACLName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodDelete, "/"+name, nil, nil, &op); err != nil {
 		return fmt.Errorf("deleting ACL policy: %w", err)
 	}
-	fmt.Printf("Delete request issued for ACL policy [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreACLFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for ACL policy [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreACLFormat)
 }
 
-func runMemstoreACLDescribe(cmd *cobra.Command, args []string) error {
-	name, err := memstoreACLName(args[0])
+func (s *memorystoreCmds) runMemstoreACLDescribe(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreACLName(args[0])
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var got map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodGet, "/"+name, nil, nil, &got); err != nil {
 		return fmt.Errorf("describing ACL policy: %w", err)
 	}
-	return emitFormatted(got, flagMemstoreACLFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagMemstoreACLFormat)
 }
 
-func runMemstoreACLList(cmd *cobra.Command, args []string) error {
-	parent, err := memstoreACLParent()
+func (s *memorystoreCmds) runMemstoreACLList(cmd *cobra.Command, args []string) error {
+	parent, err := s.memstoreACLParent()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	items, err := memorystoreRest.paginate(ctx, "/"+parent+"/aclPolicies", nil, "aclPolicies", flagMemstoreACLPageSize)
+	ctx := cmd.Context()
+	items, err := s.inv.rest(memorystoreRest).paginate(ctx, "/"+parent+"/aclPolicies", nil, "aclPolicies", s.flagMemstoreACLPageSize)
 	if err != nil {
 		return fmt.Errorf("listing ACL policies: %w", err)
 	}
-	return emitFormatted(items, flagMemstoreACLFormat)
+	return emitFormattedTo(s.inv.stdout, items, s.flagMemstoreACLFormat)
 }
 
-func runMemstoreACLUpdate(cmd *cobra.Command, args []string) error {
-	name, err := memstoreACLName(args[0])
+func (s *memorystoreCmds) runMemstoreACLUpdate(cmd *cobra.Command, args []string) error {
+	name, err := s.memstoreACLName(args[0])
 	if err != nil {
 		return err
 	}
 	body := map[string]any{}
-	if err := loadYAMLOrJSONInto(flagMemstoreACLConfigFile, &body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagMemstoreACLConfigFile, &body); err != nil {
 		return err
 	}
-	mask := flagMemstoreACLUpdateMask
+	mask := s.flagMemstoreACLUpdateMask
 	if mask == "" {
 		mask = joinMask(dcTopLevelKeys(body))
 	}
@@ -161,11 +127,11 @@ func runMemstoreACLUpdate(cmd *cobra.Command, args []string) error {
 	if mask != "" {
 		q.Set("updateMask", mask)
 	}
-	ctx := context.Background()
+	ctx := cmd.Context()
 	var op map[string]any
-	if err := memorystoreRest.do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
+	if err := s.inv.rest(memorystoreRest).do(ctx, http.MethodPatch, "/"+name, q, body, &op); err != nil {
 		return fmt.Errorf("updating ACL policy: %w", err)
 	}
-	fmt.Printf("Update request issued for ACL policy [%s].\n", args[0])
-	return emitFormatted(op, flagMemstoreACLFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for ACL policy [%s].\n", args[0])
+	return emitFormattedTo(s.inv.stdout, op, s.flagMemstoreACLFormat)
 }

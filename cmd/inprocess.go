@@ -121,6 +121,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newNetworkConnectivityCmd(inv),
 		newAiPlatformCmd(inv),
 		newAlloydbCmd(inv),
+		newMemorystoreCmd(inv),
 	}
 }
 
