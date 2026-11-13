@@ -8,7 +8,8 @@ import (
 )
 
 func endpointsSubgroup(name string) *cobra.Command {
-	for _, c := range endpointsCmd.Commands() {
+	grp := newEndpointsCmds(legacyTestInvocation())
+	for _, c := range grp.endpointsCmd.Commands() {
 		if c.Name() == name {
 			return c
 		}

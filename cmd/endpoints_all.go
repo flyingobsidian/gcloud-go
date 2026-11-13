@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	servicemanagement "google.golang.org/api/servicemanagement/v1"
 	su "google.golang.org/api/serviceusage/v1"
@@ -17,188 +16,93 @@ import (
 // --- Shared helpers for the Endpoints surface (#892-#894) ---
 
 var (
-	flagEPFormat     string
-	flagEPService    string
-	flagEPAsync      bool
-	flagEPValidate   bool
-	flagEPForce      bool
-	flagEPMember     string
-	flagEPRole       string
 	flagEPPolicyFile string
-	flagEPPageSize   int64
 )
 
-func endpointsService(ctx context.Context) (*servicemanagement.APIService, error) {
-	return gcp.ServiceManagementService(ctx, flagAccount)
+func (g *endpointsCmds) endpointsService(ctx context.Context) (*servicemanagement.APIService, error) {
+	return g.inv.clients().ServiceManagement(ctx)
 }
 
 // --- Subgroup command objects ---
 
-var (
-	endpointsConfigsCmd    = &cobra.Command{Use: "configs", Short: "View service configurations"}
-	endpointsOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Service Management operations"}
-	endpointsServicesCmd   = &cobra.Command{Use: "services", Short: "Manage Endpoints services"}
-)
-
 // --- configs ---
-
-var (
-	epConfigDescribeCmd = &cobra.Command{
-		Use: "describe CONFIG_ID", Short: "Describe a service configuration",
-		Args: cobra.ExactArgs(1), RunE: runEPConfigDescribe,
-	}
-	epConfigListCmd = &cobra.Command{
-		Use: "list", Short: "List configurations for a service",
-		Args: cobra.NoArgs, RunE: runEPConfigList,
-	}
-)
 
 // --- operations ---
 
-var (
-	epOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Service Management operation",
-		Args: cobra.ExactArgs(1), RunE: runEPOpDescribe,
-	}
-	epOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Service Management operations",
-		Args: cobra.NoArgs, RunE: runEPOpList,
-	}
-	epOpWaitCmd = &cobra.Command{
-		Use: "wait OPERATION", Short: "Wait for a Service Management operation to complete",
-		Args: cobra.ExactArgs(1), RunE: runEPOpWait,
-	}
-)
-
 // --- services ---
 
-var (
-	epSvcDeleteCmd = &cobra.Command{
-		Use: "delete SERVICE", Short: "Delete an Endpoints service",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcDelete,
-	}
-	epSvcUndeployCmd = &cobra.Command{
-		Use: "undeploy SERVICE", Short: "Undeploy an Endpoints service (alias for delete)",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcDelete,
-	}
-	epSvcDescribeCmd = &cobra.Command{
-		Use: "describe SERVICE", Short: "Describe an Endpoints service",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcDescribe,
-	}
-	epSvcListCmd = &cobra.Command{
-		Use: "list", Short: "List Endpoints services owned by the current project",
-		Args: cobra.NoArgs, RunE: runEPSvcList,
-	}
-	epSvcDeployCmd = &cobra.Command{
-		Use: "deploy CONFIG_FILE [CONFIG_FILE ...]", Short: "Deploy a service configuration",
-		Args: cobra.MinimumNArgs(1), RunE: runEPSvcDeploy,
-	}
-	epSvcGetConfigNameCmd = &cobra.Command{
-		Use: "get-config-name SERVICE", Short: "Print the active service configuration ID",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcGetConfigName,
-	}
-	epSvcEnableCmd = &cobra.Command{
-		Use: "enable SERVICE", Short: "Enable an Endpoints service for the project",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcEnable,
-	}
-	epSvcDisableCmd = &cobra.Command{
-		Use: "disable SERVICE", Short: "Disable an Endpoints service for the project",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcDisable,
-	}
-	epSvcAddIAMCmd = &cobra.Command{
-		Use: "add-iam-policy-binding SERVICE", Short: "Add an IAM policy binding to a service",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcAddIAM,
-	}
-	epSvcRemoveIAMCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding SERVICE", Short: "Remove an IAM policy binding from a service",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcRemoveIAM,
-	}
-	epSvcGetIAMCmd = &cobra.Command{
-		Use: "get-iam-policy SERVICE", Short: "Get the IAM policy for a service",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcGetIAM,
-	}
-	epSvcSetIAMCmd = &cobra.Command{
-		Use: "set-iam-policy SERVICE POLICY_FILE", Short: "Set the IAM policy for a service",
-		Args: cobra.ExactArgs(2), RunE: runEPSvcSetIAM,
-	}
-	epSvcCheckIAMCmd = &cobra.Command{
-		Use: "check-iam-policy SERVICE", Short: "Check IAM permissions on a service",
-		Args: cobra.ExactArgs(1), RunE: runEPSvcCheckIAM,
-	}
-)
-
-func init() {
+func (g *endpointsCmds) initEndpointsAll() {
 	addFmt := func(cmds ...*cobra.Command) {
 		for _, c := range cmds {
-			c.Flags().StringVar(&flagEPFormat, "format", "", "Output format")
+			c.Flags().StringVar(&g.flagEPFormat, "format", "", "Output format")
 		}
 	}
 
 	// configs
-	epConfigDescribeCmd.Flags().StringVar(&flagEPService, "service", "", "Service name (required)")
-	_ = epConfigDescribeCmd.MarkFlagRequired("service")
-	epConfigListCmd.Flags().StringVar(&flagEPService, "service", "", "Service name (required)")
-	_ = epConfigListCmd.MarkFlagRequired("service")
-	epConfigListCmd.Flags().Int64Var(&flagEPPageSize, "page-size", 0, "Page size for API pagination")
-	addFmt(epConfigDescribeCmd, epConfigListCmd)
-	endpointsConfigsCmd.AddCommand(epConfigDescribeCmd, epConfigListCmd)
-	endpointsCmd.AddCommand(endpointsConfigsCmd)
+	g.epConfigDescribeCmd.Flags().StringVar(&g.flagEPService, "service", "", "Service name (required)")
+	_ = g.epConfigDescribeCmd.MarkFlagRequired("service")
+	g.epConfigListCmd.Flags().StringVar(&g.flagEPService, "service", "", "Service name (required)")
+	_ = g.epConfigListCmd.MarkFlagRequired("service")
+	g.epConfigListCmd.Flags().Int64Var(&g.flagEPPageSize, "page-size", 0, "Page size for API pagination")
+	addFmt(g.epConfigDescribeCmd, g.epConfigListCmd)
+	g.endpointsConfigsCmd.AddCommand(g.epConfigDescribeCmd, g.epConfigListCmd)
+	g.endpointsCmd.AddCommand(g.endpointsConfigsCmd)
 
 	// operations
-	addFmt(epOpDescribeCmd, epOpListCmd, epOpWaitCmd)
-	epOpListCmd.Flags().Int64Var(&flagEPPageSize, "page-size", 0, "Page size for API pagination")
-	endpointsOperationsCmd.AddCommand(epOpDescribeCmd, epOpListCmd, epOpWaitCmd)
-	endpointsCmd.AddCommand(endpointsOperationsCmd)
+	addFmt(g.epOpDescribeCmd, g.epOpListCmd, g.epOpWaitCmd)
+	g.epOpListCmd.Flags().Int64Var(&g.flagEPPageSize, "page-size", 0, "Page size for API pagination")
+	g.endpointsOperationsCmd.AddCommand(g.epOpDescribeCmd, g.epOpListCmd, g.epOpWaitCmd)
+	g.endpointsCmd.AddCommand(g.endpointsOperationsCmd)
 
 	// services
-	epSvcDeleteCmd.Flags().BoolVar(&flagEPAsync, "async", false, "Do not wait for the operation to finish")
-	epSvcUndeployCmd.Flags().BoolVar(&flagEPAsync, "async", false, "Do not wait for the operation to finish")
-	epSvcDeployCmd.Flags().BoolVar(&flagEPAsync, "async", false, "Do not wait for the operation to finish")
-	epSvcDeployCmd.Flags().BoolVar(&flagEPValidate, "validate-only", false, "Validate the configuration only; do not deploy")
-	epSvcDeployCmd.Flags().BoolVar(&flagEPForce, "force", false, "Force deployment even when hazardous changes are detected")
-	for _, c := range []*cobra.Command{epSvcAddIAMCmd, epSvcRemoveIAMCmd} {
-		c.Flags().StringVar(&flagEPMember, "member", "", "IAM member, e.g. user:alice@example.com (required)")
-		c.Flags().StringVar(&flagEPRole, "role", "", "IAM role, e.g. roles/servicemanagement.serviceConsumer (required)")
+	g.epSvcDeleteCmd.Flags().BoolVar(&g.flagEPAsync, "async", false, "Do not wait for the operation to finish")
+	g.epSvcUndeployCmd.Flags().BoolVar(&g.flagEPAsync, "async", false, "Do not wait for the operation to finish")
+	g.epSvcDeployCmd.Flags().BoolVar(&g.flagEPAsync, "async", false, "Do not wait for the operation to finish")
+	g.epSvcDeployCmd.Flags().BoolVar(&g.flagEPValidate, "validate-only", false, "Validate the configuration only; do not deploy")
+	g.epSvcDeployCmd.Flags().BoolVar(&g.flagEPForce, "force", false, "Force deployment even when hazardous changes are detected")
+	for _, c := range []*cobra.Command{g.epSvcAddIAMCmd, g.epSvcRemoveIAMCmd} {
+		c.Flags().StringVar(&g.flagEPMember, "member", "", "IAM member, e.g. user:alice@example.com (required)")
+		c.Flags().StringVar(&g.flagEPRole, "role", "", "IAM role, e.g. roles/servicemanagement.serviceConsumer (required)")
 		_ = c.MarkFlagRequired("member")
 		_ = c.MarkFlagRequired("role")
 	}
-	addFmt(epSvcDescribeCmd, epSvcListCmd, epSvcDeployCmd, epSvcGetConfigNameCmd,
-		epSvcGetIAMCmd, epSvcSetIAMCmd, epSvcCheckIAMCmd)
-	endpointsServicesCmd.AddCommand(
-		epSvcDeleteCmd, epSvcUndeployCmd, epSvcDescribeCmd, epSvcListCmd, epSvcDeployCmd,
-		epSvcGetConfigNameCmd, epSvcEnableCmd, epSvcDisableCmd,
-		epSvcAddIAMCmd, epSvcRemoveIAMCmd, epSvcGetIAMCmd, epSvcSetIAMCmd, epSvcCheckIAMCmd,
+	addFmt(g.epSvcDescribeCmd, g.epSvcListCmd, g.epSvcDeployCmd, g.epSvcGetConfigNameCmd,
+		g.epSvcGetIAMCmd, g.epSvcSetIAMCmd, g.epSvcCheckIAMCmd)
+	g.endpointsServicesCmd.AddCommand(
+		g.epSvcDeleteCmd, g.epSvcUndeployCmd, g.epSvcDescribeCmd, g.epSvcListCmd, g.epSvcDeployCmd,
+		g.epSvcGetConfigNameCmd, g.epSvcEnableCmd, g.epSvcDisableCmd,
+		g.epSvcAddIAMCmd, g.epSvcRemoveIAMCmd, g.epSvcGetIAMCmd, g.epSvcSetIAMCmd, g.epSvcCheckIAMCmd,
 	)
-	endpointsCmd.AddCommand(endpointsServicesCmd)
+	g.endpointsCmd.AddCommand(g.endpointsServicesCmd)
 }
 
 // --- configs impl ---
 
-func runEPConfigDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPConfigDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
-	got, err := svc.Services.Configs.Get(flagEPService, args[0]).Context(ctx).Do()
+	got, err := svc.Services.Configs.Get(g.flagEPService, args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing service config: %w", err)
 	}
-	return emitFormatted(got, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagEPFormat)
 }
 
-func runEPConfigList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPConfigList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
 	var all []*servicemanagement.Service
 	pageToken := ""
 	for {
-		call := svc.Services.Configs.List(flagEPService).Context(ctx)
-		if flagEPPageSize > 0 {
-			call = call.PageSize(flagEPPageSize)
+		call := svc.Services.Configs.List(g.flagEPService).Context(ctx)
+		if g.flagEPPageSize > 0 {
+			call = call.PageSize(g.flagEPPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -213,12 +117,12 @@ func runEPConfigList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagEPFormat != "" {
-		return emitFormatted(all, flagEPFormat)
+	if g.flagEPFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagEPFormat)
 	}
-	printTableHeading(len(all), "%-30s %s\n", "CONFIG_ID", "SERVICE_NAME")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-30s %s\n", "CONFIG_ID", "SERVICE_NAME")
 	for _, c := range all {
-		fmt.Printf("%-30s %s\n", c.Id, c.Name)
+		fmt.Fprintf(g.inv.stdout, "%-30s %s\n", c.Id, c.Name)
 	}
 	return nil
 }
@@ -232,9 +136,9 @@ func epOperationsName(id string) string {
 	return "operations/" + id
 }
 
-func runEPOpDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPOpDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -242,12 +146,12 @@ func runEPOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagEPFormat)
 }
 
-func runEPOpList(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPOpList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -255,8 +159,8 @@ func runEPOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Operations.List().Context(ctx)
-		if flagEPPageSize > 0 {
-			call = call.PageSize(flagEPPageSize)
+		if g.flagEPPageSize > 0 {
+			call = call.PageSize(g.flagEPPageSize)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -271,19 +175,19 @@ func runEPOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagEPFormat != "" {
-		return emitFormatted(all, flagEPFormat)
+	if g.flagEPFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagEPFormat)
 	}
-	printTableHeading(len(all), "%-60s %-6s\n", "NAME", "DONE")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-60s %-6s\n", "NAME", "DONE")
 	for _, op := range all {
-		fmt.Printf("%-60s %-6t\n", op.Name, op.Done)
+		fmt.Fprintf(g.inv.stdout, "%-60s %-6t\n", op.Name, op.Done)
 	}
 	return nil
 }
 
-func runEPOpWait(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPOpWait(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -291,7 +195,7 @@ func runEPOpWait(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return emitFormatted(final, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, final, g.flagEPFormat)
 }
 
 func epWaitOp(ctx context.Context, svc *servicemanagement.APIService, name string) (*servicemanagement.Operation, error) {
@@ -311,9 +215,9 @@ func epWaitOp(ctx context.Context, svc *servicemanagement.APIService, name strin
 
 // --- services impl ---
 
-func runEPSvcDelete(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPSvcDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -321,20 +225,20 @@ func runEPSvcDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting service: %w", err)
 	}
-	if flagEPAsync {
-		fmt.Fprintf(os.Stderr, "Delete in progress (operation: %s).\n", op.Name)
-		return emitFormatted(op, flagEPFormat)
+	if g.flagEPAsync {
+		fmt.Fprintf(g.inv.stderr, "Delete in progress (operation: %s).\n", op.Name)
+		return emitFormattedTo(g.inv.stdout, op, g.flagEPFormat)
 	}
 	final, err := epWaitOp(ctx, svc, op.Name)
 	if err != nil {
 		return err
 	}
-	return emitFormatted(final, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, final, g.flagEPFormat)
 }
 
-func runEPSvcDescribe(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPSvcDescribe(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -342,16 +246,16 @@ func runEPSvcDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing service: %w", err)
 	}
-	return emitFormatted(got, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, got, g.flagEPFormat)
 }
 
-func runEPSvcList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *endpointsCmds) runEPSvcList(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -372,23 +276,23 @@ func runEPSvcList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	if flagEPFormat != "" {
-		return emitFormatted(all, flagEPFormat)
+	if g.flagEPFormat != "" {
+		return emitFormattedTo(g.inv.stdout, all, g.flagEPFormat)
 	}
-	printTableHeading(len(all), "%-40s %s\n", "NAME", "PROJECT_ID")
+	printTableHeadingTo(g.inv.stdout, len(all), "%-40s %s\n", "NAME", "PROJECT_ID")
 	for _, s := range all {
-		fmt.Printf("%-40s %s\n", s.ServiceName, s.ProducerProjectId)
+		fmt.Fprintf(g.inv.stdout, "%-40s %s\n", s.ServiceName, s.ProducerProjectId)
 	}
 	return nil
 }
 
-func runEPSvcDeploy(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *endpointsCmds) runEPSvcDeploy(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -418,7 +322,7 @@ func runEPSvcDeploy(cmd *cobra.Command, args []string) error {
 	}
 	// Ensure the ManagedService exists.
 	if _, err := svc.Services.Get(serviceName).Context(ctx).Do(); err != nil {
-		if !flagEPValidate {
+		if !g.flagEPValidate {
 			created, err := svc.Services.Create(&servicemanagement.ManagedService{
 				ServiceName:       serviceName,
 				ProducerProjectId: project,
@@ -433,7 +337,7 @@ func runEPSvcDeploy(cmd *cobra.Command, args []string) error {
 	}
 	submit, err := svc.Services.Configs.Submit(serviceName, &servicemanagement.SubmitConfigSourceRequest{
 		ConfigSource: source,
-		ValidateOnly: flagEPValidate,
+		ValidateOnly: g.flagEPValidate,
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("submitting service config: %w", err)
@@ -442,9 +346,9 @@ func runEPSvcDeploy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "Service config submitted for %s.\n", serviceName)
-	if flagEPValidate {
-		return emitFormatted(final, flagEPFormat)
+	fmt.Fprintf(g.inv.stderr, "Service config submitted for %s.\n", serviceName)
+	if g.flagEPValidate {
+		return emitFormattedTo(g.inv.stdout, final, g.flagEPFormat)
 	}
 	// Extract the newly generated config ID from the response.
 	configID := epConfigIDFromOp(final)
@@ -462,16 +366,16 @@ func runEPSvcDeploy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating rollout: %w", err)
 	}
-	if flagEPAsync {
-		fmt.Fprintf(os.Stderr, "Rollout in progress (operation: %s).\n", rolloutOp.Name)
-		return emitFormatted(rolloutOp, flagEPFormat)
+	if g.flagEPAsync {
+		fmt.Fprintf(g.inv.stderr, "Rollout in progress (operation: %s).\n", rolloutOp.Name)
+		return emitFormattedTo(g.inv.stdout, rolloutOp, g.flagEPFormat)
 	}
 	rolloutFinal, err := epWaitOp(ctx, svc, rolloutOp.Name)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "Service configuration [%s] deployed for service [%s].\n", configID, serviceName)
-	return emitFormatted(rolloutFinal, flagEPFormat)
+	fmt.Fprintf(g.inv.stderr, "Service configuration [%s] deployed for service [%s].\n", configID, serviceName)
+	return emitFormattedTo(g.inv.stdout, rolloutFinal, g.flagEPFormat)
 }
 
 func epDetectFileType(path string, data []byte) (string, error) {
@@ -541,9 +445,9 @@ func epUnmarshalRawMessage(raw []byte, dst any) error {
 	return json.Unmarshal(raw, dst)
 }
 
-func runEPSvcGetConfigName(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPSvcGetConfigName(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -551,22 +455,22 @@ func runEPSvcGetConfigName(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting service config: %w", err)
 	}
-	if flagEPFormat != "" {
-		return emitFormatted(got, flagEPFormat)
+	if g.flagEPFormat != "" {
+		return emitFormattedTo(g.inv.stdout, got, g.flagEPFormat)
 	}
-	fmt.Println(got.Id)
+	fmt.Fprintln(g.inv.stdout, got.Id)
 	return nil
 }
 
 // --- enable / disable use serviceusage (endpoints services are consumable services) ---
 
-func runEPSvcEnable(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *endpointsCmds) runEPSvcEnable(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceUsageService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceUsage(ctx)
 	if err != nil {
 		return err
 	}
@@ -575,17 +479,17 @@ func runEPSvcEnable(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("enabling service: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Enable in progress (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagEPFormat)
+	fmt.Fprintf(g.inv.stderr, "Enable in progress (operation: %s).\n", op.Name)
+	return emitFormattedTo(g.inv.stdout, op, g.flagEPFormat)
 }
 
-func runEPSvcDisable(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (g *endpointsCmds) runEPSvcDisable(cmd *cobra.Command, args []string) error {
+	project, err := g.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ServiceUsageService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := g.inv.clients().ServiceUsage(ctx)
 	if err != nil {
 		return err
 	}
@@ -594,15 +498,15 @@ func runEPSvcDisable(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("disabling service: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Disable in progress (operation: %s).\n", op.Name)
-	return emitFormatted(op, flagEPFormat)
+	fmt.Fprintf(g.inv.stderr, "Disable in progress (operation: %s).\n", op.Name)
+	return emitFormattedTo(g.inv.stdout, op, g.flagEPFormat)
 }
 
 // --- IAM ---
 
-func runEPSvcGetIAM(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPSvcGetIAM(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -610,12 +514,12 @@ func runEPSvcGetIAM(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, policy, g.flagEPFormat)
 }
 
-func runEPSvcSetIAM(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPSvcSetIAM(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -627,12 +531,12 @@ func runEPSvcSetIAM(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(updated, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, updated, g.flagEPFormat)
 }
 
-func runEPSvcAddIAM(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPSvcAddIAM(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -640,17 +544,17 @@ func runEPSvcAddIAM(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	epMergeBinding(policy, flagEPMember, flagEPRole)
+	epMergeBinding(policy, g.flagEPMember, g.flagEPRole)
 	updated, err := svc.Services.SetIamPolicy(args[0], &servicemanagement.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(updated, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, updated, g.flagEPFormat)
 }
 
-func runEPSvcRemoveIAM(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPSvcRemoveIAM(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -658,17 +562,17 @@ func runEPSvcRemoveIAM(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	epRemoveBinding(policy, flagEPMember, flagEPRole)
+	epRemoveBinding(policy, g.flagEPMember, g.flagEPRole)
 	updated, err := svc.Services.SetIamPolicy(args[0], &servicemanagement.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	return emitFormatted(updated, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, updated, g.flagEPFormat)
 }
 
-func runEPSvcCheckIAM(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
-	svc, err := endpointsService(ctx)
+func (g *endpointsCmds) runEPSvcCheckIAM(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	svc, err := g.endpointsService(ctx)
 	if err != nil {
 		return err
 	}
@@ -692,7 +596,7 @@ func runEPSvcCheckIAM(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("testing IAM permissions: %w", err)
 	}
-	return emitFormatted(resp, flagEPFormat)
+	return emitFormattedTo(g.inv.stdout, resp, g.flagEPFormat)
 }
 
 func epMergeBinding(policy *servicemanagement.Policy, member, role string) {

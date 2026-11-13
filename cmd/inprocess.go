@@ -87,6 +87,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newApiGatewayCmd(inv),
 		newServiceDirectoryCmd(inv),
 		newDeploymentManagerCmd(inv),
+		newEndpointsCmd(inv),
 	}
 }
 
