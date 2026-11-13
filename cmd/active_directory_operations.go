@@ -1,49 +1,24 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	managedidentities "google.golang.org/api/managedidentities/v1"
 )
 
 // --- gcloud active-directory operations (#1449) ---
 
-var adOperationsCmd = &cobra.Command{Use: "operations", Short: "Manage Managed AD long-running operations"}
-
-var (
-	flagADOpFormat   string
-	flagADOpPageSize int64
-	flagADOpFilter   string
-)
-
-var (
-	adOpCancelCmd = &cobra.Command{
-		Use: "cancel OPERATION", Short: "Cancel a Managed AD operation",
-		Args: cobra.ExactArgs(1), RunE: runADOpCancel,
-	}
-	adOpDescribeCmd = &cobra.Command{
-		Use: "describe OPERATION", Short: "Describe a Managed AD operation",
-		Args: cobra.ExactArgs(1), RunE: runADOpDescribe,
-	}
-	adOpListCmd = &cobra.Command{
-		Use: "list", Short: "List Managed AD operations",
-		Args: cobra.NoArgs, RunE: runADOpList,
-	}
-)
-
-func init() {
-	all := []*cobra.Command{adOpCancelCmd, adOpDescribeCmd, adOpListCmd}
+func (s *activeDirectoryCmds) initActiveDirectoryOperations() {
+	all := []*cobra.Command{s.adOpCancelCmd, s.adOpDescribeCmd, s.adOpListCmd}
 	for _, c := range all {
-		c.Flags().StringVar(&flagADOpFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagADOpFormat, "format", "", "Output format")
 	}
-	adOpListCmd.Flags().Int64Var(&flagADOpPageSize, "page-size", 0, "Maximum results per page")
-	adOpListCmd.Flags().StringVar(&flagADOpFilter, "filter", "", "Server-side list filter")
+	s.adOpListCmd.Flags().Int64Var(&s.flagADOpPageSize, "page-size", 0, "Maximum results per page")
+	s.adOpListCmd.Flags().StringVar(&s.flagADOpFilter, "filter", "", "Server-side list filter")
 
-	adOperationsCmd.AddCommand(all...)
-	activeDirectoryCmd.AddCommand(adOperationsCmd)
+	s.adOperationsCmd.AddCommand(all...)
+	s.activeDirectoryCmd.AddCommand(s.adOperationsCmd)
 }
 
 func adOpResource(project, op string) string {
@@ -54,13 +29,13 @@ func adOpParent(project string) string {
 	return fmt.Sprintf("projects/%s/locations/global/operations", project)
 }
 
-func runADOpCancel(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADOpCancel(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -69,17 +44,17 @@ func runADOpCancel(cmd *cobra.Command, args []string) error {
 			&managedidentities.CancelOperationRequest{}).Context(ctx).Do(); err != nil {
 		return fmt.Errorf("cancelling operation: %w", err)
 	}
-	fmt.Printf("Cancel request issued for operation [%s].\n", args[0])
+	fmt.Fprintf(s.inv.stdout, "Cancel request issued for operation [%s].\n", args[0])
 	return nil
 }
 
-func runADOpDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADOpDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -88,16 +63,16 @@ func runADOpDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing operation: %w", err)
 	}
-	return emitFormatted(got, flagADOpFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagADOpFormat)
 }
 
-func runADOpList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADOpList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -105,11 +80,11 @@ func runADOpList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Global.Operations.List(adOpParent(project)).Context(ctx)
-		if flagADOpPageSize > 0 {
-			call = call.PageSize(flagADOpPageSize)
+		if s.flagADOpPageSize > 0 {
+			call = call.PageSize(s.flagADOpPageSize)
 		}
-		if flagADOpFilter != "" {
-			call = call.Filter(flagADOpFilter)
+		if s.flagADOpFilter != "" {
+			call = call.Filter(s.flagADOpFilter)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -124,5 +99,5 @@ func runADOpList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagADOpFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagADOpFormat)
 }

@@ -1,268 +1,119 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/flyingobsidian/gcloud-go/internal/gcp"
 	"github.com/spf13/cobra"
 	managedidentities "google.golang.org/api/managedidentities/v1"
 )
 
 // --- gcloud active-directory domains (#1448) ---
 
-var adDomainsCmd = &cobra.Command{Use: "domains", Short: "Manage Managed AD domains"}
-
 var (
-	flagADDomainFormat     string
-	flagADDomainConfigFile string
-	flagADDomainUpdateMask string
-	flagADDomainPageSize   int64
-	flagADDomainFilter     string
-	flagADDomainOrderBy    string
-
-	flagADDomainIamMember   string
-	flagADDomainIamRole     string
-	flagADDomainIamCondExpr string
-	flagADDomainIamCondT    string
-	flagADDomainIamCondD    string
-	flagADDomainIamAllCond  bool
-
-	flagADDomainCreateName string
 	flagADDomainTargetName string
-)
-
-var (
-	adDomainCreateCmd = &cobra.Command{
-		Use: "create DOMAIN", Short: "Create a Managed AD domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainCreate,
-	}
-	adDomainDeleteCmd = &cobra.Command{
-		Use: "delete DOMAIN", Short: "Delete a Managed AD domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainDelete,
-	}
-	adDomainDescribeCmd = &cobra.Command{
-		Use: "describe DOMAIN", Short: "Describe a Managed AD domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainDescribe,
-	}
-	adDomainListCmd = &cobra.Command{
-		Use: "list", Short: "List Managed AD domains",
-		Args: cobra.NoArgs, RunE: runADDomainList,
-	}
-	adDomainUpdateCmd = &cobra.Command{
-		Use: "update DOMAIN", Short: "Update a Managed AD domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainUpdate,
-	}
-	adDomainDescribeLdapsCmd = &cobra.Command{
-		Use: "describe-ldaps-settings DOMAIN", Short: "Describe LDAPS settings for a domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainDescribeLdaps,
-	}
-	adDomainUpdateLdapsCmd = &cobra.Command{
-		Use: "update-ldaps-settings DOMAIN", Short: "Update LDAPS settings for a domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainUpdateLdaps,
-	}
-	adDomainExtendSchemaCmd = &cobra.Command{
-		Use: "extend-schema DOMAIN", Short: "Extend the AD schema for a domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainExtendSchema,
-	}
-	adDomainResetPwdCmd = &cobra.Command{
-		Use: "reset-admin-password DOMAIN", Short: "Reset the admin password for a domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainResetPassword,
-	}
-	adDomainRestoreCmd = &cobra.Command{
-		Use: "restore DOMAIN", Short: "Restore a domain from a backup",
-		Args: cobra.ExactArgs(1), RunE: runADDomainRestore,
-	}
-	adDomainGetIamCmd = &cobra.Command{
-		Use: "get-iam-policy DOMAIN", Short: "Get the IAM policy for a domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainGetIam,
-	}
-	adDomainSetIamCmd = &cobra.Command{
-		Use: "set-iam-policy DOMAIN POLICY_FILE", Short: "Set the IAM policy for a domain",
-		Args: cobra.ExactArgs(2), RunE: runADDomainSetIam,
-	}
-	adDomainAddIamCmd = &cobra.Command{
-		Use: "add-iam-policy-binding DOMAIN", Short: "Add an IAM policy binding to a domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainAddIam,
-	}
-	adDomainRemoveIamCmd = &cobra.Command{
-		Use: "remove-iam-policy-binding DOMAIN", Short: "Remove an IAM policy binding from a domain",
-		Args: cobra.ExactArgs(1), RunE: runADDomainRemoveIam,
-	}
 )
 
 // --- backups subgroup ---
 
-var adBackupsCmd = &cobra.Command{Use: "backups", Short: "Manage Managed AD domain backups"}
-
-var (
-	flagADBackupFormat     string
-	flagADBackupConfigFile string
-	flagADBackupUpdateMask string
-	flagADBackupPageSize   int64
-	flagADBackupFilter     string
-	flagADBackupOrderBy    string
-	flagADBackupDomain     string
-)
-
-var (
-	adBackupCreateCmd = &cobra.Command{
-		Use: "create BACKUP", Short: "Create an on-demand backup",
-		Args: cobra.ExactArgs(1), RunE: runADBackupCreate,
-	}
-	adBackupDeleteCmd = &cobra.Command{
-		Use: "delete BACKUP", Short: "Delete a backup",
-		Args: cobra.ExactArgs(1), RunE: runADBackupDelete,
-	}
-	adBackupDescribeCmd = &cobra.Command{
-		Use: "describe BACKUP", Short: "Describe a backup",
-		Args: cobra.ExactArgs(1), RunE: runADBackupDescribe,
-	}
-	adBackupListCmd = &cobra.Command{
-		Use: "list", Short: "List backups for a domain",
-		Args: cobra.NoArgs, RunE: runADBackupList,
-	}
-	adBackupUpdateCmd = &cobra.Command{
-		Use: "update BACKUP", Short: "Update a backup",
-		Args: cobra.ExactArgs(1), RunE: runADBackupUpdate,
-	}
-)
-
 // --- trusts subgroup ---
 
-var adTrustsCmd = &cobra.Command{Use: "trusts", Short: "Manage Managed AD domain trusts"}
-
-var (
-	flagADTrustFormat     string
-	flagADTrustConfigFile string
-	flagADTrustDomain     string
-	flagADTrustTargetName string
-)
-
-var (
-	adTrustCreateCmd = &cobra.Command{
-		Use: "create", Short: "Attach a trust to a domain",
-		Args: cobra.NoArgs, RunE: runADTrustCreate,
-	}
-	adTrustDeleteCmd = &cobra.Command{
-		Use: "delete", Short: "Detach a trust from a domain",
-		Args: cobra.NoArgs, RunE: runADTrustDelete,
-	}
-	adTrustDescribeCmd = &cobra.Command{
-		Use: "describe", Short: "Describe a trust on a domain",
-		Args: cobra.NoArgs, RunE: runADTrustDescribe,
-	}
-	adTrustListCmd = &cobra.Command{
-		Use: "list", Short: "List trusts on a domain",
-		Args: cobra.NoArgs, RunE: runADTrustList,
-	}
-	adTrustReconfigureCmd = &cobra.Command{
-		Use: "reconfigure", Short: "Reconfigure the DNS conditional forwarder for a trust",
-		Args: cobra.NoArgs, RunE: runADTrustReconfigure,
-	}
-	adTrustValidateCmd = &cobra.Command{
-		Use: "validate", Short: "Validate an existing trust",
-		Args: cobra.NoArgs, RunE: runADTrustValidate,
-	}
-)
-
-func init() {
+func (s *activeDirectoryCmds) initActiveDirectoryDomains() {
 	// --- domain-level flags ---
 	domainAll := []*cobra.Command{
-		adDomainCreateCmd, adDomainDeleteCmd, adDomainDescribeCmd, adDomainListCmd, adDomainUpdateCmd,
-		adDomainDescribeLdapsCmd, adDomainUpdateLdapsCmd, adDomainExtendSchemaCmd,
-		adDomainResetPwdCmd, adDomainRestoreCmd,
-		adDomainGetIamCmd, adDomainSetIamCmd, adDomainAddIamCmd, adDomainRemoveIamCmd,
+		s.adDomainCreateCmd, s.adDomainDeleteCmd, s.adDomainDescribeCmd, s.adDomainListCmd, s.adDomainUpdateCmd,
+		s.adDomainDescribeLdapsCmd, s.adDomainUpdateLdapsCmd, s.adDomainExtendSchemaCmd,
+		s.adDomainResetPwdCmd, s.adDomainRestoreCmd,
+		s.adDomainGetIamCmd, s.adDomainSetIamCmd, s.adDomainAddIamCmd, s.adDomainRemoveIamCmd,
 	}
 	for _, c := range domainAll {
-		c.Flags().StringVar(&flagADDomainFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagADDomainFormat, "format", "", "Output format")
 	}
-	adDomainCreateCmd.Flags().StringVar(&flagADDomainConfigFile, "config-file", "",
+	s.adDomainCreateCmd.Flags().StringVar(&s.flagADDomainConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the Domain body (required)")
-	_ = adDomainCreateCmd.MarkFlagRequired("config-file")
-	adDomainCreateCmd.Flags().StringVar(&flagADDomainCreateName, "domain-name", "",
+	_ = s.adDomainCreateCmd.MarkFlagRequired("config-file")
+	s.adDomainCreateCmd.Flags().StringVar(&s.flagADDomainCreateName, "domain-name", "",
 		"Optional Domain resource ID (overrides the DOMAIN positional if set)")
 
-	adDomainUpdateCmd.Flags().StringVar(&flagADDomainConfigFile, "config-file", "",
+	s.adDomainUpdateCmd.Flags().StringVar(&s.flagADDomainConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the Domain body (required)")
-	_ = adDomainUpdateCmd.MarkFlagRequired("config-file")
-	adDomainUpdateCmd.Flags().StringVar(&flagADDomainUpdateMask, "update-mask", "",
+	_ = s.adDomainUpdateCmd.MarkFlagRequired("config-file")
+	s.adDomainUpdateCmd.Flags().StringVar(&s.flagADDomainUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 
-	adDomainListCmd.Flags().Int64Var(&flagADDomainPageSize, "page-size", 0, "Maximum results per page")
-	adDomainListCmd.Flags().StringVar(&flagADDomainFilter, "filter", "", "Server-side list filter")
-	adDomainListCmd.Flags().StringVar(&flagADDomainOrderBy, "order-by", "", "Server-side ordering")
+	s.adDomainListCmd.Flags().Int64Var(&s.flagADDomainPageSize, "page-size", 0, "Maximum results per page")
+	s.adDomainListCmd.Flags().StringVar(&s.flagADDomainFilter, "filter", "", "Server-side list filter")
+	s.adDomainListCmd.Flags().StringVar(&s.flagADDomainOrderBy, "order-by", "", "Server-side ordering")
 
-	adDomainUpdateLdapsCmd.Flags().StringVar(&flagADDomainConfigFile, "config-file", "",
+	s.adDomainUpdateLdapsCmd.Flags().StringVar(&s.flagADDomainConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the LDAPSSettings body (required)")
-	_ = adDomainUpdateLdapsCmd.MarkFlagRequired("config-file")
-	adDomainUpdateLdapsCmd.Flags().StringVar(&flagADDomainUpdateMask, "update-mask", "",
+	_ = s.adDomainUpdateLdapsCmd.MarkFlagRequired("config-file")
+	s.adDomainUpdateLdapsCmd.Flags().StringVar(&s.flagADDomainUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
 
-	adDomainExtendSchemaCmd.Flags().StringVar(&flagADDomainConfigFile, "config-file", "",
+	s.adDomainExtendSchemaCmd.Flags().StringVar(&s.flagADDomainConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the ExtendSchemaRequest body (required)")
-	_ = adDomainExtendSchemaCmd.MarkFlagRequired("config-file")
+	_ = s.adDomainExtendSchemaCmd.MarkFlagRequired("config-file")
 
-	adDomainRestoreCmd.Flags().StringVar(&flagADDomainConfigFile, "config-file", "",
+	s.adDomainRestoreCmd.Flags().StringVar(&s.flagADDomainConfigFile, "config-file", "",
 		"Path to a YAML/JSON file with the RestoreDomainRequest body (required)")
-	_ = adDomainRestoreCmd.MarkFlagRequired("config-file")
+	_ = s.adDomainRestoreCmd.MarkFlagRequired("config-file")
 
-	for _, c := range []*cobra.Command{adDomainAddIamCmd, adDomainRemoveIamCmd} {
-		adIamFlags(c, &flagADDomainIamMember, &flagADDomainIamRole,
-			&flagADDomainIamCondExpr, &flagADDomainIamCondT, &flagADDomainIamCondD)
+	for _, c := range []*cobra.Command{s.adDomainAddIamCmd, s.adDomainRemoveIamCmd} {
+		adIamFlags(c, &s.flagADDomainIamMember, &s.flagADDomainIamRole,
+			&s.flagADDomainIamCondExpr, &s.flagADDomainIamCondT, &s.flagADDomainIamCondD)
 	}
-	adDomainRemoveIamCmd.Flags().BoolVar(&flagADDomainIamAllCond, "all", false,
+	s.adDomainRemoveIamCmd.Flags().BoolVar(&s.flagADDomainIamAllCond, "all", false,
 		"Remove the member from all bindings for the role, regardless of condition")
 
-	adDomainsCmd.AddCommand(domainAll...)
+	s.adDomainsCmd.AddCommand(domainAll...)
 
 	// --- backups ---
 	backupAll := []*cobra.Command{
-		adBackupCreateCmd, adBackupDeleteCmd, adBackupDescribeCmd, adBackupListCmd, adBackupUpdateCmd,
+		s.adBackupCreateCmd, s.adBackupDeleteCmd, s.adBackupDescribeCmd, s.adBackupListCmd, s.adBackupUpdateCmd,
 	}
 	for _, c := range backupAll {
-		c.Flags().StringVar(&flagADBackupFormat, "format", "", "Output format")
-		c.Flags().StringVar(&flagADBackupDomain, "domain", "", "Managed AD domain ID (required)")
+		c.Flags().StringVar(&s.flagADBackupFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagADBackupDomain, "domain", "", "Managed AD domain ID (required)")
 		_ = c.MarkFlagRequired("domain")
 	}
-	for _, c := range []*cobra.Command{adBackupCreateCmd, adBackupUpdateCmd} {
-		c.Flags().StringVar(&flagADBackupConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.adBackupCreateCmd, s.adBackupUpdateCmd} {
+		c.Flags().StringVar(&s.flagADBackupConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the Backup body")
 	}
-	adBackupUpdateCmd.Flags().StringVar(&flagADBackupUpdateMask, "update-mask", "",
+	s.adBackupUpdateCmd.Flags().StringVar(&s.flagADBackupUpdateMask, "update-mask", "",
 		"Comma-separated list of fields to update (defaults to every populated field)")
-	adBackupListCmd.Flags().Int64Var(&flagADBackupPageSize, "page-size", 0, "Maximum results per page")
-	adBackupListCmd.Flags().StringVar(&flagADBackupFilter, "filter", "", "Server-side list filter")
-	adBackupListCmd.Flags().StringVar(&flagADBackupOrderBy, "order-by", "", "Server-side ordering")
+	s.adBackupListCmd.Flags().Int64Var(&s.flagADBackupPageSize, "page-size", 0, "Maximum results per page")
+	s.adBackupListCmd.Flags().StringVar(&s.flagADBackupFilter, "filter", "", "Server-side list filter")
+	s.adBackupListCmd.Flags().StringVar(&s.flagADBackupOrderBy, "order-by", "", "Server-side ordering")
 
-	adBackupsCmd.AddCommand(backupAll...)
-	adDomainsCmd.AddCommand(adBackupsCmd)
+	s.adBackupsCmd.AddCommand(backupAll...)
+	s.adDomainsCmd.AddCommand(s.adBackupsCmd)
 
 	// --- trusts ---
 	trustAll := []*cobra.Command{
-		adTrustCreateCmd, adTrustDeleteCmd, adTrustDescribeCmd, adTrustListCmd,
-		adTrustReconfigureCmd, adTrustValidateCmd,
+		s.adTrustCreateCmd, s.adTrustDeleteCmd, s.adTrustDescribeCmd, s.adTrustListCmd,
+		s.adTrustReconfigureCmd, s.adTrustValidateCmd,
 	}
 	for _, c := range trustAll {
-		c.Flags().StringVar(&flagADTrustFormat, "format", "", "Output format")
-		c.Flags().StringVar(&flagADTrustDomain, "domain", "", "Managed AD domain ID (required)")
+		c.Flags().StringVar(&s.flagADTrustFormat, "format", "", "Output format")
+		c.Flags().StringVar(&s.flagADTrustDomain, "domain", "", "Managed AD domain ID (required)")
 		_ = c.MarkFlagRequired("domain")
 	}
-	for _, c := range []*cobra.Command{adTrustCreateCmd, adTrustDeleteCmd, adTrustReconfigureCmd, adTrustValidateCmd} {
-		c.Flags().StringVar(&flagADTrustConfigFile, "config-file", "",
+	for _, c := range []*cobra.Command{s.adTrustCreateCmd, s.adTrustDeleteCmd, s.adTrustReconfigureCmd, s.adTrustValidateCmd} {
+		c.Flags().StringVar(&s.flagADTrustConfigFile, "config-file", "",
 			"Path to a YAML/JSON file with the trust request body (required)")
 		_ = c.MarkFlagRequired("config-file")
 	}
-	for _, c := range []*cobra.Command{adTrustDescribeCmd} {
-		c.Flags().StringVar(&flagADTrustTargetName, "target-domain-name", "",
+	for _, c := range []*cobra.Command{s.adTrustDescribeCmd} {
+		c.Flags().StringVar(&s.flagADTrustTargetName, "target-domain-name", "",
 			"Target domain name of the trust to describe (required)")
 		_ = c.MarkFlagRequired("target-domain-name")
 	}
 
-	adTrustsCmd.AddCommand(trustAll...)
-	adDomainsCmd.AddCommand(adTrustsCmd)
+	s.adTrustsCmd.AddCommand(trustAll...)
+	s.adDomainsCmd.AddCommand(s.adTrustsCmd)
 
-	activeDirectoryCmd.AddCommand(adDomainsCmd)
+	s.activeDirectoryCmd.AddCommand(s.adDomainsCmd)
 
 	// silence linter about currently-unused flag holder
 	_ = flagADDomainTargetName
@@ -286,21 +137,21 @@ func adBackupParent(project, domain string) string {
 
 // --- domains: runs ---
 
-func runADDomainCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &managedidentities.Domain{}
-	if err := loadYAMLOrJSONInto(flagADDomainConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagADDomainConfigFile, body); err != nil {
 		return err
 	}
 	name := args[0]
-	if flagADDomainCreateName != "" {
-		name = flagADDomainCreateName
+	if s.flagADDomainCreateName != "" {
+		name = s.flagADDomainCreateName
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -310,17 +161,17 @@ func runADDomainCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating domain: %w", err)
 	}
-	fmt.Printf("Create request issued for domain [%s] (operation: %s).\n", name, op.Name)
-	return emitFormatted(op, flagADDomainFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for domain [%s] (operation: %s).\n", name, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADDomainFormat)
 }
 
-func runADDomainDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -329,17 +180,17 @@ func runADDomainDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("deleting domain: %w", err)
 	}
-	fmt.Printf("Delete request issued for domain [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagADDomainFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for domain [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADDomainFormat)
 }
 
-func runADDomainDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -348,16 +199,16 @@ func runADDomainDescribe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing domain: %w", err)
 	}
-	return emitFormatted(got, flagADDomainFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagADDomainFormat)
 }
 
-func runADDomainList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -365,14 +216,14 @@ func runADDomainList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Global.Domains.List(adDomainParent(project)).Context(ctx)
-		if flagADDomainPageSize > 0 {
-			call = call.PageSize(flagADDomainPageSize)
+		if s.flagADDomainPageSize > 0 {
+			call = call.PageSize(s.flagADDomainPageSize)
 		}
-		if flagADDomainFilter != "" {
-			call = call.Filter(flagADDomainFilter)
+		if s.flagADDomainFilter != "" {
+			call = call.Filter(s.flagADDomainFilter)
 		}
-		if flagADDomainOrderBy != "" {
-			call = call.OrderBy(flagADDomainOrderBy)
+		if s.flagADDomainOrderBy != "" {
+			call = call.OrderBy(s.flagADDomainOrderBy)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -387,24 +238,24 @@ func runADDomainList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagADDomainFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagADDomainFormat)
 }
 
-func runADDomainUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &managedidentities.Domain{}
-	if err := loadYAMLOrJSONInto(flagADDomainConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagADDomainConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagADDomainUpdateMask
+	mask := s.flagADDomainUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -417,17 +268,17 @@ func runADDomainUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating domain: %w", err)
 	}
-	fmt.Printf("Update request issued for domain [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagADDomainFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for domain [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADDomainFormat)
 }
 
-func runADDomainDescribeLdaps(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainDescribeLdaps(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -437,24 +288,24 @@ func runADDomainDescribeLdaps(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("describing LDAPS settings: %w", err)
 	}
-	return emitFormatted(got, flagADDomainFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagADDomainFormat)
 }
 
-func runADDomainUpdateLdaps(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainUpdateLdaps(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &managedidentities.LDAPSSettings{}
-	if err := loadYAMLOrJSONInto(flagADDomainConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagADDomainConfigFile, body); err != nil {
 		return err
 	}
-	mask := flagADDomainUpdateMask
+	mask := s.flagADDomainUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -468,21 +319,21 @@ func runADDomainUpdateLdaps(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating LDAPS settings: %w", err)
 	}
-	fmt.Printf("Update request issued for LDAPS settings on domain [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagADDomainFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for LDAPS settings on domain [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADDomainFormat)
 }
 
-func runADDomainExtendSchema(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainExtendSchema(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &managedidentities.ExtendSchemaRequest{}
-	if err := loadYAMLOrJSONInto(flagADDomainConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagADDomainConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -491,17 +342,17 @@ func runADDomainExtendSchema(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("extending schema: %w", err)
 	}
-	fmt.Printf("Extend-schema request issued for domain [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagADDomainFormat)
+	fmt.Fprintf(s.inv.stdout, "Extend-schema request issued for domain [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADDomainFormat)
 }
 
-func runADDomainResetPassword(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainResetPassword(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -511,21 +362,21 @@ func runADDomainResetPassword(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resetting admin password: %w", err)
 	}
-	fmt.Printf("Reset admin password for domain [%s]. New password: %s\n", args[0], resp.Password)
-	return emitFormatted(resp, flagADDomainFormat)
+	fmt.Fprintf(s.inv.stdout, "Reset admin password for domain [%s]. New password: %s\n", args[0], resp.Password)
+	return emitFormattedTo(s.inv.stdout, resp, s.flagADDomainFormat)
 }
 
-func runADDomainRestore(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainRestore(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &managedidentities.RestoreDomainRequest{}
-	if err := loadYAMLOrJSONInto(flagADDomainConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagADDomainConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -534,17 +385,17 @@ func runADDomainRestore(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("restoring domain: %w", err)
 	}
-	fmt.Printf("Restore request issued for domain [%s] (operation: %s).\n", args[0], op.Name)
-	return emitFormatted(op, flagADDomainFormat)
+	fmt.Fprintf(s.inv.stdout, "Restore request issued for domain [%s] (operation: %s).\n", args[0], op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADDomainFormat)
 }
 
-func runADDomainGetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainGetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -554,11 +405,11 @@ func runADDomainGetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	return emitFormatted(policy, flagADDomainFormat)
+	return emitFormattedTo(s.inv.stdout, policy, s.flagADDomainFormat)
 }
 
-func runADDomainSetIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainSetIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
@@ -567,8 +418,8 @@ func runADDomainSetIam(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	policy.Version = 3
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -578,17 +429,17 @@ func runADDomainSetIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	adUpdatedIam(fmt.Sprintf("domain [%s]", args[0]))
-	return emitFormatted(updated, flagADDomainFormat)
+	s.adUpdatedIam(fmt.Sprintf("domain [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagADDomainFormat)
 }
 
-func runADDomainAddIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainAddIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -598,25 +449,25 @@ func runADDomainAddIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	adAddBinding(policy, flagADDomainIamRole, flagADDomainIamMember,
-		adBuildCondition(flagADDomainIamCondExpr, flagADDomainIamCondT, flagADDomainIamCondD))
+	adAddBinding(policy, s.flagADDomainIamRole, s.flagADDomainIamMember,
+		adBuildCondition(s.flagADDomainIamCondExpr, s.flagADDomainIamCondT, s.flagADDomainIamCondD))
 	policy.Version = 3
 	updated, err := svc.Projects.Locations.Global.Domains.
 		SetIamPolicy(resource, &managedidentities.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	adUpdatedIam(fmt.Sprintf("domain [%s]", args[0]))
-	return emitFormatted(updated, flagADDomainFormat)
+	s.adUpdatedIam(fmt.Sprintf("domain [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagADDomainFormat)
 }
 
-func runADDomainRemoveIam(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADDomainRemoveIam(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -626,93 +477,93 @@ func runADDomainRemoveIam(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("getting IAM policy: %w", err)
 	}
-	if !adRemoveBinding(policy, flagADDomainIamRole, flagADDomainIamMember,
-		adBuildCondition(flagADDomainIamCondExpr, flagADDomainIamCondT, flagADDomainIamCondD), flagADDomainIamAllCond) {
-		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", flagADDomainIamRole, flagADDomainIamMember)
+	if !adRemoveBinding(policy, s.flagADDomainIamRole, s.flagADDomainIamMember,
+		adBuildCondition(s.flagADDomainIamCondExpr, s.flagADDomainIamCondT, s.flagADDomainIamCondD), s.flagADDomainIamAllCond) {
+		return fmt.Errorf("policy binding not found for role [%s] and member [%s]", s.flagADDomainIamRole, s.flagADDomainIamMember)
 	}
 	updated, err := svc.Projects.Locations.Global.Domains.
 		SetIamPolicy(resource, &managedidentities.SetIamPolicyRequest{Policy: policy}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("setting IAM policy: %w", err)
 	}
-	adUpdatedIam(fmt.Sprintf("domain [%s]", args[0]))
-	return emitFormatted(updated, flagADDomainFormat)
+	s.adUpdatedIam(fmt.Sprintf("domain [%s]", args[0]))
+	return emitFormattedTo(s.inv.stdout, updated, s.flagADDomainFormat)
 }
 
 // --- backups: runs ---
 
-func runADBackupCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADBackupCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &managedidentities.Backup{}
-	if flagADBackupConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagADBackupConfigFile, body); err != nil {
+	if s.flagADBackupConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagADBackupConfigFile, body); err != nil {
 			return err
 		}
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Global.Domains.Backups.
-		Create(adBackupParent(project, flagADBackupDomain), body).
+		Create(adBackupParent(project, s.flagADBackupDomain), body).
 		BackupId(args[0]).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("creating backup: %w", err)
 	}
-	fmt.Printf("Create request issued for backup [%s] on domain [%s] (operation: %s).\n",
-		args[0], flagADBackupDomain, op.Name)
-	return emitFormatted(op, flagADBackupFormat)
+	fmt.Fprintf(s.inv.stdout, "Create request issued for backup [%s] on domain [%s] (operation: %s).\n",
+		args[0], s.flagADBackupDomain, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADBackupFormat)
 }
 
-func runADBackupDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADBackupDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Global.Domains.Backups.
-		Delete(adBackupResource(project, flagADBackupDomain, args[0])).Context(ctx).Do()
+		Delete(adBackupResource(project, s.flagADBackupDomain, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("deleting backup: %w", err)
 	}
-	fmt.Printf("Delete request issued for backup [%s] on domain [%s] (operation: %s).\n",
-		args[0], flagADBackupDomain, op.Name)
-	return emitFormatted(op, flagADBackupFormat)
+	fmt.Fprintf(s.inv.stdout, "Delete request issued for backup [%s] on domain [%s] (operation: %s).\n",
+		args[0], s.flagADBackupDomain, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADBackupFormat)
 }
 
-func runADBackupDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADBackupDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	got, err := svc.Projects.Locations.Global.Domains.Backups.
-		Get(adBackupResource(project, flagADBackupDomain, args[0])).Context(ctx).Do()
+		Get(adBackupResource(project, s.flagADBackupDomain, args[0])).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing backup: %w", err)
 	}
-	return emitFormatted(got, flagADBackupFormat)
+	return emitFormattedTo(s.inv.stdout, got, s.flagADBackupFormat)
 }
 
-func runADBackupList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADBackupList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
@@ -720,15 +571,15 @@ func runADBackupList(cmd *cobra.Command, args []string) error {
 	pageToken := ""
 	for {
 		call := svc.Projects.Locations.Global.Domains.Backups.
-			List(adBackupParent(project, flagADBackupDomain)).Context(ctx)
-		if flagADBackupPageSize > 0 {
-			call = call.PageSize(flagADBackupPageSize)
+			List(adBackupParent(project, s.flagADBackupDomain)).Context(ctx)
+		if s.flagADBackupPageSize > 0 {
+			call = call.PageSize(s.flagADBackupPageSize)
 		}
-		if flagADBackupFilter != "" {
-			call = call.Filter(flagADBackupFilter)
+		if s.flagADBackupFilter != "" {
+			call = call.Filter(s.flagADBackupFilter)
 		}
-		if flagADBackupOrderBy != "" {
-			call = call.OrderBy(flagADBackupOrderBy)
+		if s.flagADBackupOrderBy != "" {
+			call = call.OrderBy(s.flagADBackupOrderBy)
 		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
@@ -743,31 +594,31 @@ func runADBackupList(cmd *cobra.Command, args []string) error {
 		}
 		pageToken = resp.NextPageToken
 	}
-	return emitFormatted(all, flagADBackupFormat)
+	return emitFormattedTo(s.inv.stdout, all, s.flagADBackupFormat)
 }
 
-func runADBackupUpdate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADBackupUpdate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &managedidentities.Backup{}
-	if flagADBackupConfigFile != "" {
-		if err := loadYAMLOrJSONInto(flagADBackupConfigFile, body); err != nil {
+	if s.flagADBackupConfigFile != "" {
+		if err := loadYAMLOrJSONInto(s.flagADBackupConfigFile, body); err != nil {
 			return err
 		}
 	}
-	mask := flagADBackupUpdateMask
+	mask := s.flagADBackupUpdateMask
 	if mask == "" {
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	call := svc.Projects.Locations.Global.Domains.Backups.
-		Patch(adBackupResource(project, flagADBackupDomain, args[0]), body).Context(ctx)
+		Patch(adBackupResource(project, s.flagADBackupDomain, args[0]), body).Context(ctx)
 	if mask != "" {
 		call = call.UpdateMask(mask)
 	}
@@ -775,152 +626,152 @@ func runADBackupUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("updating backup: %w", err)
 	}
-	fmt.Printf("Update request issued for backup [%s] on domain [%s] (operation: %s).\n",
-		args[0], flagADBackupDomain, op.Name)
-	return emitFormatted(op, flagADBackupFormat)
+	fmt.Fprintf(s.inv.stdout, "Update request issued for backup [%s] on domain [%s] (operation: %s).\n",
+		args[0], s.flagADBackupDomain, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADBackupFormat)
 }
 
 // --- trusts: runs ---
 
-func runADTrustCreate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADTrustCreate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	trust := &managedidentities.Trust{}
-	if err := loadYAMLOrJSONInto(flagADTrustConfigFile, trust); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagADTrustConfigFile, trust); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Global.Domains.
-		AttachTrust(adDomainResource(project, flagADTrustDomain),
+		AttachTrust(adDomainResource(project, s.flagADTrustDomain),
 			&managedidentities.AttachTrustRequest{Trust: trust}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("attaching trust: %w", err)
 	}
-	fmt.Printf("Attach trust request issued for domain [%s] (operation: %s).\n",
-		flagADTrustDomain, op.Name)
-	return emitFormatted(op, flagADTrustFormat)
+	fmt.Fprintf(s.inv.stdout, "Attach trust request issued for domain [%s] (operation: %s).\n",
+		s.flagADTrustDomain, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADTrustFormat)
 }
 
-func runADTrustDelete(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADTrustDelete(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	trust := &managedidentities.Trust{}
-	if err := loadYAMLOrJSONInto(flagADTrustConfigFile, trust); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagADTrustConfigFile, trust); err != nil {
 		return err
 	}
 	if trust.TargetDomainName == "" {
 		return fmt.Errorf("config file must include targetDomainName for the trust to detach")
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Global.Domains.
-		DetachTrust(adDomainResource(project, flagADTrustDomain),
+		DetachTrust(adDomainResource(project, s.flagADTrustDomain),
 			&managedidentities.DetachTrustRequest{Trust: trust}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("detaching trust: %w", err)
 	}
-	fmt.Printf("Detach trust request issued for domain [%s] (operation: %s).\n",
-		flagADTrustDomain, op.Name)
-	return emitFormatted(op, flagADTrustFormat)
+	fmt.Fprintf(s.inv.stdout, "Detach trust request issued for domain [%s] (operation: %s).\n",
+		s.flagADTrustDomain, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADTrustFormat)
 }
 
-func runADTrustDescribe(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADTrustDescribe(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	dom, err := svc.Projects.Locations.Global.Domains.
-		Get(adDomainResource(project, flagADTrustDomain)).Context(ctx).Do()
+		Get(adDomainResource(project, s.flagADTrustDomain)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing domain: %w", err)
 	}
 	for _, t := range dom.Trusts {
-		if t.TargetDomainName == flagADTrustTargetName {
-			return emitFormatted(t, flagADTrustFormat)
+		if t.TargetDomainName == s.flagADTrustTargetName {
+			return emitFormattedTo(s.inv.stdout, t, s.flagADTrustFormat)
 		}
 	}
 	return fmt.Errorf("no trust with target-domain-name [%s] on domain [%s]",
-		flagADTrustTargetName, flagADTrustDomain)
+		s.flagADTrustTargetName, s.flagADTrustDomain)
 }
 
-func runADTrustList(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADTrustList(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	dom, err := svc.Projects.Locations.Global.Domains.
-		Get(adDomainResource(project, flagADTrustDomain)).Context(ctx).Do()
+		Get(adDomainResource(project, s.flagADTrustDomain)).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("describing domain: %w", err)
 	}
-	return emitFormatted(dom.Trusts, flagADTrustFormat)
+	return emitFormattedTo(s.inv.stdout, dom.Trusts, s.flagADTrustFormat)
 }
 
-func runADTrustReconfigure(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADTrustReconfigure(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &managedidentities.ReconfigureTrustRequest{}
-	if err := loadYAMLOrJSONInto(flagADTrustConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagADTrustConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Global.Domains.
-		ReconfigureTrust(adDomainResource(project, flagADTrustDomain), body).Context(ctx).Do()
+		ReconfigureTrust(adDomainResource(project, s.flagADTrustDomain), body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("reconfiguring trust: %w", err)
 	}
-	fmt.Printf("Reconfigure trust request issued for domain [%s] (operation: %s).\n",
-		flagADTrustDomain, op.Name)
-	return emitFormatted(op, flagADTrustFormat)
+	fmt.Fprintf(s.inv.stdout, "Reconfigure trust request issued for domain [%s] (operation: %s).\n",
+		s.flagADTrustDomain, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADTrustFormat)
 }
 
-func runADTrustValidate(cmd *cobra.Command, args []string) error {
-	project, err := resolveProject()
+func (s *activeDirectoryCmds) runADTrustValidate(cmd *cobra.Command, args []string) error {
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
 	body := &managedidentities.ValidateTrustRequest{}
-	if err := loadYAMLOrJSONInto(flagADTrustConfigFile, body); err != nil {
+	if err := loadYAMLOrJSONInto(s.flagADTrustConfigFile, body); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	svc, err := gcp.ManagedIdentitiesService(ctx, flagAccount)
+	ctx := cmd.Context()
+	svc, err := s.inv.clients().ManagedIdentities(ctx)
 	if err != nil {
 		return err
 	}
 	op, err := svc.Projects.Locations.Global.Domains.
-		ValidateTrust(adDomainResource(project, flagADTrustDomain), body).Context(ctx).Do()
+		ValidateTrust(adDomainResource(project, s.flagADTrustDomain), body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("validating trust: %w", err)
 	}
-	fmt.Printf("Validate trust request issued for domain [%s] (operation: %s).\n",
-		flagADTrustDomain, op.Name)
-	return emitFormatted(op, flagADTrustFormat)
+	fmt.Fprintf(s.inv.stdout, "Validate trust request issued for domain [%s] (operation: %s).\n",
+		s.flagADTrustDomain, op.Name)
+	return emitFormattedTo(s.inv.stdout, op, s.flagADTrustFormat)
 }
