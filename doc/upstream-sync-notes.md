@@ -682,6 +682,20 @@ Not applicable or not ported:
   which is also where it writes keys. **Project numbers in arguments** —
   gcloud-go never required a project ID in compute commands.
 
+## Compute Firewall Policies 587.0.0 (#1949)
+
+- **`gcloud compute network-firewall-policies associations update`
+  promoted to GA, and `--priority` / `--associated-policy-to-be-replaced`
+  on `associations create` promoted to GA** (587.0.0) — gcloud-go's
+  `compute network-firewall-policies` group is still a stub (only
+  `describe` and `list`, both "not yet implemented"), and the
+  `associations` subgroup is not registered at all. gcloud-go does not
+  split release tracks, so `associations create` (with `--priority` and
+  `--associated-policy-to-be-replaced`) and `associations update`
+  (`--firewall-policy`, `--firewall-policy-region`,
+  `--global-firewall-policy`, `--name`, `--priority`) will come with the
+  group's implementation.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
