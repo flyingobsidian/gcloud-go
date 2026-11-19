@@ -696,6 +696,17 @@ Not applicable or not ported:
   `--global-firewall-policy`, `--name`, `--priority`) will come with the
   group's implementation.
 
+## Compute OS Config 585.0.0–588.0.0 (#1950)
+
+- **`--description` on `gcloud compute os-config policy-orchestrators
+  create|update`** (588.0.0) and **Regional Endpoints (REP) support for
+  `gcloud compute os-config` via `--endpoint-mode`** (585.0.0) — gcloud-go's
+  `compute os-config` group is still a stub (only `describe` and `list`,
+  both "not yet implemented"); `policy-orchestrators` and the other
+  OS Config subgroups are not registered. Both changes will come with the
+  group's implementation, which can reuse the `--endpoint-mode` handling
+  added for `workstations` (#1945).
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
