@@ -118,6 +118,12 @@ type computeCmds struct {
 	flagImagesListShowDeprecate     bool
 	flagImagesListPreview           bool
 	flagImagesListURI               bool
+	flagImageViewsRegion            string
+	flagImageViewsStandard          bool
+	flagImageViewsNoStandard        bool
+	flagImageViewsPreview           bool
+	flagImageViewsShowDeprecated    bool
+	flagImageViewsURI               bool
 	projectInfoCmd                  *cobra.Command
 	projectInfoDescribeCmd          *cobra.Command
 	projectInfoAddMetadataCmd       *cobra.Command
@@ -125,6 +131,7 @@ type computeCmds struct {
 	flagRemoveMetadataKeys          string
 	flagRemoveMetadataAll           bool
 	flagAddProjectMetadata          map[string]string
+	flagAddProjectMetadataFromFile  map[string]string
 	forwardingRulesCmd              *cobra.Command
 	forwardingRulesListCmd          *cobra.Command
 	flagFRListFormat                string
@@ -177,6 +184,8 @@ type computeCmds struct {
 	managedListInstancesCmd         *cobra.Command
 	flagManagedRegion               string
 	flagManagedListFormat           string
+	flagManagedListInstLimit        int
+	flagManagedListInstPageSize     int64
 	managedDescribeCmd              *cobra.Command
 	flagManagedDescribeRegion       string
 	managedResizeCmd                *cobra.Command
@@ -281,6 +290,8 @@ type computeCmds struct {
 	instancesAddMetadataCmd         *cobra.Command
 	instancesRemoveMetadataCmd      *cobra.Command
 	flagAddMetadataKV               map[string]string
+	flagManagedNoGracefulShutdown   bool
+	flagAddMetadataFromFile         map[string]string
 	instancesResetCmd               *cobra.Command
 	instancesSetMachineTypeCmd      *cobra.Command
 	flagSetMachineType              string
@@ -750,6 +761,7 @@ Examples:
 	}
 	s.initCompute()
 	s.initComputeImagesList()
+	s.initComputeImageViews()
 	s.initComputeLists()
 	s.initComputeMisc()
 	s.initComputeSubnetsList()

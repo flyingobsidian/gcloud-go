@@ -19,7 +19,7 @@ func (s *computeCmds) initInstancesOps() {
 	s.instancesSetMachineTypeCmd.MarkFlagRequired("machine-type")
 
 	s.instancesGetSerialPortOutputCmd.Flags().Int64Var(&s.flagSerialPort, "port", 1, "Serial port number (1-4)")
-	s.instancesGetSerialPortOutputCmd.Flags().Int64Var(&s.flagSerialStart, "start", 0, "Byte offset to start reading from")
+	s.instancesGetSerialPortOutputCmd.Flags().Int64Var(&s.flagSerialStart, "start", 0, "Byte index (zero-based) of the first byte to return; negative values count back from the end")
 
 	s.instancesResetCmd.Flags().BoolVar(&s.flagResetAsync, "async", false, "Return immediately without waiting")
 	s.instancesCmd.AddCommand(s.instancesResetCmd)
@@ -103,8 +103,9 @@ func (s *computeCmds) runInstancesGetSerialPortOutput(cmd *cobra.Command, args [
 		return err
 	}
 
+	startSet := cmd.Flags().Changed("start")
 	call := svc.Instances.GetSerialPortOutput(project, zone, instance).Context(ctx).Port(s.flagSerialPort)
-	if s.flagSerialStart > 0 {
+	if startSet {
 		call = call.Start(s.flagSerialStart)
 	}
 
@@ -113,6 +114,27 @@ func (s *computeCmds) runInstancesGetSerialPortOutput(cmd *cobra.Command, args [
 		return fmt.Errorf("getting serial port output: %w", err)
 	}
 
-	fmt.Fprint(s.inv.stdout, output.Contents)
+	if s.inv.flags.format != "" {
+		if err := emitFormattedTo(s.inv.stdout, output, s.inv.flags.format); err != nil {
+			return err
+		}
+	} else {
+		// gcloud-python's default format is value[no-quote](contents).
+		fmt.Fprintln(s.inv.stdout, output.Contents)
+	}
+	if startSet && serialOutputLost(s.flagSerialStart, output) {
+		fmt.Fprintf(s.inv.stderr, "WARNING: Some serial port output was lost due to a limited buffer. The oldest byte of output returned was at offset %d.\n", output.Start)
+	}
+	fmt.Fprintf(s.inv.stderr, "\nSpecify --start=%d in the next get-serial-port-output invocation to get only the new output starting from here.\n", output.Next)
 	return nil
+}
+
+// serialOutputLost reports whether output starts after the requested start,
+// as gcloud-python 589.0.0's Epilog does: a negative start is relative to
+// output.Next, and output is lost if it begins after max(0, next+start).
+func serialOutputLost(start int64, output *compute.SerialPortOutput) bool {
+	if start < 0 {
+		return output.Start > max(0, output.Next+start)
+	}
+	return output.Start != start
 }

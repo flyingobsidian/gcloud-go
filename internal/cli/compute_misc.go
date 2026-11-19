@@ -22,6 +22,8 @@ func (s *computeCmds) initComputeMisc() {
 	s.projectInfoRemoveMetadataCmd.Flags().StringVar(&s.flagRemoveMetadataKeys, "keys", "", "Comma-separated list of metadata keys to remove")
 	s.projectInfoRemoveMetadataCmd.Flags().BoolVar(&s.flagRemoveMetadataAll, "all", false, "Remove all metadata")
 	s.projectInfoAddMetadataCmd.Flags().StringToStringVar(&s.flagAddProjectMetadata, "metadata", nil, "Metadata key=value pairs to add")
+	s.projectInfoAddMetadataCmd.Flags().StringToStringVar(&s.flagAddProjectMetadataFromFile, "metadata-from-file", nil,
+		"Metadata key=filepath pairs; a filepath of - reads standard input")
 	s.projectInfoAddMetadataCmd.MarkFlagRequired("metadata")
 	s.projectInfoCmd.AddCommand(s.projectInfoDescribeCmd)
 	s.projectInfoCmd.AddCommand(s.projectInfoAddMetadataCmd)
@@ -94,6 +96,10 @@ func (s *computeCmds) runProjectInfoDescribe(cmd *cobra.Command, args []string) 
 }
 
 func (s *computeCmds) runProjectInfoAddMetadata(cmd *cobra.Command, args []string) error {
+	add, err := s.addMetadataDict(s.flagAddProjectMetadata, s.flagAddProjectMetadataFromFile)
+	if err != nil {
+		return err
+	}
 	project, err := s.inv.project()
 	if err != nil {
 		return err
@@ -115,20 +121,7 @@ func (s *computeCmds) runProjectInfoAddMetadata(cmd *cobra.Command, args []strin
 		metadata = &compute.Metadata{}
 	}
 
-	for k, v := range s.flagAddProjectMetadata {
-		val := v
-		found := false
-		for _, item := range metadata.Items {
-			if item.Key == k {
-				item.Value = &val
-				found = true
-				break
-			}
-		}
-		if !found {
-			metadata.Items = append(metadata.Items, &compute.MetadataItems{Key: k, Value: &val})
-		}
-	}
+	mergeMetadata(metadata, add)
 
 	op, err := svc.Projects.SetCommonInstanceMetadata(project, metadata).Context(ctx).Do()
 	if err != nil {

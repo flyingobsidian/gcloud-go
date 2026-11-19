@@ -19,6 +19,8 @@ func (s *computeCmds) initInstanceGroupsManaged() {
 	// list-instances
 	s.managedListInstancesCmd.Flags().StringVar(&s.flagManagedRegion, "region", "", "Region of the managed instance group")
 	s.managedListInstancesCmd.Flags().StringVar(&s.flagManagedListFormat, "format", "", "Output format (e.g. json, 'csv(NAME,ZONE,STATUS)', 'get(NAME)')")
+	s.managedListInstancesCmd.Flags().IntVar(&s.flagManagedListInstLimit, "limit", 0, "Maximum number of resources to list")
+	s.managedListInstancesCmd.Flags().Int64Var(&s.flagManagedListInstPageSize, "page-size", 0, "Number of resources per page")
 
 	// describe
 	s.managedDescribeCmd.Flags().StringVar(&s.flagManagedDescribeRegion, "region", "", "Region")
@@ -47,6 +49,7 @@ func (s *computeCmds) runManagedListInstances(cmd *cobra.Command, args []string)
 		return fmt.Errorf("project is required; set via --project flag, CLOUDSDK_CORE_PROJECT env, or config")
 	}
 	region := s.flagManagedRegion
+	maxResults, limit := s.managedListInstancesPaging()
 
 	ctx := cmd.Context()
 	svc, err := s.inv.clients().Compute(ctx)
@@ -60,6 +63,9 @@ func (s *computeCmds) runManagedListInstances(cmd *cobra.Command, args []string)
 		pageToken := ""
 		for {
 			call := svc.RegionInstanceGroupManagers.ListManagedInstances(project, region, group).Context(ctx)
+			if maxResults > 0 {
+				call = call.MaxResults(maxResults)
+			}
 			if pageToken != "" {
 				call = call.PageToken(pageToken)
 			}
@@ -68,13 +74,17 @@ func (s *computeCmds) runManagedListInstances(cmd *cobra.Command, args []string)
 				return fmt.Errorf("listing managed instances: %w", err)
 			}
 			allInstances = append(allInstances, resp.ManagedInstances...)
+			if limit > 0 && len(allInstances) >= limit {
+				allInstances = allInstances[:limit]
+				break
+			}
 			if resp.NextPageToken == "" {
 				break
 			}
 			pageToken = resp.NextPageToken
 		}
 
-		return s.formatManagedInstances(allInstances, s.flagManagedListFormat, true)
+		return s.formatManagedInstances(allInstances, s.flagManagedListFormat)
 	}
 
 	// Zonal MIG fallback.
@@ -87,6 +97,9 @@ func (s *computeCmds) runManagedListInstances(cmd *cobra.Command, args []string)
 	pageToken := ""
 	for {
 		call := svc.InstanceGroupManagers.ListManagedInstances(project, zone, group).Context(ctx)
+		if maxResults > 0 {
+			call = call.MaxResults(maxResults)
+		}
 		if pageToken != "" {
 			call = call.PageToken(pageToken)
 		}
@@ -95,20 +108,105 @@ func (s *computeCmds) runManagedListInstances(cmd *cobra.Command, args []string)
 			return fmt.Errorf("listing managed instances: %w", err)
 		}
 		allInstances = append(allInstances, resp.ManagedInstances...)
+		if limit > 0 && len(allInstances) >= limit {
+			allInstances = allInstances[:limit]
+			break
+		}
 		if resp.NextPageToken == "" {
 			break
 		}
 		pageToken = resp.NextPageToken
 	}
 
-	return s.formatManagedInstances(allInstances, s.flagManagedListFormat, false)
+	return s.formatManagedInstances(allInstances, s.flagManagedListFormat)
+}
+
+// managedListInstancesPaging mirrors gcloud-python 589.0.0's
+// list-instances paging: without client-side transforms (--filter,
+// --flatten), --page-size and --limit (the smaller of the two,
+// capped at 500) are sent as maxResults and the listing stops once --limit
+// instances are fetched. It returns maxResults (0 for none) and the limit.
+func (s *computeCmds) managedListInstancesPaging() (int64, int) {
+	if s.inv.flags.filter != "" || len(s.inv.flags.flatten) > 0 {
+		return 0, 0
+	}
+	maxResults := s.flagManagedListInstPageSize
+	if l := int64(s.flagManagedListInstLimit); l > 0 && (maxResults <= 0 || l < maxResults) {
+		maxResults = l
+	}
+	return min(maxResults, 500), s.flagManagedListInstLimit
+}
+
+// managedListInstancesColumns returns gcloud-python GA's list-instances
+// table columns; GRACEFUL_SHUTDOWN_TIMESTAMP and TERMINATION_TIMESTAMP are
+// dynamic fields shown only when some instance has a value (589.0.0).
+func managedListInstancesColumns(instances []*compute.ManagedInstance) []string {
+	cols := []string{"name", "zone", "status", "healthState", "action", "instanceTemplate", "versionName", "lastError"}
+	var graceful, termination bool
+	for _, mi := range instances {
+		if mi.Scheduling != nil {
+			graceful = graceful || mi.Scheduling.GracefulShutdownTimestamp != ""
+			termination = termination || mi.Scheduling.TerminationTimestamp != ""
+		}
+	}
+	if graceful {
+		cols = append(cols, "gracefulShutdownTimestamp")
+	}
+	if termination {
+		cols = append(cols, "terminationTimestamp")
+	}
+	return cols
+}
+
+// managedListInstancesRows builds the rows of the default table.
+func managedListInstancesRows(instances []*compute.ManagedInstance) []map[string]any {
+	rows := make([]map[string]any, 0, len(instances))
+	for _, mi := range instances {
+		row := map[string]any{
+			"name":             mi.Name,
+			"zone":             extractZoneFromURL(mi.Instance),
+			"status":           mi.InstanceStatus,
+			"healthState":      "",
+			"action":           mi.CurrentAction,
+			"instanceTemplate": "",
+			"versionName":      "",
+			"lastError":        "",
+		}
+		if row["name"] == "" {
+			row["name"] = path.Base(mi.Instance)
+		}
+		if len(mi.InstanceHealth) > 0 {
+			row["healthState"] = mi.InstanceHealth[0].DetailedHealthState
+		}
+		if mi.Version != nil {
+			if mi.Version.InstanceTemplate != "" {
+				row["instanceTemplate"] = path.Base(mi.Version.InstanceTemplate)
+			}
+			row["versionName"] = mi.Version.Name
+		}
+		if mi.LastAttempt != nil && mi.LastAttempt.Errors != nil {
+			var errs []string
+			for _, e := range mi.LastAttempt.Errors.Errors {
+				errs = append(errs, fmt.Sprintf("Error %s: %s", e.Code, e.Message))
+			}
+			row["lastError"] = strings.Join(errs, ", ")
+		}
+		if mi.Scheduling != nil {
+			row["gracefulShutdownTimestamp"] = mi.Scheduling.GracefulShutdownTimestamp
+			row["terminationTimestamp"] = mi.Scheduling.TerminationTimestamp
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 // formatManagedInstances renders managed instances per --format. It supports
-// json, get(FIELD) and csv(FIELDS); otherwise it prints the default table.
-// showZone includes the ZONE column in the default table (regional listings
-// span zones; zonal listings do not).
-func (s *computeCmds) formatManagedInstances(instances []*compute.ManagedInstance, format string, showZone bool) error {
+// json, get(FIELD) and csv(FIELDS) over the table's column names; otherwise
+// it prints gcloud-python's default table.
+func (s *computeCmds) formatManagedInstances(instances []*compute.ManagedInstance, format string) error {
+	if format == "" {
+		format = s.inv.flags.format
+	}
 	switch {
 	case format == "json":
 		return s.inv.printJSON(instances)
@@ -134,25 +232,14 @@ func (s *computeCmds) formatManagedInstances(instances []*compute.ManagedInstanc
 			fmt.Fprintln(s.inv.stdout, strings.Join(vals, ","))
 		}
 		return nil
-	}
-
-	if showZone {
-		printTableHeadingTo(s.inv.stdout, len(instances), "%-40s %-10s %-15s %-20s %-15s\n", "NAME", "ZONE", "STATUS", "ACTION", "HEALTH")
-		for _, mi := range instances {
-			fmt.Fprintf(s.inv.stdout, "%-40s %-10s %-15s %-20s %-15s\n",
-				managedInstanceField(mi, "NAME"), managedInstanceField(mi, "ZONE"),
-				managedInstanceField(mi, "STATUS"), managedInstanceField(mi, "ACTION"),
-				managedInstanceField(mi, "HEALTH"))
-		}
+	case format != "":
+		return emitFormattedTo(s.inv.stdout, instances, format)
+	case len(instances) == 0:
+		fmt.Fprintln(s.inv.stderr, "Listed 0 items.")
 		return nil
 	}
-	printTableHeadingTo(s.inv.stdout, len(instances), "%-40s %-15s %-20s %-15s\n", "NAME", "STATUS", "ACTION", "HEALTH")
-	for _, mi := range instances {
-		fmt.Fprintf(s.inv.stdout, "%-40s %-15s %-20s %-15s\n",
-			managedInstanceField(mi, "NAME"), managedInstanceField(mi, "STATUS"),
-			managedInstanceField(mi, "ACTION"), managedInstanceField(mi, "HEALTH"))
-	}
-	return nil
+	table := "table(" + strings.Join(managedListInstancesColumns(instances), ",") + ")"
+	return emitFormattedTo(s.inv.stdout, managedListInstancesRows(instances), table)
 }
 
 // managedInstanceField extracts a display column from a managed instance.
