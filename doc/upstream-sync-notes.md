@@ -723,6 +723,43 @@ Not applicable or not ported:
   and beta tracks (v1alpha/v1beta APIs). gcloud-go follows the GA track,
   so `--mode` accepts only `backfill`.
 
+## Database Migration 583.0.0–589.0.0 (#1951)
+
+gcloud-go's `database-migration connection-profiles create|update` and
+`migration-jobs create|update` take the full `ConnectionProfile` /
+`MigrationJob` body via `--config-file` rather than gcloud-python's
+per-engine granular flags (`connection-profiles create` has no
+`mysql|postgresql|oracle|sqlserver|alloydb|cloudsql` subcommands), so every
+item in this range is already reachable by setting the corresponding field
+in the YAML/JSON body:
+
+- **`--dbm-port`** on `connection-profiles create sqlserver` / `update`
+  (589.0.0) → `sqlserver.dbmPort`.
+- **`--sqlserver-dag-source-ag` / `--sqlserver-dag-linked-server`** on
+  `migration-jobs create|update` (589.0.0) →
+  `sqlserverHomogeneousMigrationJobConfig.dagConfig.sourceAg` / `.linkedServer`.
+- **`--ssl-flags`** on `connection-profiles create postgresql` / `update`
+  (588.0.0), and its `^DELIM^` custom-delimiter parsing (589.0.0) →
+  `<engine>.ssl.sslFlags` as a YAML/JSON map, so values containing commas
+  (e.g. `server_certificate_dn`) need no delimiter syntax.
+- **`--asm-host|port|user|password|service-name`** on `connection-profiles
+  create oracle` (588.0.0) → `oracle.oracleAsmConfig.hostname|port|username|password|asmService`.
+- **`--machine-type`** on `connection-profiles create alloydb` (588.0.0) →
+  `alloydb.settings.primaryInstanceSettings.machineConfig.machineType`.
+- **`--load-parallel-level`** on `migration-jobs create|update` (586.0.0) →
+  `performanceConfig.loadParallelLevel` (`MIN`, `OPTIMAL`, `MAX`).
+- **Connectivity updates on `connection-profiles update`** (584.0.0:
+  `--private-connection`, `--psc-service-attachment`,
+  `--static-ip-connectivity`, `--forward-ssh-*`) →
+  `<engine>.privateConnectivity`, `.privateServiceConnectConnectivity`,
+  `.staticIpConnectivity`, `.forwardSshConnectivity`; `update` derives its
+  update mask from the top-level fields in the file (or `--update-mask`).
+- **`--mysql-is-primary-destination`** on `migration-jobs create`
+  (584.0.0) → `mysqlHomogeneousConfig.isPrimaryDestination`.
+- **Homogeneous MySQL destination profiles for quickstart migrations**
+  (583.0.0) → a `mysql` body with `cloudSqlId` set, as for any other
+  connection profile.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
