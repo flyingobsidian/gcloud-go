@@ -19,6 +19,7 @@ func (s *workstationsCmds) initWorkstationsClusters() {
 		c.Flags().StringVar(&s.flagWsClLocation, "location", "", "Location (required)")
 		_ = c.MarkFlagRequired("location")
 		c.Flags().StringVar(&s.flagWsClFormat, "format", "", "Output format")
+		s.addWsEndpointModeFlag(c)
 	}
 	s.workstationsClCreateCmd.Flags().StringVar(&s.flagWsClConfigFile, "config-file", "", "YAML/JSON file with the WorkstationCluster body (required)")
 	_ = s.workstationsClCreateCmd.MarkFlagRequired("config-file")
@@ -41,7 +42,7 @@ func (s *workstationsCmds) runWsClCreate(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -59,7 +60,7 @@ func (s *workstationsCmds) runWsClDelete(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -77,7 +78,7 @@ func (s *workstationsCmds) runWsClDescribe(cmd *cobra.Command, args []string) er
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -94,7 +95,7 @@ func (s *workstationsCmds) runWsClList(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -136,7 +137,7 @@ func (s *workstationsCmds) runWsClUpdate(cmd *cobra.Command, args []string) erro
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, name)
 	if err != nil {
 		return err
 	}

@@ -22,6 +22,7 @@ func (s *workstationsCmds) initWorkstationsConfigs() {
 		c.Flags().StringVar(&s.flagWsCfgCluster, "cluster", "", "Workstation cluster (required)")
 		_ = c.MarkFlagRequired("cluster")
 		c.Flags().StringVar(&s.flagWsCfgFormat, "format", "", "Output format")
+		s.addWsEndpointModeFlag(c)
 	}
 	s.workstationsCfgCreateCmd.Flags().StringVar(&s.flagWsCfgConfigFile, "config-file", "", "YAML/JSON file with the WorkstationConfig body (required)")
 	_ = s.workstationsCfgCreateCmd.MarkFlagRequired("config-file")
@@ -44,7 +45,7 @@ func (s *workstationsCmds) runWsCfgCreate(cmd *cobra.Command, args []string) err
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -62,7 +63,7 @@ func (s *workstationsCmds) runWsCfgDelete(cmd *cobra.Command, args []string) err
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -80,7 +81,7 @@ func (s *workstationsCmds) runWsCfgDescribe(cmd *cobra.Command, args []string) e
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -97,7 +98,7 @@ func (s *workstationsCmds) runWsCfgList(cmd *cobra.Command, args []string) error
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -139,7 +140,7 @@ func (s *workstationsCmds) runWsCfgUpdate(cmd *cobra.Command, args []string) err
 		mask = joinMask(nonEmptyJSONFields(body))
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -161,7 +162,7 @@ func (s *workstationsCmds) runWsCfgGetIam(cmd *cobra.Command, args []string) err
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -183,7 +184,7 @@ func (s *workstationsCmds) runWsCfgSetIam(cmd *cobra.Command, args []string) err
 	}
 	policy.Version = 3
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Workstations(ctx)
+	svc, err := s.wsService(ctx, name)
 	if err != nil {
 		return err
 	}

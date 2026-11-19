@@ -562,6 +562,27 @@ gcloud-python, and gcloud-go does not port alpha/beta-only features (see
   implemented yet; the queue-level retry configuration remains settable
   through `tasks queues create|update --config-file`.
 
+## Cloud Workstations 585.0.0–587.0.0 (#1945)
+
+- **Regional endpoint support (`--endpoint-mode`)** (587.0.0) — implemented
+  on gcloud-go's `workstations clusters create|delete|describe|list|update`
+  and `workstations configs create|delete|describe|list|update|get-iam-policy|set-iam-policy`.
+  The flag (or else the `regional/endpoint_mode` property) selects the
+  endpoint as Python's `_ShouldUseRegionalEndpoints` does for commands
+  annotated `regional_endpoint_compatibility: SUPPORTED`: `regional` always
+  uses `workstations.LOCATION.rep.googleapis.com`, `regional-preferred` does
+  so only for the regions with a known endpoint in 589.0.0's API map
+  (asia-south1, europe-west6, us-central1, us-east1, us-east4, us-east5,
+  us-west1, us-west4), and `global` or unset uses the global endpoint. The
+  flag on the workstation-level commands (`workstations create|start|ssh|…`)
+  will come with those commands, which are still stubs in gcloud-go.
+- **`--console-base-url` on `clusters create|update`** and
+  **`--disk-provisioned-iops` / `--disk-provisioned-throughput` on
+  `configs create|update`** (585.0.0) — alpha/beta-only flags that set
+  `consoleBaseUrl` and the hyperdisk `persistentDirectories[].gceHd`
+  `provisionedIops` / `provisionedThroughput`, which exist only in the
+  v1beta API. gcloud-go's commands use v1, so these are not ported.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
