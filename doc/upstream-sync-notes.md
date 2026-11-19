@@ -544,6 +544,24 @@ and `run domain-mappings create` take the full resource body via
 - **`storage tail` (alpha), `storage buckets encryption-keys rotate` and
   `storage buckets rapid-caches` (hidden)** — not ported.
 
+## Cloud Tasks 587.0.0 (#1944)
+
+No gcloud-go change is needed: every 587.0.0 addition is alpha/beta-only in
+gcloud-python, and gcloud-go does not port alpha/beta-only features (see
+#1914).
+
+- **`gcloud alpha|beta tasks batch-create`** (`--tasks-from-file`,
+  `--failed-tasks-file`, `--dry-run`) — alpha/beta-only; not ported.
+- **`--from-file` and `--failed-tasks-file` on `tasks delete`** (and the
+  optional `TASK` positional they bring) — added only to the beta/alpha
+  `delete`; the GA command is unchanged.
+- **Task-level retry flags (`--max-attempts`, `--max-retry-duration`,
+  `--min-backoff`, `--max-backoff`, `--max-doublings`) on
+  `tasks create-http-task` / `create-app-engine-task`** — registered only on
+  the alpha/beta tracks. gcloud-go's task-level `tasks` commands are not
+  implemented yet; the queue-level retry configuration remains settable
+  through `tasks queues create|update --config-file`.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
