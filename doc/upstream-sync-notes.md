@@ -606,6 +606,16 @@ gcloud-python, and gcloud-go does not port alpha/beta-only features (see
   `--update-slurm-partitions` help fix** (584.0.0) — apply to the granular
   flags, which gcloud-go does not port.
 
+## Compliance Manager 586.0.0 (#1947)
+
+- **`gcloud compliance-manager framework-deployments update`** (586.0.0,
+  GA) — gcloud-go's `compliance-manager` group is still a set of stubs
+  (#317), and `framework-deployments update` is already registered as one,
+  so the command tree matches gcloud-python. The update flags
+  (`--framework`, `--target-resource-config-existing`,
+  `--target-resource-creation-config-*`, `--[add-|remove-|clear-]cloud-control-metadata`,
+  `--etag`, `--async`, …) will come with the group's implementation.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
