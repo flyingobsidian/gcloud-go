@@ -237,25 +237,21 @@ func emitTable(w io.Writer, rows []map[string]any, fields []string) error {
 }
 
 // writePadded prints cells space-padded to widths, with two spaces between
-// columns and no trailing whitespace on the final column.
+// columns and no trailing whitespace, even when the last cells are empty (as
+// gcloud-python's table printer does).
 func writePadded(w io.Writer, cells []string, widths []int) error {
+	var line strings.Builder
 	for i, c := range cells {
 		if i > 0 {
-			if _, err := fmt.Fprint(w, "  "); err != nil {
-				return err
-			}
+			line.WriteString("  ")
 		}
 		if i == len(cells)-1 {
-			if _, err := fmt.Fprint(w, c); err != nil {
-				return err
-			}
+			line.WriteString(c)
 		} else {
-			if _, err := fmt.Fprintf(w, "%-*s", widths[i], c); err != nil {
-				return err
-			}
+			fmt.Fprintf(&line, "%-*s", widths[i], c)
 		}
 	}
-	_, err := fmt.Fprintln(w)
+	_, err := fmt.Fprintln(w, strings.TrimRight(line.String(), " "))
 	return err
 }
 

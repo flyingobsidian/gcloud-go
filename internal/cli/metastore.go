@@ -188,6 +188,8 @@ func (g *metastoreCmds) initMetastore() {
 	g.metastoreServicesBackupsCmd.AddCommand(bkAll...)
 	g.metastoreServicesCmd.AddCommand(g.metastoreServicesBackupsCmd)
 
+	g.initMetastoreMigrations()
+
 	g.metastoreCmd.AddCommand(g.metastoreServicesCmd)
 
 }
@@ -1068,6 +1070,21 @@ type metastoreCmds struct {
 	msBackupDeleteCmd           *cobra.Command
 	msBackupDescribeCmd         *cobra.Command
 	msBackupListCmd             *cobra.Command
+	// migrations (nested)
+	metastoreServicesMigrationsCmd *cobra.Command
+	msMigStartCmd                  *cobra.Command
+	msMigDeleteCmd                 *cobra.Command
+	msMigDescribeCmd               *cobra.Command
+	msMigListCmd                   *cobra.Command
+	flagMSMigExecutionID           string
+	flagMSMigMode                  string
+	flagMSMigConflictPolicy        string
+	flagMSMigDryRun                bool
+	flagMSMigReportPath            string
+	flagMSMigHiveCatalog           string
+	flagMSMigHiveDatabases         []string
+	flagMSMigIcebergCatalog        string
+	flagMSMigIcebergNamespaces     []string
 }
 
 // newMetastoreCmd returns the "metastore" command group for inv.
@@ -1228,6 +1245,7 @@ func newMetastoreCmds(inv *invocation) *metastoreCmds {
 		Use: "list", Short: "List service backups",
 		Args: cobra.NoArgs, RunE: g.runMSBackupList,
 	}
+	g.newMetastoreMigrationsCmds()
 	g.initMetastore()
 	return g
 }

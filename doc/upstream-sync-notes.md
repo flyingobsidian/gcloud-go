@@ -707,6 +707,22 @@ Not applicable or not ported:
   group's implementation, which can reuse the `--endpoint-mode` handling
   added for `workstations` (#1945).
 
+## Dataproc Metastore 584.0.0 (#1952)
+
+- **`gcloud metastore services migrations start|describe|list|delete`
+  promoted to GA** (584.0.0) — implemented in
+  `internal/cli/metastore_migrations.go` on the metastore v1 API, with
+  gcloud-python's GA flags (`--migration-execution-id`, `--mode=backfill`,
+  `--conflict-policy`, `--dry-run`, `--report-path`, `--hive-catalog`,
+  `--hive-databases`, `--iceberg-catalog`, `--iceberg-namespaces`), its
+  argument validation and `["*"]` list defaults, and its default
+  `migrations list` table.
+- **`INCREMENTAL_SYNC` mode for Iceberg migrations** (584.0.0, public
+  preview) — `--mode=incremental-sync` and the `migrations cancel` /
+  `complete` commands that end such a migration exist only in the alpha
+  and beta tracks (v1alpha/v1beta APIs). gcloud-go follows the GA track,
+  so `--mode` accepts only `backfill`.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
