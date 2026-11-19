@@ -451,9 +451,14 @@ func (c *Clients) DeveloperConnect(ctx context.Context) (*developerconnect.Servi
 	return newService(ctx, c, developerconnect.NewService)
 }
 
-// Workstations returns a Cloud Workstations v1 client.
-func (c *Clients) Workstations(ctx context.Context) (*workstations.Service, error) {
-	return newService(ctx, c, workstations.NewService)
+// Workstations returns a Cloud Workstations v1 client for endpoint (a
+// regional endpoint base URL), or the global endpoint when endpoint is "".
+func (c *Clients) Workstations(ctx context.Context, endpoint string) (*workstations.Service, error) {
+	var opts []option.ClientOption
+	if endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
+	}
+	return newService(ctx, c, workstations.NewService, opts...)
 }
 
 // SourceRepo returns a Cloud Source Repositories v1 client.

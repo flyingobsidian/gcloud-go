@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
+	workstations "google.golang.org/api/workstations/v1"
 )
 
 // --- gcloud workstations (#400) ---
@@ -21,6 +24,74 @@ func (s *workstationsCmds) initWorkstations() {
 		registerStubCommand(s.workstationsCmd, name, "Not yet implemented")
 	}
 
+}
+
+// Endpoint modes of the regional/endpoint_mode property and --endpoint-mode.
+const (
+	endpointModeGlobal            = "global"
+	endpointModeRegional          = "regional"
+	endpointModeRegionalPreferred = "regional-preferred"
+)
+
+// wsRegionalEndpointRegions returns the regions with a known workstations
+// regional endpoint in gcloud-python 589.0.0's API map.
+func wsRegionalEndpointRegions() []string {
+	return []string{
+		"asia-south1", "europe-west6", "us-central1", "us-east1",
+		"us-east4", "us-east5", "us-west1", "us-west4",
+	}
+}
+
+// addWsEndpointModeFlag adds --endpoint-mode to c, as gcloud-python does for
+// commands annotated regional_endpoint_compatibility: SUPPORTED (587.0.0).
+func (s *workstationsCmds) addWsEndpointModeFlag(c *cobra.Command) {
+	c.Flags().StringVar(&s.flagWsEndpointMode, "endpoint-mode", "",
+		"Endpoint mode: global (default), regional, or regional-preferred (overrides regional/endpoint_mode)")
+}
+
+// wsEndpoint returns the workstations endpoint for location, or "" for the
+// global endpoint, following gcloud-python's _ShouldUseRegionalEndpoints for
+// a command that supports both: --endpoint-mode (else regional/endpoint_mode)
+// of regional always selects workstations.LOCATION.rep.googleapis.com,
+// regional-preferred does so only for a region with a known endpoint, and
+// global or unset uses the global endpoint.
+func (s *workstationsCmds) wsEndpoint(location string) (string, error) {
+	mode := s.flagWsEndpointMode
+	if mode == "" {
+		m, err := s.inv.env.Property("regional", "endpoint_mode")
+		if err != nil {
+			return "", err
+		}
+		mode = m
+	}
+	regional := fmt.Sprintf("https://workstations.%s.rep.googleapis.com/", location)
+	switch mode {
+	case "", endpointModeGlobal:
+		return "", nil
+	case endpointModeRegional:
+		return regional, nil
+	case endpointModeRegionalPreferred:
+		if slices.Contains(wsRegionalEndpointRegions(), location) {
+			return regional, nil
+		}
+		return "", nil
+	}
+	return "", fmt.Errorf("argument --endpoint-mode: Invalid choice: '%s'. Valid choices are [%s, %s, %s]",
+		mode, endpointModeGlobal, endpointModeRegional, endpointModeRegionalPreferred)
+}
+
+// wsService returns a workstations client for the endpoint selected for the
+// location of resource, a projects/P/locations/L/... name.
+func (s *workstationsCmds) wsService(ctx context.Context, resource string) (*workstations.Service, error) {
+	location := ""
+	if parts := strings.Split(resource, "/"); len(parts) >= 4 && parts[2] == "locations" {
+		location = parts[3]
+	}
+	endpoint, err := s.wsEndpoint(location)
+	if err != nil {
+		return nil, err
+	}
+	return s.inv.clients().Workstations(ctx, endpoint)
 }
 
 // wsLocationParent returns "projects/PROJECT/locations/LOCATION".
@@ -65,6 +136,7 @@ type workstationsCmds struct {
 	inv *invocation
 
 	workstationsCmd            *cobra.Command
+	flagWsEndpointMode         string
 	workstationsClustersCmd    *cobra.Command
 	flagWsClLocation           string
 	flagWsClFormat             string
