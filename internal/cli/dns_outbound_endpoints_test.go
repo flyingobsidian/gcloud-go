@@ -90,7 +90,7 @@ func TestEmitDNSOEList(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "NAME  ENDPOINT_IP  NETWORK  SUBNETWORK  DESCRIPTION\n" +
-		"ep1   10.0.0.5     net      sub         \n"
+		"ep1   10.0.0.5     net      sub\n"
 	if out.String() != want {
 		t.Errorf("table:\n%q\nwant:\n%q", out.String(), want)
 	}
