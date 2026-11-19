@@ -39,7 +39,7 @@ func TestFormatManagedInstancesCSVHeadings(t *testing.T) {
 	}
 
 	inv, stdout, _ := newTestInvocation(t, nil, "")
-	if err := newComputeCmds(inv).formatManagedInstances(instances, "csv(NAME,ZONE,STATUS)", true); err != nil {
+	if err := newComputeCmds(inv).formatManagedInstances(instances, "csv(NAME,ZONE,STATUS)"); err != nil {
 		t.Fatalf("formatManagedInstances: %v", err)
 	}
 	out := stdout.String()

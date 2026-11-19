@@ -3,8 +3,10 @@ package cli
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
@@ -185,6 +187,12 @@ func (s *computeCmds) runInstancesCreate(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
+	// Read --metadata-from-file once: a "-" value consumes stdin.
+	metaDict, err := s.constructMetadataDict(s.flagMetadata, s.flagMetadataFromFile)
+	if err != nil {
+		return err
+	}
+
 	for _, instance := range args {
 		machineTypeURL := fmt.Sprintf("zones/%s/machineTypes/%s", zone, s.flagMachineType)
 		sourceImage := fmt.Sprintf("projects/%s/global/images/family/%s", s.flagImageProject, s.flagImageFamily)
@@ -212,11 +220,7 @@ func (s *computeCmds) runInstancesCreate(cmd *cobra.Command, args []string) erro
 			inst.Tags = &compute.Tags{Items: s.flagTags}
 		}
 
-		meta, err := buildMetadata(s.flagMetadata, s.flagMetadataFromFile)
-		if err != nil {
-			return err
-		}
-		if meta != nil {
+		if meta := buildMetadata(metaDict); meta != nil {
 			inst.Metadata = meta
 		}
 
@@ -641,22 +645,51 @@ func shouldModifyDisk(d *compute.AttachedDisk, mode string, _ bool) bool {
 	return false
 }
 
-func buildMetadata(kv map[string]string, fromFile map[string]string) (*compute.Metadata, error) {
-	var items []*compute.MetadataItems
-	for k, v := range kv {
-		val := v
-		items = append(items, &compute.MetadataItems{Key: k, Value: &val})
+// constructMetadataDict merges --metadata and --metadata-from-file as
+// gcloud-python's ConstructMetadataDict does: a key may appear in only one of
+// them, and a file path of "-" (for at most one key) reads standard input.
+func (s *computeCmds) constructMetadataDict(kv, fromFile map[string]string) (map[string]string, error) {
+	stdinKeys := 0
+	for _, f := range fromFile {
+		if f == "-" {
+			stdinKeys++
+		}
 	}
-	for k, f := range fromFile {
-		data, err := os.ReadFile(f)
+	if stdinKeys > 1 {
+		return nil, fmt.Errorf("Cannot specify [-] for multiple keys in [--metadata-from-file].")
+	}
+	out := make(map[string]string, len(kv)+len(fromFile))
+	for k, v := range kv {
+		out[k] = v
+	}
+	for _, k := range slices.Sorted(maps.Keys(fromFile)) {
+		if _, dup := out[k]; dup {
+			return nil, fmt.Errorf("Encountered duplicate metadata key [%s].", k)
+		}
+		var data []byte
+		var err error
+		if f := fromFile[k]; f == "-" {
+			data, err = io.ReadAll(s.inv.stdin)
+		} else {
+			data, err = os.ReadFile(f)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("reading metadata file for key %q: %w", k, err)
 		}
-		val := string(data)
+		out[k] = string(data)
+	}
+	return out, nil
+}
+
+// buildMetadata returns a Metadata message for dict, or nil when it is empty.
+func buildMetadata(dict map[string]string) *compute.Metadata {
+	if len(dict) == 0 {
+		return nil
+	}
+	items := make([]*compute.MetadataItems, 0, len(dict))
+	for _, k := range slices.Sorted(maps.Keys(dict)) {
+		val := dict[k]
 		items = append(items, &compute.MetadataItems{Key: k, Value: &val})
 	}
-	if len(items) == 0 {
-		return nil, nil
-	}
-	return &compute.Metadata{Items: items}, nil
+	return &compute.Metadata{Items: items}
 }

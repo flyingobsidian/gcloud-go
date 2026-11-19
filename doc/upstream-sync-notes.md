@@ -616,6 +616,72 @@ gcloud-python, and gcloud-go does not port alpha/beta-only features (see
   `--target-resource-creation-config-*`, `--[add-|remove-|clear-]cloud-control-metadata`,
   `--etag`, `--async`, …) will come with the group's implementation.
 
+## Compute Engine 583.0.0–589.0.0 (#1948)
+
+Implemented, for the commands gcloud-go has:
+
+- **`-` for standard input in `--metadata-from-file`** (588.0.0) on
+  `compute instances create`, `instances add-metadata` and
+  `project-info add-metadata` (the last two gain `--metadata-from-file`,
+  which gcloud-python has long had). As in `ConstructMetadataDict`, `-` may
+  be used for only one key, a key may not be given in both `--metadata` and
+  `--metadata-from-file`, and `add-metadata` requires at least one of them.
+  `instances create` reads the metadata once for all the instances it
+  creates.
+- **`--no-graceful-shutdown` on `instance-groups managed delete` and
+  `recreate-instances`** (583.0.0–584.0.0), sent only when given.
+  `recreate-instances --region` no longer requires a zone.
+- **`instance-groups managed list-instances`** (589.0.0): `--limit` and
+  `--page-size` (the smaller, capped at 500) are sent as `maxResults` and
+  fetching stops at `--limit`, unless `--filter` or `--flatten` needs the
+  full list. The default table is now gcloud-python GA's (NAME, ZONE,
+  STATUS, HEALTH_STATE, ACTION, INSTANCE_TEMPLATE, VERSION_NAME,
+  LAST_ERROR), with GRACEFUL_SHUTDOWN_TIMESTAMP and TERMINATION_TIMESTAMP
+  shown only when some instance has a value. The colour changes and
+  `--no-color` are alpha-only.
+- **`instances get-serial-port-output`**: `--start` is sent whenever given
+  (including 0 and negative offsets, relative to the end), the "output was
+  lost" warning uses the 589.0.0 rule for negative starts, and the
+  `Specify --start=N in the next get-serial-port-output invocation …` hint
+  is printed, with Python's `value(contents)` default output.
+- **`compute image-views list|describe` and `compute project-views
+  describe` promoted to GA** (584.0.0–587.0.0) — added. `image-views list`
+  lists the current project's and (by default, `--standard-images`) the
+  public image projects' image views in `--region` (else `compute/region`),
+  hides deprecated images unless `--show-deprecated`, takes
+  `--preview-images`, and prints gcloud-python's NAME/PROJECT/FAMILY/
+  DEPRECATED/STATUS table. An image view has no self link, so `--uri`
+  prints its image's.
+
+Not applicable or not ported:
+
+- **GA promotions and flags on commands gcloud-go has only as list/describe
+  or stubs** — `advice capacity` / `capacity-history` (the `advice` group
+  is a stub), `interconnects set-name` and attachment label updates, `url-maps test-iam-permissions` and `regex_rewrite`,
+  `security-policies` / `org-security-policies` `--request-body-to-exclude`,
+  `snapshots create --kms-key`, `reservations update --share-setting`,
+  backend-services create/update flags (`--network-endpoint-group`,
+  `--ha-policy-*`, `--outlier-detection-*`), `instance-groups managed
+  stop-instances|delete-instances --no-graceful-shutdown`, the
+  `EXTERNAL_PASSTHROUGH` / `IPAddresses` import/export schema changes, and
+  `disk-types list` fixes. They will follow when those commands are ported.
+- **`--preemption-notice-duration` and `enable-vpc-scoped-dns` in
+  `--network-interface` on `instances create` / `instance-templates
+  create`** — gcloud-go's `instances create` has a reduced flag set without
+  these flags; `instance-templates create` is not ported.
+- **Alpha/beta/preview-only additions** (`accelerator-interconnects`,
+  `recoverable-snapshots`, `snapshot-recycle-bin-policy`,
+  `ssl-policies` IAM commands, `instance-groups ssh`, CPU utilisation range
+  autoscaling flags, `--local-ssd-encryption-mode=CMEK_ENCRYPTION`,
+  `--protection-tier`, `--reset-mode`, management interfaces, and the
+  alpha/beta track freeze) — not ported.
+- **IAP tunnel reconnect auth errors** — gcloud-go's IAP tunnel does not
+  reconnect, so there is no retry loop to stop. **`compute ssh` security
+  keys in Cloud Shell and SSH key metadata targeting the instance's
+  project** — gcloud-go's `ssh` resolves the instance in the active project,
+  which is also where it writes keys. **Project numbers in arguments** —
+  gcloud-go never required a project ID in compute commands.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys

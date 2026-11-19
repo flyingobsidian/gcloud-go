@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	icompute "github.com/flyingobsidian/gcloud-go/internal/compute"
@@ -11,7 +13,8 @@ import (
 
 func (s *computeCmds) initInstancesMetadata() {
 	s.instancesAddMetadataCmd.Flags().StringToStringVar(&s.flagAddMetadataKV, "metadata", nil, "Metadata key=value pairs to add")
-	s.instancesAddMetadataCmd.MarkFlagRequired("metadata")
+	s.instancesAddMetadataCmd.Flags().StringToStringVar(&s.flagAddMetadataFromFile, "metadata-from-file", nil,
+		"Metadata key=filepath pairs; a filepath of - reads standard input")
 
 	s.instancesRemoveMetadataCmd.Flags().StringVar(&s.flagRemoveMetadataKeys, "keys", "", "Comma-separated list of metadata keys to remove")
 	s.instancesRemoveMetadataCmd.Flags().BoolVar(&s.flagRemoveMetadataAll, "all", false, "Remove all metadata")
@@ -21,6 +24,10 @@ func (s *computeCmds) initInstancesMetadata() {
 }
 
 func (s *computeCmds) runInstancesAddMetadata(cmd *cobra.Command, args []string) error {
+	add, err := s.addMetadataDict(s.flagAddMetadataKV, s.flagAddMetadataFromFile)
+	if err != nil {
+		return err
+	}
 	instance := args[0]
 	project, zone, err := s.inv.projectZone()
 	if err != nil {
@@ -43,21 +50,7 @@ func (s *computeCmds) runInstancesAddMetadata(cmd *cobra.Command, args []string)
 		metadata = &compute.Metadata{}
 	}
 
-	// Update or add keys.
-	for k, v := range s.flagAddMetadataKV {
-		val := v
-		found := false
-		for _, item := range metadata.Items {
-			if item.Key == k {
-				item.Value = &val
-				found = true
-				break
-			}
-		}
-		if !found {
-			metadata.Items = append(metadata.Items, &compute.MetadataItems{Key: k, Value: &val})
-		}
-	}
+	mergeMetadata(metadata, add)
 
 	op, err := svc.Instances.SetMetadata(project, zone, instance, metadata).Context(ctx).Do()
 	if err != nil {
@@ -124,4 +117,32 @@ func (s *computeCmds) runInstancesRemoveMetadata(cmd *cobra.Command, args []stri
 	}
 	fmt.Fprintf(s.inv.stdout, "Updated metadata for instance [%s].\n", instance)
 	return nil
+}
+
+// addMetadataDict builds the metadata to add from --metadata and
+// --metadata-from-file, at least one of which is required.
+func (s *computeCmds) addMetadataDict(kv, fromFile map[string]string) (map[string]string, error) {
+	if len(kv) == 0 && len(fromFile) == 0 {
+		return nil, fmt.Errorf("At least one of [--metadata] or [--metadata-from-file] must be provided.")
+	}
+	return s.constructMetadataDict(kv, fromFile)
+}
+
+// mergeMetadata sets each key of add on metadata, overwriting existing
+// values and appending new keys.
+func mergeMetadata(metadata *compute.Metadata, add map[string]string) {
+	for _, k := range slices.Sorted(maps.Keys(add)) {
+		val := add[k]
+		found := false
+		for _, item := range metadata.Items {
+			if item.Key == k {
+				item.Value = &val
+				found = true
+				break
+			}
+		}
+		if !found {
+			metadata.Items = append(metadata.Items, &compute.MetadataItems{Key: k, Value: &val})
+		}
+	}
 }

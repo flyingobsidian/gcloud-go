@@ -33,6 +33,8 @@ func (s *computeCmds) initInstanceGroupsManagedExtra() {
 
 	// delete
 	s.managedDeleteCmd.Flags().StringVar(&s.flagManagedDeleteRegion, "region", "", "Region")
+	s.managedDeleteCmd.Flags().BoolVar(&s.flagManagedNoGracefulShutdown, "no-graceful-shutdown", false,
+		"Delete the managed instance group without graceful shutdown")
 
 	// list
 	s.managedListCmd.Flags().BoolVar(&s.flagManagedListURI, "uri", false, "Print resource URIs")
@@ -48,6 +50,8 @@ func (s *computeCmds) initInstanceGroupsManagedExtra() {
 
 	// recreate-instances
 	s.managedRecreateCmd.Flags().StringVar(&s.flagManagedRecreateRegion, "region", "", "Region")
+	s.managedRecreateCmd.Flags().BoolVar(&s.flagManagedNoGracefulShutdown, "no-graceful-shutdown", false,
+		"End an ongoing graceful shutdown, or recreate the specified instances without graceful shutdown")
 	s.managedRecreateCmd.Flags().StringSliceVar(&s.flagManagedRecreateInstances, "instances", nil, "Instance URLs to recreate")
 	s.managedRecreateCmd.MarkFlagRequired("instances")
 
@@ -148,7 +152,11 @@ func (s *computeCmds) runManagedDelete(cmd *cobra.Command, args []string) error 
 	}
 
 	if s.flagManagedDeleteRegion != "" {
-		op, err := svc.RegionInstanceGroupManagers.Delete(project, s.flagManagedDeleteRegion, group).Context(ctx).Do()
+		call := svc.RegionInstanceGroupManagers.Delete(project, s.flagManagedDeleteRegion, group).Context(ctx)
+		if cmd.Flags().Changed("no-graceful-shutdown") {
+			call = call.NoGracefulShutdown(s.flagManagedNoGracefulShutdown)
+		}
+		op, err := call.Do()
 		if err != nil {
 			return fmt.Errorf("deleting managed instance group: %w", err)
 		}
@@ -161,7 +169,11 @@ func (s *computeCmds) runManagedDelete(cmd *cobra.Command, args []string) error 
 		return fmt.Errorf("either --region or --zone is required")
 	}
 
-	op, err := svc.InstanceGroupManagers.Delete(project, zone, group).Context(ctx).Do()
+	call := svc.InstanceGroupManagers.Delete(project, zone, group).Context(ctx)
+	if cmd.Flags().Changed("no-graceful-shutdown") {
+		call = call.NoGracefulShutdown(s.flagManagedNoGracefulShutdown)
+	}
+	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("deleting managed instance group: %w", err)
 	}
@@ -275,7 +287,8 @@ func (s *computeCmds) runManagedSetTemplate(cmd *cobra.Command, args []string) e
 
 func (s *computeCmds) runManagedRecreateInstances(cmd *cobra.Command, args []string) error {
 	group := args[0]
-	project, _, err := s.inv.projectZone()
+	// Resolve only the project: a regional MIG (--region) needs no zone.
+	project, err := s.inv.project()
 	if err != nil {
 		return err
 	}
@@ -294,7 +307,11 @@ func (s *computeCmds) runManagedRecreateInstances(cmd *cobra.Command, args []str
 		reqR := &compute.RegionInstanceGroupManagersRecreateRequest{
 			Instances: s.flagManagedRecreateInstances,
 		}
-		op, err := svc.RegionInstanceGroupManagers.RecreateInstances(project, s.flagManagedRecreateRegion, group, reqR).Context(ctx).Do()
+		call := svc.RegionInstanceGroupManagers.RecreateInstances(project, s.flagManagedRecreateRegion, group, reqR).Context(ctx)
+		if cmd.Flags().Changed("no-graceful-shutdown") {
+			call = call.NoGracefulShutdown(s.flagManagedNoGracefulShutdown)
+		}
+		op, err := call.Do()
 		if err != nil {
 			return fmt.Errorf("recreating instances: %w", err)
 		}
@@ -307,7 +324,11 @@ func (s *computeCmds) runManagedRecreateInstances(cmd *cobra.Command, args []str
 		return fmt.Errorf("either --region or --zone is required")
 	}
 
-	op, err := svc.InstanceGroupManagers.RecreateInstances(project, zone, group, req).Context(ctx).Do()
+	call := svc.InstanceGroupManagers.RecreateInstances(project, zone, group, req).Context(ctx)
+	if cmd.Flags().Changed("no-graceful-shutdown") {
+		call = call.NoGracefulShutdown(s.flagManagedNoGracefulShutdown)
+	}
+	op, err := call.Do()
 	if err != nil {
 		return fmt.Errorf("recreating instances: %w", err)
 	}
