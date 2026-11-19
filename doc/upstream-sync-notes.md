@@ -515,6 +515,35 @@ and `run domain-mappings create` take the full resource body via
   `policies`, `catalogs list-members`, `list-dependents` and `mcp` changes
   are likewise not surfaced.
 
+## Cloud Storage 583.0.0–589.0.0 (#1943)
+
+- **Server-side hash validation for resumable uploads in `storage cp`, `mv`
+  and `rsync`** (589.0.0) — implemented: uploads that the Go client sends
+  as a resumable session (larger than one 16 MiB chunk) carry the file's
+  MD5 in the object metadata, so the server rejects a mismatch, and fail
+  with `Source file size changed post-initiation.` if the file's size
+  changes during the upload. `storage/enable_server_side_hash_validation`
+  (default true) turns it off; `storage/check_hashes=never` drops the hash
+  but keeps the size check, as Python's digesters do. Single-request
+  uploads send no hash, as in Python's simple uploads.
+- **`storage objects compose` validates the composed CRC32C** — implemented:
+  unless `storage/check_hashes` is `never`, the sources' CRC32Cs are combined
+  and compared with the new object's; on a mismatch the new object is
+  deleted and the command fails with Python's `HashMismatchError` message.
+  Missing source or destination hashes produce Python's warnings and skip
+  the check.
+- **`--page-size` on `storage operations list`** — gcloud-go's command
+  already has `--page-size` (bucket-scoped via `--bucket`). Python's new
+  page-size default of 100 applies only to the location-scoped
+  (`projects/P/locations/L`) v2 operations listing, which gcloud-go does
+  not implement.
+- **Parallel composite upload digests and resumable tracker-file checks** —
+  gcloud-go has no parallel composite uploads or tracker files.
+- **gRPC bidi download tuning for RAPID storage, `storage/use_mrd_bidi_downloads`
+  and `storage/use_nic_isolation`** — gcloud-go uses the JSON API only.
+- **`storage tail` (alpha), `storage buckets encryption-keys rotate` and
+  `storage buckets rapid-caches` (hidden)** — not ported.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys

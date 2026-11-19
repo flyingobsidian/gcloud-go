@@ -111,10 +111,46 @@ func (s *storageCmds) runStObjCompose(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	sources, err := s.composeSourcesForValidation(cmd, svc, body)
+	if err != nil {
+		return err
+	}
 	got, err := svc.Objects.Compose(s.flagStObjBucket, args[0], body).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("composing object: %w", err)
 	}
+	if err := s.validateComposedHash(sources, got); err != nil {
+		// Delete the corrupt composed object; the sources are untouched.
+		if delErr := svc.Objects.Delete(got.Bucket, got.Name).Generation(got.Generation).Context(ctx).Do(); delErr != nil {
+			return fmt.Errorf("%w (deleting composed object: %v)", err, delErr)
+		}
+		return err
+	}
 	fmt.Fprintf(s.inv.stdout, "Composed object [%s] in bucket [%s].\n", args[0], s.flagStObjBucket)
 	return emitFormattedTo(s.inv.stdout, got, s.flagStObjFormat)
+}
+
+// composeSourcesForValidation fetches the metadata of body's source objects
+// for validateComposedHash, unless storage/check_hashes is never.
+func (s *storageCmds) composeSourcesForValidation(cmd *cobra.Command, svc *storage.Service, body *storage.ComposeRequest) ([]*storage.Object, error) {
+	never, err := s.storageCheckHashesNever()
+	if err != nil || never {
+		return nil, err
+	}
+	sources := make([]*storage.Object, 0, len(body.SourceObjects))
+	for _, src := range body.SourceObjects {
+		if src == nil {
+			continue
+		}
+		call := svc.Objects.Get(s.flagStObjBucket, src.Name).Context(cmd.Context())
+		if src.Generation != 0 {
+			call = call.Generation(src.Generation)
+		}
+		obj, err := call.Do()
+		if err != nil {
+			return nil, fmt.Errorf("describing source object [%s]: %w", src.Name, err)
+		}
+		sources = append(sources, obj)
+	}
+	return sources, nil
 }

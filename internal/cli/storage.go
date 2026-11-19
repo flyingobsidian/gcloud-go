@@ -340,7 +340,15 @@ func (s *storageCmds) storageUploadFile(ctx context.Context, svc *storage.Servic
 	if s.flagStorageCpCacheControl != "" {
 		obj.CacheControl = s.flagStorageCpCacheControl
 	}
-	call := svc.Objects.Insert(bucket, obj).Media(f).Context(ctx)
+	info, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", src, err)
+	}
+	media, err := s.prepareServerSideHashValidation(f, info.Size(), obj)
+	if err != nil {
+		return err
+	}
+	call := svc.Objects.Insert(bucket, obj).Media(media).Context(ctx)
 	if s.flagStorageCpNoClobber {
 		call = call.IfGenerationMatch(0)
 	}
