@@ -583,6 +583,29 @@ gcloud-python, and gcloud-go does not port alpha/beta-only features (see
   `provisionedIops` / `provisionedThroughput`, which exist only in the
   v1beta API. gcloud-go's commands use v1, so these are not ported.
 
+## Cluster Director 583.0.0–588.0.0 (#1946)
+
+- **`gcloud cluster-director` promoted to GA** (583.0.0) — implemented on
+  the hypercomputecluster v1 API: `clusters create|delete|describe|list|update`,
+  `operations describe` and `locations describe|list`, with the declarative
+  commands' messages (`Create request issued for: [ID]`, `Waiting for
+  operation [...] to complete...done.`, `Created cluster [ID].`), the
+  delete confirmation prompt and `--async`. `clusters create` and `update`
+  take the cluster spec from `--config` (a JSON object, or a file holding
+  one; unknown fields are rejected as in `DictToMessageWithErrorCheck`),
+  and `update` requires `--update-mask`, as on Python's `--config` path.
+  Python's granular create/update flags (`--create-network`,
+  `--create-filestores`, `--slurm-node-sets`, `--reserved-instances`,
+  `--quickstart-cluster`, `--reference-architecture`, …) are not ported;
+  express the same cluster in `--config`.
+- **`networkTags` on instance configurations and `--slurm-login-node`, and
+  existing NFS storage (`--nfs`, `--add-nfs`, `--remove-nfs`)** (586.0.0–588.0.0,
+  beta) — granular flags; set the corresponding fields in `--config`.
+- **No default storage injected by `--quickstart-cluster` / reference
+  architectures when custom storage is given** (583.0.0) and **the
+  `--update-slurm-partitions` help fix** (584.0.0) — apply to the granular
+  flags, which gcloud-go does not port.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
