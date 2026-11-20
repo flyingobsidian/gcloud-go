@@ -833,6 +833,41 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
 - **`--prioritized` on `rolloutsequences upgrade`** (589.0.0) — alpha/beta
   only; gcloud-go follows the GA track.
 
+## Google Cloud CLI 584.0.0–589.0.0 (#1959)
+
+- **Bundled Python, OpenSSL, `cryptography`, `grpcio`/`setuptools` updates,
+  Python 3.15 support and the Alpine Docker images' bundled Python**
+  (584.0.0–589.0.0) — gcloud-go is a native Go binary and ships none of
+  these.
+- **`minikube` component deprecation** (584.0.0) — gcloud-go has no
+  component manager or bundled components.
+- **`--tls-offload` removed from `gcloud auth enterprise-certificate-config
+  create`, and Certificate-Based Access now requiring the ECP HTTP proxy**
+  (585.0.0) — gcloud-go's `enterprise-certificate-config create` never had
+  `--tls-offload`, and gcloud-go does not implement ECP / mTLS (see
+  #1806).
+- **ANSI colour in `tmux`** (585.0.0) — gcloud-go does not colourise
+  output.
+- **Hidden `--assert=readonly` flag / `core/assert` property and the
+  per-command `hints: read_only` metadata** — a hidden, unadvertised
+  guardrail that needs read-only annotations on every command; not ported.
+- **Hidden `metrics/request_attribution` and `core/command_impl`
+  properties, and the `metrics/environment` validator** — hidden Python
+  internals (User-Agent attribution and choosing between declarative and
+  Python implementations). gcloud-go has a single implementation per
+  command and accepts any well-formed property name (see
+  `config.ValidatePropertyName`), so setting them is harmless.
+- **`api_endpoint_overrides` additions/removals and the new hidden
+  `softwaredeliverytrust/location` property** — gcloud-go does not read
+  `api_endpoint_overrides` and accepts any well-formed property name, so
+  there is no schema to update.
+- **New hidden alpha groups `meridian`, `onboarding`,
+  `workspace-key-access`** — alpha only. **Removed groups** `genomics`,
+  `managed-flink` and hidden `smart-guardrails` — not in gcloud-go;
+  `telco-automation` is handled under #1974.
+- **Proxy settings resolution moved to `core/proxy_config.py`** — an
+  internal Python refactor with no user-visible change.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
