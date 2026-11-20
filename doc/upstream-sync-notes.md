@@ -799,6 +799,21 @@ gcloud-go follows the GA track, so none of these items apply yet:
 android-executable` (beta in 587.0.0), and `software-versions list|describe`
 (586.0.0).
 
+## Distributed Cloud Edge 583.0.0 (#1956)
+
+- **GA promotion of `edge-cloud zones`, `services`, `projects`,
+  `service-accounts` (and `keys`) and `api-keys`**, on the edgecontainer
+  v1 API (583.0.0) — gcloud-go's `edge-cloud` group only has the
+  `container` and `networking` subgroups, both still stubs (#334), and the
+  Go API module has no edgecontainer client. gcloud-go does not split
+  release tracks, so these subgroups will be added with the group's
+  implementation.
+- **`--control-plane-node-system-partition-size-gib` (100|300) on
+  `edge-cloud container clusters create`** (583.0.0, GA) — `clusters
+  create` is a stub; the flag comes with its implementation.
+- **`edge-cloud container vpn-connections` removed upstream** — gcloud-go's
+  stub group was already removed under #1915.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
