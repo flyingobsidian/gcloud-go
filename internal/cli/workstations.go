@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -26,13 +25,6 @@ func (s *workstationsCmds) initWorkstations() {
 
 }
 
-// Endpoint modes of the regional/endpoint_mode property and --endpoint-mode.
-const (
-	endpointModeGlobal            = "global"
-	endpointModeRegional          = "regional"
-	endpointModeRegionalPreferred = "regional-preferred"
-)
-
 // wsRegionalEndpointRegions returns the regions with a known workstations
 // regional endpoint in gcloud-python 589.0.0's API map.
 func wsRegionalEndpointRegions() []string {
@@ -45,39 +37,17 @@ func wsRegionalEndpointRegions() []string {
 // addWsEndpointModeFlag adds --endpoint-mode to c, as gcloud-python does for
 // commands annotated regional_endpoint_compatibility: SUPPORTED (587.0.0).
 func (s *workstationsCmds) addWsEndpointModeFlag(c *cobra.Command) {
-	c.Flags().StringVar(&s.flagWsEndpointMode, "endpoint-mode", "",
-		"Endpoint mode: global (default), regional, or regional-preferred (overrides regional/endpoint_mode)")
+	addEndpointModeFlag(c, &s.flagWsEndpointMode)
 }
 
 // wsEndpoint returns the workstations endpoint for location, or "" for the
-// global endpoint, following gcloud-python's _ShouldUseRegionalEndpoints for
-// a command that supports both: --endpoint-mode (else regional/endpoint_mode)
-// of regional always selects workstations.LOCATION.rep.googleapis.com,
-// regional-preferred does so only for a region with a known endpoint, and
-// global or unset uses the global endpoint.
+// global endpoint (see regionalEndpoint).
 func (s *workstationsCmds) wsEndpoint(location string) (string, error) {
-	mode := s.flagWsEndpointMode
-	if mode == "" {
-		m, err := s.inv.env.Property("regional", "endpoint_mode")
-		if err != nil {
-			return "", err
-		}
-		mode = m
+	mode, err := s.inv.endpointMode(s.flagWsEndpointMode)
+	if err != nil {
+		return "", err
 	}
-	regional := fmt.Sprintf("https://workstations.%s.rep.googleapis.com/", location)
-	switch mode {
-	case "", endpointModeGlobal:
-		return "", nil
-	case endpointModeRegional:
-		return regional, nil
-	case endpointModeRegionalPreferred:
-		if slices.Contains(wsRegionalEndpointRegions(), location) {
-			return regional, nil
-		}
-		return "", nil
-	}
-	return "", fmt.Errorf("argument --endpoint-mode: Invalid choice: '%s'. Valid choices are [%s, %s, %s]",
-		mode, endpointModeGlobal, endpointModeRegional, endpointModeRegionalPreferred)
+	return regionalEndpoint(mode, "workstations", location, wsRegionalEndpointRegions())
 }
 
 // wsService returns a workstations client for the endpoint selected for the

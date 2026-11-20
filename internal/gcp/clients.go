@@ -63,6 +63,7 @@ import (
 	deploymentmanager "google.golang.org/api/deploymentmanager/v2"
 	deploymentmanagerbeta "google.golang.org/api/deploymentmanager/v2beta"
 	developerconnect "google.golang.org/api/developerconnect/v1"
+	developerknowledge "google.golang.org/api/developerknowledge/v1"
 	dns "google.golang.org/api/dns/v1"
 	domains "google.golang.org/api/domains/v1"
 	eventarc "google.golang.org/api/eventarc/v1"
@@ -72,7 +73,6 @@ import (
 	gkeonprem "google.golang.org/api/gkeonprem/v1"
 	"google.golang.org/api/googleapi"
 	healthcare "google.golang.org/api/healthcare/v1"
-	developerknowledge "google.golang.org/api/developerknowledge/v1"
 	hypercomputecluster "google.golang.org/api/hypercomputecluster/v1"
 	cloudiam "google.golang.org/api/iam/v1"
 	iamv2 "google.golang.org/api/iam/v2"
@@ -355,8 +355,12 @@ func (c *Clients) Batch(ctx context.Context) (*batchapi.Service, error) {
 }
 
 // Looker returns a client for the Looker API.
-func (c *Clients) Looker(ctx context.Context) (*looker.Service, error) {
-	return newService(ctx, c, looker.NewService)
+func (c *Clients) Looker(ctx context.Context, endpoint string) (*looker.Service, error) {
+	var opts []option.ClientOption
+	if endpoint != "" {
+		opts = append(opts, option.WithEndpoint(endpoint))
+	}
+	return newService(ctx, c, looker.NewService, opts...)
 }
 
 // ServiceDirectory returns a client for the ServiceDirectory API.
