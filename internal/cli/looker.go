@@ -53,6 +53,35 @@ func (s *lookerCmds) lkFinishOp(ctx context.Context, svc *looker.Service, op *lo
 	return nil
 }
 
+// lkRegionalEndpointRegions returns the regions with a known looker regional
+// endpoint in gcloud-python 589.0.0's API map.
+func lkRegionalEndpointRegions() []string {
+	return []string{
+		"us-central1", "us-east1", "us-east4", "us-east5", "us-east7",
+		"us-south1", "us-west1", "us-west2", "us-west3", "us-west4",
+	}
+}
+
+// lkEndpoint returns the looker endpoint that --endpoint-mode (or
+// regional/endpoint_mode) selects for --region (588.0.0), or "" for the
+// global endpoint.
+func (s *lookerCmds) lkEndpoint() (string, error) {
+	mode, err := s.inv.endpointMode(s.flagLKEndpointMode)
+	if err != nil {
+		return "", err
+	}
+	return regionalEndpoint(mode, "looker", s.flagLKRegion, lkRegionalEndpointRegions())
+}
+
+// lkService returns a looker client for the endpoint lkEndpoint selects.
+func (s *lookerCmds) lkService(ctx context.Context) (*looker.Service, error) {
+	endpoint, err := s.lkEndpoint()
+	if err != nil {
+		return nil, err
+	}
+	return s.inv.clients().Looker(ctx, endpoint)
+}
+
 // --- regions ---
 
 // --- operations ---
@@ -74,6 +103,9 @@ func (s *lookerCmds) initLooker() {
 	}
 	s.lkOpDescribeCmd.Flags().StringVar(&s.flagLKFormat, "format", "", "Output format")
 	s.lkOpListCmd.Flags().StringVar(&s.flagLKFormat, "format", "", "Output format")
+	for _, c := range []*cobra.Command{s.lkOpCancelCmd, s.lkOpDescribeCmd, s.lkOpListCmd} {
+		addEndpointModeFlag(c, &s.flagLKEndpointMode)
+	}
 	s.lookerOperationsCmd.AddCommand(s.lkOpCancelCmd, s.lkOpDescribeCmd, s.lkOpListCmd)
 	s.lookerCmd.AddCommand(s.lookerOperationsCmd)
 
@@ -83,6 +115,7 @@ func (s *lookerCmds) initLooker() {
 	for _, c := range instAll {
 		c.Flags().StringVar(&s.flagLKRegion, "region", "", "Region containing the instance (required)")
 		_ = c.MarkFlagRequired("region")
+		addEndpointModeFlag(c, &s.flagLKEndpointMode)
 	}
 	for _, c := range []*cobra.Command{s.lkInstCreateCmd, s.lkInstUpdateCmd, s.lkInstRestoreCmd, s.lkInstExportCmd, s.lkInstImportCmd} {
 		c.Flags().StringVar(&s.flagLKConfigFile, "config-file", "",
@@ -106,6 +139,7 @@ func (s *lookerCmds) initLooker() {
 		c.Flags().StringVar(&s.flagLKInstance, "instance", "", "Instance containing the backup (required)")
 		_ = c.MarkFlagRequired("region")
 		_ = c.MarkFlagRequired("instance")
+		addEndpointModeFlag(c, &s.flagLKEndpointMode)
 	}
 	for _, c := range []*cobra.Command{s.lkBackupCreateCmd, s.lkBackupDeleteCmd} {
 		c.Flags().BoolVar(&s.flagLKAsync, "async", false, "Return the long-running operation without waiting")
@@ -124,8 +158,11 @@ func (s *lookerCmds) runLKRegionsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := s.inv.checkGlobalOnlyEndpointMode(); err != nil {
+		return err
+	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.inv.clients().Looker(ctx, "")
 	if err != nil {
 		return err
 	}
@@ -155,7 +192,7 @@ func (s *lookerCmds) runLKOpCancel(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -172,7 +209,7 @@ func (s *lookerCmds) runLKOpDescribe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -189,7 +226,7 @@ func (s *lookerCmds) runLKOpList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -223,7 +260,7 @@ func (s *lookerCmds) runLKInstCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -241,7 +278,7 @@ func (s *lookerCmds) runLKInstDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -258,7 +295,7 @@ func (s *lookerCmds) runLKInstDescribe(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -275,7 +312,7 @@ func (s *lookerCmds) runLKInstList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -307,7 +344,7 @@ func (s *lookerCmds) runLKInstUpdate(cmd *cobra.Command, args []string) error {
 		mask = joinMask(nonEmptyJSONFields(inst))
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -325,7 +362,7 @@ func (s *lookerCmds) runLKInstRestart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -346,7 +383,7 @@ func (s *lookerCmds) runLKInstRestore(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -367,7 +404,7 @@ func (s *lookerCmds) runLKInstExport(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -388,7 +425,7 @@ func (s *lookerCmds) runLKInstImport(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -415,7 +452,7 @@ func (s *lookerCmds) runLKBackupCreate(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -434,7 +471,7 @@ func (s *lookerCmds) runLKBackupDelete(cmd *cobra.Command, args []string) error 
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -451,7 +488,7 @@ func (s *lookerCmds) runLKBackupDescribe(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -468,7 +505,7 @@ func (s *lookerCmds) runLKBackupList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx := cmd.Context()
-	svc, err := s.inv.clients().Looker(ctx)
+	svc, err := s.lkService(ctx)
 	if err != nil {
 		return err
 	}
@@ -493,6 +530,7 @@ type lookerCmds struct {
 
 	lookerCmd            *cobra.Command
 	flagLKRegion         string
+	flagLKEndpointMode   string
 	flagLKInstance       string
 	flagLKConfigFile     string
 	flagLKUpdateMask     string

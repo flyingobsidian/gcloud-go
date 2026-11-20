@@ -46,7 +46,7 @@ func TestWorkstationsEndpointMode(t *testing.T) {
 		{name: "regional-preferred unknown", flag: "regional-preferred", location: "europe-west1"},
 		{name: "property", property: "regional", location: "us-west1", want: "https://workstations.us-west1.rep.googleapis.com/"},
 		{name: "flag overrides property", flag: "global", property: "regional", location: "us-west1"},
-		{name: "invalid", flag: "nearby", location: "us-west1", wantErr: "argument --endpoint-mode: Invalid choice: 'nearby'. Valid choices are [global, regional, regional-preferred]"},
+		{name: "invalid", flag: "nearby", location: "us-west1", wantErr: "argument --endpoint-mode: Invalid choice: 'nearby'.\n\nValid choices are [global, regional, regional-preferred]."},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			vars := map[string]string{}

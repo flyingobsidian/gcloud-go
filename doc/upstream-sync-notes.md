@@ -897,6 +897,32 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   unadvertised in gcloud-python; the underlying fields are likewise
   reachable through `--config-file`.
 
+## Looker 588.0.0–589.0.0 (#1962)
+
+- **Regional endpoint support (`--endpoint-mode`)** (588.0.0) —
+  implemented. The 16 commands gcloud-python marks as supporting regional
+  endpoints (`looker backups create|delete|describe|list`, `instances
+  create|delete|describe|export|import|list|restart|restore|update`,
+  `operations cancel|describe|list`) take `--endpoint-mode` (else the
+  `regional/endpoint_mode` property) and use
+  `looker.REGION.rep.googleapis.com` for `regional`, and for
+  `regional-preferred` in the regions gcloud-python's API map lists.
+  `looker regions list` stays global-only and, like gcloud-python, fails
+  when the property is `regional`. The selection logic is shared with
+  `workstations` (`internal/cli/regional_endpoint.go`).
+- **`instances update --linked-lsp-project-number` sending an empty update
+  mask** (589.0.0) — gcloud-go's `update` takes the instance body from
+  `--config-file` and defaults the update mask to the fields in it (or
+  `--update-mask`), so `linkedLspProjectNumber` is masked whenever it is
+  set; the bug does not apply.
+- **New `--edition` choices (`core-*-annual`, `core-trial-*-annual`,
+  `nonprod-core-*-annual`) on `instances create`** — gcloud-go sets
+  `platformEdition` in the `--config-file` body, so the new editions are
+  usable as their API enum values (e.g. `core-s-annual` is
+  `LOOKER_CORE_S_ANNUAL`).
+- **`--google-auth-enabled` / `--workforce-auth-enabled` on `instances
+  create|update`** — alpha only.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
