@@ -868,6 +868,13 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
 - **Proxy settings resolution moved to `core/proxy_config.py`** — an
   internal Python refactor with no user-visible change.
 
+## Identity and Access Management 588.0.0 (#1960)
+
+- **`--recommend` on `gcloud beta iam service-accounts delete` no longer has
+  any effect** (588.0.0) — a beta-only flag. gcloud-go follows the GA
+  track, and its `iam service-accounts delete` has no `--recommend`, so
+  nothing changes.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
