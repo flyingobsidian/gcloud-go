@@ -875,6 +875,28 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   track, and its `iam service-accounts delete` has no `--recommend`, so
   nothing changes.
 
+## Kubernetes Engine 583.0.0–589.0.0 (#1961)
+
+- **Bundled `kubectl` version updates** (583.0.0, 585.0.0, 588.0.0) —
+  gcloud-go does not bundle `kubectl` (see #1809).
+- **`--wiz-sensor-api-key-secret-uri`, `--wiz-sensor-proxy-secret-uri` and
+  `--wiz-sensor-registry-secret-uri` on `gcloud container clusters create`,
+  `create-auto` and `update`** (589.0.0) — gcloud-go's `clusters create`
+  and `update` build the `Cluster` / `ClusterUpdate` body from
+  `--config-file` (and `create-auto` is not ported), so the add-on is
+  already configurable through `addonsConfig.wizSensorConfig`
+  (`enabled`, `apiKeySecretUri`, `proxySecretUri`, `registrySecretUri`) on
+  create and `desiredAddonsConfig.wizSensorConfig` on update.
+- **`--add-maintenance-exclusion-scope` becoming a choice list** — gcloud-go
+  has no `--add-maintenance-exclusion-*` flags; exclusions and their
+  `maintenanceExclusionOptions.scope` (`NO_UPGRADES`, `NO_MINOR_UPGRADES`,
+  `NO_MINOR_OR_NODE_UPGRADES`) are set in the `maintenancePolicy` of the
+  `--config-file` body.
+- **New hidden `clusters create|update` flags** (`--enable-cluster-scale-to-zero`,
+  `--default-compute-class`, `--network-suite`, …) — hidden and
+  unadvertised in gcloud-python; the underlying fields are likewise
+  reachable through `--config-file`.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
