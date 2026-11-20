@@ -760,6 +760,23 @@ in the YAML/JSON body:
   (583.0.0) → a `mysql` body with `cloudSqlId` set, as for any other
   connection profile.
 
+## Design Center 584.0.0–586.0.0 (#1953)
+
+Every item targets a `design-center spaces` subgroup that gcloud-go has not
+ported: gcloud-go implements `spaces` (create/delete/describe/list/update and
+the IAM commands), `locations` and `operations`, but not
+`spaces applications` or `spaces application-templates` (and its
+`components` / `revisions` subgroups). As with #1801, these land with those
+subgroups:
+
+- **`spaces applications recommend-iam-roles`** (586.0.0, GA).
+- **`spaces application-templates export`** and
+  **`spaces application-templates revisions export`** (584.0.0, GA).
+- **`--[add-|clear-|remove-]input-variable-aliases`** on
+  `spaces application-templates components update` (584.0.0).
+- **`application-templates ingest-iac|snapshot`** and
+  **`applications export`** — alpha only; gcloud-go follows the GA track.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
