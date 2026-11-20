@@ -789,6 +789,16 @@ subgroups:
   `--limit` (default 5), `--page-size` and `--sort-by`; no `--uri`, as in
   gcloud-python).
 
+## Device Run 586.0.0–589.0.0 (#1955)
+
+gcloud-go does not have the `device-run` group, and gcloud-python ships it
+only in the alpha and beta tracks (no GA command exists in 589.0.0).
+gcloud-go follows the GA track, so none of these items apply yet:
+`sessions submit xctest` (beta in 586.0.0, removed from beta again in
+589.0.0) and its `--locale` flag (587.0.0), `sessions submit
+android-executable` (beta in 587.0.0), and `software-versions list|describe`
+(586.0.0).
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
