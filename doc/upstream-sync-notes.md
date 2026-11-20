@@ -814,6 +814,14 @@ android-executable` (beta in 587.0.0), and `software-versions list|describe`
 - **`edge-cloud container vpn-connections` removed upstream** — gcloud-go's
   stub group was already removed under #1915.
 
+## Firebase 583.0.0–589.0.0 (#1957)
+
+Every new command in this range is alpha only: `firebase apps
+create|list|sdk-config`, `firebase auth providers enable`, `firebase
+projects create`, and `firebase security-rules get|list|release`.
+gcloud-go follows the GA track (its `firebase` group carries the GA
+`test` subgroup), so none of them apply.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
