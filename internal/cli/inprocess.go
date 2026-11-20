@@ -39,6 +39,7 @@ func migratedGroups(inv *invocation) []*cobra.Command {
 		newAnthosCmd(inv),
 		newComplianceManagerCmd(inv),
 		newClusterDirectorCmd(inv),
+		newDeveloperKnowledgeCmd(inv),
 		newWorkloadIdentityCmd(inv),
 		newPreviewCmd(inv),
 		newAlphaCmd(inv),

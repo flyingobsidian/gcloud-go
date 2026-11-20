@@ -777,6 +777,18 @@ subgroups:
 - **`application-templates ingest-iac|snapshot`** and
   **`applications export`** — alpha only; gcloud-go follows the GA track.
 
+## Developer Knowledge 584.0.0–586.0.0 (#1954)
+
+- **`gcloud developer-knowledge` promoted to beta (584.0.0) and GA
+  (586.0.0)** — gcloud-go did not have the group. It is now implemented in
+  `internal/cli/developer_knowledge.go` on the developerknowledge v1 API,
+  which both the beta and GA tracks use: `answer-query` (`--query`,
+  `--query-filter`), `documents describe NAME` (`--view`
+  basic|content|full, default content) and `documents search-chunks`
+  (`--query`, `--query-filter`, plus the list flags `--filter`,
+  `--limit` (default 5), `--page-size` and `--sort-by`; no `--uri`, as in
+  gcloud-python).
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
