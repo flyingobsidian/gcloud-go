@@ -72,6 +72,7 @@ import (
 	gkeonprem "google.golang.org/api/gkeonprem/v1"
 	"google.golang.org/api/googleapi"
 	healthcare "google.golang.org/api/healthcare/v1"
+	developerknowledge "google.golang.org/api/developerknowledge/v1"
 	hypercomputecluster "google.golang.org/api/hypercomputecluster/v1"
 	cloudiam "google.golang.org/api/iam/v1"
 	iamv2 "google.golang.org/api/iam/v2"
@@ -450,6 +451,12 @@ func (c *Clients) NetworkServicesBeta(ctx context.Context) (*networkservicesbeta
 // DeveloperConnect returns a Developer Connect v1 client.
 func (c *Clients) DeveloperConnect(ctx context.Context) (*developerconnect.Service, error) {
 	return newService(ctx, c, developerconnect.NewService)
+}
+
+// DeveloperKnowledge returns a Developer Knowledge (developerknowledge) v1
+// client.
+func (c *Clients) DeveloperKnowledge(ctx context.Context) (*developerknowledge.Service, error) {
+	return newService(ctx, c, developerknowledge.NewService)
 }
 
 // HypercomputeCluster returns a Cluster Director (hypercomputecluster) v1
