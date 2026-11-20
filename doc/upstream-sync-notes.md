@@ -822,6 +822,17 @@ projects create`, and `firebase security-rules get|list|release`.
 gcloud-go follows the GA track (its `firebase` group carries the GA
 `test` subgroup), so none of them apply.
 
+## GKE Hub 583.0.0–589.0.0 (#1958)
+
+- **`--ignore-maintenance-policies`, `--ignore-cluster-disruption-budgets`,
+  `--patch-only`, `--soak-duration-overrides-per-stage` and
+  `--soak-duration-override-all-stages` on `gcloud container fleet
+  rolloutsequences upgrade`** (583.0.0 beta, 585.0.0 GA) — gcloud-go's
+  `container fleet rolloutsequences upgrade` is still a "not yet
+  implemented" stub, so the flags come with its implementation.
+- **`--prioritized` on `rolloutsequences upgrade`** (589.0.0) — alpha/beta
+  only; gcloud-go follows the GA track.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
