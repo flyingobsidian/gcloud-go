@@ -954,6 +954,13 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   follows the GA track. (gcloud-go's `server-tls-policies create|update`
   already exist, taking the body from `--config-file`.)
 
+## Network Services 583.0.0 (#1966)
+
+- **`gcloud network-services telemetry-policies delete|describe|list|export|import`
+  promoted to beta** (583.0.0), and the new **`egress-routings`** and
+  **`mcp-transcoders`** groups — alpha/beta only; gcloud-go follows the GA
+  track.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
