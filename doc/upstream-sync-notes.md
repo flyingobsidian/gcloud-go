@@ -967,6 +967,14 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   — alpha only (the `number-registry` group has no GA commands); gcloud-go
   follows the GA track and does not have the group.
 
+## Orchestration Pipelines 583.0.0–586.0.0 (#1969)
+
+- **`gcloud orchestration-pipelines info`** (586.0.0) and the
+  **`BUNDLE_ID` default variable for `orchestration-pipelines deploy`**
+  (583.0.0) — the `orchestration-pipelines` group exists only in
+  gcloud-python's beta track; gcloud-go follows GA and does not have it
+  (see #1817).
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
