@@ -93,6 +93,7 @@ func (s *networkManagementCmds) initNetworkManagement() {
 	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLFilterExpr, "filter-expr", "", "CEL filter to further select which flows are logged")
 	s.netmgmtVFLCreateCmd.Flags().StringVar(&s.flagNMVFLState, "state", "", "State (ENABLED, DISABLED)")
 	s.netmgmtVFLCreateCmd.Flags().StringToStringVar(&s.flagNMVFLLabels, "labels", nil, "Labels (key=value)")
+	addNMVFLConnectionLoggingFlag(s.netmgmtVFLCreateCmd, &s.flagNMVFLConnLogging)
 
 	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMFile, "config-from-file", "", "YAML/JSON file with the VpcFlowLogsConfig patch")
 	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMVFLDescription, "description", "", "New description")
@@ -102,6 +103,7 @@ func (s *networkManagementCmds) initNetworkManagement() {
 	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMVFLFilterExpr, "filter-expr", "", "CEL filter")
 	s.netmgmtVFLUpdateCmd.Flags().StringVar(&s.flagNMVFLState, "state", "", "State")
 	s.netmgmtVFLUpdateCmd.Flags().StringToStringVar(&s.flagNMVFLLabels, "labels", nil, "Labels (replaces the existing set)")
+	addNMVFLConnectionLoggingFlag(s.netmgmtVFLUpdateCmd, &s.flagNMVFLConnLogging)
 
 	s.netmgmtVFLListCmd.Flags().StringVar(&s.flagNMLocation, "location", "global", "Location to list configs in")
 	s.netmgmtVFLListCmd.Flags().StringVar(&s.flagNMFilter, "filter", "", "Server-side filter expression")
@@ -490,7 +492,27 @@ func (s *networkManagementCmds) runNMOpsWait(cmd *cobra.Command, args []string) 
 
 // --- VPC Flow Logs configs impl ---
 
-func (s *networkManagementCmds) buildVpcFlowLogsConfig(base *networkmanagement.VpcFlowLogsConfig) *networkmanagement.VpcFlowLogsConfig {
+// addNMVFLConnectionLoggingFlag adds --connection-logging (588.0.0) to c.
+func addNMVFLConnectionLoggingFlag(c *cobra.Command, v *string) {
+	c.Flags().StringVar(v, "connection-logging", "",
+		"Whether to enable connection logging (default disabled; not valid for VPN tunnel or interconnect attachment targets): "+
+			"enabled, disabled, connection-logging-enabled, connection-logging-disabled")
+}
+
+// nmVFLConnectionLogging maps a --connection-logging choice to its
+// ConnectionLogging value, as gcloud-python's choices do.
+func nmVFLConnectionLogging(choice string) (string, error) {
+	switch choice {
+	case "enabled", "connection-logging-enabled":
+		return "CONNECTION_LOGGING_ENABLED", nil
+	case "disabled", "connection-logging-disabled":
+		return "CONNECTION_LOGGING_DISABLED", nil
+	}
+	return "", fmt.Errorf("argument --connection-logging: Invalid choice: '%s'.\n\nValid choices are "+
+		"[connection-logging-disabled, connection-logging-enabled, disabled, enabled].", choice)
+}
+
+func (s *networkManagementCmds) buildVpcFlowLogsConfig(base *networkmanagement.VpcFlowLogsConfig) (*networkmanagement.VpcFlowLogsConfig, error) {
 	c := base
 	if c == nil {
 		c = &networkmanagement.VpcFlowLogsConfig{}
@@ -528,7 +550,14 @@ func (s *networkManagementCmds) buildVpcFlowLogsConfig(base *networkmanagement.V
 	if len(s.flagNMVFLLabels) > 0 {
 		c.Labels = s.flagNMVFLLabels
 	}
-	return c
+	if s.flagNMVFLConnLogging != "" {
+		v, err := nmVFLConnectionLogging(s.flagNMVFLConnLogging)
+		if err != nil {
+			return nil, err
+		}
+		c.ConnectionLogging = v
+	}
+	return c, nil
 }
 
 func (s *networkManagementCmds) runNMVFLCreate(cmd *cobra.Command, args []string) error {
@@ -543,7 +572,10 @@ func (s *networkManagementCmds) runNMVFLCreate(cmd *cobra.Command, args []string
 			return err
 		}
 	}
-	cfg := s.buildVpcFlowLogsConfig(base)
+	cfg, err := s.buildVpcFlowLogsConfig(base)
+	if err != nil {
+		return err
+	}
 	ctx := cmd.Context()
 	svc, err := s.inv.clients().NetworkManagement(ctx)
 	if err != nil {
@@ -647,7 +679,10 @@ func (s *networkManagementCmds) runNMVFLUpdate(cmd *cobra.Command, args []string
 			return err
 		}
 	}
-	cfg := s.buildVpcFlowLogsConfig(base)
+	cfg, err := s.buildVpcFlowLogsConfig(base)
+	if err != nil {
+		return err
+	}
 	var mask []string
 	if s.flagNMVFLDescription != "" {
 		mask = append(mask, "description")
@@ -670,11 +705,14 @@ func (s *networkManagementCmds) runNMVFLUpdate(cmd *cobra.Command, args []string
 	if len(s.flagNMVFLLabels) > 0 {
 		mask = append(mask, "labels")
 	}
+	if s.flagNMVFLConnLogging != "" {
+		mask = append(mask, "connection_logging")
+	}
 	if s.flagNMFile != "" && len(mask) == 0 {
 		mask = nonEmptyJSONFields(cfg)
 	}
 	if len(mask) == 0 {
-		return fmt.Errorf("nothing to update: pass at least one of --description, --aggregation-interval, --flow-sampling, --metadata, --filter-expr, --state, --labels, or --config-from-file")
+		return fmt.Errorf("nothing to update: pass at least one of --description, --aggregation-interval, --flow-sampling, --metadata, --filter-expr, --state, --labels, --connection-logging, or --config-from-file")
 	}
 	ctx := cmd.Context()
 	svc, err := s.inv.clients().NetworkManagement(ctx)
@@ -723,6 +761,7 @@ type networkManagementCmds struct {
 	flagNMVFLFlowSampling       float64
 	flagNMVFLMetadata           string
 	flagNMVFLFilterExpr         string
+	flagNMVFLConnLogging        string
 	flagNMVFLState              string
 	flagNMVFLLabels             map[string]string
 	netmgmtConnectivityTestsCmd *cobra.Command
