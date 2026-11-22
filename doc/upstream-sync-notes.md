@@ -980,6 +980,12 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
 - **`--tags` on `gcloud parametermanager parameters create`** (584.0.0) —
   beta only; gcloud-go follows the GA track.
 
+## Policy Troubleshooter 584.0.0 (#1971)
+
+- **`gcloud policy-troubleshoot error-info-id`** (584.0.0) — alpha/beta
+  only (`release_tracks: [ALPHA, BETA]`); gcloud-go's GA
+  `policy-troubleshoot` group, like gcloud-python's, has only `iam`.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
