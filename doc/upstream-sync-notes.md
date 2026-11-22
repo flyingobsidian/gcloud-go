@@ -934,6 +934,14 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
 - **Updated `connectivity-tests` examples** (588.0.0) — help text only;
   gcloud-go's short help does not carry the Python examples.
 
+## Network Connectivity 586.0.0 (#1963)
+
+- **`--hub`, `--auto-accept` and `--psc-routing-enabled` on `gcloud
+  network-connectivity transports create` promoted to GA** (586.0.0) —
+  gcloud-go's `transports create` takes the `Transport` body from
+  `--config-file`, so `hub`, `autoAccept` and `pscRoutingEnabled` are
+  already settable there.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
