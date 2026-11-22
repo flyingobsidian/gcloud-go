@@ -961,6 +961,12 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   **`mcp-transcoders`** groups — alpha/beta only; gcloud-go follows the GA
   track.
 
+## Number Registry 583.0.0–589.0.0 (#1967)
+
+- **`gcloud number-registry org-number-registries create|delete|describe|list`**
+  — alpha only (the `number-registry` group has no GA commands); gcloud-go
+  follows the GA track and does not have the group.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
