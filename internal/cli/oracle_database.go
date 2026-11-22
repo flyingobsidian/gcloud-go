@@ -664,5 +664,6 @@ func newOracleDatabaseCmds(inv *invocation) *oracleDatabaseCmds {
 	s.initOracleDatabaseOdbNetworks()
 	s.initOracleDatabaseOperations()
 	s.initOracleDatabasePluggableDatabases()
+	s.initOracleDatabaseLabelsUpdates()
 	return s
 }
