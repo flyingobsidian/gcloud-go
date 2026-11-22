@@ -986,6 +986,18 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   only (`release_tracks: [ALPHA, BETA]`); gcloud-go's GA
   `policy-troubleshoot` group, like gcloud-python's, has only `iam`.
 
+## Security Command Center 587.0.0 (#1972)
+
+- **`--[no-]deletion-notifications-enabled` on `gcloud scc bqexports
+  create|update` and `gcloud scc notifications create|update`** (587.0.0)
+  — gcloud-go's commands take the `BigQueryExport` /
+  `NotificationConfig` body from `--config-file`, so
+  `deletionNotificationsEnabled: true|false` is already settable there.
+  On `update`, `true` is picked up by the default update mask (the
+  populated fields); to turn it off, pass
+  `--update-mask=deletionNotificationsEnabled`, since a `false` value is
+  not a populated field.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
