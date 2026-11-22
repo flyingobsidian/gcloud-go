@@ -998,6 +998,24 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   `--update-mask=deletionNotificationsEnabled`, since a `false` value is
   not a populated field.
 
+## Oracle Database 589.0.0 (#1968)
+
+- **Labels-only `update` commands** (589.0.0, GA) — implemented for
+  `cloud-exadata-infrastructures`, `cloud-vm-clusters`, `db-systems`,
+  `exascale-db-storage-vaults`, `goldengate-connections`,
+  `goldengate-connection-assignments` and `goldengate-deployments`
+  (`internal/cli/oracle_database_update_labels.go`). Like gcloud-python's
+  declarative `read_modify_update` commands, each gets the resource, applies
+  `--labels` or `--update-labels` / `--remove-labels` / `--clear-labels`,
+  patches with `updateMask=labels` (and `--request-id`), and waits for the
+  operation unless `--async`, printing the same status lines and the
+  updated resource. Argument-conflict errors match gcloud-python. With no
+  labels flag, gcloud-go fails up front with gcloud-python's
+  `Must specify at least one valid parameter to update.` rather than
+  getting the resource and sending an empty update mask.
+- **`odb-networks odb-subnets update`** — gcloud-go has not ported the
+  `odb-networks odb-subnets` subgroup, so its `update` comes with it.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
