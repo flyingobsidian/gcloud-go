@@ -975,6 +975,11 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   gcloud-python's beta track; gcloud-go follows GA and does not have it
   (see #1817).
 
+## Parametermanager 584.0.0 (#1970)
+
+- **`--tags` on `gcloud parametermanager parameters create`** (584.0.0) —
+  beta only; gcloud-go follows the GA track.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
