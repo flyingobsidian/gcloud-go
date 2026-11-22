@@ -942,6 +942,18 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   `--config-file`, so `hub`, `autoAccept` and `pscRoutingEnabled` are
   already settable there.
 
+## Network Security 586.0.0–588.0.0 (#1965)
+
+- **`DENY_BY_DEFAULT` action for `gcloud network-security authz-policies
+  import`** (586.0.0) — gcloud-go has no `authz-policies import`; its
+  `authz-policies create|update` take the `AuthzPolicy` body from
+  `--config-file`, so `action: DENY_BY_DEFAULT` is already accepted there.
+- **`server-tls-policies create|update` with granular flags** (588.0.0),
+  **`rate-limit-policies`** (beta in 587.0.0) and **`firewall-endpoints
+  wildfire-verdict-change-requests`** (586.0.0) — alpha/beta only; gcloud-go
+  follows the GA track. (gcloud-go's `server-tls-policies create|update`
+  already exist, taking the body from `--config-file`.)
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
