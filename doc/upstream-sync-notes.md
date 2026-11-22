@@ -923,6 +923,17 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
 - **`--google-auth-enabled` / `--workforce-auth-enabled` on `instances
   create|update`** — alpha only.
 
+## Network Management 588.0.0 (#1964)
+
+- **`--connection-logging` on `gcloud network-management
+  vpc-flow-logs-configs create|update`** (588.0.0, GA) — implemented, with
+  gcloud-python's choices (`enabled` / `connection-logging-enabled` →
+  `CONNECTION_LOGGING_ENABLED`, `disabled` / `connection-logging-disabled`
+  → `CONNECTION_LOGGING_DISABLED`); `update` adds `connection_logging` to
+  the update mask.
+- **Updated `connectivity-tests` examples** (588.0.0) — help text only;
+  gcloud-go's short help does not carry the Python examples.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
