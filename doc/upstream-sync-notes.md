@@ -1051,6 +1051,17 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   flag; `gceSetup.networkInterfaces[].nicType: VIRTIO_NET` was always the
   API's value there, so the typo never affected gcloud-go.
 
+## Telco Automation 583.0.0–589.0.0 (#1974)
+
+- **`gcloud telco-automation` removed upstream** (between 582.0.0 and
+  589.0.0, without a release note) — gcloud-python 589.0.0 dropped the
+  whole group (`operations describe|wait`, `orchestration-cluster
+  create|delete|describe|list`) together with its generated
+  `telcoautomation` API client and its `api_endpoint_overrides` entry (see
+  #1959). gcloud-go removes the group too
+  (`internal/cli/telco_automation*.go`), so `gcloud telco-automation` is
+  an unknown command, as in gcloud-python.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
