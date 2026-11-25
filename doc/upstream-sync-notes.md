@@ -1043,6 +1043,14 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   import-data-objects|export-data-objects`), so the flag comes with
   `data-objects search`.
 
+## Workbench 589.0.0 (#1977)
+
+- **`--nic-type` choice fixed from `VIRTIGO_NET` to `VIRTIO_NET` on `gcloud
+  workbench instances create`** (589.0.0) — gcloud-go's `instances create`
+  takes the `Instance` body from `--config-file` and has no `--nic-type`
+  flag; `gceSetup.networkInterfaces[].nicType: VIRTIO_NET` was always the
+  API's value there, so the typo never affected gcloud-go.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
