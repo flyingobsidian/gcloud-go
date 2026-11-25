@@ -1016,6 +1016,12 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
 - **`odb-networks odb-subnets update`** — gcloud-go has not ported the
   `odb-networks odb-subnets` subgroup, so its `update` comes with it.
 
+## Software Delivery Trust 583.0.0–589.0.0 (#1973)
+
+- **New `gcloud software-delivery-trust` group** (`attestations`,
+  `operations`, `policies` (+ `revisions`) and `policy-bindings`) — alpha
+  only; gcloud-go follows the GA track and does not have the group.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
