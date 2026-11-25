@@ -1035,6 +1035,14 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   settable. On `update`, the mask is the body's top-level fields, so the
   file must carry the whole `transferSpec`.
 
+## Vector Search 587.0.0 (#1976)
+
+- **`--dense-scann-target-recall` on `gcloud vector-search collections
+  data-objects search`** (587.0.0) — gcloud-go has not ported the
+  `collections data-objects` subgroup (only `collections
+  import-data-objects|export-data-objects`), so the flag comes with
+  `data-objects search`.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
