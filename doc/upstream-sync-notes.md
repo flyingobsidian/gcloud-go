@@ -1022,6 +1022,19 @@ gcloud-go follows the GA track (its `firebase` group carries the GA
   `operations`, `policies` (+ `revisions`) and `policy-bindings`) — alpha
   only; gcloud-go follows the GA track and does not have the group.
 
+## Transfer 583.0.0–585.0.0 (#1975)
+
+- **`--match-glob` (583.0.0, GA) and `--include-storage-classes` (585.0.0) on
+  `gcloud transfer jobs create|update`, with `--clear-match-glob` /
+  `--clear-include-storage-classes` on `update`** — gcloud-go's `transfer
+  jobs create|update` do not port gcloud-python's object-condition flags
+  (`--include-prefixes`, `--include-modified-before-absolute`, …); object
+  conditions come from the `--config-file` `TransferJob` body, where
+  `transferSpec.objectConditions.matchGlob` and
+  `transferSpec.objectConditions.includeStorageClasses` are already
+  settable. On `update`, the mask is the body's top-level fields, so the
+  file must carry the whole `transferSpec`.
+
 ## Breaking Changes 584.0.0–589.0.0 (#1915)
 
 The Cloud Services items (586.0.0) are implemented: `services api-keys
