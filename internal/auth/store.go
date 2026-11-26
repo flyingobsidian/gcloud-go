@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,6 +22,18 @@ type CredentialStore struct {
 	configDir  string
 	dbPathOnce sync.Once
 	dbPath     string
+
+	// Warnings receives best-effort warnings, such as a failed write to
+	// credentials.db; nil discards them. The CLI sets it to the invocation's
+	// stderr, so in-process callers capture them (#2070).
+	Warnings io.Writer
+}
+
+// warnf writes a warning to s.Warnings, if set.
+func (s *CredentialStore) warnf(format string, a ...any) {
+	if s.Warnings != nil {
+		fmt.Fprintf(s.Warnings, format, a...)
+	}
 }
 
 // NewStoreFor creates a credential store using env's gcloud config directory.
@@ -72,7 +85,7 @@ func (s *CredentialStore) Store(credFile string) (string, error) {
 	if err := s.storeToSQLite(account, data); err != nil {
 		// Best-effort for gcloud compatibility; log so consistent failures are
 		// observable without burdening the caller.
-		fmt.Fprintf(os.Stderr, "warning: writing %s to SQLite credentials.db failed: %v\n", account, err)
+		s.warnf("warning: writing %s to SQLite credentials.db failed: %v\n", account, err)
 	}
 
 	// Also store as JSON file for fallback.
@@ -229,7 +242,7 @@ func (s *CredentialStore) StoreRaw(account string, data []byte) error {
 	if err := s.storeToSQLite(account, data); err != nil {
 		// Best-effort for gcloud compatibility; log so consistent failures are
 		// observable without burdening the caller.
-		fmt.Fprintf(os.Stderr, "warning: writing %s to SQLite credentials.db failed: %v\n", account, err)
+		s.warnf("warning: writing %s to SQLite credentials.db failed: %v\n", account, err)
 	}
 
 	jsonDir := filepath.Join(s.configDir, "credentials")
