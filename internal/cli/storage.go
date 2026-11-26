@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/flyingobsidian/gcloud-go/internal/gfilter"
 	"github.com/spf13/cobra"
 	storage "google.golang.org/api/storage/v1"
 )
@@ -40,11 +41,13 @@ import (
 // --- ls ---
 
 func (s *storageCmds) initStorage() {
-	s.storageBucketsListCmd.Flags().StringVar(&s.flagStorageBucketsFormat, "format", "", "Output format (e.g. json)")
+	s.storageBucketsListCmd.Flags().StringVar(&s.flagStorageBucketsFormat, "format", "", "Output format (default yaml)")
 	s.storageBucketsListCmd.Flags().BoolVar(&s.flagStorageBucketsSoftDeleted, "soft-deleted", false, "Include soft-deleted buckets")
 	s.storageBucketsListCmd.Flags().StringVar(&s.flagBucketsListFilter, "filter", "", "Filter expression")
 	s.storageBucketsListCmd.Flags().StringVar(&s.flagBucketsListPrefix, "prefix", "", "Filter buckets by name prefix")
-	s.storageBucketsListCmd.Flags().BoolVar(&s.flagBucketsListURI, "uri", false, "Print gs:// URIs")
+	s.storageBucketsListCmd.Flags().BoolVar(&s.flagBucketsListURI, "uri", false, "Print a list of resource URIs instead of the default output")
+	s.storageBucketsListCmd.Flags().BoolVar(&s.flagBucketsListRaw, "raw", false,
+		"Shows metadata in the format returned by the API instead of standardizing it")
 	s.storageBucketsCmd.AddCommand(s.storageBucketsListCmd)
 	s.storageBucketsCmd.AddCommand(s.storageBucketsDescribeCmd)
 
@@ -113,7 +116,7 @@ func (s *storageCmds) runStorageBucketsList(cmd *cobra.Command, args []string) e
 	var allBuckets []*storage.Bucket
 	pageToken := ""
 	for {
-		call := svc.Buckets.List(project).Context(ctx)
+		call := svc.Buckets.List(project).Projection("full").Context(ctx)
 		if s.flagStorageBucketsSoftDeleted {
 			call = call.SoftDeleted(true)
 		}
@@ -134,32 +137,88 @@ func (s *storageCmds) runStorageBucketsList(cmd *cobra.Command, args []string) e
 		pageToken = resp.NextPageToken
 	}
 
-	// Client-side filter (simple substring match on name).
-	if s.flagBucketsListFilter != "" {
-		var filtered []*storage.Bucket
-		for _, b := range allBuckets {
-			if strings.Contains(b.Name, s.flagBucketsListFilter) {
-				filtered = append(filtered, b)
+	return s.emitStorageBucketsList(allBuckets)
+}
+
+// storageBucketsFilter compiles --filter. A single bare word (a gcloud
+// "global restriction", which gfilter does not parse) matches records with
+// any string value containing it, case-insensitively.
+func storageBucketsFilter(expr string) (func(map[string]any) bool, error) {
+	f, err := gfilter.Compile(expr)
+	if err == nil {
+		return func(r map[string]any) bool { return f.Match(r) }, nil
+	}
+	word := strings.TrimSpace(expr)
+	if word == "" || strings.ContainsAny(word, " \t:=<>~()\"'") {
+		return nil, fmt.Errorf("invalid --filter expression: %w", err)
+	}
+	word = strings.ToLower(word)
+	return func(r map[string]any) bool { return anyStringContains(r, word) }, nil
+}
+
+// anyStringContains reports whether a string leaf of v contains lowerWord,
+// case-insensitively.
+func anyStringContains(v any, lowerWord string) bool {
+	switch t := v.(type) {
+	case string:
+		return strings.Contains(strings.ToLower(t), lowerWord)
+	case map[string]any:
+		for _, e := range t {
+			if anyStringContains(e, lowerWord) {
+				return true
 			}
 		}
-		allBuckets = filtered
+	case []any:
+		for _, e := range t {
+			if anyStringContains(e, lowerWord) {
+				return true
+			}
+		}
+	case map[string]string:
+		for _, e := range t {
+			if strings.Contains(strings.ToLower(e), lowerWord) {
+				return true
+			}
+		}
 	}
+	return false
+}
 
-	if s.flagStorageBucketsFormat == "json" {
-		return s.inv.printJSON(allBuckets)
+// emitStorageBucketsList prints buckets as gcloud-python does (#2016): each
+// bucket's display record (or, with --raw, its API metadata), filtered by
+// --filter, as YAML documents by default or in --format; --uri prints each
+// bucket's API URI.
+func (s *storageCmds) emitStorageBucketsList(buckets []*storage.Bucket) error {
+	match, err := storageBucketsFilter(s.flagBucketsListFilter)
+	if err != nil {
+		return err
 	}
-
+	records := []map[string]any{}
+	for _, b := range buckets {
+		var r map[string]any
+		if s.flagBucketsListRaw {
+			r, _ = storageMessageDict(b).(map[string]any)
+		} else {
+			r = storageBucketDisplay(b)
+		}
+		if match(r) {
+			records = append(records, r)
+		}
+	}
+	if len(records) == 0 && s.flagStorageBucketsFormat == "" {
+		fmt.Fprintln(s.inv.stderr, "Listed 0 items.")
+		return nil
+	}
 	if s.flagBucketsListURI {
-		for _, b := range allBuckets {
-			fmt.Fprintf(s.inv.stdout, "gs://%s/\n", b.Name)
+		for _, r := range records {
+			fmt.Fprintf(s.inv.stdout, "https://storage.googleapis.com/storage/v1/b/%s\n", r["name"])
 		}
 		return nil
 	}
-
-	for _, b := range allBuckets {
-		fmt.Fprintf(s.inv.stdout, "gs://%s/\n", b.Name)
+	if s.flagStorageBucketsFormat == "" || s.flagStorageBucketsFormat == "yaml" {
+		return emitPyYAMLDocuments(s.inv.stdout, records)
 	}
-	return nil
+	return emitFormattedTo(s.inv.stdout, records, s.flagStorageBucketsFormat)
 }
 
 // parseGCSPath splits "gs://bucket/prefix" into bucket and prefix.
@@ -1146,6 +1205,7 @@ type storageCmds struct {
 	flagBucketsListFilter         string
 	flagBucketsListPrefix         string
 	flagBucketsListURI            bool
+	flagBucketsListRaw            bool
 	storageLsCmd                  *cobra.Command
 	flagStorageLsRecurse          bool
 	flagStorageLsLong             bool
