@@ -250,6 +250,17 @@ func (inv *invocation) printJSON(v any) error {
 	return emitJSON(inv.stdout, v)
 }
 
+// credentialStore returns the credential store for the invocation's
+// environment, with warnings going to its stderr.
+func (inv *invocation) credentialStore() (*auth.CredentialStore, error) {
+	store, err := auth.NewStoreFor(inv.env)
+	if err != nil {
+		return nil, err
+	}
+	store.Warnings = inv.stderr
+	return store, nil
+}
+
 // restClient returns a REST client for endpoint that uses the invocation's
 // credentials, billing project and HTTP logging.
 func (inv *invocation) restClient(endpoint string) *restClient {

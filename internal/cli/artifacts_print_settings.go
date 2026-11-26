@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"github.com/spf13/cobra"
 	artifactregistry "google.golang.org/api/artifactregistry/v1"
 )
@@ -116,7 +115,7 @@ func (s *artifactsCmds) getServiceAccountCreds(jsonKey string) (string, error) {
 	if account == "" {
 		return "", nil
 	}
-	store, err := auth.NewStoreFor(s.inv.env)
+	store, err := s.inv.credentialStore()
 	if err != nil {
 		return "", nil
 	}

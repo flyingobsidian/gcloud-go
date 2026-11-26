@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/flyingobsidian/gcloud-go/internal/auth"
 	"github.com/spf13/cobra"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -52,7 +51,7 @@ func (s *authCmds) runAuthLogin(cmd *cobra.Command, args []string) error {
 }
 
 func (s *authCmds) runAuthLoginCredFile() error {
-	store, err := auth.NewStoreFor(s.inv.env)
+	store, err := s.inv.credentialStore()
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -181,7 +180,7 @@ func (s *authCmds) runAuthLoginBrowser() error {
 
 	data, _ := json.Marshal(credJSON)
 
-	store, err := auth.NewStoreFor(s.inv.env)
+	store, err := s.inv.credentialStore()
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -222,7 +221,7 @@ func openBrowser(url string) {
 }
 
 func (s *authCmds) runAuthList(cmd *cobra.Command, args []string) error {
-	store, err := auth.NewStoreFor(s.inv.env)
+	store, err := s.inv.credentialStore()
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -299,7 +298,7 @@ func (s *authCmds) runAuthList(cmd *cobra.Command, args []string) error {
 }
 
 func (s *authCmds) runAuthRevoke(cmd *cobra.Command, args []string) error {
-	store, err := auth.NewStoreFor(s.inv.env)
+	store, err := s.inv.credentialStore()
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}
@@ -372,7 +371,7 @@ func (s *authCmds) runAuthRevoke(cmd *cobra.Command, args []string) error {
 }
 
 func (s *authCmds) runAuthActivateServiceAccount(cmd *cobra.Command, args []string) error {
-	store, err := auth.NewStoreFor(s.inv.env)
+	store, err := s.inv.credentialStore()
 	if err != nil {
 		return fmt.Errorf("initializing credential store: %w", err)
 	}

@@ -1,10 +1,12 @@
 package auth
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -254,5 +256,27 @@ func TestCredAccountID(t *testing.T) {
 				t.Errorf("credAccountID() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// A failed credentials.db write is reported on Warnings, not the process's
+// stderr (#2070).
+func TestStoreRawWarnsOnWarnings(t *testing.T) {
+	dir := t.TempDir()
+	var warnings bytes.Buffer
+	store := &CredentialStore{configDir: dir, Warnings: &warnings}
+	// A directory where the database file should be makes the SQLite write fail.
+	store.dbPathOnce.Do(func() { store.dbPath = dir })
+	if err := store.StoreRaw("user@example.com", []byte(`{"type":"authorized_user"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(warnings.String(), "warning: writing user@example.com to SQLite credentials.db failed") {
+		t.Errorf("warnings = %q", warnings.String())
+	}
+	// With no Warnings writer the warning is dropped.
+	quiet := &CredentialStore{configDir: dir}
+	quiet.dbPathOnce.Do(func() { quiet.dbPath = dir })
+	if err := quiet.StoreRaw("user@example.com", []byte(`{"type":"authorized_user"}`)); err != nil {
+		t.Fatal(err)
 	}
 }

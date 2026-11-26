@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"sync"
 
 	"golang.org/x/oauth2"
@@ -38,6 +37,10 @@ type TunnelConfig struct {
 	Interface   string
 	Port        int
 	TokenSource oauth2.TokenSource
+	// Errors receives errors from connections the listener accepts, which
+	// have no caller to return them to; nil discards them. The CLI sets it
+	// to the invocation's stderr (#2070).
+	Errors io.Writer
 }
 
 // Tunnel represents an active IAP tunnel.
@@ -85,7 +88,9 @@ func handleConn(ctx context.Context, cfg TunnelConfig, tcpConn net.Conn) {
 
 	t, err := connect(ctx, cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "IAP tunnel connect error: %v\n", err)
+		if cfg.Errors != nil {
+			fmt.Fprintf(cfg.Errors, "IAP tunnel connect error: %v\n", err)
+		}
 		return
 	}
 	defer t.conn.Close(websocket.StatusNormalClosure, "done")

@@ -341,6 +341,7 @@ func (s *computeCmds) startIAPTunnel(ctx context.Context, project, zone, instanc
 		Instance:    instance,
 		Port:        22,
 		TokenSource: ts,
+		Errors:      s.inv.stderr,
 	}, 0)
 	if err != nil {
 		return nil, fmt.Errorf("starting IAP tunnel: %w", err)
